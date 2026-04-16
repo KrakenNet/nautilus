@@ -1,0 +1,22 @@
+_min_copier_version: "9.0.0"
+_subdirectory: ""
+
+project_name:
+  type: str
+  help: Project name (e.g. nautilus-adapter-influxdb)
+
+module_name:
+  type: str
+  help: Python module name (e.g. nautilus_adapter_influxdb)
+
+adapter_type:
+  type: str
+  help: Adapter type
+  choices:
+    - influxdb
+    - s3
+    - custom
+
+author:
+  type: str
+  help: Author name

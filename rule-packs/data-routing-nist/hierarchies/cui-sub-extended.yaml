@@ -1,0 +1,32 @@
+# Extended CUI sub-category hierarchy (design Component F).
+#
+# Ordered LOWEST -> HIGHEST sensitivity; rank-based dominance
+# semantics apply (see fathom.engine.dominates).  An agent's CUI
+# clearance level must dominate the source's CUI classification
+# for access to be granted.
+#
+# Levels:
+#   public         -- non-CUI, publicly releasable information
+#   cui-basic      -- CUI Basic (default marking category)
+#   cui-specified  -- CUI Specified (agency-defined controls)
+#   itar           -- International Traffic in Arms Regulations
+#   ear            -- Export Administration Regulations
+#   fti            -- Federal Tax Information (26 USC 6103)
+#   les            -- Law Enforcement Sensitive
+#
+name: cui-sub-extended
+levels:
+  - name: public
+    rank: 0
+  - name: cui-basic
+    rank: 10
+  - name: cui-specified
+    rank: 20
+  - name: itar
+    rank: 30
+  - name: ear
+    rank: 40
+  - name: fti
+    rank: 50
+  - name: les
+    rank: 60

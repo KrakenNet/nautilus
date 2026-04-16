@@ -1,0 +1,60 @@
+<form class="filter-form"
+      hx-get="/admin/audit"
+      hx-target="#audit-table-body"
+      hx-push-url="true"
+      hx-trigger="submit">
+
+    <div class="filter-field">
+        <label for="filter-agent-id">Agent ID</label>
+        <input type="text"
+               id="filter-agent-id"
+               name="agent_id"
+               value="{{ filters.agent_id | default('') }}"
+               placeholder="Filter by agent...">
+    </div>
+
+    <div class="filter-field">
+        <label for="filter-source-id">Source</label>
+        <select id="filter-source-id" name="source_id">
+            <option value="">All Sources</option>
+            {% for source in available_sources %}
+            <option value="{{ source }}"
+                    {% if filters.source_id == source %}selected{% endif %}>
+                {{ source }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="filter-field">
+        <label for="filter-event-type">Event Type</label>
+        <select id="filter-event-type" name="event_type">
+            <option value="">All Types</option>
+            {% for etype in available_event_types %}
+            <option value="{{ etype }}"
+                    {% if filters.event_type == etype %}selected{% endif %}>
+                {{ etype }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="filter-field">
+        <label for="filter-start">From</label>
+        <input type="datetime-local"
+               id="filter-start"
+               name="start"
+               value="{{ filters.start | default('') }}">
+    </div>
+
+    <div class="filter-field">
+        <label for="filter-end">To</label>
+        <input type="datetime-local"
+               id="filter-end"
+               name="end"
+               value="{{ filters.end | default('') }}">
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+    <a href="/admin/audit" class="btn btn-sm">Clear</a>
+</form>

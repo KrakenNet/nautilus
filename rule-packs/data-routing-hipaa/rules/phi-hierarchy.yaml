@@ -1,0 +1,64 @@
+# HIPAA PHI Classification Hierarchy
+# Defines the sensitivity ordering for protected health information.
+
+template: phi_source_tag
+
+regulation: "HIPAA"
+regulation_section: "45 CFR 164.514"
+title: "PHI Classification Hierarchy"
+
+description: >-
+  Establishes the PHI sensitivity hierarchy used by all HIPAA rules.
+  Higher levels inherit all restrictions of lower levels and add
+  additional safeguards. Rules reference this hierarchy to compare
+  data sensitivity against agent authorization levels.
+
+hierarchy:
+  name: phi-sensitivity
+  ordered: true
+  levels:
+    - name: de-identified
+      rank: 0
+      description: >-
+        Data that has been de-identified per HIPAA Safe Harbor or
+        Expert Determination methods. Not considered PHI.
+      safeguards: []
+
+    - name: limited
+      rank: 1
+      description: >-
+        Limited data set — direct identifiers removed but may contain
+        dates, geographic subdivisions, and other indirect identifiers.
+        Requires a data use agreement.
+      safeguards:
+        - data_use_agreement_required
+        - audit_logging
+
+    - name: standard
+      rank: 2
+      description: >-
+        Standard PHI containing one or more of the 18 HIPAA
+        identifiers. Subject to all Privacy and Security Rule
+        requirements.
+      safeguards:
+        - data_use_agreement_required
+        - audit_logging
+        - encryption_at_rest
+        - encryption_in_transit
+        - access_control_enforcement
+
+    - name: sensitive
+      rank: 3
+      description: >-
+        Highly sensitive PHI including psychotherapy notes, substance
+        abuse treatment records, HIV/AIDS status, genetic information,
+        and reproductive health data. Requires explicit patient consent.
+      safeguards:
+        - data_use_agreement_required
+        - audit_logging
+        - encryption_at_rest
+        - encryption_in_transit
+        - access_control_enforcement
+        - explicit_patient_consent
+        - enhanced_breach_notification
+        - segmented_storage

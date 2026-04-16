@@ -1,0 +1,38 @@
+# Minimal two-source fixture config for tests (design §12).
+sources:
+  - id: nvd_db
+    type: postgres
+    description: "National Vulnerability Database mirror (test fixture)"
+    classification: unclassified
+    data_types: [cve, vulnerability, patch]
+    allowed_purposes: [threat-analysis, incident-response]
+    connection: ${TEST_PG_DSN}
+    table: vulns
+
+  - id: internal_vulns
+    type: pgvector
+    description: "Internal vulnerability embeddings (test fixture)"
+    classification: unclassified
+    data_types: [vulnerability, scan_result]
+    allowed_purposes: [threat-analysis]
+    connection: ${TEST_PGV_DSN}
+    table: vuln_embeddings
+    embedding_column: embedding
+    metadata_column: metadata
+    distance_operator: "<=>"
+    top_k: 10
+
+rules:
+  user_rules_dirs: []
+
+analysis:
+  keyword_map:
+    vulnerability: [vulnerability, vuln, weakness]
+    patch: [patch, fix, update]
+    asset: [asset, system, host, server]
+
+audit:
+  path: ./audit.jsonl
+
+attestation:
+  enabled: true

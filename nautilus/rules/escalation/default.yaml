@@ -1,0 +1,13 @@
+# Nautilus built-in escalation pack (design §3.4, AC-3.1, AC-3.3).
+#
+# Each entry becomes one `escalation_rule` fact asserted per request. The
+# `contains-all` CLIPS external fires when the session's accumulated
+# `data_types_seen` multislot contains every token in `trigger_combination`.
+#
+# PII aggregation: accumulating email + phone + dob + ssn within one session
+# constitutes a confidential-level exposure; action `escalate` raises the
+# effective classification to `confidential` rather than denying outright.
+- id: pii-aggregation-confidential
+  trigger_combination: "email phone dob ssn"
+  resulting_level: confidential
+  action: escalate

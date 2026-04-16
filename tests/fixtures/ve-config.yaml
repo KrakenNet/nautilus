@@ -1,0 +1,88 @@
+# VE (verification environment) config — Phase 5 Task 5.1.
+#
+# Exercises the full reasoning pipeline end-to-end:
+#   - Two sources (pgvector + elasticsearch) covering multi-adapter fan-out.
+#   - Postgres-backed session store (design §3.2) via ${VE_PG_DSN}.
+#   - File attestation sink (AC-14.2) for JSONL inspection in VE2a.
+#   - API-key auth (AC-12.2) with a single key in ${VE_API_KEY}.
+#   - Two agents: orch-a (clearance=secret, cti compartment) and
+#     orch-b (clearance=cui) so classification/escalation paths can
+#     be stimulated from both vantage points.
+#
+# Path note (Windows dev workstation):
+#   The audit + attestation paths point at ``./ve-runtime/`` instead of
+#   ``/tmp/...`` because under MSYS bash the Python child process
+#   spawned by ``nautilus serve`` resolves ``/tmp/`` to a Windows path
+#   that may not be writable. ``./ve-runtime/`` is gitignored via the
+#   ``.ve-*`` prefix rule; VE3 cleans it up.
+#
+# References: FR-25, FR-27, AC-12.4, design §7.1.
+
+sources:
+  - id: ve_pgv
+    type: pgvector
+    description: "VE pgvector source — mixed PII/CTI embeddings"
+    classification: cui
+    data_types: [pii, cti]
+    allowed_purposes: [threat-hunt, threat-analysis, incident-response]
+    connection: ${VE_PG_DSN}
+    table: vuln_embeddings
+    embedding_column: embedding
+    metadata_column: metadata
+    distance_operator: "<=>"
+    top_k: 5
+
+  - id: ve_es
+    type: elasticsearch
+    description: "VE Elasticsearch source — threat intel index"
+    classification: unclassified
+    data_types: [cti, ioc]
+    allowed_purposes: [threat-hunt, threat-analysis]
+    connection: ${VE_ES_URL}
+    index: ve-threat-intel
+
+agents:
+  orch-a:
+    id: orch-a
+    clearance: secret
+    compartments: [cti]
+    default_purpose: threat-hunt
+  orch-b:
+    id: orch-b
+    clearance: cui
+    compartments: []
+
+rules:
+  # VE2a exercises the ``expires_at`` branch of the attestation hash
+  # (FR-19, AC-12.1, design §7.5). The user rule under ``ve-rules/``
+  # asserts a ``scope_constraint`` with a future-dated ``expires_at``
+  # whenever ``context.purpose == "ve-expiring-probe"``, flipping the
+  # attestation payload to ``scope_hash_version == "v2"``.
+  user_rules_dirs:
+    - tests/fixtures/ve-rules
+
+analysis:
+  keyword_map:
+    pii: [pii, email, phone, dob, ssn, personal]
+    threat: [threat, hunt, ioc, incident]
+    patch: [patch, fix, update]
+
+api:
+  host: 127.0.0.1
+  port: 18080
+  keys:
+    - ${VE_API_KEY}
+
+audit:
+  path: ./ve-runtime/ve-audit.jsonl
+
+attestation:
+  enabled: true
+  sink:
+    type: file
+    path: ./ve-runtime/ve-attestation.jsonl
+
+session_store:
+  backend: postgres
+  dsn: ${VE_PG_DSN}
+  on_failure: fail_closed

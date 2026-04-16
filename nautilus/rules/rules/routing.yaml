@@ -1,0 +1,39 @@
+# Nautilus default routing rule (fathom-rules >= 0.3.0).
+#
+# Emits one ``routing_decision`` fact per ``source`` whose ``data_types``
+# advertise overlaps with the active ``intent``'s ``data_types_needed``.
+# Both slots are space-separated strings (see template doc); the LHS
+# delegates the actual set-overlap check to the ``overlaps`` external
+# registered via ``register_overlaps`` (Engine.register_function).
+#
+# ``then.action: route`` is required so the rule emits a
+# ``__fathom_decision`` fact and surfaces in
+# ``EvaluationResult.rule_trace`` — pure ``then.assert`` rules are
+# invisible to the trace (see fathom evaluator._capture_trace).
+module: nautilus-routing
+ruleset: nautilus-default-routing
+version: "1.0"
+rules:
+  - name: match-sources-by-data-type
+    description: "Match sources whose data_types overlap the intent's data_types_needed."
+    salience: 100
+    when:
+      - template: intent
+        conditions:
+          - slot: data_types_needed
+            bind: ?needed
+      - template: source
+        conditions:
+          - slot: id
+            bind: ?sid
+          - slot: data_types
+            bind: ?have
+          - test: "(overlaps ?needed ?have)"
+    then:
+      action: route
+      reason: "data_types overlap"
+      assert:
+        - template: routing_decision
+          slots:
+            source_id: "?sid"
+            reason: "data_types overlap"

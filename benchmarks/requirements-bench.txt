@@ -1,0 +1,4 @@
+# Benchmark dependencies
+locust>=2.32
+httpx>=0.28
+pyyaml>=6.0

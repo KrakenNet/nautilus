@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard-grid">
+    <aside class="sidebar">
+        {% block sidebar %}
+        <ul class="sidebar-nav">
+            <li><a href="/admin/sources">Sources</a></li>
+            <li><a href="/admin/decisions">Decisions</a></li>
+            <li><a href="/admin/audit">Audit</a></li>
+            <li><a href="/admin/attestation">Attestation</a></li>
+        </ul>
+        {% endblock %}
+    </aside>
+    <section class="content">
+        {% block dashboard_content %}{% endblock %}
+    </section>
+</div>
+{% endblock %}

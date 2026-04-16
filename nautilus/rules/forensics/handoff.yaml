@@ -1,0 +1,173 @@
+# Nautilus forensic handoff rule pack (design §3.7, FR-11, FR-12, AC-5.2, Task 2.22).
+#
+# Three heuristics that infer undeclared agent-to-agent handoffs from
+# post-hoc ``audit_event`` facts. Loaded OFFLINE by the forensic
+# worker (``nautilus.forensics.handoff_worker`` — Task 2.23) via
+# ``Engine.from_rules(Path("nautilus/rules/forensics"))``. Never
+# loaded by :class:`nautilus.core.fathom_router.FathomRouter` — the
+# request-time hot path does not see this module.
+#
+# ---- Window semantics ----------------------------------------------
+# The heuristics say "within window". Time windowing is NOT expressed
+# in the rule LHS — the worker pre-filters ``audit_event`` assertions
+# to those inside the current (audit-log-driven) window before calling
+# ``engine.evaluate()``. Rules therefore join purely on
+# session_id / sources_queried overlap / classification delta.
+#
+# ---- Salience -> confidence mapping --------------------------------
+# Each rule asserts an ``inferred_handoff`` fact with a per-signal
+# ``confidence = salience / 100.0`` (pre-computed; CLIPS RHS does not
+# carry arithmetic on slot literals here). The forensic worker then
+# aggregates per-(session, source, receiver) by SUMMING the confidences
+# and clamping to ``[0.0, 1.0]`` before emitting a single
+# :class:`nautilus.core.models.InferredHandoff`. Concrete per-rule
+# confidences:
+#   - h-shared-session          salience 100 -> 1.0
+#   - h-source-overlap          salience 80  -> 0.8
+#   - h-classification-delta    salience 60  -> 0.6
+#
+# ---- Ordering (source vs receiving agent) --------------------------
+# All three rules bind the EARLIER-timestamped audit_event to
+# ``?source_agent`` and the LATER one to ``?receiving_agent``.
+# Timestamps are ISO-8601 strings, which sort lexicographically in
+# wall-clock order (padded zone offsets required; the broker audit
+# writer guarantees this — core/audit.py). CLIPS ``str-compare``
+# returns -1 / 0 / 1, so ``(> (str-compare ?t2 ?t1) 0)`` means t2 is
+# strictly after t1.
+#
+# ---- External-function discipline ----------------------------------
+# These rules compile with a bare ``fathom.Engine()`` + templates —
+# i.e. they use ONLY functions auto-registered by ``Engine.__init__``
+# (``fathom-dominates``) and CLIPS built-ins (``str-compare``,
+# ``explode$``, ``intersection$``, ``length$``, ``neq``). They MUST
+# NOT reference the router-layer externals (``overlaps``,
+# ``contains-all``, ``not-in-list``) because the forensic worker does
+# not instantiate a :class:`FathomRouter`.
+#
+# ---- Action convention ---------------------------------------------
+# fathom-rules requires ``then.action`` to be one of
+# ``{allow, deny, escalate, scope, route}``. These rules are pure
+# fact-asserters (no broker decision), so we pick ``allow`` — a neutral
+# value that still surfaces the firing in ``EvaluationResult.rule_trace``
+# (see ``fathom.evaluator._capture_trace``) without implying the
+# forensic worker should "allow" anything. The worker consumes the
+# asserted ``inferred_handoff`` facts via ``Engine.query`` and ignores
+# the decision channel entirely.
+#
+module: nautilus-forensics
+ruleset: nautilus-forensic-handoff
+version: "1.0"
+rules:
+  - name: h-shared-session
+    description: "Two distinct agents touched the same session within window."
+    salience: 100
+    when:
+      - template: audit_event
+        conditions:
+          - slot: session_id
+            bind: ?sid
+          - slot: agent_id
+            bind: ?a1
+          - slot: timestamp
+            bind: ?t1
+      - template: audit_event
+        conditions:
+          - slot: session_id
+            bind: ?sid
+          - slot: agent_id
+            bind: ?a2
+          - slot: timestamp
+            bind: ?t2
+          - test: "(neq ?a1 ?a2)"
+          - test: "(> (str-compare ?t2 ?t1) 0)"
+    then:
+      action: allow  # neutral; see header "Action convention"
+      reason: "shared session between distinct agents"
+      assert:
+        - template: inferred_handoff
+          slots:
+            session_id: "?sid"
+            source_agent: "?a1"
+            receiving_agent: "?a2"
+            confidence: "1.0"
+            signals: "shared-session"
+
+  - name: h-source-overlap
+    description: "Two distinct agents on same session share >=1 queried source."
+    salience: 80
+    when:
+      - template: audit_event
+        conditions:
+          - slot: session_id
+            bind: ?sid
+          - slot: agent_id
+            bind: ?a1
+          - slot: sources_queried
+            bind: ?q1
+          - slot: timestamp
+            bind: ?t1
+      - template: audit_event
+        conditions:
+          - slot: session_id
+            bind: ?sid
+          - slot: agent_id
+            bind: ?a2
+          - slot: sources_queried
+            bind: ?q2
+          - slot: timestamp
+            bind: ?t2
+          - test: "(neq ?a1 ?a2)"
+          - test: "(> (str-compare ?t2 ?t1) 0)"
+          - test: "(> (length$ (intersection$ (explode$ ?q1) (explode$ ?q2))) 0)"
+    then:
+      action: allow  # neutral; see header "Action convention"
+      reason: "distinct agents share at least one queried source"
+      assert:
+        - template: inferred_handoff
+          slots:
+            session_id: "?sid"
+            source_agent: "?a1"
+            receiving_agent: "?a2"
+            confidence: "0.8"
+            signals: "source-overlap"
+
+  - name: h-classification-delta
+    description: "Later agent's max classification is strictly lower than earlier agent's."
+    salience: 60
+    when:
+      - template: audit_event
+        conditions:
+          - slot: session_id
+            bind: ?sid
+          - slot: agent_id
+            bind: ?a1
+          - slot: classification
+            bind: ?c1
+          - slot: timestamp
+            bind: ?t1
+      - template: audit_event
+        conditions:
+          - slot: session_id
+            bind: ?sid
+          - slot: agent_id
+            bind: ?a2
+          - slot: classification
+            bind: ?c2
+          - slot: timestamp
+            bind: ?t2
+          - test: "(neq ?a1 ?a2)"
+          - test: "(> (str-compare ?t2 ?t1) 0)"
+          # earlier (a1) dominates later (a2) i.e. strictly higher rank
+          - test: '(fathom-dominates ?c1 "" ?c2 "" "classification")'
+          - test: '(not (fathom-dominates ?c2 "" ?c1 "" "classification"))'
+    then:
+      action: allow  # neutral; see header "Action convention"
+      reason: "later agent observed lower max classification"
+      assert:
+        - template: inferred_handoff
+          slots:
+            session_id: "?sid"
+            source_agent: "?a1"
+            receiving_agent: "?a2"
+            confidence: "0.6"
+            signals: "classification-delta"

@@ -1,0 +1,31 @@
+# Nautilus built-in Fathom module (design §5.1b, §3.1).
+#
+# fathom-rules 0.2.0+ ``parse_module_file`` requires a top-level
+# ``modules:`` list; ``focus_order`` wires the evaluation order for
+# ``engine.evaluate``.
+#
+# Hierarchies registered with this module (design §3.1, FR-1/FR-2):
+#   - classification  (nautilus/rules/hierarchies/classification.yaml)
+#   - cui-sub         (nautilus/rules/hierarchies/cui-sub.yaml)
+#
+# They are bound into ``Engine._hierarchy_registry`` via the
+# ``type: classification`` entries in
+# ``nautilus/rules/functions/classification_scope.yaml``
+# (fathom-rules 0.3 resolves ``hierarchy_ref`` at ``load_functions``).
+# Rules in this module invoke them through the ``fathom-dominates``
+# external registered by the engine.
+#
+# Rulesets loaded into this module (file-scan order in
+# ``nautilus/rules/rules/`` — design §3.9, Task 1.12):
+#   - nautilus-default-routing         (routing.yaml)
+#   - nautilus-default-denial          (denial.yaml)
+#   - nautilus-default-classification  (classification.yaml)
+#   - nautilus-default-handoff         (handoff.yaml — information-flow-violation)
+#   - nautilus-default-temporal        (temporal.yaml — purpose-expired-deny)
+#
+modules:
+  - name: nautilus-routing
+    description: "Nautilus built-in routing, denial, classification, and temporal rules"
+
+focus_order:
+  - nautilus-routing

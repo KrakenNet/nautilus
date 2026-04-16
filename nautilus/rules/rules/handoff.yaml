@@ -1,0 +1,54 @@
+# Nautilus default handoff rule (design §3.6, FR-10, AC-4.3).
+#
+# Fires when the declaring (source) agent's clearance dominates the
+# handoff's classification but the receiving agent's clearance does
+# NOT — i.e. the declared handoff would exfiltrate data above the
+# receiver's authorized level. Emits one ``denial_record`` fact with
+# ``rule_name="information-flow-violation"``.
+#
+# Dominance is delegated to the ``fathom-dominates`` external already
+# registered by :class:`FathomRouter` (same entry point used by
+# ``default-classification-deny``). Compartments are intentionally
+# passed as ``""`` for the first pass — the current ``declare_handoff``
+# surface does not thread compartments into the data_handoff fact.
+# When compartmented handoffs ship, the template gains a
+# ``compartments`` slot and this rule's tests change to bind it.
+#
+# Salience 250 sits above classification-deny (150) and purpose-
+# mismatch (200) so handoff-only evaluations (``Broker.declare_handoff``)
+# surface the violation consistently even if request-time rules are
+# also in scope.
+#
+# ``then.action: deny`` emits a ``__fathom_decision`` fact so the rule
+# surfaces in ``EvaluationResult.rule_trace`` — same pattern as
+# ``default-classification-deny`` and ``deny-purpose-mismatch``.
+#
+module: nautilus-routing
+ruleset: nautilus-default-handoff
+version: "1.0"
+rules:
+  - name: information-flow-violation
+    description: "Deny handoff when receiver clearance does not dominate declared classification."
+    salience: 250
+    when:
+      - template: data_handoff
+        conditions:
+          - slot: session_id
+            bind: ?session_id
+          - slot: classification
+            bind: ?classification
+          - slot: from_clearance
+            bind: ?from_clearance
+          - slot: to_clearance
+            bind: ?to_clearance
+          - test: '(fathom-dominates ?from_clearance "" ?classification "" "classification")'
+          - test: '(not (fathom-dominates ?to_clearance "" ?classification "" "classification"))'
+    then:
+      action: deny
+      reason: "receiving agent clearance does not dominate declared classification"
+      assert:
+        - template: denial_record
+          slots:
+            source_id: "?session_id"
+            reason: "receiving agent clearance does not dominate declared classification"
+            rule_name: "information-flow-violation"

@@ -1,0 +1,23 @@
+name: data-routing-nist
+version: "0.1.0"
+description: >-
+  NIST SP 800-53 compliance rules for Nautilus data routing.
+  Implements access control (AC) and system/communications protection (SC)
+  control families as salience-based routing rules.
+compliance_framework: "NIST SP 800-53"
+author: Project Fathom
+license: Apache-2.0
+
+templates:
+  - templates/nist_control.yaml
+
+modules:
+  - modules/nist-routing.yaml
+
+hierarchies:
+  - hierarchies/cui-sub-extended.yaml
+
+disclaimer: >-
+  Reference implementation only -- not certified for production compliance.
+  Organizations must validate rules against their specific regulatory
+  requirements and engage qualified compliance personnel.

@@ -1,0 +1,40 @@
+{% extends "layouts/dashboard.html" %}
+{% from "macros/table.html" import render_sort_header %}
+
+{% block title %}Audit Log - Nautilus Admin{% endblock %}
+
+{% block dashboard_content %}
+<h1>Audit Log</h1>
+
+{% include "partials/audit_filters.html" %}
+
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                {{ render_sort_header("timestamp", "Timestamp", current_sort) }}
+                <th>Event Type</th>
+                <th>Agent ID</th>
+                <th>Source ID</th>
+                {{ render_sort_header("duration_ms", "Duration (ms)", current_sort) }}
+                <th>Outcome</th>
+            </tr>
+        </thead>
+        <tbody id="audit-table-body">
+            {% for entry in entries %}
+                {% include "partials/audit_rows.html" %}
+            {% else %}
+            <tr>
+                <td colspan="6">
+                    <div class="empty-state">
+                        <p>No audit entries found</p>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% include "partials/pagination.html" %}
+{% endblock %}

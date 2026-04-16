@@ -1,0 +1,47 @@
+# VE user-rule for Task 5.2 (VE2a): emits a ScopeConstraint with a
+# future ``expires_at`` so the attestation layer canonicalizes under
+# the v2 hash schema (FR-19, AC-12.1, design §3.8 / §7.5).
+#
+# Trigger: request carries ``context.purpose == "ve-expiring-probe"``
+# — the router's purpose-gate will skip the sources (neither VE source
+# advertises that purpose in ``allowed_purposes``), but this rule still
+# asserts a ``scope_constraint`` fact with a future-dated ``expires_at``.
+# The router picks it up via ``engine.query("scope_constraint")`` and
+# propagates the temporal slot onto the :class:`ScopeConstraint`, which
+# flips :func:`build_scope_payload` to emit ``scope_hash_version="v2"``.
+#
+# ``operator: "="`` aligns with the SQL-operator allowlist pinned on
+# :class:`~nautilus.core.models.ScopeConstraint`.
+#
+module: nautilus-routing
+ruleset: ve-expiring-scope
+version: "1.0"
+rules:
+  - name: ve-expiring-scope-probe
+    description: "Attach a future-dated ScopeConstraint for VE2a v2-hash probe."
+    salience: 50
+    when:
+      - template: agent
+        conditions:
+          - slot: purpose
+            bind: ?purpose
+          - test: '(eq ?purpose "ve-expiring-probe")'
+      - template: source
+        conditions:
+          - slot: id
+            bind: ?sid
+    then:
+      action: scope
+      reason: "VE2a expiring-scope probe"
+      assert:
+        - template: scope_constraint
+          slots:
+            source_id: "?sid"
+            field: "classification"
+            # ``operator`` is a CLIPS symbol slot — use a CLIPS expression
+            # (``(sym-cat ...)``) so fathom's YAML emitter renders it as a
+            # symbol token rather than a quoted string literal. "=" is in
+            # :class:`ScopeConstraint`'s Literal operator allowlist.
+            operator: "(sym-cat =)"
+            value: "cui"
+            expires_at: "2030-01-01T00:00:00Z"

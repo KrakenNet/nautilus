@@ -1,0 +1,15 @@
+# CUI sub-category hierarchy (design §3.1, FR-2, AC-1.2).
+#
+# Two-hierarchy workaround: the base ``classification`` ladder exposes
+# ``cui`` as a single level, and this secondary ``cui-sub`` ladder
+# expresses the sub-category ranking (CTI, IIH, PCIIP are siblings
+# above the generic ``cui`` base; equality = plain CUI). Rules invoke
+# ``fathom-dominates`` twice — once per hierarchy — to enforce both
+# the primary level and the CUI specifier.
+#
+name: cui-sub
+levels:
+  - cui
+  - cui-sp-cti
+  - cui-sp-iih
+  - cui-sp-pciip

@@ -1,0 +1,31 @@
+"""{{ project_name }} adapter implementation."""
+
+from __future__ import annotations
+
+from typing import ClassVar
+
+from nautilus_adapter_sdk.config import SourceConfig
+from nautilus_adapter_sdk.types import AdapterResult, IntentAnalysis, ScopeConstraint
+
+
+class {{ module_name | capitalize }}Adapter:
+    """Adapter for {{ adapter_type }} data sources."""
+
+    source_type: ClassVar[str] = "{{ adapter_type }}"
+
+    async def connect(self, config: SourceConfig) -> None:
+        """Establish connection to the data source."""
+        raise NotImplementedError
+
+    async def execute(
+        self,
+        intent: IntentAnalysis,
+        scope: list[ScopeConstraint],
+        context: dict,
+    ) -> AdapterResult:
+        """Execute a scoped query against the data source."""
+        raise NotImplementedError
+
+    async def close(self) -> None:
+        """Close the connection and release resources."""
+        pass

@@ -1,0 +1,30 @@
+rule: sc-7-boundary-protection
+template: nist_control_mapping
+description: >-
+  Denies data routing when the source resides in a restricted boundary
+  zone. Implements NIST SP 800-53 SC-7 (Boundary Protection) by
+  enforcing perimeter controls that prevent data egress from protected
+  network segments without authorized boundary traversal.
+
+control_id: "SC-7"
+control_family: "System and Communications Protection"
+title: "Boundary Protection"
+salience: 175
+salience_band: "170-190"
+action: deny
+
+conditions:
+  - field: source.boundary_zone
+    operator: in
+    value:
+      - restricted
+      - classified
+      - isolated
+  - field: route.boundary_traversal_authorized
+    operator: ne
+    value: true
+
+denial_reason: >-
+  Source resides in restricted boundary zone ({{ source.boundary_zone }}).
+  Boundary traversal not authorized for this route. Denied per NIST SC-7
+  Boundary Protection.

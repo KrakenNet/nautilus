@@ -1,0 +1,110 @@
+# HIPAA Breach Detection Rules
+# Temporal operator rules — detect anomalous PHI access patterns.
+
+template: phi_source_tag
+
+regulation: "HIPAA"
+regulation_section: "45 CFR 164.408"
+title: "Breach Detection"
+salience_band: "110-120"
+action: escalate
+
+description: >-
+  Detects anomalous PHI access patterns that may indicate a breach
+  under the HIPAA Breach Notification Rule. Uses temporal operators
+  to identify high-volume access, off-hours access, and cross-entity
+  access that deviate from established baselines.
+
+rules:
+  - name: breach-high-volume-access
+    salience: 120
+    description: >-
+      Escalate when an agent accesses an unusually high volume of
+      PHI records within a sliding time window, indicating potential
+      bulk exfiltration or unauthorized data harvesting.
+    conditions:
+      - field: agent.phi_access_count
+        operator: exceeds
+        value: "{{ agent.baseline_access_count * 3 }}"
+        temporal:
+          window: 1h
+          aggregation: count
+      - field: source.phi_level
+        operator: in
+        values: [standard, sensitive]
+    effects:
+      - type: escalate
+        parameters:
+          reason: "High-volume PHI access detected — exceeds 3x baseline"
+          escalation_target: privacy_officer
+          require_immediate_review: true
+          suspend_further_access: true
+
+  - name: breach-off-hours-access
+    salience: 115
+    description: >-
+      Escalate when PHI access occurs outside the agent's established
+      working hours or from an unrecognized access context.
+    conditions:
+      - field: request.timestamp
+        operator: outside
+        value: "{{ agent.established_hours }}"
+        temporal:
+          reference: agent_schedule
+      - field: source.phi_level
+        operator: in
+        values: [standard, sensitive]
+    effects:
+      - type: escalate
+        parameters:
+          reason: "Off-hours PHI access detected"
+          escalation_target: security_officer
+          require_justification: true
+          log_enhanced_audit: true
+
+  - name: breach-cross-entity-access
+    salience: 112
+    description: >-
+      Escalate when an agent associated with one covered entity
+      accesses PHI belonging to a different covered entity without
+      a business associate agreement.
+    conditions:
+      - field: agent.covered_entity
+        operator: not_equals
+        value: "{{ source.covered_entity }}"
+      - field: agent.business_associate_agreement
+        operator: is_not_set
+      - field: source.phi_level
+        operator: in
+        values: [limited, standard, sensitive]
+    effects:
+      - type: escalate
+        parameters:
+          reason: "Cross-entity PHI access without BAA"
+          escalation_target: compliance_officer
+          require_baa_verification: true
+          block_pending_review: true
+
+  - name: breach-pattern-anomaly
+    salience: 110
+    description: >-
+      Escalate when access patterns deviate significantly from the
+      agent's historical norm — accessing new PHI categories, new
+      patient populations, or new data sources.
+    conditions:
+      - field: request.access_pattern
+        operator: deviates_from
+        value: "{{ agent.access_baseline }}"
+        temporal:
+          window: 24h
+          deviation_threshold: 2.0
+      - field: source.phi_level
+        operator: in
+        values: [standard, sensitive]
+    effects:
+      - type: escalate
+        parameters:
+          reason: "Access pattern anomaly — deviation exceeds 2 sigma"
+          escalation_target: security_officer
+          require_justification: true
+          log_enhanced_audit: true

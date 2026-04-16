@@ -1,0 +1,33 @@
+# HIPAA compliance rule pack for Nautilus data routing (design Component F).
+#
+# Reference implementation only -- not certified for production compliance.
+# Organizations must validate rules against their specific regulatory
+# requirements and engage qualified compliance personnel.
+#
+name: data-routing-hipaa
+version: "0.1.0"
+description: >
+  HIPAA compliance rules for Nautilus data routing. Implements minimum
+  necessary, PHI access control, breach detection, and role-based
+  restrictions aligned with the HIPAA Privacy and Security Rules.
+compliance_framework: "HIPAA"
+disclaimer: >
+  Reference implementation only -- not certified for production compliance.
+  Organizations must validate rules against their specific regulatory
+  requirements and engage qualified compliance personnel.
+
+templates:
+  - templates/phi_classification.yaml
+
+modules:
+  - modules/hipaa-routing.yaml
+
+rules:
+  - rules/minimum-necessary.yaml
+  - rules/phi-access-control.yaml
+  - rules/phi-hierarchy.yaml
+  - rules/breach-detection.yaml
+  - rules/role-restrictions.yaml
+
+hierarchies:
+  - hierarchies/phi-level.yaml

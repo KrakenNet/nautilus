@@ -1,0 +1,194 @@
+# Synthesized VCR cassette for AnthropicProvider (Task 2.26).
+#
+# Captures the 3 canonical fixture prompts under temperature=0 against the
+# Messages API with tool_use bound to IntentAnalysis. Responses are hand-
+# authored to match anthropic's Messages response envelope exactly so
+# pytest-recording / VCR.py can replay them without network I/O.
+#
+# The content[0] block is a `tool_use` block (AnthropicProvider pins
+# tool_choice={"type":"tool","name":"emit_intent_analysis"}); its `input`
+# field carries the IntentAnalysis payload the provider validates.
+#
+# Canonical prompts (routing-representative):
+#   1. low-sensitivity  : public CVE lookup                    -> public
+#   2. mid-sensitivity  : internal asset inventory query       -> internal
+#   3. high-sensitivity : credential / PII-adjacent review     -> confidential
+interactions:
+- request:
+    method: POST
+    uri: https://api.anthropic.com/v1/messages
+    body:
+      model: claude-sonnet-4-5
+      max_tokens: 512
+      temperature: 0
+      messages:
+      - role: user
+        content: |-
+          CANONICAL_PROMPT_1: lookup public CVE metadata for CVE-2024-0001
+          context_json: {"purpose": "threat-analysis"}
+      tools:
+      - name: emit_intent_analysis
+        description: Emit the structured IntentAnalysis classification.
+        input_schema:
+          type: object
+      tool_choice:
+        type: tool
+        name: emit_intent_analysis
+    headers:
+      anthropic-version: ['2023-06-01']
+      content-type: [application/json]
+      x-api-key: [REDACTED]
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      content-type: [application/json]
+    body:
+      string: |-
+        {
+          "id": "msg_01canonical01public",
+          "type": "message",
+          "role": "assistant",
+          "model": "claude-sonnet-4-5",
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_01canonical01public",
+              "name": "emit_intent_analysis",
+              "input": {
+                "raw_intent": "lookup public CVE metadata for CVE-2024-0001",
+                "data_types_needed": ["cve", "vulnerability"],
+                "entities": ["CVE-2024-0001"],
+                "temporal_scope": null,
+                "estimated_sensitivity": "public",
+                "purpose_inferred": "threat-analysis"
+              }
+            }
+          ],
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 120,
+            "output_tokens": 48
+          }
+        }
+- request:
+    method: POST
+    uri: https://api.anthropic.com/v1/messages
+    body:
+      model: claude-sonnet-4-5
+      max_tokens: 512
+      temperature: 0
+      messages:
+      - role: user
+        content: |-
+          CANONICAL_PROMPT_2: enumerate internal asset inventory for host-prod-42
+          context_json: {"purpose": "incident-response", "clearance": "internal"}
+      tools:
+      - name: emit_intent_analysis
+        description: Emit the structured IntentAnalysis classification.
+        input_schema:
+          type: object
+      tool_choice:
+        type: tool
+        name: emit_intent_analysis
+    headers:
+      anthropic-version: ['2023-06-01']
+      content-type: [application/json]
+      x-api-key: [REDACTED]
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      content-type: [application/json]
+    body:
+      string: |-
+        {
+          "id": "msg_01canonical02internal",
+          "type": "message",
+          "role": "assistant",
+          "model": "claude-sonnet-4-5",
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_01canonical02internal",
+              "name": "emit_intent_analysis",
+              "input": {
+                "raw_intent": "enumerate internal asset inventory for host-prod-42",
+                "data_types_needed": ["asset", "scan_result"],
+                "entities": ["host-prod-42"],
+                "temporal_scope": null,
+                "estimated_sensitivity": "internal",
+                "purpose_inferred": "incident-response"
+              }
+            }
+          ],
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 138,
+            "output_tokens": 52
+          }
+        }
+- request:
+    method: POST
+    uri: https://api.anthropic.com/v1/messages
+    body:
+      model: claude-sonnet-4-5
+      max_tokens: 512
+      temperature: 0
+      messages:
+      - role: user
+        content: |-
+          CANONICAL_PROMPT_3: review leaked credential exposure for user alice@example.com
+          context_json: {"purpose": "credential-review", "clearance": "restricted"}
+      tools:
+      - name: emit_intent_analysis
+        description: Emit the structured IntentAnalysis classification.
+        input_schema:
+          type: object
+      tool_choice:
+        type: tool
+        name: emit_intent_analysis
+    headers:
+      anthropic-version: ['2023-06-01']
+      content-type: [application/json]
+      x-api-key: [REDACTED]
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      content-type: [application/json]
+    body:
+      string: |-
+        {
+          "id": "msg_01canonical03confidential",
+          "type": "message",
+          "role": "assistant",
+          "model": "claude-sonnet-4-5",
+          "content": [
+            {
+              "type": "tool_use",
+              "id": "toolu_01canonical03confidential",
+              "name": "emit_intent_analysis",
+              "input": {
+                "raw_intent": "review leaked credential exposure for user alice@example.com",
+                "data_types_needed": ["credential.exposure", "customer.profile"],
+                "entities": ["alice@example.com"],
+                "temporal_scope": null,
+                "estimated_sensitivity": "confidential",
+                "purpose_inferred": "credential-review"
+              }
+            }
+          ],
+          "stop_reason": "tool_use",
+          "stop_sequence": null,
+          "usage": {
+            "input_tokens": 146,
+            "output_tokens": 58
+          }
+        }
+version: 1

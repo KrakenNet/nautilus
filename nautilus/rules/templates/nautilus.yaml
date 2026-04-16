@@ -1,0 +1,126 @@
+# Nautilus built-in Fathom templates (design §5.1).
+#
+# Multislot-shaped fields (data_types_needed, data_types, allowed_purposes,
+# compartments, data_types_seen, sources_visited, pii_sources_accessed_list,
+# sources_queried, trigger_combination) are encoded at the router layer as
+# space-separated strings before fact assertion; CLIPS rules decompose them
+# with ``explode$`` on the LHS. Fathom YAML templates only expose scalar
+# CLIPS ``slot`` constructs today, so every "multislot" below is a string
+# slot with default "" — Phase 1 callers that never populate the new slots
+# continue to parse unchanged.
+#
+templates:
+  - name: agent
+    description: "Requesting agent principal (id, clearance, purpose, compartments)."
+    slots:
+      - { name: id,           type: string, required: true }
+      - { name: clearance,    type: string, required: true }
+      - { name: purpose,      type: string, required: true }
+      - { name: compartments, type: string, default: "" }   # space-separated multislot
+      - { name: sub_category, type: string, default: "" }
+
+  - name: intent
+    description: "Parsed user intent with requested data types."
+    slots:
+      - { name: raw,               type: string, required: true }
+      - { name: data_types_needed, type: string, required: true }  # space-separated multislot
+      - { name: entities,          type: string, default: "" }
+
+  - name: source
+    description: "Registered data source (postgres/pgvector/http)."
+    slots:
+      - { name: id,               type: string, required: true }
+      - { name: type,             type: symbol, required: true }
+      - { name: classification,   type: string, required: true }
+      - { name: data_types,       type: string, required: true }   # space-separated
+      - { name: allowed_purposes, type: string, default: "" }      # space-separated
+      - { name: compartments,     type: string, default: "" }      # space-separated multislot
+      - { name: sub_category,     type: string, default: "" }
+
+  - name: session
+    description: "Per-request session counters and purpose/exposure tracking."
+    slots:
+      - { name: id,                        type: string,  required: true }
+      - { name: pii_sources_accessed,      type: integer, default: 0 }
+      - { name: data_types_seen,           type: string,  default: "" }  # multislot
+      - { name: sources_visited,           type: string,  default: "" }  # multislot
+      - { name: pii_sources_accessed_list, type: string,  default: "" }  # multislot
+      - { name: purpose_start_ts,          type: float,   default: 0.0 }
+      - { name: purpose_ttl_seconds,       type: float,   default: 0.0 }
+
+  - name: routing_decision
+    description: "Router output: a source selected for the request."
+    slots:
+      - { name: source_id, type: string, required: true }
+      - { name: reason,    type: string, required: true }
+
+  - name: scope_constraint
+    description: "Row-level scope predicate attached to a source."
+    slots:
+      - { name: source_id,  type: string, required: true }
+      - { name: field,      type: string, required: true }
+      - { name: operator,   type: symbol, required: true }
+      - { name: value,      type: string, required: true }  # stringified; typed at broker layer
+      - { name: expires_at, type: string, default: "" }      # ISO-8601 or empty
+      - { name: valid_from, type: string, default: "" }      # ISO-8601 or empty
+
+  - name: denial_record
+    description: "Per-source denial with firing rule name."
+    slots:
+      - { name: source_id, type: string, required: true }
+      - { name: reason,    type: string, required: true }
+      - { name: rule_name, type: string, required: true }
+
+  - name: data_handoff
+    description: "Declared agent-to-agent handoff of session-scoped data."
+    slots:
+      - { name: from_agent,     type: string, required: true }
+      - { name: to_agent,       type: string, required: true }
+      - { name: session_id,     type: string, required: true }
+      - { name: classification, type: string, required: true }
+      - { name: from_clearance, type: string, required: true }
+      - { name: to_clearance,   type: string, required: true }
+
+  - name: escalation_rule
+    description: "Declarative escalation trigger combining session-exposure signals."
+    slots:
+      - { name: id,                   type: string, required: true }
+      - { name: trigger_combination,  type: string, required: true }  # multislot
+      - { name: resulting_level,      type: string, required: true }
+      - { name: action,               type: string, required: true }
+
+  - name: session_exposure
+    description: "Per-session exposure marker (category + value) accumulated across queries."
+    slots:
+      - { name: session_id, type: string, required: true }
+      - { name: value,      type: string, required: true }
+      - { name: category,   type: string, required: true }
+
+  - name: audit_event
+    description: "Append-only audit trail record for broker decisions and handoffs."
+    slots:
+      - { name: session_id,     type: string, required: true }
+      - { name: agent_id,       type: string, required: true }
+      - { name: event_type,     type: string, required: true }
+      - { name: sources_queried, type: string, default: "" }   # multislot
+      - { name: classification, type: string, required: true }
+      - { name: timestamp,      type: string, required: true }
+
+  - name: inferred_handoff
+    description: "Forensic-inferred agent-to-agent handoff (design §3.7, FR-11, FR-12)."
+    # Emitted by the offline forensic worker's rule pack
+    # (nautilus/rules/forensics/handoff.yaml). Populated from paired
+    # ``audit_event`` facts whose session_id / sources_queried /
+    # classification trip one of the three heuristics. ``confidence``
+    # is the salience-weighted signal sum mapped to [0.0, 1.0]
+    # (see handoff.yaml header for the exact mapping). ``signals`` is
+    # a space-separated multislot of heuristic ids (``shared-session``,
+    # ``source-overlap``, ``classification-delta``) so the worker can
+    # aggregate multiple firings on the same (session, source, receiver)
+    # into a single :class:`nautilus.core.models.InferredHandoff`.
+    slots:
+      - { name: session_id,      type: string, required: true }
+      - { name: source_agent,    type: string, required: true }
+      - { name: receiving_agent, type: string, required: true }
+      - { name: confidence,      type: string, required: true } # stringified float; worker parses to [0.0, 1.0]
+      - { name: signals,         type: string, default: "" }    # space-separated multislot

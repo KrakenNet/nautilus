@@ -1,0 +1,39 @@
+template: nist_control_mapping
+description: >-
+  Maps NIST SP 800-53 controls to Nautilus routing actions via salience bands.
+  Each rule referencing this template declares a control_id, control_family,
+  and the corresponding routing action at a defined salience level.
+
+fields:
+  control_id:
+    type: string
+    description: "NIST control identifier (e.g., AC-3, SC-7)"
+    required: true
+
+  control_family:
+    type: string
+    description: "NIST control family name (e.g., Access Control, System and Communications Protection)"
+    required: true
+
+  title:
+    type: string
+    description: "Human-readable control title"
+    required: true
+
+  salience_band:
+    type: string
+    description: "Salience range for this control (e.g., 170-190, 130-150, 110-120)"
+    required: true
+    enum:
+      - "170-190"
+      - "130-150"
+      - "110-120"
+
+  action:
+    type: string
+    description: "Routing action to take when control is triggered"
+    required: true
+    enum:
+      - deny
+      - constrain
+      - escalate

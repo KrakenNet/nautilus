@@ -1,0 +1,11 @@
+<tr hx-get="/admin/decisions/{{ decision.request_id }}"
+    hx-target="#decision-detail-modal"
+    hx-swap="innerHTML"
+    class="clickable-row">
+    <td>{{ decision.timestamp }}</td>
+    <td><code>{{ decision.request_id }}</code></td>
+    <td>{{ decision.agent_id }}</td>
+    <td>{{ decision.sources_queried }}</td>
+    <td>{{ decision.sources_denied }}</td>
+    <td>{{ decision.duration_ms }}</td>
+</tr>

@@ -1,0 +1,51 @@
+<div class="card">
+    <h2>
+        {% if valid %}
+        <span class="badge badge-success">Valid</span>
+        {% else %}
+        <span class="badge badge-error">Invalid</span>
+        {% endif %}
+        Attestation Result
+    </h2>
+
+    {% if error %}
+    <p class="text-error">{{ error }}</p>
+    {% endif %}
+
+    {% if claims %}
+    <table>
+        <thead>
+            <tr>
+                <th>Claim</th>
+                <th>Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>request_id</td>
+                <td><code>{{ claims.request_id | default('N/A') }}</code></td>
+            </tr>
+            <tr>
+                <td>scope_hash</td>
+                <td><code>{{ claims.scope_hash | default('N/A') }}</code></td>
+            </tr>
+            <tr>
+                <td>rule_trace_hash</td>
+                <td><code>{{ claims.rule_trace_hash | default('N/A') }}</code></td>
+            </tr>
+            <tr>
+                <td>timestamp</td>
+                <td><code>{{ claims.timestamp | default('N/A') }}</code></td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p>
+        {% if expired %}
+        <span class="badge badge-error">Expired</span>
+        {% else %}
+        <span class="badge badge-success">Not Expired</span>
+        {% endif %}
+    </p>
+    {% endif %}
+</div>

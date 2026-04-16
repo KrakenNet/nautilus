@@ -1,0 +1,56 @@
+"""Compliance tests for {{ project_name }}."""
+
+from __future__ import annotations
+
+import pytest
+
+from nautilus_adapter_sdk.config import SourceConfig
+from nautilus_adapter_sdk.testing import AdapterComplianceSuite
+
+from {{ module_name }}.adapter import {{ module_name | capitalize }}Adapter
+
+
+@pytest.fixture()
+def adapter_factory():
+    """Return a callable that creates a fresh adapter instance."""
+    return lambda: {{ module_name | capitalize }}Adapter()
+
+
+@pytest.fixture()
+def source_config():
+    """Return a SourceConfig for testing."""
+    return SourceConfig(id="test-source", type="{{ adapter_type }}")
+
+
+@pytest.fixture()
+def compliance_suite(adapter_factory, source_config):
+    """Return a wired AdapterComplianceSuite."""
+    return AdapterComplianceSuite(
+        adapter_factory=adapter_factory,
+        source_config=source_config,
+    )
+
+
+@pytest.mark.asyncio()
+async def test_connect_execute_close_lifecycle(compliance_suite):
+    await compliance_suite.test_connect_execute_close_lifecycle()
+
+
+@pytest.mark.asyncio()
+async def test_scope_enforcement_valid_operator(compliance_suite):
+    await compliance_suite.test_scope_enforcement_valid_operator()
+
+
+@pytest.mark.asyncio()
+async def test_scope_enforcement_invalid_operator(compliance_suite):
+    await compliance_suite.test_scope_enforcement_invalid_operator()
+
+
+@pytest.mark.asyncio()
+async def test_idempotent_close(compliance_suite):
+    await compliance_suite.test_idempotent_close()
+
+
+@pytest.mark.asyncio()
+async def test_error_path_returns_error_record(compliance_suite):
+    await compliance_suite.test_error_path_returns_error_record()

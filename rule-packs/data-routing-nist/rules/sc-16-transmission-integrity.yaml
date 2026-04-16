@@ -1,0 +1,26 @@
+rule: sc-16-transmission-integrity
+template: nist_control_mapping
+description: >-
+  Denies data transmission when integrity requirements are not met.
+  Implements NIST SP 800-53 SC-16 (Transmission of Security and Privacy
+  Attributes) by verifying that the transmission channel satisfies the
+  integrity controls required by the data's security attributes.
+
+control_id: "SC-16"
+control_family: "System and Communications Protection"
+title: "Transmission of Security and Privacy Attributes"
+salience: 170
+salience_band: "170-190"
+action: deny
+
+conditions:
+  - field: source.integrity_requirement
+    operator: is_set
+  - field: channel.integrity_level
+    operator: lt
+    value: "{{ source.integrity_requirement }}"
+
+denial_reason: >-
+  Transmission channel integrity ({{ channel.integrity_level }}) does not
+  meet the required level ({{ source.integrity_requirement }}). Denied per
+  NIST SC-16 Transmission of Security and Privacy Attributes.

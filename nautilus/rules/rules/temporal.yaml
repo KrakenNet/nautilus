@@ -1,0 +1,48 @@
+# Nautilus purpose-TTL denial rule (design §3.9, FR-18, AC-7.3).
+#
+# Fires when the session's declared purpose has aged past its TTL, i.e.
+# the current wall clock minus ``purpose_start_ts`` is NOT less than
+# ``purpose_ttl_seconds``. Delegated to the ``fathom-changed-within``
+# external (``fathom/engine.py:318``) which returns true while the
+# timestamp is still inside the window; we invert with ``not`` to fire
+# the denial once the window has elapsed.
+#
+# The ``(> ?ttl 0.0)`` guard prevents the rule from firing on the
+# template default (0.0) — Phase-1 sessions that never populated the
+# TTL slot must remain parseable without spurious denials (NFR-5).
+#
+# Global denial: the single ``denial_record`` asserts
+# ``source_id="*"`` — the broker interprets ``*`` as "all sources" at
+# the Phase-2 routing layer (§3.9 — purpose expiry denies the whole
+# request, not a subset). Salience 250 sits above the other denials
+# (purpose-mismatch 200, classification 150) so the global deny
+# short-circuits per-source routing.
+#
+# ``then.action: deny`` is required so the rule emits a
+# ``__fathom_decision`` fact and surfaces in
+# ``EvaluationResult.rule_trace`` (see fathom evaluator._capture_trace).
+module: nautilus-routing
+ruleset: nautilus-default-temporal
+version: "1.0"
+rules:
+  - name: purpose-expired-deny
+    description: "Deny the request when the session's purpose TTL has elapsed."
+    salience: 250
+    when:
+      - template: session
+        conditions:
+          - slot: purpose_start_ts
+            bind: ?start
+          - slot: purpose_ttl_seconds
+            bind: ?ttl
+          - test: "(> ?ttl 0.0)"
+          - test: "(not (fathom-changed-within ?start ?ttl))"
+    then:
+      action: deny
+      reason: "session purpose TTL elapsed"
+      assert:
+        - template: denial_record
+          slots:
+            source_id: "*"
+            reason: "session purpose TTL elapsed"
+            rule_name: "purpose-expired-deny"

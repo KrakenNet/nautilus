@@ -1,0 +1,15 @@
+# HIPAA routing module definition (design Component F).
+#
+# Registers the hipaa-routing Fathom module for HIPAA compliance rules.
+# Rules enforce minimum necessary, PHI access control, breach detection,
+# and role-based restrictions.
+#
+# Templates: phi_source_tag (templates/phi_classification.yaml)
+# Hierarchies: phi-level (hierarchies/phi-level.yaml)
+#
+modules:
+  - name: hipaa-routing
+    description: "HIPAA compliance routing, access control, and breach detection rules"
+
+focus_order:
+  - hipaa-routing

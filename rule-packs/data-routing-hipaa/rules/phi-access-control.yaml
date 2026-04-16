@@ -1,0 +1,79 @@
+# HIPAA Privacy & Security Rules: PHI Access Control
+# Denial rules — blocks unauthorized PHI access.
+
+template: phi_source_tag
+
+regulation: "HIPAA"
+regulation_section: "45 CFR 164.312(a)(1)"
+title: "PHI Access Control"
+salience_band: "170-190"
+action: deny
+
+description: >-
+  Denies access to protected health information when the requesting
+  agent lacks proper authorization, role assignment, or valid purpose.
+  Implements HIPAA technical safeguards for access control.
+
+rules:
+  - name: deny-no-authorization
+    salience: 190
+    description: >-
+      Deny access when agent has no valid HIPAA authorization for the
+      requested PHI source.
+    conditions:
+      - field: agent.hipaa_authorization
+        operator: is_not_set
+      - field: source.phi_level
+        operator: in
+        values: [limited, standard, sensitive]
+    denial_reason: >-
+      Agent lacks valid HIPAA authorization. Access to PHI
+      ({{ source.phi_level }}) denied per 45 CFR 164.312(a)(1).
+
+  - name: deny-invalid-role
+    salience: 185
+    description: >-
+      Deny access when agent role is not in the covered entity's
+      authorized workforce for the requested PHI category.
+    conditions:
+      - field: agent.role
+        operator: not_in
+        values: "{{ source.covered_entity.authorized_roles }}"
+      - field: source.phi_level
+        operator: in
+        values: [standard, sensitive]
+    denial_reason: >-
+      Agent role ({{ agent.role }}) is not authorized for
+      {{ source.phi_level }} PHI under covered entity
+      {{ source.covered_entity }}. Access denied.
+
+  - name: deny-no-valid-purpose
+    salience: 180
+    description: >-
+      Deny access when the stated purpose is not a HIPAA-permitted
+      use (treatment, payment, or healthcare operations).
+    conditions:
+      - field: request.purpose
+        operator: not_in
+        values: [treatment, payment, operations, research]
+      - field: source.phi_level
+        operator: in
+        values: [limited, standard, sensitive]
+    denial_reason: >-
+      Purpose ({{ request.purpose }}) is not a HIPAA-permitted use.
+      PHI access denied per 45 CFR 164.502(a).
+
+  - name: deny-sensitive-without-explicit-consent
+    salience: 170
+    description: >-
+      Deny access to sensitive PHI (psychotherapy notes, substance
+      abuse records, HIV status) without explicit patient consent.
+    conditions:
+      - field: source.phi_level
+        operator: equals
+        value: sensitive
+      - field: request.patient_consent
+        operator: is_not_set
+    denial_reason: >-
+      Sensitive PHI requires explicit patient consent per 45 CFR
+      164.508. No consent record found. Access denied.

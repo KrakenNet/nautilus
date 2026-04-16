@@ -1,0 +1,17 @@
+# Primary classification hierarchy (design §3.1, FR-1/FR-2).
+#
+# Ordered LOWEST -> HIGHEST; rank-based dominance semantics apply
+# (see fathom.engine.dominates: subject dominates object iff
+# rank(subject) >= rank(object) AND compartments_superset).
+#
+# Wired into Fathom's ``_hierarchy_registry`` at ``Engine.load_functions``
+# time via ``hierarchy_ref`` from the classification scope-function YAML
+# under ``nautilus/rules/functions/`` (fathom-rules 0.3 mechanism).
+#
+name: classification
+levels:
+  - unclassified
+  - cui
+  - confidential
+  - secret
+  - top-secret

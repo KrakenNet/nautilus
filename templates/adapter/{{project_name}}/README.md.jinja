@@ -1,0 +1,47 @@
+# {{ project_name }}
+
+Nautilus adapter for **{{ adapter_type }}** data sources.
+
+## Installation
+
+```bash
+pip install -e .
+```
+
+For development dependencies:
+
+```bash
+pip install -e ".[dev]"
+```
+
+## Usage
+
+The adapter is automatically discovered via the `nautilus.adapters` entry point.
+
+```python
+from {{ module_name }}.adapter import {{ module_name | capitalize }}Adapter
+
+adapter = {{ module_name | capitalize }}Adapter()
+await adapter.connect(config)
+result = await adapter.execute(intent, scope, context)
+await adapter.close()
+```
+
+## Testing
+
+Run the compliance test suite:
+
+```bash
+pytest tests/ -v
+```
+
+## Linting and Type Checking
+
+```bash
+ruff check src/ tests/
+pyright src/
+```
+
+## License
+
+Proprietary - {{ author }}

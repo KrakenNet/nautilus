@@ -1,0 +1,53 @@
+# POC milestone fixture (reasoning-engine spec Task 1.15).
+#
+# Single pgvector source classified `cui` with data_types=[pii]. The agent
+# registry declares `a1: clearance=cui` so the default-classification-deny
+# rule is satisfied when the request carries clearance=cui, and trips on a
+# clearance=unclassified request (POC assertion 6).
+#
+# `attestation.sink.type: file` exercises the store-and-forward path end-to-
+# end; the destination path is env-interpolated so the integration test can
+# redirect it under `tmp_path` (Windows has no /tmp) without template churn.
+# `session_store.backend: postgres` exercises PostgresSessionStore — the DSN
+# resolves from `TEST_PG_DSN` (exported by the pg_container fixture).
+#
+# Audit path is plain `./audit.jsonl` — the test monkeypatches CWD onto
+# `tmp_path` so the audit file stays scoped to the test run.
+sources:
+  - id: cui_embeddings
+    type: pgvector
+    description: "CUI embedding store holding PII for POC scenario"
+    classification: cui
+    data_types: [pii]
+    connection: ${TEST_PGV_DSN}
+    table: vuln_embeddings
+    embedding_column: embedding
+    metadata_column: metadata
+    distance_operator: "<=>"
+    top_k: 5
+
+agents:
+  a1:
+    id: a1
+    clearance: cui
+
+rules:
+  user_rules_dirs: []
+
+analysis:
+  keyword_map:
+    pii: [pii, email, phone, personal]
+    threat: [threat, hunt, ioc]
+
+audit:
+  path: ./audit.jsonl
+
+attestation:
+  enabled: true
+  sink:
+    type: file
+    path: ${POC_ATTESTATION_PATH}
+
+session_store:
+  backend: postgres
+  on_failure: fail_closed

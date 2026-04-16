@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68.0", "setuptools-scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "{{ project_name }}"
+version = "0.1.0"
+description = "Nautilus adapter for {{ adapter_type }}"
+authors = [{ name = "{{ author }}" }]
+requires-python = ">=3.11"
+dependencies = [
+    "nautilus-adapter-sdk>=0.1.0",
+]
+
+[project.entry-points."nautilus.adapters"]
+{{ module_name }} = "{{ module_name }}.adapter:{{ module_name | capitalize }}Adapter"
+
+[tool.setuptools.packages.find]
+where = ["src"]

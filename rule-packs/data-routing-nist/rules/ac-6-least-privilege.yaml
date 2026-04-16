@@ -1,0 +1,35 @@
+# NIST SP 800-53 AC-6: Least Privilege
+# Scope constraint rule — limits data access to minimum necessary.
+
+template: nist_control_mapping
+
+control_id: "AC-6"
+control_family: "Access Control"
+title: "Least Privilege"
+salience_band: "130-150"
+action: constrain
+
+description: >-
+  Enforces the principle of least privilege by adding scope constraints
+  that limit data routing to the minimum necessary for the authorized
+  purpose. Prevents over-broad data access by constraining queries and
+  result sets to the narrowest permissible scope.
+
+conditions:
+  - field: request.scope
+    operator: exceeds
+    value: minimum_necessary
+  - field: request.data_classification
+    operator: in
+    values:
+      - CUI
+      - CUI//SP-CTI
+      - CUI//SP-ITAR
+
+effects:
+  - type: scope_constraint
+    description: "Reduce data scope to minimum necessary for stated purpose"
+    parameters:
+      enforce_minimum_necessary: true
+      strip_excess_fields: true
+      limit_result_set: true

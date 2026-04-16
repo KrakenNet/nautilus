@@ -1,0 +1,35 @@
+<tr class="clickable-row"
+    onclick="this.nextElementSibling.classList.toggle('hidden')">
+    <td>{{ entry.timestamp }}</td>
+    <td><span class="badge">{{ entry.event_type }}</span></td>
+    <td>{{ entry.agent_id }}</td>
+    <td>{{ entry.source_id | default("—") }}</td>
+    <td>{{ entry.duration_ms | default("—") }}</td>
+    <td>{{ entry.outcome | default("—") }}</td>
+</tr>
+<tr class="detail-row hidden">
+    <td colspan="6">
+        <div class="detail-expand">
+            <dl>
+                <dt>Entry ID</dt>
+                <dd><code>{{ entry.id }}</code></dd>
+                <dt>Timestamp</dt>
+                <dd>{{ entry.timestamp }}</dd>
+                <dt>Event Type</dt>
+                <dd>{{ entry.event_type }}</dd>
+                <dt>Agent ID</dt>
+                <dd>{{ entry.agent_id }}</dd>
+                <dt>Source ID</dt>
+                <dd>{{ entry.source_id | default("N/A") }}</dd>
+                <dt>Duration (ms)</dt>
+                <dd>{{ entry.duration_ms | default("N/A") }}</dd>
+                <dt>Outcome</dt>
+                <dd>{{ entry.outcome | default("N/A") }}</dd>
+                <dt>Request ID</dt>
+                <dd><code>{{ entry.request_id | default("N/A") }}</code></dd>
+                <dt>Details</dt>
+                <dd><pre><code>{{ entry.details | tojson(indent=2) if entry.details else "N/A" }}</code></pre></dd>
+            </dl>
+        </div>
+    </td>
+</tr>

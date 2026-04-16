@@ -1,0 +1,13 @@
+# PHI classification template for HIPAA rule pack (design Component F).
+#
+# Tags data sources with PHI sensitivity metadata. Used by HIPAA rules
+# to enforce minimum necessary, access control, and breach detection.
+#
+templates:
+  - name: phi_source_tag
+    description: "PHI classification tag for a data source under HIPAA."
+    slots:
+      - { name: source_id,      type: string, required: true }
+      - { name: phi_level,      type: string, required: true }   # de-identified | limited | standard | sensitive
+      - { name: purpose,        type: string, required: true }   # treatment | payment | operations | research
+      - { name: covered_entity, type: string, required: true }   # the HIPAA covered entity identifier

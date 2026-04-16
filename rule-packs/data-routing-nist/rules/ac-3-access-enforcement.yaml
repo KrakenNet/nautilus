@@ -1,0 +1,26 @@
+rule: ac-3-access-enforcement
+template: nist_control_mapping
+description: >-
+  Denies access when an agent's clearance level is insufficient for the
+  source data classification. Implements NIST SP 800-53 AC-3 (Access
+  Enforcement) by comparing agent security attributes against the
+  classification label attached to the requested data source.
+
+control_id: "AC-3"
+control_family: "Access Control"
+title: "Access Enforcement"
+salience: 180
+salience_band: "170-190"
+action: deny
+
+conditions:
+  - field: agent.clearance_level
+    operator: lt
+    value: "{{ source.classification_level }}"
+  - field: source.classification_level
+    operator: is_set
+
+denial_reason: >-
+  Agent clearance level ({{ agent.clearance_level }}) is insufficient for
+  source classification ({{ source.classification_level }}). Access denied
+  per NIST AC-3 Access Enforcement.

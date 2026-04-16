@@ -1,0 +1,19 @@
+# PHI sensitivity hierarchy (design Component F).
+#
+# Ordered LOWEST -> HIGHEST; rank-based dominance semantics apply
+# (see fathom.engine.dominates). An agent's authorized PHI level
+# must dominate the source's PHI level for access to be granted.
+#
+# Levels:
+#   de-identified  -- safe harbor / expert determination; no PHI
+#   limited        -- limited data set (dates, geography, etc.)
+#   standard       -- standard individually identifiable PHI
+#   sensitive      -- highly sensitive PHI (substance abuse, HIV,
+#                     mental health, genetic data)
+#
+name: phi-level
+levels:
+  - de-identified
+  - limited
+  - standard
+  - sensitive

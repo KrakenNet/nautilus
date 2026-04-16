@@ -1,0 +1,53 @@
+# Default classification denial rule (design §3.1, FR-1/FR-2, AC-1.1/1.3).
+#
+# Fires when the requesting agent's clearance does NOT dominate the
+# source's classification under the ``classification`` hierarchy. The
+# dominance check is delegated to the ``fathom-dominates`` external
+# registered by Fathom; it consults ``Engine._hierarchy_registry`` at
+# rule-LHS evaluation time.
+#
+# Salience 150 sits BETWEEN the routing rule (100) and the purpose-
+# mismatch denial (200), so classification denials fire after the
+# purpose guard but before routing decisions — matching the
+# "classification > purpose > routing" conceptual order.
+#
+# ``then.action: deny`` is required so the rule emits a
+# ``__fathom_decision`` fact and surfaces in
+# ``EvaluationResult.rule_trace`` (see fathom evaluator._capture_trace).
+#
+# Compartments are carried as space-separated strings per the
+# design-§5.1 multislot convention; ``fathom-dominates`` decomposes
+# them via ``compartments_superset`` internally.
+#
+module: nautilus-routing
+ruleset: nautilus-default-classification
+version: "1.0"
+rules:
+  - name: default-classification-deny
+    description: "Deny sources whose classification is not dominated by the agent's clearance."
+    salience: 150
+    when:
+      - template: agent
+        conditions:
+          - slot: clearance
+            bind: ?clearance
+          - slot: compartments
+            bind: ?subj_cmp
+      - template: source
+        conditions:
+          - slot: id
+            bind: ?sid
+          - slot: classification
+            bind: ?src_cls
+          - slot: compartments
+            bind: ?src_cmp
+          - test: '(not (fathom-dominates ?clearance ?subj_cmp ?src_cls ?src_cmp "classification"))'
+    then:
+      action: deny
+      reason: "clearance does not dominate source classification"
+      assert:
+        - template: denial_record
+          slots:
+            source_id: "?sid"
+            reason: "clearance does not dominate source classification"
+            rule_name: "default-classification-deny"

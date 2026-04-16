@@ -1,0 +1,68 @@
+# Nautilus .dockerignore — minimize build context so images stay ≤200 MB
+# (D-16, NFR-10, FR-31). Mirrors .gitignore where practical but is stricter
+# because even files tracked in git are not needed in the runtime image.
+
+# Version control / CI
+.git/
+.github/
+.gitignore
+.gitattributes
+
+# Spec / design artifacts — not shipped in runtime
+specs/
+docs/
+design-docs/
+design.md
+design-v2.md
+CLAUDE.md
+
+# Tests and test data
+tests/
+*.test.py
+test-*.jsonl
+audit.jsonl
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.hypothesis/
+
+# Verification / VE ephemeral state (Phase 1 artifacts)
+.ve-*
+.speckit-state.json
+.ralph-state.json
+
+# Python caches / build artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Editor / OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Local venvs — we rebuild inside the image
+.venv/
+venv/
+env/
+
+# Type / lint caches
+.mypy_cache/
+.ruff_cache/
+.pyright/
+
+# Docker itself
+Dockerfile
+.dockerignore
+
+# Main sample / top-level scripts not part of the package
+main.py

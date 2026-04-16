@@ -1,0 +1,77 @@
+# HIPAA Privacy Rule: Minimum Necessary Standard
+# Scope constraint rule — limits PHI access to the minimum necessary
+# for the stated purpose (treatment, payment, operations).
+
+template: phi_source_tag
+
+regulation: "HIPAA"
+regulation_section: "45 CFR 164.502(b)"
+title: "Minimum Necessary"
+salience_band: "130-150"
+action: scope_constraint
+
+description: >-
+  Enforces the HIPAA minimum necessary standard by constraining PHI
+  access to only the data elements required for the stated purpose.
+  Treatment has the broadest access; payment and operations receive
+  progressively narrower scopes.
+
+rules:
+  - name: minimum-necessary-treatment
+    salience: 150
+    description: >-
+      Treatment purpose: permit access to relevant clinical data but
+      constrain to the treating provider's care context.
+    conditions:
+      - field: request.purpose
+        operator: equals
+        value: treatment
+      - field: source.phi_level
+        operator: in
+        values: [de-identified, limited, standard, sensitive]
+    effects:
+      - type: scope_constraint
+        parameters:
+          allowed_fields: clinical_relevant
+          restrict_to_care_context: true
+          strip_billing_data: true
+
+  - name: minimum-necessary-payment
+    salience: 140
+    description: >-
+      Payment purpose: permit access to billing and coverage data only.
+      Clinical details beyond diagnosis codes are excluded.
+    conditions:
+      - field: request.purpose
+        operator: equals
+        value: payment
+      - field: source.phi_level
+        operator: in
+        values: [de-identified, limited, standard]
+    effects:
+      - type: scope_constraint
+        parameters:
+          allowed_fields: billing_and_coverage
+          strip_clinical_notes: true
+          strip_psychotherapy_notes: true
+          limit_to_diagnosis_codes: true
+
+  - name: minimum-necessary-operations
+    salience: 130
+    description: >-
+      Operations purpose: permit access to de-identified and limited
+      data sets only. Standard and sensitive PHI require explicit
+      authorization.
+    conditions:
+      - field: request.purpose
+        operator: equals
+        value: operations
+      - field: source.phi_level
+        operator: in
+        values: [de-identified, limited]
+    effects:
+      - type: scope_constraint
+        parameters:
+          allowed_fields: operational_summary
+          require_de_identification: true
+          strip_direct_identifiers: true

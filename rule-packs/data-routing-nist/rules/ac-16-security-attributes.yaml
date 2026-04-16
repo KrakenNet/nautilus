@@ -1,0 +1,37 @@
+# NIST SP 800-53 AC-16: Security and Privacy Attributes
+# Scope constraint rule — enforces security attribute binding.
+
+template: nist_control_mapping
+
+control_id: "AC-16"
+control_family: "Access Control"
+title: "Security and Privacy Attributes"
+salience_band: "130-150"
+action: constrain
+
+description: >-
+  Enforces binding of security and privacy attributes to data objects
+  during routing. Ensures that classification labels, handling caveats,
+  and dissemination controls remain associated with data throughout
+  the routing pipeline.
+
+conditions:
+  - field: data.security_attributes
+    operator: missing_or_incomplete
+    value: true
+  - field: request.data_classification
+    operator: in
+    values:
+      - CUI
+      - CUI//SP-CTI
+      - CUI//SP-ITAR
+      - CUI//SP-EXPT
+
+effects:
+  - type: scope_constraint
+    description: "Bind required security attributes before routing"
+    parameters:
+      require_classification_label: true
+      require_handling_caveat: true
+      require_dissemination_control: true
+      block_if_unbound: true

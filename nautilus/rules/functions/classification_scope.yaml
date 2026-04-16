@@ -1,0 +1,27 @@
+# Classification scope-function registrations (design §3.1, FR-1/FR-2).
+#
+# Each entry is a ``type: classification`` function whose ``hierarchy_ref``
+# points at a YAML under ``nautilus/rules/hierarchies/``. fathom-rules
+# 0.3 ``Engine.load_functions`` resolves each ref, parses the hierarchy
+# file into a ``HierarchyDefinition``, and stores it in
+# ``Engine._hierarchy_registry`` — which the ``fathom-dominates`` external
+# consults at rule-LHS evaluation time.
+#
+# Without these entries the Fathom engine's hierarchy registry stays
+# empty and ``fathom-dominates`` returns False for every call,
+# causing ``default-classification-deny`` to fire spuriously on every
+# request. This file is the documented registration surface for the
+# two built-in Nautilus ladders.
+#
+functions:
+  - name: classification-scope
+    description: "Register the primary classification ladder (unclassified..top-secret)."
+    params: ["?a", "?b"]
+    type: classification
+    hierarchy_ref: classification.yaml
+
+  - name: cui-sub-scope
+    description: "Register the CUI sub-category ladder (cui..cui-sp-pciip)."
+    params: ["?a", "?b"]
+    type: classification
+    hierarchy_ref: cui-sub.yaml

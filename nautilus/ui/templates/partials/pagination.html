@@ -1,0 +1,25 @@
+<nav class="pagination">
+    {% if prev_cursor %}
+    <a href="?cursor={{ prev_cursor }}"
+       hx-get="?cursor={{ prev_cursor }}"
+       hx-target="#audit-table-body"
+       hx-push-url="true"
+       class="btn btn-sm">Previous</a>
+    {% else %}
+    <span class="btn btn-sm disabled">Previous</span>
+    {% endif %}
+
+    {% if total_estimate %}
+    <span class="pagination-info">~{{ total_estimate }} total</span>
+    {% endif %}
+
+    {% if next_cursor %}
+    <a href="?cursor={{ next_cursor }}"
+       hx-get="?cursor={{ next_cursor }}"
+       hx-target="#audit-table-body"
+       hx-push-url="true"
+       class="btn btn-sm">Next</a>
+    {% else %}
+    <span class="btn btn-sm disabled">Next</span>
+    {% endif %}
+</nav>

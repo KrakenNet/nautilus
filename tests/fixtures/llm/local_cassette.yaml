@@ -1,0 +1,161 @@
+# Synthesized VCR cassette for LocalInferenceProvider (Task 2.26).
+#
+# LocalInferenceProvider reuses the OpenAI SDK chat-completions shape
+# against an OpenAI-compatible local inference server (vLLM / llama.cpp /
+# LM Studio). base_url is a local loopback by convention; api_key is
+# "not-needed" for most local servers.
+#
+# Captures the same 3 canonical prompts at temperature=0 so the local
+# branch of the determinism harness (NFR-12) replays identical inputs
+# against an air-gapped model id.
+#
+# Canonical prompts (routing-representative):
+#   1. low-sensitivity  : public CVE lookup                    -> public
+#   2. mid-sensitivity  : internal asset inventory query       -> internal
+#   3. high-sensitivity : credential / PII-adjacent review     -> confidential
+interactions:
+- request:
+    method: POST
+    uri: http://127.0.0.1:8080/v1/chat/completions
+    body:
+      model: nautilus-local-intent-v1
+      temperature: 0
+      max_output_tokens: 512
+      messages:
+      - role: user
+        content: 'CANONICAL_PROMPT_1: lookup public CVE metadata for CVE-2024-0001'
+      response_format:
+        type: json_schema
+        json_schema:
+          name: IntentAnalysis
+          strict: true
+    headers:
+      authorization: [Bearer not-needed]
+      content-type: [application/json]
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      content-type: [application/json]
+    body:
+      string: |-
+        {
+          "id": "chatcmpl-local-canonical01public",
+          "object": "chat.completion",
+          "created": 1712345678,
+          "model": "nautilus-local-intent-v1",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "{\"raw_intent\": \"lookup public CVE metadata for CVE-2024-0001\", \"data_types_needed\": [\"cve\", \"vulnerability\"], \"entities\": [\"CVE-2024-0001\"], \"temporal_scope\": null, \"estimated_sensitivity\": \"public\", \"purpose_inferred\": \"threat-analysis\"}",
+                "refusal": null
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 120,
+            "completion_tokens": 48,
+            "total_tokens": 168
+          }
+        }
+- request:
+    method: POST
+    uri: http://127.0.0.1:8080/v1/chat/completions
+    body:
+      model: nautilus-local-intent-v1
+      temperature: 0
+      max_output_tokens: 512
+      messages:
+      - role: user
+        content: 'CANONICAL_PROMPT_2: enumerate internal asset inventory for host-prod-42'
+      response_format:
+        type: json_schema
+        json_schema:
+          name: IntentAnalysis
+          strict: true
+    headers:
+      authorization: [Bearer not-needed]
+      content-type: [application/json]
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      content-type: [application/json]
+    body:
+      string: |-
+        {
+          "id": "chatcmpl-local-canonical02internal",
+          "object": "chat.completion",
+          "created": 1712345679,
+          "model": "nautilus-local-intent-v1",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "{\"raw_intent\": \"enumerate internal asset inventory for host-prod-42\", \"data_types_needed\": [\"asset\", \"scan_result\"], \"entities\": [\"host-prod-42\"], \"temporal_scope\": null, \"estimated_sensitivity\": \"internal\", \"purpose_inferred\": \"incident-response\"}",
+                "refusal": null
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 138,
+            "completion_tokens": 52,
+            "total_tokens": 190
+          }
+        }
+- request:
+    method: POST
+    uri: http://127.0.0.1:8080/v1/chat/completions
+    body:
+      model: nautilus-local-intent-v1
+      temperature: 0
+      max_output_tokens: 512
+      messages:
+      - role: user
+        content: 'CANONICAL_PROMPT_3: review leaked credential exposure for user alice@example.com'
+      response_format:
+        type: json_schema
+        json_schema:
+          name: IntentAnalysis
+          strict: true
+    headers:
+      authorization: [Bearer not-needed]
+      content-type: [application/json]
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      content-type: [application/json]
+    body:
+      string: |-
+        {
+          "id": "chatcmpl-local-canonical03confidential",
+          "object": "chat.completion",
+          "created": 1712345680,
+          "model": "nautilus-local-intent-v1",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "{\"raw_intent\": \"review leaked credential exposure for user alice@example.com\", \"data_types_needed\": [\"credential.exposure\", \"customer.profile\"], \"entities\": [\"alice@example.com\"], \"temporal_scope\": null, \"estimated_sensitivity\": \"confidential\", \"purpose_inferred\": \"credential-review\"}",
+                "refusal": null
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 146,
+            "completion_tokens": 58,
+            "total_tokens": 204
+          }
+        }
+version: 1

@@ -1,0 +1,21 @@
+FROM python:3.14-slim
+
+LABEL maintainer="se-jo-ma"
+LABEL description="Reproducible benchmark environment for Nautilus load testing"
+
+WORKDIR /bench
+
+# Install system deps for building native extensions
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install locust and nautilus runtime deps
+COPY requirements-bench.txt .
+RUN pip install --no-cache-dir -r requirements-bench.txt
+
+# Copy benchmark files
+COPY . /bench/
+
+ENTRYPOINT ["locust"]
+CMD ["-f", "locustfile.py"]

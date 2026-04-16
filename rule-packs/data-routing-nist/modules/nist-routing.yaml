@@ -1,0 +1,21 @@
+module: nist-routing
+description: >-
+  NIST SP 800-53 data routing module. Aggregates all NIST control rules
+  into a single loadable module for the Nautilus routing engine.
+pack: data-routing-nist
+
+templates:
+  - nist_control_mapping
+
+rules:
+  - rules/ac-3-access-enforcement.yaml
+  - rules/ac-4-information-flow.yaml
+  - rules/ac-6-least-privilege.yaml
+  - rules/ac-16-security-attributes.yaml
+  - rules/ac-21-information-sharing.yaml
+  - rules/ac-23-data-mining.yaml
+  - rules/sc-7-boundary-protection.yaml
+  - rules/sc-16-transmission-integrity.yaml
+
+hierarchies:
+  - hierarchies/cui-sub-extended.yaml

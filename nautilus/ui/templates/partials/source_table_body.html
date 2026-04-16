@@ -1,0 +1,18 @@
+{% for source in sources %}
+<tr>
+    <td>{{ source.id }}</td>
+    <td><span class="badge">{{ source.type }}</span></td>
+    <td><span class="badge">{{ source.classification }}</span></td>
+    <td>{{ source.data_types | join(", ") }}</td>
+    <td>{{ source.allowed_purposes | join(", ") if source.allowed_purposes else "—" }}</td>
+    <td>{{ source.last_query if source.last_query else "Never" }}</td>
+</tr>
+{% else %}
+<tr>
+    <td colspan="6">
+        <div class="empty-state">
+            <p>No sources configured</p>
+        </div>
+    </td>
+</tr>
+{% endfor %}

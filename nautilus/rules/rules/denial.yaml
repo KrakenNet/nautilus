@@ -1,0 +1,44 @@
+# Nautilus default denial rule (fathom-rules >= 0.3.0).
+#
+# Emits one ``denial_record`` fact per ``source`` whose
+# ``allowed_purposes`` is non-empty AND does not include the requesting
+# ``agent.purpose``. The membership check is delegated to the
+# ``not-in-list`` external registered via ``register_not_in_list``
+# (Engine.register_function); the empty-string guard is a plain CLIPS
+# ``neq`` test.
+#
+# Salience 200 > the routing rule (100), so denials win the focus when
+# both apply against the same source set.
+#
+# ``then.action: deny`` is required so the rule emits a
+# ``__fathom_decision`` fact and surfaces in
+# ``EvaluationResult.rule_trace``.
+module: nautilus-routing
+ruleset: nautilus-default-denial
+version: "1.0"
+rules:
+  - name: deny-purpose-mismatch
+    description: "Deny sources whose allowed_purposes excludes the agent's purpose."
+    salience: 200
+    when:
+      - template: agent
+        conditions:
+          - slot: purpose
+            bind: ?purpose
+      - template: source
+        conditions:
+          - slot: id
+            bind: ?sid
+          - slot: allowed_purposes
+            bind: ?allowed
+          - test: '(neq ?allowed "")'
+          - test: "(not-in-list ?purpose ?allowed)"
+    then:
+      action: deny
+      reason: "purpose not authorized"
+      assert:
+        - template: denial_record
+          slots:
+            source_id: "?sid"
+            reason: "purpose not authorized"
+            rule_name: "deny-purpose-mismatch"

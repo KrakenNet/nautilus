@@ -1,0 +1,23 @@
+# Nautilus forensic rule-pack module (design §3.7, FR-12, Task 2.22).
+#
+# Registers the ``nautilus-forensics`` Fathom module referenced by
+# ``nautilus/rules/forensics/handoff.yaml``. The forensic rule pack is
+# loaded OFFLINE by ``nautilus.forensics.handoff_worker`` (Task 2.23)
+# via ``Engine.from_rules(Path("nautilus/rules/forensics"))``, which
+# uses the subdirectory convention to pick up ``modules/``,
+# ``templates/`` (none here — reused from the main pack via
+# ``nautilus/rules/templates/nautilus.yaml``), and ``rules/`` (none
+# here — the sibling ``handoff.yaml`` is the single rule file).
+#
+# Kept separate from ``nautilus-routing`` (see
+# ``nautilus/rules/modules/nautilus-routing.yaml``) because the
+# forensic rules are asserting-only (they emit ``inferred_handoff``
+# facts, no ``routing_decision`` / ``denial_record``) and must not be
+# present in the request-time evaluation path.
+#
+modules:
+  - name: nautilus-forensics
+    description: "Forensic post-hoc handoff inference rule pack (offline worker)"
+
+focus_order:
+  - nautilus-forensics

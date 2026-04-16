@@ -1,0 +1,89 @@
+{# Reusable table macros for Nautilus Admin UI #}
+
+{% macro render_table(headers, rows) %}
+<div class="table-wrap">
+    <table>
+        <thead>
+            <tr>
+                {% for header in headers %}
+                <th>{{ header }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% if rows %}
+                {% for row in rows %}
+                <tr>
+                    {% for cell in row %}
+                    <td>{{ cell }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            {% else %}
+                <tr>
+                    <td colspan="{{ headers | length }}">
+                        {{ render_empty_state("No data available") }}
+                    </td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{% endmacro %}
+
+{% macro render_sort_header(field, label, current_sort) %}
+{% set is_active = current_sort and current_sort.lstrip('-') == field %}
+{% set is_desc = current_sort and current_sort.startswith('-') %}
+{% set next_sort = ('-' ~ field) if (is_active and not is_desc) else field %}
+<th>
+    <a href="?sort={{ next_sort }}"
+       hx-get="?sort={{ next_sort }}"
+       hx-target="closest .table-wrap"
+       hx-push-url="true"
+       class="sort-header{% if is_active %} active{% endif %}">
+        {{ label }}
+        {% if is_active %}
+            <span class="sort-indicator">{{ '&#9660;' if is_desc else '&#9650;' }}</span>
+        {% endif %}
+    </a>
+</th>
+{% endmacro %}
+
+{% macro render_filter_form(filters) %}
+<form class="filter-form"
+      hx-get=""
+      hx-target="closest .table-wrap"
+      hx-push-url="true"
+      hx-trigger="submit">
+    {% for filter in filters %}
+    <div class="filter-field">
+        <label for="filter-{{ filter.name }}">{{ filter.label }}</label>
+        {% if filter.type == 'select' %}
+        <select id="filter-{{ filter.name }}" name="{{ filter.name }}">
+            <option value="">All</option>
+            {% for option in filter.options %}
+            <option value="{{ option.value }}"
+                    {% if option.value == filter.current %}selected{% endif %}>
+                {{ option.label }}
+            </option>
+            {% endfor %}
+        </select>
+        {% else %}
+        <input type="{{ filter.type | default('text') }}"
+               id="filter-{{ filter.name }}"
+               name="{{ filter.name }}"
+               value="{{ filter.current | default('') }}"
+               placeholder="{{ filter.placeholder | default('') }}">
+        {% endif %}
+    </div>
+    {% endfor %}
+    <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+    <a href="?" class="btn btn-sm">Clear</a>
+</form>
+{% endmacro %}
+
+{% macro render_empty_state(message) %}
+<div class="empty-state">
+    <p>{{ message }}</p>
+</div>
+{% endmacro %}

@@ -1,0 +1,30 @@
+rule: ac-4-information-flow
+template: nist_control_mapping
+description: >-
+  Denies cross-boundary data flow when no explicit authorization exists.
+  Implements NIST SP 800-53 AC-4 (Information Flow Enforcement) as the
+  primary flow control rule, blocking data movement between security
+  domains unless an approved flow authorization is present.
+
+control_id: "AC-4"
+control_family: "Access Control"
+title: "Information Flow Enforcement"
+salience: 185
+salience_band: "170-190"
+action: deny
+
+conditions:
+  - field: source.security_domain
+    operator: ne
+    value: "{{ destination.security_domain }}"
+  - field: flow.authorization
+    operator: not_in
+    value:
+      - approved
+      - conditionally_approved
+
+denial_reason: >-
+  Cross-boundary data flow from {{ source.security_domain }} to
+  {{ destination.security_domain }} denied. No valid flow authorization
+  exists. Requires explicit approval per NIST AC-4 Information Flow
+  Enforcement.

@@ -1,0 +1,28 @@
+{% extends "layouts/dashboard.html" %}
+
+{% block title %}Sources - Nautilus Admin{% endblock %}
+
+{% block dashboard_content %}
+<h1>Source Status</h1>
+<p>{{ source_count }} configured source{{ "s" if source_count != 1 else "" }}</p>
+
+<div class="table-wrap" hx-ext="sse" sse-connect="/admin/sources/events">
+    <table>
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Type</th>
+                <th>Classification</th>
+                <th>Data Types</th>
+                <th>Allowed Purposes</th>
+                <th>Last Query</th>
+            </tr>
+        </thead>
+        <tbody id="source-table-body"
+               sse-swap="source-update"
+               hx-swap="innerHTML">
+            {% include "partials/source_table_body.html" %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,34 @@
+<div class="modal-backdrop" onclick="this.parentElement.innerHTML=''">
+    <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <h2>Decision Detail: <code>{{ decision.request_id }}</code></h2>
+            <button class="modal-close" onclick="this.closest('.modal-backdrop').parentElement.innerHTML=''">&times;</button>
+        </div>
+        <div class="modal-body">
+            <section>
+                <h3>Rule Trace</h3>
+                <pre><code>{{ decision.rule_trace | tojson(indent=2) if decision.rule_trace else 'N/A' }}</code></pre>
+            </section>
+
+            <section>
+                <h3>Routing Decisions</h3>
+                <pre><code>{{ decision.routing_decisions | tojson(indent=2) if decision.routing_decisions else 'N/A' }}</code></pre>
+            </section>
+
+            <section>
+                <h3>Scope Constraints</h3>
+                <pre><code>{{ decision.scope_constraints | tojson(indent=2) if decision.scope_constraints else 'N/A' }}</code></pre>
+            </section>
+
+            <section>
+                <h3>Denial Records</h3>
+                <pre><code>{{ decision.denial_records | tojson(indent=2) if decision.denial_records else 'N/A' }}</code></pre>
+            </section>
+
+            <section>
+                <h3>Facts Asserted Summary</h3>
+                <pre><code>{{ decision.facts_asserted_summary | tojson(indent=2) if decision.facts_asserted_summary else 'N/A' }}</code></pre>
+            </section>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,36 @@
+# NIST SP 800-53 AC-21: Information Sharing
+# Escalation rule — triggers review for cross-organization sharing.
+
+template: nist_control_mapping
+
+control_id: "AC-21"
+control_family: "Access Control"
+title: "Information Sharing"
+salience_band: "110-120"
+action: escalate
+
+description: >-
+  Escalates data routing decisions when information is shared across
+  organizational boundaries. Cross-org sharing of controlled data
+  requires human review to verify that sharing agreements, need-to-know,
+  and recipient authorization are satisfied.
+
+conditions:
+  - field: request.sharing_context
+    operator: equals
+    value: cross_organization
+  - field: request.data_classification
+    operator: in
+    values:
+      - CUI
+      - CUI//SP-CTI
+      - CUI//SP-ITAR
+
+effects:
+  - type: escalate
+    description: "Escalate to authorized reviewer for cross-org sharing approval"
+    parameters:
+      reason: "Cross-organization information sharing detected"
+      require_sharing_agreement: true
+      require_recipient_verification: true
+      escalation_target: data_owner

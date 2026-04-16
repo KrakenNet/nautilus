@@ -1,0 +1,40 @@
+# NIST SP 800-53 AC-23: Data Mining Protection
+# Escalation rule — triggers review for data mining patterns.
+
+template: nist_control_mapping
+
+control_id: "AC-23"
+control_family: "Access Control"
+title: "Data Mining Protection"
+salience_band: "110-120"
+action: escalate
+
+description: >-
+  Escalates routing decisions when data mining or bulk extraction
+  patterns are detected. Protects against unauthorized aggregation
+  of controlled information by requiring human review before
+  permitting large-scale data access operations.
+
+conditions:
+  - field: request.access_pattern
+    operator: in
+    values:
+      - bulk_extraction
+      - aggregation_query
+      - pattern_mining
+  - field: request.data_classification
+    operator: in
+    values:
+      - CUI
+      - CUI//SP-CTI
+      - CUI//SP-ITAR
+      - CUI//SP-EXPT
+
+effects:
+  - type: escalate
+    description: "Escalate to reviewer for data mining pattern approval"
+    parameters:
+      reason: "Data mining or bulk extraction pattern detected"
+      require_purpose_justification: true
+      require_volume_limit_review: true
+      escalation_target: security_officer

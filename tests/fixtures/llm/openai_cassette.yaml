@@ -1,0 +1,165 @@
+# Synthesized VCR cassette for OpenAIProvider (Task 2.26).
+#
+# Captures the 3 canonical fixture prompts under temperature=0 against the
+# Responses API (responses.parse with text_format=IntentAnalysis). Responses
+# are hand-authored to match OpenAI's chat-completion / responses envelope
+# so pytest-recording / VCR.py can replay them without network I/O.
+#
+# The provider reads response.output_parsed — in raw-wire form that is the
+# choices[0].message.content JSON string that the SDK parses through the
+# Pydantic schema. We encode both representations so either replay path
+# (raw responses.create, or responses.parse) lands on the same payload.
+#
+# Canonical prompts (routing-representative):
+#   1. low-sensitivity  : public CVE lookup                    -> public
+#   2. mid-sensitivity  : internal asset inventory query       -> internal
+#   3. high-sensitivity : credential / PII-adjacent review     -> confidential
+interactions:
+- request:
+    method: POST
+    uri: https://api.openai.com/v1/chat/completions
+    body:
+      model: gpt-4o-2024-08-06
+      temperature: 0
+      max_output_tokens: 512
+      messages:
+      - role: user
+        content: 'CANONICAL_PROMPT_1: lookup public CVE metadata for CVE-2024-0001'
+      response_format:
+        type: json_schema
+        json_schema:
+          name: IntentAnalysis
+          strict: true
+    headers:
+      authorization: [REDACTED]
+      content-type: [application/json]
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      content-type: [application/json]
+    body:
+      string: |-
+        {
+          "id": "chatcmpl-canonical01public",
+          "object": "chat.completion",
+          "created": 1712345678,
+          "model": "gpt-4o-2024-08-06",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "{\"raw_intent\": \"lookup public CVE metadata for CVE-2024-0001\", \"data_types_needed\": [\"cve\", \"vulnerability\"], \"entities\": [\"CVE-2024-0001\"], \"temporal_scope\": null, \"estimated_sensitivity\": \"public\", \"purpose_inferred\": \"threat-analysis\"}",
+                "refusal": null
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 120,
+            "completion_tokens": 48,
+            "total_tokens": 168
+          },
+          "system_fingerprint": "fp_canonical_determinism_v1"
+        }
+- request:
+    method: POST
+    uri: https://api.openai.com/v1/chat/completions
+    body:
+      model: gpt-4o-2024-08-06
+      temperature: 0
+      max_output_tokens: 512
+      messages:
+      - role: user
+        content: 'CANONICAL_PROMPT_2: enumerate internal asset inventory for host-prod-42'
+      response_format:
+        type: json_schema
+        json_schema:
+          name: IntentAnalysis
+          strict: true
+    headers:
+      authorization: [REDACTED]
+      content-type: [application/json]
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      content-type: [application/json]
+    body:
+      string: |-
+        {
+          "id": "chatcmpl-canonical02internal",
+          "object": "chat.completion",
+          "created": 1712345679,
+          "model": "gpt-4o-2024-08-06",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "{\"raw_intent\": \"enumerate internal asset inventory for host-prod-42\", \"data_types_needed\": [\"asset\", \"scan_result\"], \"entities\": [\"host-prod-42\"], \"temporal_scope\": null, \"estimated_sensitivity\": \"internal\", \"purpose_inferred\": \"incident-response\"}",
+                "refusal": null
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 138,
+            "completion_tokens": 52,
+            "total_tokens": 190
+          },
+          "system_fingerprint": "fp_canonical_determinism_v1"
+        }
+- request:
+    method: POST
+    uri: https://api.openai.com/v1/chat/completions
+    body:
+      model: gpt-4o-2024-08-06
+      temperature: 0
+      max_output_tokens: 512
+      messages:
+      - role: user
+        content: 'CANONICAL_PROMPT_3: review leaked credential exposure for user alice@example.com'
+      response_format:
+        type: json_schema
+        json_schema:
+          name: IntentAnalysis
+          strict: true
+    headers:
+      authorization: [REDACTED]
+      content-type: [application/json]
+  response:
+    status:
+      code: 200
+      message: OK
+    headers:
+      content-type: [application/json]
+    body:
+      string: |-
+        {
+          "id": "chatcmpl-canonical03confidential",
+          "object": "chat.completion",
+          "created": 1712345680,
+          "model": "gpt-4o-2024-08-06",
+          "choices": [
+            {
+              "index": 0,
+              "message": {
+                "role": "assistant",
+                "content": "{\"raw_intent\": \"review leaked credential exposure for user alice@example.com\", \"data_types_needed\": [\"credential.exposure\", \"customer.profile\"], \"entities\": [\"alice@example.com\"], \"temporal_scope\": null, \"estimated_sensitivity\": \"confidential\", \"purpose_inferred\": \"credential-review\"}",
+                "refusal": null
+              },
+              "finish_reason": "stop"
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 146,
+            "completion_tokens": 58,
+            "total_tokens": 204
+          },
+          "system_fingerprint": "fp_canonical_determinism_v1"
+        }
+version: 1

@@ -1,0 +1,106 @@
+# HIPAA role-based restrictions (design Component F).
+#
+# Purpose-based role restrictions aligned with the HIPAA Privacy Rule
+# minimum necessary standard.  Treatment roles receive broader PHI
+# access; operations and research roles are restricted to aggregate
+# or de-identified data unless an explicit exception applies.
+#
+# Salience 130-150 places these rules after breach-detection (110-120)
+# but before PHI access-control denials (170-190).
+#
+module: hipaa-routing
+ruleset: hipaa-role-restrictions
+version: "0.1.0"
+rules:
+  - name: treatment-role-broad-access
+    description: >-
+      Treatment roles (providers, care team) may access standard and
+      sensitive PHI when the stated purpose is treatment.
+    salience: 150
+    when:
+      - template: phi_source_tag
+        conditions:
+          - slot: phi_level
+            bind: ?phi_level
+          - slot: purpose
+            value: treatment
+      - template: agent
+        conditions:
+          - slot: role
+            bind: ?role
+          - test: '(member ?role ("provider" "care_team"))'
+    then:
+      action: allow
+      reason: "treatment role granted broad PHI access per HIPAA treatment exception"
+
+  - name: payment-role-standard-access
+    description: >-
+      Payment roles may access up to standard PHI for payment purposes.
+      Sensitive PHI requires additional authorization.
+    salience: 140
+    when:
+      - template: phi_source_tag
+        conditions:
+          - slot: phi_level
+            value: standard
+          - slot: purpose
+            value: payment
+      - template: agent
+        conditions:
+          - slot: role
+            value: billing
+    then:
+      action: allow
+      reason: "payment role granted standard PHI access for billing"
+
+  - name: operations-aggregate-only
+    description: >-
+      Operations roles are restricted to aggregate (de-identified or
+      limited) data.  Access to standard or sensitive PHI is denied.
+    salience: 140
+    when:
+      - template: phi_source_tag
+        conditions:
+          - slot: phi_level
+            bind: ?phi_level
+          - slot: purpose
+            value: operations
+          - test: '(member ?phi_level ("standard" "sensitive"))'
+      - template: agent
+        conditions:
+          - slot: role
+            value: operations
+    then:
+      action: deny
+      reason: "operations role restricted to aggregate data; standard/sensitive PHI denied"
+      assert:
+        - template: denial_record
+          slots:
+            reason: "operations role denied non-aggregate PHI"
+            rule_name: "operations-aggregate-only"
+
+  - name: research-deidentified-only
+    description: >-
+      Research roles may only access de-identified data unless a
+      specific IRB authorization is present (not modeled here).
+    salience: 130
+    when:
+      - template: phi_source_tag
+        conditions:
+          - slot: phi_level
+            bind: ?phi_level
+          - slot: purpose
+            value: research
+          - test: '(neq ?phi_level "de-identified")'
+      - template: agent
+        conditions:
+          - slot: role
+            value: researcher
+    then:
+      action: deny
+      reason: "research role restricted to de-identified data per HIPAA"
+      assert:
+        - template: denial_record
+          slots:
+            reason: "research role denied identifiable PHI"
+            rule_name: "research-deidentified-only"
