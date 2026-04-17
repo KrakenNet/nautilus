@@ -1,13 +1,33 @@
 # Nautilus
 
-Nautilus is a policy-first data broker: a single `broker.request(...)` call
-plans an intent, routes it to the right sources, enforces CLIPS-backed scope
-rules, executes adapters concurrently, and emits a signed attestation plus a
-complete audit entry per request.
+> Policy-first data broker for AI agents. One call plans, routes, enforces, attests, and audits.
 
-See [`./specs/core-broker/design.md`](./specs/core-broker/design.md) for the
-architecture and [`./specs/core-broker/requirements.md`](./specs/core-broker/requirements.md)
-for the functional/non-functional requirements this implementation satisfies.
+[![PyPI](https://img.shields.io/pypi/v/nautilus.svg)](https://pypi.org/project/nautilus/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
+[![CI](https://github.com/se-jo-ma/nautilus/actions/workflows/ci.yml/badge.svg)](https://github.com/se-jo-ma/nautilus/actions/workflows/ci.yml)
+[![Docs](https://github.com/se-jo-ma/nautilus/actions/workflows/docs-deploy.yml/badge.svg)](https://nautilus.krakn.ai)
+
+**Current version:** 0.1.0
+**License:** MIT
+**Language:** Python 3.14+
+**Package Manager:** uv
+**Maintained by:** [se-jo-ma](https://github.com/se-jo-ma)
+
+---
+
+## Why Nautilus?
+
+Every AI agent framework gives agents direct access to data. For most tasks, that's fine.
+
+For some tasks, unchecked access is unacceptable:
+
+- **Policy routing** — "Which databases should this query hit?" can't be the agent's choice.
+- **Scope enforcement** — "What rows is this agent allowed to see?" needs provable constraints.
+- **Audit** — "What data did this agent touch, and why?" requires a tamper-evident trail.
+- **Attestation** — "Can we prove this routing decision happened?" needs a signed token.
+
+Nautilus provides **deterministic, policy-first data brokering** using Fathom — a CLIPS-based expert system — to route, scope, and attest every request.
 
 ## Install
 
@@ -15,149 +35,148 @@ for the functional/non-functional requirements this implementation satisfies.
 uv add nautilus
 ```
 
-Python 3.12+ is required. PostgreSQL 16+ with the `pgvector` extension is
-required only if you register `postgres` or `pgvector` sources.
-
-## Quickstart
-
-The snippet below is runnable verbatim against the repo's two-source test
-fixture at [`tests/fixtures/nautilus.yaml`](./tests/fixtures/nautilus.yaml).
-Export `TEST_PG_DSN` and `TEST_PGV_DSN` first (the fixture references them
-via `${TEST_PG_DSN}` / `${TEST_PGV_DSN}`); any reachable PostgreSQL with
-`pgvector` installed works.
+## Quick Start
 
 ```python
 from nautilus import Broker
 
-broker = Broker.from_config("tests/fixtures/nautilus.yaml")
+broker = Broker.from_config("nautilus.yaml")
 try:
     response = broker.request(
         "agent-alpha",
         "Find vulnerabilities for CVE-2026-1234",
-        {"clearance": "unclassified", "purpose": "threat-analysis", "session_id": "s1", "embedding": [0.1, 0.2, 0.3]},
+        {"clearance": "unclassified", "purpose": "threat-analysis", "session_id": "s1"},
     )
-    print(response.data)
+    print(response.data)                # {"main-db": [...]}
+    print(response.sources_queried)     # ["main-db"]
+    print(response.sources_denied)      # ["classified-db"]
+    print(response.attestation_token)   # signed JWS
+    print(response.duration_ms)         # 47
 finally:
     broker.close()
 ```
 
-`response` is a `BrokerResponse` (see design §4.8): `response.data` is a
-`dict[source_id, list[row]]`, `response.sources_queried` lists successful
-sources, `response.attestation_token` is the signed JWS, and
-`response.request_id` is the UUID4 key that joins the response to the
-per-request audit entry in `./audit.jsonl`.
+See the [Getting Started guide](https://nautilus.krakn.ai/getting-started/) for a full walkthrough.
 
-## What you get per request
+## What Ships Today
 
-- **Planned routing** via the Fathom intent router — sources selected by
-  intent + data types, never by the caller.
-- **Scope enforcement** through a CLIPS rules engine over the
-  `(clearance, purpose, source)` triple; denials are recorded, not
-  swallowed.
-- **Concurrent adapter execution** with per-adapter error isolation so one
-  failing source never sinks the response.
-- **Signed attestation** (JWS) bound to `request_id`, enabling external
-  verification without replaying the query.
-- **Complete audit entry** (design §4.9) appended to `./audit.jsonl` for
-  every request — success, denial, or error.
+**Core runtime**
+- `Broker` facade with sync/async APIs (`request`, `arequest`, `from_config`, `afrom_config`)
+- Fathom-based policy router for intent-aware source selection and scope enforcement
+- Per-source scope constraints (WHERE-clause fragments) with injection-safe field validation
+- Ed25519 JWS attestation service for signed routing decisions
+- JSONL audit sink with per-request, append-only entries (fsync'd)
+- Pattern-matching and LLM-based intent analysis (Anthropic, OpenAI)
+- Cross-agent handoff reasoning with session-backed escalation detection
+
+**Adapters (8 built-in)**
+- PostgreSQL, PgVector, Elasticsearch, Neo4j, REST, ServiceNow, InfluxDB, S3
+- Pluggable via entry points and the [Adapter SDK](https://nautilus.krakn.ai/reference/adapter-sdk/)
+
+**Transports**
+- FastAPI REST server (`POST /v1/request`, health/readiness probes)
+- MCP transport (stdio and HTTP modes)
+- CLI: `nautilus serve`, `nautilus health`, `nautilus version`
+
+**Rule packs**
+- `data-routing-nist` — NIST clearance/classification routing rules
+- `data-routing-hipaa` — HIPAA-compliant routing rules
+
+## What You Get Per Request
+
+| Step | What happens |
+|------|-------------|
+| **Intent analysis** | Classify intent into data types, entities, temporal scope, sensitivity |
+| **Policy routing** | Fathom evaluates `(clearance, purpose, source)` — route, scope, or deny |
+| **Adapter fan-out** | Routed sources execute concurrently with per-adapter error isolation |
+| **Attestation** | Ed25519 JWS signed over routing decision, bound to `request_id` |
+| **Audit** | JSONL entry appended per request — success, denial, or error |
+
+## Key Differentiator: Session-Aware Routing
+
+Unlike stateless policy engines, Nautilus maintains working memory across requests within a session:
+
+- **Cumulative exposure** — "This agent accessed PII from 3 sources — deny the 4th."
+- **Cross-agent handoffs** — "Agent A is passing `secret` data to Agent B who has `unclassified` clearance — deny."
+- **Escalation detection** — "Anomalous access pattern detected — escalate for forensic review."
+
+## Integration Shapes
+
+**As a library**
+```python
+from nautilus import Broker
+broker = Broker.from_config("nautilus.yaml")
+response = broker.request("agent-id", "intent", context)
+```
+
+**As a REST sidecar**
+```bash
+nautilus serve --config nautilus.yaml --transport rest --bind 0.0.0.0:8000
+curl -H "X-API-Key: $KEY" -X POST localhost:8000/v1/request \
+  -d '{"agent_id": "agent-alpha", "intent": "...", "context": {...}}'
+```
+
+**As an MCP server**
+```bash
+nautilus serve --config nautilus.yaml --transport mcp
+```
+
+**Air-gapped mode**
+```bash
+nautilus serve --config nautilus.yaml --air-gapped
+```
 
 ## Configuration
 
-A `nautilus.yaml` declares `sources`, `rules`, `analysis`, `audit`, and
-`attestation` blocks. The test fixture is the minimal working example;
-design §12 documents the full schema.
-
-## Reasoning Engine
-
-Phase 2 adds cross-agent handoff reasoning, a Postgres-backed session
-store, optional LLM intent analysis, and REST/MCP transports. Install
-with the provider extra you need:
-
-```bash
-uv add 'nautilus[llm-anthropic]'   # or llm-openai, llm-local, or no extra
-```
-
-Add an `agents:` block and a durable `session_store` to `nautilus.yaml`:
+A `nautilus.yaml` declares sources, rules, analysis, audit, and attestation:
 
 ```yaml
-agents:
-  agent-alpha: { clearance: secret, compartments: [crypto], default_purpose: threat-analysis }
-  agent-beta:  { clearance: unclassified, compartments: [],       default_purpose: reporting }
-session_store:
-  backend: postgres
-  dsn: ${NAUTILUS_SESSION_DSN}
-  on_failure: fallback_memory
-analysis:
-  mode: llm-first           # falls back to pattern on provider error
-  provider: anthropic
-api:
-  keys: [${NAUTILUS_API_KEY}]
+sources:
+  - id: main-db
+    adapter: postgres
+    dsn: ${DATABASE_URL}
+    classification: confidential
+    data_types: [users, orders]
+
+rules:
+  paths: [./rules/]
+
+attestation:
+  enabled: true
+
+audit:
+  sink: file
+  path: ./audit.jsonl
 ```
 
-Declare a cooperative handoff from Python (zero adapter calls, one audit
-entry, signed attestation):
+## Documentation
 
-```python
-import asyncio
-from nautilus import Broker
+Full documentation is available at [nautilus.krakn.ai](https://nautilus.krakn.ai).
 
-async def main() -> None:
-    broker = await Broker.afrom_config("nautilus.yaml")
-    try:
-        decision = await broker.declare_handoff(
-            source_agent_id="agent-alpha",
-            receiving_agent_id="agent-beta",
-            session_id="s-42",
-            data_classifications=["secret"],
-        )
-        print(decision.action, decision.rule_trace)
-    finally:
-        await broker.aclose()
+- [Getting Started](https://nautilus.krakn.ai/getting-started/)
+- [Concepts](https://nautilus.krakn.ai/concepts/)
+- [How-to Guides](https://nautilus.krakn.ai/how-to/)
+- [Reference](https://nautilus.krakn.ai/reference/)
 
-asyncio.run(main())
-```
+## Related Projects
 
-Run the REST + MCP transport via the stdlib-argparse CLI:
-
-```bash
-nautilus serve --config nautilus.yaml --transport both --bind 0.0.0.0:8000
-nautilus serve --config nautilus.yaml --air-gapped   # force pattern analyzer
-nautilus health --url http://localhost:8000/readyz
-```
-
-`--air-gapped` overrides `analysis.mode` to `pattern` and refuses any
-configured LLM provider (design §3.15, AC-15.2). The REST surface is a
-FastAPI app — `POST /v1/request` accepts a `BrokerRequest` and returns a
-`BrokerResponse` with `attestation_token` and `request_id`; `/v1/query`
-is a locked alias (D-9). Mount it under your own ASGI stack with
-`create_app`:
-
-```python
-from nautilus.transport import create_app
-
-app = create_app("nautilus.yaml")  # FastAPI; lifespan owns one Broker
-```
-
-See [`./specs/reasoning-engine/design.md`](./specs/reasoning-engine/design.md)
-for the architecture and
-[`./specs/reasoning-engine/requirements.md`](./specs/reasoning-engine/requirements.md)
-for the user stories, FRs, and ACs this phase satisfies.
-
-## Async usage
-
-From inside a running event loop, call `await broker.arequest(...)` —
-`broker.request()` deliberately raises `RuntimeError` in that context
-(design §8, UQ-4) to prevent nested `asyncio.run` calls.
+- **[Fathom](https://github.com/se-jo-ma/fathom)** — Deterministic reasoning runtime that powers Nautilus routing
+- **Bosun** — Agent governance built on Fathom (fleet analysis, compliance attestation)
 
 ## Development
 
 ```bash
+git clone https://github.com/se-jo-ma/nautilus.git
+cd nautilus
 uv sync
 uv run pytest -m unit            # fast suite, no containers
 uv run pytest -m integration     # full e2e, boots PostgreSQL via testcontainers
 uv run ruff check && uv run ruff format --check && uv run pyright
+uv run mkdocs serve              # docs preview
 ```
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## License
 
-See `LICENSE`.
+MIT — see [LICENSE](LICENSE) for details.

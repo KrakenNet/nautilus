@@ -1,0 +1,80 @@
+site_name: Nautilus
+site_description: Policy-first data broker for AI agents
+site_url: https://nautilus.krakn.ai
+repo_url: https://github.com/se-jo-ma/nautilus
+repo_name: se-jo-ma/nautilus
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [., packages/nautilus-adapter-sdk/src]
+          options:
+            show_source: true
+            show_root_heading: true
+            members_order: source
+
+extra:
+  version:
+    provider: mike
+    default: latest
+    alias: true
+
+nav:
+  - Home: _index.md
+  - Getting Started: getting-started.md
+  - How-to Guides:
+      - Overview: how-to/index.md
+  - Concepts:
+      - Overview: concepts/index.md
+      - Architecture: concepts/architecture.md
+  - Reference:
+      - Overview: reference/index.md
+      - Python SDK: reference/python-sdk.md
+      - REST API: reference/rest-api.md
+      - CLI: reference/cli.md
+      - Rule Packs: reference/rule-packs.md
+      - Adapter SDK: reference/adapter-sdk.md
+      - Adapter SDK Docs:
+          - Overview: sdk/docs/index.md
+          - Tutorial: sdk/docs/tutorial.md
+          - Discovery: sdk/docs/discovery.md
+          - Protocol: sdk/docs/reference/protocol.md
+          - Types: sdk/docs/reference/types.md
+          - Testing: sdk/docs/reference/testing.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true

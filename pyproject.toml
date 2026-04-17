@@ -40,10 +40,14 @@ dependencies = [
 ]
 
 [project.urls]
-# TODO: update once the public repository URL is finalized.
+Homepage = "https://github.com/se-jo-ma/nautilus"
 Repository = "https://github.com/se-jo-ma/nautilus"
-Documentation = "https://github.com/se-jo-ma/nautilus/blob/main/specs/core-broker/design.md"
+Documentation = "https://nautilus.krakn.ai"
+Changelog = "https://github.com/se-jo-ma/nautilus/blob/master/CHANGELOG.md"
 Issues = "https://github.com/se-jo-ma/nautilus/issues"
+
+[project.scripts]
+nautilus = "nautilus.cli:main"
 
 [project.optional-dependencies]
 dev = [
@@ -72,6 +76,11 @@ otel = [
 ]
 llm-anthropic = ["anthropic>=0.40"]
 llm-openai = ["openai>=1.50"]
+docs = [
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.24",
+    "mike>=2.1",
+]
 
 [project.entry-points."fathom.packs"]
 data-routing-nist = "nautilus.rule_packs.data_routing_nist"
