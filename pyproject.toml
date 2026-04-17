@@ -119,6 +119,7 @@ venv = ".venv"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+testpaths = ["tests"]
 markers = [
     "unit: unit tests",
     "integration: integration tests",
