@@ -8,7 +8,10 @@ without requiring OpenTelemetry packages to be installed.
 from __future__ import annotations
 
 from nautilus.observability._noop import NoOpMetrics, NoOpSpan, NoOpSpanObj
-from nautilus.observability.metrics import NautilusMetrics, _NoOpInstrument
+from nautilus.observability.metrics import (  # pyright: ignore[reportPrivateUsage]
+    NautilusMetrics,
+    _NoOpInstrument,
+)
 from nautilus.observability.spans import (
     SPAN_ADAPTER_FAN_OUT,
     SPAN_ATTESTATION_SIGN,

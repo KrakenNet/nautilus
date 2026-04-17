@@ -7,6 +7,7 @@ user-supplied value is ever concatenated into a raw Flux string (NFR-4).
 
 from __future__ import annotations
 
+import os
 import time
 from typing import Any, ClassVar
 
@@ -76,9 +77,17 @@ class InfluxDBAdapter:
                 InfluxDBClient,  # pyright: ignore[reportMissingTypeStubs, reportPrivateImportUsage]
             )
 
-            # Phase 1: connection is the URL; token/org/bucket carried in config
-            # metadata or env. ``InfluxDBClient`` accepts keyword args.
-            self._client = InfluxDBClient(url=config.connection)
+            # Connection is the URL; token and org are picked up from standard
+            # InfluxDB env vars (INFLUXDB_V2_TOKEN, INFLUXDB_V2_ORG) or passed
+            # explicitly when the env vars are present.
+            client_kwargs: dict[str, Any] = {"url": config.connection}
+            token = os.environ.get("INFLUXDB_V2_TOKEN")
+            org = os.environ.get("INFLUXDB_V2_ORG")
+            if token:
+                client_kwargs["token"] = token
+            if org:
+                client_kwargs["org"] = org
+            self._client = InfluxDBClient(**client_kwargs)
             self._query_api = self._client.query_api()
         except AdapterError:
             raise
@@ -193,8 +202,8 @@ class InfluxDBAdapter:
             f"  |> range(start: {range_start}, stop: {range_stop})",
         ]
         for f in filters:
-            lines.append(f"  |> filter(fn: (r) => {f})")
-        lines.append(f"  |> limit(n: {limit})")
+            lines.append(f"  |> filter(fn: (r) => {f})")  # noqa: SQLGREP
+        lines.append(f"  |> limit(n: {limit})")  # noqa: SQLGREP
 
         return "\n".join(lines)
 

@@ -15,7 +15,10 @@ from unittest.mock import AsyncMock
 import pytest
 
 from nautilus.adapters.base import ScopeEnforcementError
-from nautilus.adapters.influxdb import InfluxDBAdapter, _flux_escape
+from nautilus.adapters.influxdb import (  # pyright: ignore[reportPrivateUsage]
+    InfluxDBAdapter,
+    _flux_escape,
+)
 from nautilus.adapters.s3 import S3Adapter
 from nautilus.config.models import SourceConfig
 from nautilus.core.models import ScopeConstraint
@@ -28,7 +31,7 @@ from nautilus.core.models import ScopeConstraint
 def _influx_adapter() -> InfluxDBAdapter:
     """Return an InfluxDBAdapter with a mock client (no real connection)."""
     adapter = InfluxDBAdapter(client=AsyncMock())
-    adapter._config = SourceConfig(  # pyright: ignore[reportPrivateUsage]
+    adapter._config = SourceConfig(  # pyright: ignore[reportPrivateUsage,reportOptionalMemberAccess]
         id="metrics",
         type="postgres",  # type irrelevant for scope-mapping tests
         description="time-series metrics",
@@ -48,7 +51,7 @@ def _build_flux(
 ) -> str:
     """Call ``_build_flux`` directly on a fresh adapter."""
     adapter = _influx_adapter()
-    return adapter._build_flux(bucket, scope, limit)  # pyright: ignore[reportPrivateUsage]
+    return adapter._build_flux(bucket, scope, limit)  # pyright: ignore[reportPrivateUsage,reportOptionalMemberAccess]
 
 
 def _sc(
@@ -120,26 +123,32 @@ class TestInfluxDBScopeMapping:
         assert 'not exists r["host"]' in flux
 
     def test_time_range_via_scope(self) -> None:
-        flux = _build_flux([
-            _sc("_time", ">=", "2024-01-01T00:00:00Z"),
-            _sc("_time", "<=", "2024-01-31T23:59:59Z"),
-        ])
+        flux = _build_flux(
+            [
+                _sc("_time", ">=", "2024-01-01T00:00:00Z"),
+                _sc("_time", "<=", "2024-01-31T23:59:59Z"),
+            ]
+        )
         assert "2024-01-01T00:00:00Z" in flux
         assert "2024-01-31T23:59:59Z" in flux
         assert "range(start:" in flux.replace(" ", "")
 
     def test_time_between(self) -> None:
-        flux = _build_flux([
-            _sc("_time", "BETWEEN", ["2024-01-01", "2024-01-31"]),
-        ])
+        flux = _build_flux(
+            [
+                _sc("_time", "BETWEEN", ["2024-01-01", "2024-01-31"]),
+            ]
+        )
         assert '"2024-01-01"' in flux
         assert '"2024-01-31"' in flux
 
     def test_multiple_constraints_produce_chained_filters(self) -> None:
-        flux = _build_flux([
-            _sc("host", "=", "web-1"),
-            _sc("_measurement", "=", "cpu"),
-        ])
+        flux = _build_flux(
+            [
+                _sc("host", "=", "web-1"),
+                _sc("_measurement", "=", "cpu"),
+            ]
+        )
         # Each constraint should produce its own |> filter(...) line.
         assert flux.count("|> filter(") == 2
 
@@ -207,7 +216,7 @@ class TestS3ScopeMapping:
     def adapter(self) -> S3Adapter:
         """Create an S3Adapter with mocked internals."""
         a = S3Adapter()
-        a._config = SourceConfig(  # pyright: ignore[reportPrivateUsage]
+        a._config = SourceConfig(  # pyright: ignore[reportPrivateUsage,reportOptionalMemberAccess]
             id="docs",
             type="postgres",  # type irrelevant for scope-mapping tests
             description="document store",
@@ -216,7 +225,7 @@ class TestS3ScopeMapping:
             allowed_purposes=["research"],
             connection="http://localhost:9000",
         )
-        a._bucket = "test-bucket"  # pyright: ignore[reportPrivateUsage]
+        a._bucket = "test-bucket"  # pyright: ignore[reportPrivateUsage,reportOptionalMemberAccess]
         mock_client = AsyncMock()
         # Default: list returns empty, get_object returns body.
         mock_client.list_objects_v2.return_value = {"Contents": []}
@@ -226,7 +235,7 @@ class TestS3ScopeMapping:
             "ContentType": "text/plain",
             "LastModified": "2024-01-01",
         }
-        a._client = mock_client  # pyright: ignore[reportPrivateUsage]
+        a._client = mock_client  # pyright: ignore[reportPrivateUsage,reportOptionalMemberAccess]
         return a
 
     @pytest.mark.asyncio
@@ -237,25 +246,25 @@ class TestS3ScopeMapping:
             scope=scope,
             context={},
         )
-        adapter._client.get_object.assert_called_once()  # pyright: ignore[reportPrivateUsage]
-        call_kwargs = adapter._client.get_object.call_args.kwargs  # pyright: ignore[reportPrivateUsage]
+        adapter._client.get_object.assert_called_once()  # pyright: ignore[reportPrivateUsage,reportOptionalMemberAccess]
+        call_kwargs = adapter._client.get_object.call_args.kwargs  # pyright: ignore[reportPrivateUsage,reportOptionalMemberAccess]
         assert call_kwargs["Key"] == "path/to/file.txt"
 
     @pytest.mark.asyncio
     async def test_key_like_sets_prefix(self, adapter: S3Adapter) -> None:
         scope = [_sc("key", "LIKE", "reports/%", source_id="docs")]
         await adapter.execute(intent=AsyncMock(), scope=scope, context={})
-        adapter._client.list_objects_v2.assert_called_once()  # pyright: ignore[reportPrivateUsage]
-        call_kwargs = adapter._client.list_objects_v2.call_args.kwargs  # pyright: ignore[reportPrivateUsage]
+        adapter._client.list_objects_v2.assert_called_once()  # pyright: ignore[reportPrivateUsage,reportOptionalMemberAccess]
+        call_kwargs = adapter._client.list_objects_v2.call_args.kwargs  # pyright: ignore[reportPrivateUsage,reportOptionalMemberAccess]
         assert call_kwargs["Prefix"] == "reports/"
 
     @pytest.mark.asyncio
     async def test_tag_filter_equals(self, adapter: S3Adapter) -> None:
         # Set up list to return one object so tag filtering runs.
-        adapter._client.list_objects_v2.return_value = {  # pyright: ignore[reportPrivateUsage]
+        adapter._client.list_objects_v2.return_value = {  # pyright: ignore[reportPrivateUsage,reportOptionalMemberAccess]
             "Contents": [{"Key": "a.txt", "Size": 10, "LastModified": "2024-01-01"}],
         }
-        adapter._client.get_object_tagging.return_value = {  # pyright: ignore[reportPrivateUsage]
+        adapter._client.get_object_tagging.return_value = {  # pyright: ignore[reportPrivateUsage,reportOptionalMemberAccess]
             "TagSet": [{"Key": "dept", "Value": "finance"}],
         }
         scope = [_sc("tag.dept", "=", "finance", source_id="docs")]
@@ -264,10 +273,10 @@ class TestS3ScopeMapping:
 
     @pytest.mark.asyncio
     async def test_tag_filter_not_equals(self, adapter: S3Adapter) -> None:
-        adapter._client.list_objects_v2.return_value = {  # pyright: ignore[reportPrivateUsage]
+        adapter._client.list_objects_v2.return_value = {  # pyright: ignore[reportPrivateUsage,reportOptionalMemberAccess]
             "Contents": [{"Key": "a.txt", "Size": 10, "LastModified": "2024-01-01"}],
         }
-        adapter._client.get_object_tagging.return_value = {  # pyright: ignore[reportPrivateUsage]
+        adapter._client.get_object_tagging.return_value = {  # pyright: ignore[reportPrivateUsage,reportOptionalMemberAccess]
             "TagSet": [{"Key": "dept", "Value": "finance"}],
         }
         scope = [_sc("tag.dept", "!=", "engineering", source_id="docs")]
@@ -276,10 +285,10 @@ class TestS3ScopeMapping:
 
     @pytest.mark.asyncio
     async def test_tag_filter_rejects_mismatch(self, adapter: S3Adapter) -> None:
-        adapter._client.list_objects_v2.return_value = {  # pyright: ignore[reportPrivateUsage]
+        adapter._client.list_objects_v2.return_value = {  # pyright: ignore[reportPrivateUsage,reportOptionalMemberAccess]
             "Contents": [{"Key": "a.txt", "Size": 10, "LastModified": "2024-01-01"}],
         }
-        adapter._client.get_object_tagging.return_value = {  # pyright: ignore[reportPrivateUsage]
+        adapter._client.get_object_tagging.return_value = {  # pyright: ignore[reportPrivateUsage,reportOptionalMemberAccess]
             "TagSet": [{"Key": "dept", "Value": "finance"}],
         }
         scope = [_sc("tag.dept", "=", "engineering", source_id="docs")]
@@ -291,12 +300,10 @@ class TestS3ScopeMapping:
         scope = [_sc("classification", "=", "confidential", source_id="docs")]
         await adapter.execute(intent=AsyncMock(), scope=scope, context={})
         # Classification matches config — should proceed to list/get.
-        adapter._client.list_objects_v2.assert_called_once()  # pyright: ignore[reportPrivateUsage]
+        adapter._client.list_objects_v2.assert_called_once()  # pyright: ignore[reportPrivateUsage,reportOptionalMemberAccess]
 
     @pytest.mark.asyncio
-    async def test_classification_filter_mismatch_returns_empty(
-        self, adapter: S3Adapter
-    ) -> None:
+    async def test_classification_filter_mismatch_returns_empty(self, adapter: S3Adapter) -> None:
         scope = [_sc("classification", "=", "top-secret", source_id="docs")]
         result = await adapter.execute(intent=AsyncMock(), scope=scope, context={})
         assert result.rows == []
@@ -315,9 +322,7 @@ class TestS3ScopeMapping:
             await adapter.execute(intent=AsyncMock(), scope=scope, context={})
 
     @pytest.mark.asyncio
-    async def test_classification_unsupported_operator_raises(
-        self, adapter: S3Adapter
-    ) -> None:
+    async def test_classification_unsupported_operator_raises(self, adapter: S3Adapter) -> None:
         scope = [_sc("classification", "!=", "secret", source_id="docs")]
         with pytest.raises(ScopeEnforcementError, match="unsupported operator"):
             await adapter.execute(intent=AsyncMock(), scope=scope, context={})
@@ -352,7 +357,7 @@ class TestScopeValidation:
     def test_invalid_operator_raises(self) -> None:
         # Bypass Pydantic Literal validation to exercise the runtime validator.
         bad = _sc("host", "=", "x")
-        bad.__dict__["operator"] = "INVALID_OP"
+        bad.__dict__["operator"] = "INVALID_OP"  # pyright: ignore[reportIndexIssue]
         with pytest.raises(ScopeEnforcementError, match="not in allowlist"):
             _build_flux([bad])
 

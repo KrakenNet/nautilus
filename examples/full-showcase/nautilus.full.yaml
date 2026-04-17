@@ -1,0 +1,148 @@
+# Full-showcase Nautilus configuration WITH external credentials.
+#
+# Extends the base nautilus.yaml with:
+#   - ServiceNow incident adapter (requires SNOW_INSTANCE, SNOW_USER, SNOW_PASS)
+#   - LLM-backed intent analysis via Anthropic (requires ANTHROPIC_API_KEY)
+#
+# Used via: docker compose -f docker-compose.yml -f docker-compose.full.yml up --build -d
+# Credentials come from .env (copy .env.example to .env and fill in values).
+#
+# Environment variables (in addition to those in the base config):
+#   ANTHROPIC_API_KEY  — Anthropic API key for Claude-backed intent analysis
+#   SNOW_INSTANCE      — ServiceNow subdomain (e.g. "dev12345")
+#   SNOW_USER          — ServiceNow username
+#   SNOW_PASS          — ServiceNow password
+
+sources:
+  # ── Postgres: vulnerability database ──────────────────────────────────
+  - id: vuln_db
+    type: postgres
+    description: "National Vulnerability Database mirror — CVEs, patches, advisories"
+    classification: cui-basic
+    data_types: [cve, vulnerability, patch, advisory]
+    allowed_purposes: [threat-analysis, incident-response, compliance-audit]
+    connection: ${PG_DSN}
+    table: vulnerabilities
+
+  # ── InfluxDB: infrastructure metrics ──────────────────────────────────
+  - id: server_metrics
+    type: influxdb
+    description: "Infrastructure time-series — CPU, memory, disk, network"
+    classification: unclassified
+    data_types: [metric, timeseries, performance]
+    allowed_purposes: [monitoring, capacity-planning, incident-response]
+    connection: ${INFLUXDB_URL}
+    table: showcase
+
+  # ── S3/MinIO: compliance documents ────────────────────────────────────
+  - id: compliance_docs
+    type: s3
+    description: "Compliance reports, policies, and audit artifacts"
+    classification: cui-specified
+    data_types: [report, policy, audit-trail, compliance]
+    allowed_purposes: [compliance-audit, legal-review]
+    connection: ${MINIO_ENDPOINT}
+    table: compliance-docs
+
+  # ── Elasticsearch: application log index ────────────────────────────────
+  - id: app_logs
+    type: elasticsearch
+    description: "Application log index — errors, warnings, access events"
+    classification: cui-basic
+    data_types: [log, event, alert, error]
+    allowed_purposes: [incident-response, monitoring, threat-analysis]
+    connection: ${ES_URL}
+    index: app-logs
+
+  # ── Neo4j: security knowledge graph ───────────────────────────────────
+  - id: threat_graph
+    type: neo4j
+    description: "Threat intelligence knowledge graph — actors, TTPs, IOCs"
+    classification: cui-basic
+    data_types: [threat-actor, indicator, technique, campaign]
+    allowed_purposes: [threat-analysis, incident-response]
+    connection: ${NEO4J_URL}
+    label: ThreatActor
+    auth:
+      type: basic
+      username: ${NEO4J_USER}
+      password: ${NEO4J_PASS}
+
+  # ── ServiceNow: incident management ──────────────────────────────────
+  - id: snow_incidents
+    type: servicenow
+    description: "ServiceNow incident table — active incidents, changes, problems"
+    classification: cui-basic
+    data_types: [incident, change, problem]
+    allowed_purposes: [incident-response, monitoring, compliance-audit]
+    connection: https://${SNOW_INSTANCE}.service-now.com
+    table: incident
+    auth:
+      type: basic
+      username: ${SNOW_USER}
+      password: ${SNOW_PASS}
+
+# ── Agents with graduated clearance ─────────────────────────────────────
+agents:
+  analyst:
+    id: analyst
+    clearance: cui-basic
+    compartments: []
+    default_purpose: threat-analysis
+
+  auditor:
+    id: auditor
+    clearance: cui-specified
+    compartments: [compliance]
+    default_purpose: compliance-audit
+
+  intern:
+    id: intern
+    clearance: unclassified
+    compartments: []
+    default_purpose: monitoring
+
+# ── Rules ────────────────────────────────────────────────────────────────
+rules:
+  user_rules_dirs: []
+
+# ── Intent analysis (LLM-first with pattern-matching fallback) ──────────
+analysis:
+  mode: llm-first
+  provider:
+    type: anthropic
+    api_key_env: ANTHROPIC_API_KEY
+    model: claude-sonnet-4-5
+    timeout_s: 2.0
+  keyword_map:
+    vulnerability: [vulnerability, vuln, cve, weakness, exploit, advisory]
+    patch: [patch, fix, update, remediation, hotfix]
+    metric: [cpu, memory, disk, network, latency, throughput, load]
+    compliance: [compliance, audit, hipaa, nist, regulation, policy]
+    report: [report, summary, assessment, findings]
+    timeseries: [timeseries, time-series, metrics, performance]
+    log: [log, error, warning, exception, trace, event]
+    threat-actor: [threat, actor, attacker, campaign, apt, ttp, ioc, indicator]
+    incident: [incident, outage, ticket, change, problem, sla]
+
+# ── Audit log ────────────────────────────────────────────────────────────
+audit:
+  path: /data/audit/audit.jsonl
+
+# ── Attestation (auto-generates Ed25519 key on startup) ──────────────────
+attestation:
+  enabled: true
+  sink:
+    type: file
+    path: /data/audit/attestations.jsonl
+
+# ── API ──────────────────────────────────────────────────────────────────
+api:
+  host: "0.0.0.0"
+  port: 8000
+  keys:
+    - demo-key-2024
+
+# ── Session store (in-memory for demo) ───────────────────────────────────
+session_store:
+  backend: memory

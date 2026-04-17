@@ -1,11 +1,11 @@
 {% for source in sources %}
 <tr>
-    <td>{{ source.id }}</td>
+    <td><strong>{{ source.id }}</strong></td>
     <td><span class="badge">{{ source.type }}</span></td>
-    <td><span class="badge">{{ source.classification }}</span></td>
-    <td>{{ source.data_types | join(", ") }}</td>
-    <td>{{ source.allowed_purposes | join(", ") if source.allowed_purposes else "—" }}</td>
-    <td>{{ source.last_query if source.last_query else "Never" }}</td>
+    <td><span class="badge badge-{% if source.classification == 'cui-specified' %}danger{% elif source.classification == 'cui-basic' %}warning{% else %}info{% endif %}">{{ source.classification }}</span></td>
+    <td class="text-sm">{{ source.description }}</td>
+    <td class="text-sm">{{ source.data_types | join(", ") }}</td>
+    <td class="text-sm">{{ source.allowed_purposes | join(", ") if source.allowed_purposes else "—" }}</td>
 </tr>
 {% else %}
 <tr>

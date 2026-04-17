@@ -27,6 +27,12 @@ from nautilus.analysis.llm.base import LLMProviderError
 from nautilus.analysis.llm.openai_provider import OpenAIProvider
 from nautilus.core.models import IntentAnalysis
 
+# When the openai SDK is not installed, AsyncOpenAI is None and the constructor
+# raises LLMProviderError. Patch it to a MagicMock so offline tests can still
+# construct providers without the real SDK.
+if op_mod.AsyncOpenAI is None:  # pyright: ignore[reportUnnecessaryComparison]
+    op_mod.AsyncOpenAI = MagicMock()  # type: ignore[assignment]
+
 
 def _make_intent_analysis() -> IntentAnalysis:
     """Build a deterministic :class:`IntentAnalysis` for parse-return mocks."""

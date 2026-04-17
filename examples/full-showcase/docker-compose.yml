@@ -1,0 +1,280 @@
+# Nautilus full-showcase stack.
+#
+# Start everything:
+#   docker compose up --build -d
+#
+# Then run the demo:
+#   ./demo.sh
+#
+# Services:
+#   nautilus      — broker + admin UI         http://localhost:8000
+#   postgres      — vulnerability database    localhost:5432
+#   influxdb      — time-series metrics       http://localhost:8086
+#   minio         — S3-compatible objects     http://localhost:9000  (console: 9001)
+#   elasticsearch — log/search index          http://localhost:9200
+#   neo4j         — knowledge graph           http://localhost:7474  (bolt: 7687)
+#   grafana       — dashboards               http://localhost:3000
+#   tempo         — distributed tracing       http://localhost:3200
+#   prometheus    — metrics scraping          http://localhost:9090
+#   loki          — log aggregation           http://localhost:3100
+#   docs          — SDK documentation site    http://localhost:8001
+#   bench         — Locust load testing       http://localhost:8089
+
+services:
+  # ── Nautilus broker ───────────────────────────────────────────────────
+  nautilus:
+    build:
+      context: ../..
+      dockerfile: examples/full-showcase/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./nautilus.yaml:/config/nautilus.yaml:ro
+      - audit-data:/data/audit
+    environment:
+      # Postgres
+      - PG_DSN=postgresql://nautilus:nautilus@postgres:5432/nautilus
+      # InfluxDB
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_V2_TOKEN=demo-token-2024
+      - INFLUXDB_V2_ORG=nautilus
+      # MinIO (S3-compatible)
+      - MINIO_ENDPOINT=http://minio:9000
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      # Elasticsearch
+      - ES_URL=http://elasticsearch:9200
+      # Neo4j
+      - NEO4J_URL=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASS=nautilus2024
+      # OTel
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
+      - OTEL_SERVICE_NAME=nautilus
+    depends_on:
+      postgres:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      elasticsearch:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-m", "nautilus", "health", "--url", "http://localhost:8000/readyz"]
+      interval: 10s
+      timeout: 5s
+      start_period: 15s
+      retries: 5
+
+  # ── PostgreSQL ────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=nautilus
+      - POSTGRES_PASSWORD=nautilus
+      - POSTGRES_DB=nautilus
+    volumes:
+      - ./seed/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nautilus"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── InfluxDB 2.x ─────────────────────────────────────────────────────
+  influxdb:
+    image: influxdb:2.7-alpine
+    ports:
+      - "8086:8086"
+    environment:
+      - DOCKER_INFLUXDB_INIT_MODE=setup
+      - DOCKER_INFLUXDB_INIT_USERNAME=admin
+      - DOCKER_INFLUXDB_INIT_PASSWORD=admin12345
+      - DOCKER_INFLUXDB_INIT_ORG=nautilus
+      - DOCKER_INFLUXDB_INIT_BUCKET=showcase
+      - DOCKER_INFLUXDB_INIT_ADMIN_TOKEN=demo-token-2024
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── MinIO (S3-compatible) ─────────────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    volumes:
+      - minio-data:/data
+
+  # ── Elasticsearch ──────────────────────────────────────────────────────
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 10
+
+  # ── Neo4j ─────────────────────────────────────────────────────────────
+  neo4j:
+    image: neo4j:5
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/nautilus2024
+    volumes:
+      - neo4j-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 10
+
+  # ── Seed runner (one-shot) ────────────────────────────────────────────
+  seed:
+    image: python:3.12-slim
+    working_dir: /seed
+    volumes:
+      - ./seed:/seed:ro
+    environment:
+      - PG_DSN=postgresql://nautilus:nautilus@postgres:5432/nautilus
+      - INFLUXDB_URL=http://influxdb:8086
+      - INFLUXDB_TOKEN=demo-token-2024
+      - INFLUXDB_ORG=nautilus
+      - INFLUXDB_BUCKET=showcase
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin
+      - ES_URL=http://elasticsearch:9200
+      - NEO4J_URL=bolt://neo4j:7687
+      - NEO4J_USER=neo4j
+      - NEO4J_PASS=nautilus2024
+    entrypoint: ["bash", "-c", "pip install -q psycopg2-binary influxdb-client boto3 'elasticsearch>=8,<9' neo4j && python seed.py"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      elasticsearch:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+
+  # ── Demo queries (one-shot — populates audit log) ─────────────────────
+  demo-queries:
+    image: python:3.12-slim
+    working_dir: /seed
+    volumes:
+      - ./seed:/seed:ro
+    entrypoint: ["python", "demo-queries.py"]
+    depends_on:
+      nautilus:
+        condition: service_healthy
+
+  # ── Grafana ───────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.1.0
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - tempo
+      - prometheus
+      - loki
+
+  # ── Tempo (trace backend) ─────────────────────────────────────────────
+  tempo:
+    image: grafana/tempo:2.5.0
+    ports:
+      - "3200:3200"
+      - "4317:4317"
+      - "4318:4318"
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+
+  # ── Prometheus ────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # ── Loki (log aggregation) ────────────────────────────────────────────
+  loki:
+    image: grafana/loki:3.1.0
+    ports:
+      - "3100:3100"
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+
+  # ── Locust (load testing) ─────────────────────────────────────────────
+  bench:
+    image: locustio/locust:latest
+    ports:
+      - "8089:8089"
+    volumes:
+      - ../../benchmarks/locustfile.py:/mnt/locust/locustfile.py:ro
+    command: ["-f", "/mnt/locust/locustfile.py", "--host", "http://nautilus:8000", "--web-host", "0.0.0.0"]
+    depends_on:
+      nautilus:
+        condition: service_healthy
+    profiles:
+      - bench
+
+  # ── MkDocs SDK documentation site ─────────────────────────────────────
+  docs:
+    image: python:3.12-slim
+    ports:
+      - "8001:8001"
+    working_dir: /docs
+    volumes:
+      - ../../docs/sdk:/docs:ro
+      - ../../packages/nautilus-adapter-sdk:/packages/nautilus-adapter-sdk:ro
+    entrypoint: ["bash", "-c", "pip install -q mkdocs mkdocs-material 'mkdocstrings[python]' && mkdocs serve -a 0.0.0.0:8001"]
+    profiles:
+      - docs
+
+volumes:
+  pg-data:
+  influxdb-data:
+  minio-data:
+  tempo-data:
+  audit-data:
+  es-data:
+  neo4j-data:

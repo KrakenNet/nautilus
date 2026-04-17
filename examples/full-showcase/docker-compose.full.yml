@@ -1,0 +1,21 @@
+# Additive compose file — enables ServiceNow + LLM intent analysis.
+#
+# Usage:
+#   cp .env.example .env   # fill in your credentials
+#   docker compose -f docker-compose.yml -f docker-compose.full.yml up --build -d
+#
+# This swaps nautilus.yaml for nautilus.full.yaml (adds ServiceNow source +
+# LLM-first analysis mode) and passes the credential env vars through.
+
+services:
+  nautilus:
+    volumes:
+      - ./nautilus.full.yaml:/config/nautilus.yaml:ro
+      - audit-data:/data/audit
+    environment:
+      # Anthropic (LLM intent analysis — falls back to pattern matching on error)
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      # ServiceNow
+      - SNOW_INSTANCE=${SNOW_INSTANCE}
+      - SNOW_USER=${SNOW_USER}
+      - SNOW_PASS=${SNOW_PASS}

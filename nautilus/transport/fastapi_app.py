@@ -281,6 +281,16 @@ def create_app(
         return {"status": "ok"}
 
     # ------------------------------------------------------------------
+    # Root redirect — / → /admin
+    # ------------------------------------------------------------------
+
+    @app.get("/", include_in_schema=False)
+    async def root_redirect() -> Response:  # pyright: ignore[reportUnusedFunction]
+        from fastapi.responses import RedirectResponse
+
+        return RedirectResponse(url="/admin", status_code=302)
+
+    # ------------------------------------------------------------------
     # Admin UI — operator-facing dashboard (FR-1, AC-1.1)
     # ------------------------------------------------------------------
 

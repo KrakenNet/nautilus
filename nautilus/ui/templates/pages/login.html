@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nautilus Admin — Login</title>
+    <link rel="stylesheet" href="/admin/static/styles.css?v=3">
+    <style>
+        .login-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: var(--color-bg);
+        }
+        .login-card {
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-md);
+            padding: 2rem;
+            width: 100%;
+            max-width: 400px;
+        }
+        .login-card h1 {
+            font-size: 1.5rem;
+            margin-bottom: 0.25rem;
+        }
+        .login-card p {
+            color: var(--color-text-muted);
+            margin-bottom: 1.5rem;
+        }
+        .login-card label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        .login-card input[type="password"] {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius);
+            font-size: 1rem;
+            margin-bottom: 1rem;
+        }
+        .login-card input[type="password"]:focus {
+            outline: none;
+            border-color: var(--color-primary);
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2);
+        }
+        .login-card button {
+            width: 100%;
+            padding: 0.6rem;
+            background: var(--color-primary);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius);
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        .login-card button:hover {
+            background: var(--color-primary-hover);
+        }
+        .login-error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: var(--color-danger);
+            padding: 0.5rem 0.75rem;
+            border-radius: var(--radius);
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+        }
+        .login-hint {
+            margin-top: 1rem;
+            font-size: 0.85rem;
+            color: var(--color-text-muted);
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <h1>Nautilus Admin</h1>
+            <p>Enter your API key to access the dashboard.</p>
+            {% if error %}
+            <div class="login-error">{{ error }}</div>
+            {% endif %}
+            <form method="post" action="/admin/login">
+                <label for="api_key">API Key</label>
+                <input type="password" id="api_key" name="api_key" placeholder="X-API-Key value" required autofocus>
+                <button type="submit">Sign in</button>
+            </form>
+            <div class="login-hint">
+                Demo key: <code>demo-key-2024</code>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

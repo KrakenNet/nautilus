@@ -1,0 +1,42 @@
+# Minimal Nautilus configuration — single Postgres source.
+#
+# Set the PG_DSN environment variable before starting:
+#   export PG_DSN="postgresql://user:pass@localhost:5432/mydb"
+#
+# Or use the full-showcase Docker example which handles this automatically.
+
+sources:
+  - id: vuln_db
+    type: postgres
+    description: "Vulnerability database"
+    classification: unclassified
+    data_types: [cve, vulnerability, patch]
+    allowed_purposes: [threat-analysis, incident-response]
+    connection: ${PG_DSN}
+    table: vulnerabilities
+
+agents:
+  analyst:
+    id: analyst
+    clearance: unclassified
+    compartments: []
+    default_purpose: threat-analysis
+
+rules:
+  user_rules_dirs: []
+
+analysis:
+  mode: pattern
+  keyword_map:
+    vulnerability: [vulnerability, vuln, cve, weakness]
+    patch: [patch, fix, update, remediation]
+
+audit:
+  path: ./audit.jsonl
+
+attestation:
+  enabled: true
+
+api:
+  keys:
+    - my-secret-key

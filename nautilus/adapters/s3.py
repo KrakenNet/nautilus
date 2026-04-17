@@ -75,7 +75,7 @@ class S3Adapter:
             # environment variables for auth (standard boto credential chain).
             conn_dict = {"endpoint_url": str(conn)}
 
-        self._bucket = conn_dict.get("bucket", "default")
+        self._bucket = conn_dict.get("bucket") or config.table or "default"
 
         session_kwargs: dict[str, Any] = {}
         self._session = AioSession(**session_kwargs)

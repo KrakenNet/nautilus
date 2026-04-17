@@ -24,6 +24,8 @@ _SUPPORTED_TYPES = {
     "rest",
     "neo4j",
     "servicenow",
+    "influxdb",
+    "s3",
 }
 
 

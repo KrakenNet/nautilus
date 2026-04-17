@@ -15,7 +15,8 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from starlette.responses import Response
 from fastapi.templating import Jinja2Templates
 
 from nautilus.core.broker import Broker
@@ -69,25 +70,121 @@ async def _safe_audit_path(request: Request) -> str | None:
     return str(broker._config.audit.path)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
 
 
-async def _safe_auth_user(request: Request) -> str | HTMLResponse:
-    """Authenticate, returning an HTML error response on failure.
+async def _safe_auth_user(request: Request) -> str | Response:
+    """Authenticate, returning a redirect to login on failure.
 
-    Wraps :func:`get_auth_user` so that authentication failures are
-    captured and converted into proper HTML pages instead of raw JSON
-    ``HTTPException`` bodies.  Callers must check the return type.
+    Wraps :func:`get_auth_user` so that authentication failures redirect
+    the browser to ``/admin/login`` instead of showing raw JSON errors.
     """
     try:
         return await get_auth_user(request)
     except HTTPException as exc:
-        title = "Unauthorized" if exc.status_code == 401 else "Forbidden"
+        if exc.status_code == 401:
+            return RedirectResponse(url="/admin/login", status_code=302)
+        title = "Forbidden"
         return _error_page(title, str(exc.detail), status_code=exc.status_code)
+
+
+@router.get("/", include_in_schema=False)
+async def admin_index() -> RedirectResponse:
+    """Redirect /admin to /admin/playground."""
+    return RedirectResponse(url="/admin/playground", status_code=302)
+
+
+@router.get("/login", include_in_schema=False)
+async def login_page(request: Request, error: str | None = None) -> HTMLResponse:
+    """Render the API key login form."""
+    return templates.TemplateResponse(
+        request, "pages/login.html", {"request": request, "error": error}
+    )
+
+
+@router.post("/login", include_in_schema=False)
+async def login_submit(request: Request, api_key: str = Form(...)) -> Response:
+    """Validate the API key and set a session cookie."""
+    from nautilus.transport.auth import verify_api_key
+
+    keys: list[str] = list(getattr(request.app.state, "api_keys", []) or [])
+    try:
+        verify_api_key(api_key, keys)
+    except HTTPException:
+        return templates.TemplateResponse(
+            request,
+            "pages/login.html",
+            {"request": request, "error": "Invalid API key"},
+            status_code=401,
+        )
+    response = RedirectResponse(url="/admin/sources", status_code=302)
+    response.set_cookie(
+        key="nautilus_key",
+        value=api_key,
+        httponly=True,
+        samesite="lax",
+        max_age=86400,
+    )
+    return response
+
+
+@router.get("/logout", include_in_schema=False)
+async def logout() -> Response:
+    """Clear the session cookie and redirect to login."""
+    response = RedirectResponse(url="/admin/login", status_code=302)
+    response.delete_cookie(key="nautilus_key")
+    return response
+
+
+@router.get("/playground")
+async def playground(
+    request: Request,
+    user: Annotated[str | Response, Depends(_safe_auth_user)],
+) -> HTMLResponse:
+    """Playground page — submit queries to the broker interactively."""
+    if isinstance(user, Response):
+        return user
+    context = {"request": request, "user": user}
+    return templates.TemplateResponse(request, "pages/playground.html", context)
+
+
+@router.post("/api/query")
+async def playground_query(
+    request: Request,
+    broker: Annotated[Broker | None, Depends(_safe_broker)],
+    user: Annotated[str | Response, Depends(_safe_auth_user)],
+) -> JSONResponse:
+    """Proxy endpoint for playground queries.
+
+    Accepts the same JSON body as ``/v1/request`` but authenticates via
+    the admin session cookie, avoiding the httponly cookie / JS barrier.
+    """
+    if isinstance(user, Response):
+        return JSONResponse({"error": "Not authenticated"}, status_code=401)
+    if broker is None:
+        return JSONResponse({"error": "Broker not ready"}, status_code=503)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    agent_id = body.get("agent_id", "unknown")
+    intent = body.get("intent", "")
+    context = body.get("context", {})
+
+    if not intent:
+        return JSONResponse({"error": "intent is required"}, status_code=400)
+
+    try:
+        result = await broker.arequest(agent_id, intent, context)
+        return JSONResponse(result.model_dump(mode="json"))
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=500)
 
 
 @router.get("/sources")
 async def source_status(
     request: Request,
     broker: Annotated[Broker | None, Depends(_safe_broker)],
-    user: Annotated[str | HTMLResponse, Depends(_safe_auth_user)],
+    user: Annotated[str | Response, Depends(_safe_auth_user)],
 ) -> HTMLResponse:
     """Source status page — lists configured sources with metadata.
 
@@ -99,7 +196,7 @@ async def source_status(
     partial (``partials/source_table_body.html``) for HTMX swap; otherwise
     returns the full page (``pages/sources.html``).
     """
-    if isinstance(user, HTMLResponse):
+    if isinstance(user, Response):
         return user
     if broker is None:
         return _broker_not_ready()
@@ -112,6 +209,7 @@ async def source_status(
             "classification": s.classification,
             "description": s.description,
             "data_types": s.data_types,
+            "allowed_purposes": s.allowed_purposes or [],
         }
         for s in sources
     ]
@@ -132,7 +230,7 @@ async def source_status(
 async def decisions(
     request: Request,
     audit_path: Annotated[str | None, Depends(_safe_audit_path)],
-    user: Annotated[str | HTMLResponse, Depends(_safe_auth_user)],
+    user: Annotated[str | Response, Depends(_safe_auth_user)],
     agent_id: str | None = None,
     start: str | None = None,
     end: str | None = None,
@@ -149,7 +247,7 @@ async def decisions(
     partial (``partials/decision_row.html`` rows) for HTMX swap; otherwise
     returns the full page (``pages/decisions.html``).
     """
-    if isinstance(user, HTMLResponse):
+    if isinstance(user, Response):
         return user
     if audit_path is None:
         return _broker_not_ready()
@@ -226,7 +324,7 @@ async def decision_detail(
     request: Request,
     request_id: str,
     audit_path: Annotated[str | None, Depends(_safe_audit_path)],
-    user: Annotated[str | HTMLResponse, Depends(_safe_auth_user)],
+    user: Annotated[str | Response, Depends(_safe_auth_user)],
 ) -> HTMLResponse:
     """Decision detail modal — returns the full trace for a specific request.
 
@@ -234,7 +332,7 @@ async def decision_detail(
     routing decisions, scope constraints, denial records, and facts summary
     for the given ``request_id``.
     """
-    if isinstance(user, HTMLResponse):
+    if isinstance(user, Response):
         return user
     if audit_path is None:
         return _broker_not_ready()
@@ -273,7 +371,7 @@ async def decision_detail(
 async def audit(
     request: Request,
     audit_path: Annotated[str | None, Depends(_safe_audit_path)],
-    user: Annotated[str | HTMLResponse, Depends(_safe_auth_user)],
+    user: Annotated[str | Response, Depends(_safe_auth_user)],
     agent_id: str | None = None,
     source_id: str | None = None,
     event_type: str | None = None,
@@ -293,7 +391,7 @@ async def audit(
     partial (``audit_rows.html``) and pagination fragment; otherwise
     returns the full page (``pages/audit.html``).
     """
-    if isinstance(user, HTMLResponse):
+    if isinstance(user, Response):
         return user
     if audit_path is None:
         return _broker_not_ready()
@@ -362,22 +460,17 @@ async def audit(
 @router.get("/attestation")
 async def attestation(
     request: Request,
-    user: Annotated[str | HTMLResponse, Depends(_safe_auth_user)],
+    broker: Annotated[Broker | None, Depends(_safe_broker)],
+    user: Annotated[str | Response, Depends(_safe_auth_user)],
 ) -> HTMLResponse:
-    """Attestation verification page — form for verifying EdDSA JWTs.
-
-    Renders the attestation form.  When no signing key is configured the
-    template displays an "Attestation not configured" message.
-
-    ``signing_key_configured`` is hardcoded to ``False`` for POC phase
-    (AttestationService not yet implemented).
-    """
-    if isinstance(user, HTMLResponse):
+    """Attestation verification page — form for verifying EdDSA JWTs."""
+    if isinstance(user, Response):
         return user
+    has_attestation = broker is not None and getattr(broker, "_attestation", None) is not None
     context = {
         "request": request,
         "user": user,
-        "signing_key_configured": False,
+        "signing_key_configured": has_attestation,
     }
     return templates.TemplateResponse(request, "pages/attestation.html", context)
 
@@ -385,26 +478,48 @@ async def attestation(
 @router.post("/attestation/verify")
 async def attestation_verify(
     request: Request,
-    user: Annotated[str | HTMLResponse, Depends(_safe_auth_user)],
+    broker: Annotated[Broker | None, Depends(_safe_broker)],
+    user: Annotated[str | Response, Depends(_safe_auth_user)],
     token: str = Form(...),
 ) -> HTMLResponse:
-    """Verify an attestation token (EdDSA JWT).
-
-    Accepts the ``token`` form field and returns an
-    ``attestation_result.html`` HTMX fragment with verification results.
-
-    POC stub: always returns an ``invalid`` result since
-    ``AttestationService`` is not yet implemented.
-    """
-    if isinstance(user, HTMLResponse):
+    """Verify an attestation token (EdDSA JWT)."""
+    if isinstance(user, Response):
         return user
-    # POC stub — AttestationService not yet available
-    result = {
-        "valid": False,
-        "error": "AttestationService not implemented (POC stub)",
-        "token_preview": token[:64] + "..." if len(token) > 64 else token,
-        "claims": None,
-    }
+
+    import jwt as pyjwt
+
+    att_svc = getattr(broker, "_attestation", None) if broker else None
+    if att_svc is None:
+        result = {
+            "valid": False,
+            "error": "Attestation not configured on this broker instance",
+            "token_preview": token[:64] + "..." if len(token) > 64 else token,
+            "claims": None,
+        }
+    else:
+        try:
+            public_key = att_svc.public_key
+            claims = pyjwt.decode(token, public_key, algorithms=["EdDSA"])
+            result = {
+                "valid": True,
+                "error": None,
+                "token_preview": token[:64] + "..." if len(token) > 64 else token,
+                "claims": claims,
+            }
+        except pyjwt.ExpiredSignatureError:
+            result = {
+                "valid": False,
+                "error": "Token has expired",
+                "token_preview": token[:64] + "..." if len(token) > 64 else token,
+                "claims": None,
+            }
+        except pyjwt.InvalidTokenError as exc:
+            result = {
+                "valid": False,
+                "error": str(exc),
+                "token_preview": token[:64] + "..." if len(token) > 64 else token,
+                "claims": None,
+            }
 
     context = {"request": request, "user": user, "result": result}
     return templates.TemplateResponse(request, "partials/attestation_result.html", context)
@@ -416,7 +531,7 @@ def _parse_dt(value: str | None) -> datetime | None:
         return None
     try:
         return datetime.fromisoformat(value)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return None
 
 

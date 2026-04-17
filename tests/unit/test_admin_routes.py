@@ -32,11 +32,12 @@ from nautilus.ui.router import router
 # Fixtures
 # ---------------------------------------------------------------------------
 
-def _make_source(id: str, type: str = "postgres", **kwargs: Any) -> SourceConfig:
+
+def _make_source(id: str, type: str = "postgres", **kwargs: Any) -> SourceConfig:  # noqa: A002
     """Build a minimal SourceConfig for testing."""
     return SourceConfig(
         id=id,
-        type=type,
+        type=type,  # pyright: ignore[reportArgumentType]
         description=f"Test source {id}",
         classification="internal",
         data_types=["structured"],
@@ -55,9 +56,7 @@ def _make_audit_entry(
 ) -> AuditEntry:
     """Build a minimal AuditEntry for testing."""
     denial_records = (
-        [DenialRecord(source_id="src-x", rule_name="deny-rule", reason="blocked")]
-        if denied
-        else []
+        [DenialRecord(source_id="src-x", rule_name="deny-rule", reason="blocked")] if denied else []
     )
     return AuditEntry(
         timestamp=datetime(2025, 6, 15, 12, 0, 0, tzinfo=UTC),

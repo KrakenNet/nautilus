@@ -1,34 +1,71 @@
 <div class="modal-backdrop" onclick="this.parentElement.innerHTML=''">
-    <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal" onclick="event.stopPropagation()" style="max-width:720px">
         <div class="modal-header">
-            <h2>Decision Detail: <code>{{ decision.request_id }}</code></h2>
+            <h2>Decision Detail</h2>
             <button class="modal-close" onclick="this.closest('.modal-backdrop').parentElement.innerHTML=''">&times;</button>
         </div>
         <div class="modal-body">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem;margin-bottom:1rem;font-size:0.8125rem">
+                <div><strong>Request ID:</strong> <code>{{ decision.request_id }}</code></div>
+                <div><strong>Timestamp:</strong> {{ decision.timestamp }}</div>
+                <div><strong>Agent ID:</strong> {{ decision.agent_id }}</div>
+                <div><strong>Duration:</strong> {{ decision.duration_ms }}ms</div>
+            </div>
+
+            {% if decision.sources_queried %}
+            <div style="padding:0.5rem;background:#dcfce7;border-radius:var(--radius);margin-bottom:0.5rem;font-size:0.8125rem">
+                <strong>Sources Queried:</strong> {{ decision.sources_queried | join(", ") }}
+            </div>
+            {% endif %}
+
+            {% if decision.sources_denied %}
+            <div style="padding:0.5rem;background:#fee2e2;border-radius:var(--radius);margin-bottom:0.5rem;font-size:0.8125rem">
+                <strong>Sources Denied:</strong> {{ decision.sources_denied | join(", ") }}
+            </div>
+            {% endif %}
+
             <section>
                 <h3>Rule Trace</h3>
-                <pre><code>{{ decision.rule_trace | tojson(indent=2) if decision.rule_trace else 'N/A' }}</code></pre>
+                {% if decision.rule_trace %}
+                <ul style="list-style:none;font-size:0.8125rem">
+                    {% for rule in decision.rule_trace %}
+                    <li style="padding:0.25rem 0;border-bottom:1px solid var(--color-border)">
+                        <code>{{ rule }}</code>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-muted text-sm">No rules fired</p>
+                {% endif %}
             </section>
 
+            {% if decision.routing_decisions %}
             <section>
                 <h3>Routing Decisions</h3>
-                <pre><code>{{ decision.routing_decisions | tojson(indent=2) if decision.routing_decisions else 'N/A' }}</code></pre>
+                <pre><code>{{ decision.routing_decisions | tojson(indent=2) }}</code></pre>
             </section>
+            {% endif %}
 
+            {% if decision.scope_constraints %}
             <section>
                 <h3>Scope Constraints</h3>
-                <pre><code>{{ decision.scope_constraints | tojson(indent=2) if decision.scope_constraints else 'N/A' }}</code></pre>
+                <pre><code>{{ decision.scope_constraints | tojson(indent=2) }}</code></pre>
             </section>
+            {% endif %}
 
+            {% if decision.denial_records %}
             <section>
                 <h3>Denial Records</h3>
-                <pre><code>{{ decision.denial_records | tojson(indent=2) if decision.denial_records else 'N/A' }}</code></pre>
+                <pre><code>{{ decision.denial_records | tojson(indent=2) }}</code></pre>
             </section>
+            {% endif %}
 
+            {% if decision.facts_asserted_summary %}
             <section>
-                <h3>Facts Asserted Summary</h3>
-                <pre><code>{{ decision.facts_asserted_summary | tojson(indent=2) if decision.facts_asserted_summary else 'N/A' }}</code></pre>
+                <h3>Facts Asserted</h3>
+                <pre><code>{{ decision.facts_asserted_summary | tojson(indent=2) }}</code></pre>
             </section>
+            {% endif %}
         </div>
     </div>
 </div>

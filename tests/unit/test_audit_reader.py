@@ -18,6 +18,7 @@ from nautilus.ui.audit_reader import AuditPage, AuditReader
 
 # -- helpers ----------------------------------------------------------------
 
+
 def _make_audit_entry_dict(
     *,
     agent_id: str = "agent-1",
@@ -25,7 +26,7 @@ def _make_audit_entry_dict(
     event_type: str = "request",
     ts: datetime | None = None,
     request_id: str = "req-001",
-) -> dict:
+) -> dict[str, object]:
     """Return a minimal AuditEntry-shaped dict."""
     if ts is None:
         ts = datetime(2025, 6, 1, 12, 0, 0, tzinfo=UTC)
@@ -56,17 +57,22 @@ def _make_audit_entry_dict(
     }
 
 
-def _make_audit_record_line(entry_dict: dict) -> str:
+def _make_audit_record_line(entry_dict: dict[str, object]) -> str:
     """Wrap an AuditEntry dict inside a Fathom AuditRecord JSONL line."""
     entry_json = json.dumps(entry_dict, separators=(",", ":"))
-    record = {
-        "timestamp": entry_dict["timestamp"],
-        "session_id": entry_dict.get("session_id") or entry_dict["request_id"],
+    ts = entry_dict["timestamp"]
+    session_id = entry_dict.get("session_id") or entry_dict["request_id"]
+    rule_trace = entry_dict.get("rule_trace", [])
+    duration_ms = entry_dict["duration_ms"]
+    assert isinstance(duration_ms, int)
+    record: dict[str, object] = {
+        "timestamp": ts,
+        "session_id": session_id,
         "modules_traversed": [],
-        "rules_fired": entry_dict.get("rule_trace", []),
+        "rules_fired": rule_trace,
         "decision": "allow",
         "reason": "queried=1 denied=0 skipped=0 errored=0",
-        "duration_us": entry_dict["duration_ms"] * 1000,
+        "duration_us": duration_ms * 1000,
         "metadata": {"nautilus_audit_entry": entry_json},
     }
     return json.dumps(record)
@@ -77,10 +83,10 @@ def _write_jsonl(path: Path, lines: list[str]) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _make_200_line_file(path: Path) -> list[dict]:
+def _make_200_line_file(path: Path) -> list[dict[str, object]]:
     """Create a JSONL file with 200 audit lines, returning entry dicts."""
     base_ts = datetime(2025, 6, 1, 0, 0, 0, tzinfo=UTC)
-    entries: list[dict] = []
+    entries: list[dict[str, object]] = []
     lines: list[str] = []
     for i in range(200):
         entry = _make_audit_entry_dict(
@@ -96,6 +102,7 @@ def _make_200_line_file(path: Path) -> list[dict]:
 
 
 # -- pagination tests -------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestPagination:
@@ -167,6 +174,7 @@ class TestPagination:
 
 # -- double-parse tests -----------------------------------------------------
 
+
 @pytest.mark.unit
 class TestDoubleParse:
     """Outer AuditRecord -> inner AuditEntry extraction."""
@@ -208,7 +216,7 @@ class TestDoubleParse:
 
     def test_multiple_entries_double_parsed(self, tmp_path: Path) -> None:
         audit_file = tmp_path / "audit.jsonl"
-        lines = []
+        lines: list[str] = []
         for i in range(5):
             entry = _make_audit_entry_dict(
                 agent_id=f"agent-{i}",
@@ -226,6 +234,7 @@ class TestDoubleParse:
 
 
 # -- filter tests -----------------------------------------------------------
+
 
 @pytest.mark.unit
 class TestFilters:
@@ -292,8 +301,11 @@ class TestFilters:
         end = base_ts + timedelta(minutes=59)
 
         page = reader.read_page(
-            agent_id="agent-0", source_id="src-0",
-            start=start, end=end, sort="asc",
+            agent_id="agent-0",
+            source_id="src-0",
+            start=start,
+            end=end,
+            sort="asc",
         )
 
         # i in [0,59], i%12==0 => i in {0,12,24,36,48} => 5 entries
@@ -306,11 +318,12 @@ class TestFilters:
 
     def test_event_type_filter(self, tmp_path: Path) -> None:
         audit_file = tmp_path / "audit.jsonl"
-        lines = []
+        lines: list[str] = []
         for i in range(10):
             et = "handoff_declared" if i % 2 == 0 else "request"
             entry = _make_audit_entry_dict(
-                request_id=f"req-{i}", event_type=et,
+                request_id=f"req-{i}",
+                event_type=et,
             )
             lines.append(_make_audit_record_line(entry))
         _write_jsonl(audit_file, lines)
@@ -324,6 +337,7 @@ class TestFilters:
 
 # -- error handling tests ---------------------------------------------------
 
+
 @pytest.mark.unit
 class TestErrorHandling:
     """Corrupt lines, missing files, invalid cursors."""
@@ -335,9 +349,7 @@ class TestErrorHandling:
             "THIS IS NOT JSON",
             _make_audit_record_line(good_entry),
             '{"incomplete": true}',  # valid JSON but not a valid AuditRecord
-            _make_audit_record_line(
-                _make_audit_entry_dict(request_id="req-good2")
-            ),
+            _make_audit_record_line(_make_audit_entry_dict(request_id="req-good2")),
         ]
         _write_jsonl(audit_file, lines)
         reader = AuditReader(audit_file, page_size=50)
@@ -385,9 +397,7 @@ class TestErrorHandling:
 
         # Should reset to page 1
         page_first = reader.read_page(cursor=None, sort="asc")
-        assert [e.request_id for e in page.entries] == [
-            e.request_id for e in page_first.entries
-        ]
+        assert [e.request_id for e in page.entries] == [e.request_id for e in page_first.entries]
 
     def test_empty_file_returns_empty_page(self, tmp_path: Path) -> None:
         audit_file = tmp_path / "audit.jsonl"
@@ -402,11 +412,11 @@ class TestErrorHandling:
     def test_cursor_encode_decode_round_trip(self) -> None:
         """Verify cursor encode/decode is symmetric."""
         for offset in [0, 42, 999999]:
-            cursor = AuditReader._encode_cursor(offset)
-            decoded = AuditReader._decode_cursor(cursor)
+            cursor = AuditReader._encode_cursor(offset)  # pyright: ignore[reportPrivateUsage]
+            decoded = AuditReader._decode_cursor(cursor)  # pyright: ignore[reportPrivateUsage]
             assert decoded == offset
 
     def test_negative_offset_cursor_clamped_to_zero(self) -> None:
         """A cursor that decodes to a negative number is clamped to 0."""
         bad_cursor = base64.urlsafe_b64encode(b"-100").decode()
-        assert AuditReader._decode_cursor(bad_cursor) == 0
+        assert AuditReader._decode_cursor(bad_cursor) == 0  # pyright: ignore[reportPrivateUsage]

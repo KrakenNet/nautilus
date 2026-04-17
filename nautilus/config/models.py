@@ -91,6 +91,8 @@ class SourceConfig(BaseModel):
         "rest",
         "neo4j",
         "servicenow",
+        "influxdb",
+        "s3",
     ]
     description: str
     classification: str

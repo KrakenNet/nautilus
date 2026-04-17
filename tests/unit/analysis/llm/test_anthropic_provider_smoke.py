@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import pytest
 
+pytest.importorskip("anthropic", reason="anthropic SDK not installed (optional extra)")
+
 from nautilus.analysis.llm.anthropic_provider import AnthropicProvider
 from nautilus.analysis.llm.base import LLMProviderError
 

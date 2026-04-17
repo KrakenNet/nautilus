@@ -1,0 +1,131 @@
+# Full-showcase Nautilus configuration (base).
+#
+# Wires five data source types (Postgres, InfluxDB, S3/MinIO, Elasticsearch,
+# Neo4j), three agent clearance levels, pattern-based intent analysis,
+# file-backed audit + attestation, and the built-in Fathom classification/
+# routing rules. All backends are containerized — no external credentials needed.
+#
+# For ServiceNow + LLM intent analysis, see nautilus.full.yaml and .env.example.
+#
+# Environment variables (set by docker-compose.yml):
+#   PG_DSN           — Postgres connection string
+#   INFLUXDB_URL     — InfluxDB 2.x HTTP endpoint
+#   MINIO_ENDPOINT   — MinIO S3-compatible endpoint
+#   ES_URL           — Elasticsearch HTTP endpoint
+#   NEO4J_URL        — Neo4j Bolt endpoint
+#   INFLUXDB_V2_TOKEN, INFLUXDB_V2_ORG — picked up by the InfluxDB adapter
+#   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY — picked up by the S3 adapter
+
+sources:
+  # ── Postgres: vulnerability database ──────────────────────────────────
+  - id: vuln_db
+    type: postgres
+    description: "National Vulnerability Database mirror — CVEs, patches, advisories"
+    classification: cui-basic
+    data_types: [cve, vulnerability, patch, advisory]
+    allowed_purposes: [threat-analysis, incident-response, compliance-audit]
+    connection: ${PG_DSN}
+    table: vulnerabilities
+
+  # ── InfluxDB: infrastructure metrics ──────────────────────────────────
+  - id: server_metrics
+    type: influxdb
+    description: "Infrastructure time-series — CPU, memory, disk, network"
+    classification: unclassified
+    data_types: [metric, timeseries, performance]
+    allowed_purposes: [monitoring, capacity-planning, incident-response]
+    connection: ${INFLUXDB_URL}
+    table: showcase  # InfluxDB adapter uses this as the bucket name
+
+  # ── S3/MinIO: compliance documents ────────────────────────────────────
+  - id: compliance_docs
+    type: s3
+    description: "Compliance reports, policies, and audit artifacts"
+    classification: cui-specified
+    data_types: [report, policy, audit-trail, compliance]
+    allowed_purposes: [compliance-audit, legal-review]
+    connection: ${MINIO_ENDPOINT}
+    table: compliance-docs  # S3 adapter uses this as the bucket name
+
+  # ── Elasticsearch: application log index ────────────────────────────────
+  - id: app_logs
+    type: elasticsearch
+    description: "Application log index — errors, warnings, access events"
+    classification: cui-basic
+    data_types: [log, event, alert, error]
+    allowed_purposes: [incident-response, monitoring, threat-analysis]
+    connection: ${ES_URL}
+    index: app-logs
+
+  # ── Neo4j: security knowledge graph ───────────────────────────────────
+  - id: threat_graph
+    type: neo4j
+    description: "Threat intelligence knowledge graph — actors, TTPs, IOCs"
+    classification: cui-basic
+    data_types: [threat-actor, indicator, technique, campaign]
+    allowed_purposes: [threat-analysis, incident-response]
+    connection: ${NEO4J_URL}
+    label: ThreatActor
+    auth:
+      type: basic
+      username: ${NEO4J_USER}
+      password: ${NEO4J_PASS}
+
+# ── Agents with graduated clearance ─────────────────────────────────────
+agents:
+  analyst:
+    id: analyst
+    clearance: cui-basic
+    compartments: []
+    default_purpose: threat-analysis
+
+  auditor:
+    id: auditor
+    clearance: cui-specified
+    compartments: [compliance]
+    default_purpose: compliance-audit
+
+  intern:
+    id: intern
+    clearance: unclassified
+    compartments: []
+    default_purpose: monitoring
+
+# ── Rules ────────────────────────────────────────────────────────────────
+rules:
+  user_rules_dirs: []  # built-in classification/routing rules are always loaded
+
+# ── Intent analysis (pattern matching — no LLM required) ────────────────
+analysis:
+  mode: pattern
+  keyword_map:
+    vulnerability: [vulnerability, vuln, cve, weakness, exploit, advisory]
+    patch: [patch, fix, update, remediation, hotfix]
+    metric: [cpu, memory, disk, network, latency, throughput, load]
+    compliance: [compliance, audit, hipaa, nist, regulation, policy]
+    report: [report, summary, assessment, findings]
+    timeseries: [timeseries, time-series, metrics, performance]
+    log: [log, error, warning, exception, trace, event]
+    threat-actor: [threat, actor, attacker, campaign, apt, ttp, ioc, indicator]
+
+# ── Audit log ────────────────────────────────────────────────────────────
+audit:
+  path: /data/audit/audit.jsonl
+
+# ── Attestation (auto-generates Ed25519 key on startup) ──────────────────
+attestation:
+  enabled: true
+  sink:
+    type: file
+    path: /data/audit/attestations.jsonl
+
+# ── API ──────────────────────────────────────────────────────────────────
+api:
+  host: "0.0.0.0"
+  port: 8000
+  keys:
+    - demo-key-2024
+
+# ── Session store (in-memory for demo) ───────────────────────────────────
+session_store:
+  backend: memory

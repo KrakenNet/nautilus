@@ -1,0 +1,6 @@
+id,name,department,clearance,email
+1,Alice Chen,Engineering,cui-basic,alice@example.com
+2,Bob Martinez,Legal,cui-specified,bob@example.com
+3,Charlie Kim,Engineering,unclassified,charlie@example.com
+4,Dana Okafor,Security,cui-specified,dana@example.com
+5,Eve Johnson,Engineering,cui-basic,eve@example.com

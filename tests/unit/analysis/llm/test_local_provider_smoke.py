@@ -22,6 +22,14 @@ from nautilus.analysis.llm.base import LLMProviderError
 from nautilus.analysis.llm.local_provider import LocalInferenceProvider
 from nautilus.analysis.llm.openai_provider import OpenAIProvider
 
+# When the openai SDK is not installed, AsyncOpenAI is None and the constructor
+# raises LLMProviderError. Patch it to a MagicMock so offline tests can still
+# construct providers without the real SDK.
+if op_mod.AsyncOpenAI is None:  # pyright: ignore[reportUnnecessaryComparison]
+    _sentinel = MagicMock()
+    op_mod.AsyncOpenAI = _sentinel  # type: ignore[assignment]
+    lp_mod.AsyncOpenAI = _sentinel  # type: ignore[assignment]
+
 
 def _install_capturing_async_openai(
     monkeypatch: pytest.MonkeyPatch,
