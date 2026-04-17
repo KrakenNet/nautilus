@@ -2,17 +2,17 @@
 
 > Policy-first data broker for AI agents. One call plans, routes, enforces, attests, and audits.
 
-[![PyPI](https://img.shields.io/pypi/v/nautilus.svg)](https://pypi.org/project/nautilus/)
+[![PyPI](https://img.shields.io/pypi/v/nautilus-rkm.svg)](https://pypi.org/project/nautilus-rkm/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
-[![CI](https://github.com/KrakenNet/nautilus/actions/workflows/ci.yml/badge.svg)](https://github.com/KrakenNet/nautilus/actions/workflows/ci.yml)
-[![Docs](https://github.com/KrakenNet/nautilus/actions/workflows/docs-deploy.yml/badge.svg)](https://nautilus.krakn.ai)
+[![CI](https://github.com/se-jo-ma/nautilus/actions/workflows/ci.yml/badge.svg)](https://github.com/se-jo-ma/nautilus/actions/workflows/ci.yml)
+[![Docs](https://github.com/se-jo-ma/nautilus/actions/workflows/docs-deploy.yml/badge.svg)](https://nautilus.krakn.ai)
 
 **Current version:** 0.1.0
 **License:** MIT
 **Language:** Python 3.14+
 **Package Manager:** uv
-**Maintained by:** [Kraken Networks](https://github.com/KrakenNet)
+**Maintained by:** [se-jo-ma](https://github.com/se-jo-ma)
 
 ---
 
@@ -32,7 +32,7 @@ Nautilus provides **deterministic, policy-first data brokering** using Fathom â€
 ## Install
 
 ```bash
-uv add nautilus
+uv add nautilus-rkm
 ```
 
 ## Quick Start

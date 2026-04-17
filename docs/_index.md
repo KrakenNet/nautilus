@@ -5,7 +5,7 @@ Nautilus is a policy-first data broker for AI agents. A single
 enforces CLIPS-backed scope rules, executes adapters concurrently, and emits
 a signed attestation plus a complete audit entry.
 
-Current release: `nautilus` 0.1.0 (requires Python 3.14+).
+Current release: `nautilus-rkm` 0.1.0 (requires Python 3.14+).
 
 ## Start here
 

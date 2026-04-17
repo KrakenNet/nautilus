@@ -9,7 +9,7 @@ scope-enforced, attested results.
 Requires Python 3.14 or later.
 
 ```bash
-uv add nautilus
+uv add nautilus-rkm
 ```
 
 ## Configuration

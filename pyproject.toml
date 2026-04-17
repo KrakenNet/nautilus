@@ -1,5 +1,5 @@
 [project]
-name = "nautilus"
+name = "nautilus-rkm"
 version = "0.1.0"
 description = "Nautilus data broker + reasoning engine: intent-aware scoped query execution, multi-agent handoffs, LLM intent analysis, and forensic escalation via Fathom rules"
 readme = "README.md"
