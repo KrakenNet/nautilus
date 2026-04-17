@@ -12,7 +12,7 @@
 **License:** MIT
 **Language:** Python 3.14+
 **Package Manager:** uv
-**Maintained by:** [se-jo-ma](https://github.com/se-jo-ma)
+**Maintained by:** [Kraken Networks](https://github.com/KrakenNet)
 
 ---
 
