@@ -46,7 +46,7 @@ extra:
     alias: true
 
 nav:
-  - Home: _index.md
+  - Home: index.md
   - Getting Started: getting-started.md
   - How-to Guides:
       - Overview: how-to/index.md
