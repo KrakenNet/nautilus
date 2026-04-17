@@ -5,17 +5,13 @@ Run: pytest test_compliance.py -v
 
 from __future__ import annotations
 
-import asyncio
 import csv
-import tempfile
 from pathlib import Path
 
 import pytest
-
+from csv_adapter import CsvAdapter
 from nautilus_adapter_sdk.config import SourceConfig
 from nautilus_adapter_sdk.testing.compliance import AdapterComplianceSuite
-
-from csv_adapter import CsvAdapter
 
 # ---------------------------------------------------------------------------
 # Fixtures

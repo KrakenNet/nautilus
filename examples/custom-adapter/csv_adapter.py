@@ -10,6 +10,7 @@ Usage:
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import time
 from pathlib import Path
@@ -17,7 +18,6 @@ from typing import Any, ClassVar
 
 from nautilus_adapter_sdk.config import SourceConfig
 from nautilus_adapter_sdk.exceptions import AdapterError, ScopeEnforcementError
-from nautilus_adapter_sdk.protocols import Adapter
 from nautilus_adapter_sdk.types import AdapterResult, IntentAnalysis, ScopeConstraint
 
 # Operators supported by this adapter.
@@ -50,14 +50,18 @@ class CsvAdapter:
         in a future multi-sheet extension.
         """
         path = Path(str(config.connection))
-        if not path.is_file():
-            raise AdapterError(f"CSV file not found: {path}")
+
+        def _load() -> tuple[list[str], list[dict[str, str]]]:
+            if not path.is_file():
+                raise AdapterError(f"CSV file not found: {path}")
+            with path.open(newline="", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                headers = list(reader.fieldnames or [])
+                rows = list(reader)
+            return headers, rows
 
         self._path = path
-        with open(path, newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            self._headers = list(reader.fieldnames or [])
-            self._rows = list(reader)
+        self._headers, self._rows = await asyncio.to_thread(_load)
 
     async def execute(
         self,

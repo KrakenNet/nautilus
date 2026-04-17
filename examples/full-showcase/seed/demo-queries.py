@@ -10,8 +10,8 @@ Purposes must match source allowed_purposes.
 import json
 import sys
 import time
-import urllib.request
 import urllib.error
+import urllib.request
 
 NAUTILUS_URL = "http://nautilus:8000"
 API_KEY = "demo-key-2024"

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from nautilus_adapter_sdk.config import SourceConfig
 from nautilus_adapter_sdk.exceptions import ScopeEnforcementError

@@ -16,8 +16,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from starlette.responses import Response
 from fastapi.templating import Jinja2Templates
+from starlette.responses import Response
 
 from nautilus.core.broker import Broker
 from nautilus.ui.audit_reader import AuditReader

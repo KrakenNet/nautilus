@@ -7,7 +7,7 @@ Locust's stats dictionary.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -37,7 +37,7 @@ def generate_report(stats: dict[str, Any]) -> dict[str, Any]:
     response_times = total.get("response_times", {})
 
     report: dict[str, Any] = {
-        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+        "generated_at": datetime.now(tz=UTC).isoformat(),
         "summary": {
             "total_requests": total_reqs,
             "total_failures": total_fails,

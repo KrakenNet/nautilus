@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import os
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 # ---------------------------------------------------------------------------
 # Wait for services
@@ -19,8 +19,8 @@ from datetime import datetime, timedelta, timezone
 
 def _wait_http(url: str, label: str, retries: int = 30, delay: float = 2.0) -> None:
     """Block until ``url`` returns a 2xx response."""
-    import urllib.request
     import urllib.error
+    import urllib.request
 
     for attempt in range(retries):
         try:
@@ -53,7 +53,7 @@ def seed_influxdb() -> None:
     client = InfluxDBClient(url=url, token=token, org=org)
     write_api = client.write_api(write_options=SYNCHRONOUS)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     hosts = ["web-01", "web-02", "db-01", "worker-01"]
     points = []
 
@@ -127,7 +127,10 @@ def seed_minio() -> None:
             "status": "compliant",
             "findings": 3,
             "critical_findings": 0,
-            "summary": "All AC and SC controls evaluated. Minor gaps in AC-6 least privilege for service accounts.",
+            "summary": (
+                "All AC and SC controls evaluated."
+                " Minor gaps in AC-6 least privilege for service accounts."
+            ),
         },
         "reports/q2-2024-hipaa-assessment.json": {
             "title": "Q2 2024 HIPAA Risk Assessment",
@@ -136,7 +139,10 @@ def seed_minio() -> None:
             "status": "compliant_with_observations",
             "findings": 5,
             "critical_findings": 1,
-            "summary": "PHI access controls meet minimum necessary standard. Breach notification procedures need update.",
+            "summary": (
+                "PHI access controls meet minimum necessary standard."
+                " Breach notification procedures need update."
+            ),
         },
         "policies/data-classification-policy.json": {
             "title": "Data Classification Policy v3.2",
@@ -148,7 +154,14 @@ def seed_minio() -> None:
         "policies/incident-response-plan.json": {
             "title": "Incident Response Plan v2.1",
             "effective_date": "2024-02-15",
-            "phases": ["preparation", "detection", "containment", "eradication", "recovery", "lessons-learned"],
+            "phases": [
+                "preparation",
+                "detection",
+                "containment",
+                "eradication",
+                "recovery",
+                "lessons-learned",
+            ],
             "sla_critical_hours": 4,
             "sla_high_hours": 24,
         },
@@ -163,11 +176,28 @@ def seed_minio() -> None:
     }
 
     tags_map = {
-        "reports/q1-2024-security-audit.json": {"framework": "nist", "classification": "cui-specified", "type": "report"},
-        "reports/q2-2024-hipaa-assessment.json": {"framework": "hipaa", "classification": "cui-specified", "type": "report"},
-        "policies/data-classification-policy.json": {"type": "policy", "classification": "cui-basic"},
-        "policies/incident-response-plan.json": {"type": "policy", "classification": "cui-basic"},
-        "audit-trails/2024-access-review.json": {"type": "audit-trail", "classification": "cui-specified"},
+        "reports/q1-2024-security-audit.json": {
+            "framework": "nist",
+            "classification": "cui-specified",
+            "type": "report",
+        },
+        "reports/q2-2024-hipaa-assessment.json": {
+            "framework": "hipaa",
+            "classification": "cui-specified",
+            "type": "report",
+        },
+        "policies/data-classification-policy.json": {
+            "type": "policy",
+            "classification": "cui-basic",
+        },
+        "policies/incident-response-plan.json": {
+            "type": "policy",
+            "classification": "cui-basic",
+        },
+        "audit-trails/2024-access-review.json": {
+            "type": "audit-trail",
+            "classification": "cui-specified",
+        },
     }
 
     for key, content in documents.items():
@@ -199,14 +229,71 @@ def seed_elasticsearch() -> None:
     es = Elasticsearch(es_url)
 
     logs = [
-        {"timestamp": "2024-08-15T10:23:45Z", "level": "ERROR", "service": "auth-service", "message": "JWT validation failed: token expired", "trace_id": "abc123", "user_id": "u-4421"},
-        {"timestamp": "2024-08-15T10:24:01Z", "level": "WARN", "service": "api-gateway", "message": "Rate limit approaching for client app-mobile (450/500 rpm)", "trace_id": "def456", "client": "app-mobile"},
-        {"timestamp": "2024-08-15T10:25:12Z", "level": "ERROR", "service": "storage-svc", "message": "S3 upload failed: connection timeout after 30s", "trace_id": "ghi789", "bucket": "user-uploads"},
-        {"timestamp": "2024-08-15T10:26:30Z", "level": "INFO", "service": "auth-service", "message": "Successful login from new device", "trace_id": "jkl012", "user_id": "u-1187", "ip": "203.0.113.42"},
-        {"timestamp": "2024-08-15T10:27:45Z", "level": "ERROR", "service": "policy-engine", "message": "Rule evaluation timeout: RBAC policy exceeded 500ms SLA", "trace_id": "mno345", "rule": "rbac-v2"},
-        {"timestamp": "2024-08-15T10:28:15Z", "level": "WARN", "service": "event-bus", "message": "Consumer lag exceeding threshold: 15000 messages behind", "trace_id": "pqr678", "topic": "audit-events"},
-        {"timestamp": "2024-08-15T10:30:00Z", "level": "ERROR", "service": "api-gateway", "message": "Upstream service unavailable: circuit breaker OPEN for payment-svc", "trace_id": "stu901", "upstream": "payment-svc"},
-        {"timestamp": "2024-08-15T10:31:22Z", "level": "INFO", "service": "monitoring", "message": "Health check recovered: db-01 PostgreSQL connection pool restored", "trace_id": "vwx234", "host": "db-01"},
+        {
+            "timestamp": "2024-08-15T10:23:45Z",
+            "level": "ERROR",
+            "service": "auth-service",
+            "message": "JWT validation failed: token expired",
+            "trace_id": "abc123",
+            "user_id": "u-4421",
+        },
+        {
+            "timestamp": "2024-08-15T10:24:01Z",
+            "level": "WARN",
+            "service": "api-gateway",
+            "message": "Rate limit approaching for client app-mobile (450/500 rpm)",
+            "trace_id": "def456",
+            "client": "app-mobile",
+        },
+        {
+            "timestamp": "2024-08-15T10:25:12Z",
+            "level": "ERROR",
+            "service": "storage-svc",
+            "message": "S3 upload failed: connection timeout after 30s",
+            "trace_id": "ghi789",
+            "bucket": "user-uploads",
+        },
+        {
+            "timestamp": "2024-08-15T10:26:30Z",
+            "level": "INFO",
+            "service": "auth-service",
+            "message": "Successful login from new device",
+            "trace_id": "jkl012",
+            "user_id": "u-1187",
+            "ip": "203.0.113.42",
+        },
+        {
+            "timestamp": "2024-08-15T10:27:45Z",
+            "level": "ERROR",
+            "service": "policy-engine",
+            "message": "Rule evaluation timeout: RBAC policy exceeded 500ms SLA",
+            "trace_id": "mno345",
+            "rule": "rbac-v2",
+        },
+        {
+            "timestamp": "2024-08-15T10:28:15Z",
+            "level": "WARN",
+            "service": "event-bus",
+            "message": "Consumer lag exceeding threshold: 15000 messages behind",
+            "trace_id": "pqr678",
+            "topic": "audit-events",
+        },
+        {
+            "timestamp": "2024-08-15T10:30:00Z",
+            "level": "ERROR",
+            "service": "api-gateway",
+            "message": "Upstream service unavailable: circuit breaker OPEN for payment-svc",
+            "trace_id": "stu901",
+            "upstream": "payment-svc",
+        },
+        {
+            "timestamp": "2024-08-15T10:31:22Z",
+            "level": "INFO",
+            "service": "monitoring",
+            "message": "Health check recovered: db-01 PostgreSQL connection pool restored",
+            "trace_id": "vwx234",
+            "host": "db-01",
+        },
     ]
 
     index_name = "app-logs"
@@ -235,10 +322,12 @@ def seed_neo4j() -> None:
     with driver.session() as session:
         # Create threat actors
         session.run(
-            "MERGE (a:ThreatActor {name: 'APT-29', aliases: 'Cozy Bear', origin: 'Russia', active_since: '2008'})"
+            "MERGE (a:ThreatActor {name: 'APT-29', aliases: 'Cozy Bear',"
+            " origin: 'Russia', active_since: '2008'})"
         )
         session.run(
-            "MERGE (a:ThreatActor {name: 'APT-41', aliases: 'Winnti', origin: 'China', active_since: '2012'})"
+            "MERGE (a:ThreatActor {name: 'APT-41', aliases: 'Winnti',"
+            " origin: 'China', active_since: '2012'})"
         )
 
         # Create TTPs (MITRE ATT&CK)
@@ -249,12 +338,14 @@ def seed_neo4j() -> None:
             "MERGE (t:Technique {id: 'T1078', name: 'Valid Accounts', tactic: 'Persistence'})"
         )
         session.run(
-            "MERGE (t:Technique {id: 'T1190', name: 'Exploit Public-Facing Application', tactic: 'Initial Access'})"
+            "MERGE (t:Technique {id: 'T1190',"
+            " name: 'Exploit Public-Facing Application', tactic: 'Initial Access'})"
         )
 
         # Create IOCs
         session.run(
-            "MERGE (i:Indicator {type: 'domain', value: 'malicious-updates.example.com', confidence: 'high'})"
+            "MERGE (i:Indicator {type: 'domain',"
+            " value: 'malicious-updates.example.com', confidence: 'high'})"
         )
         session.run(
             "MERGE (i:Indicator {type: 'ip', value: '198.51.100.23', confidence: 'medium'})"
@@ -283,7 +374,8 @@ def seed_neo4j() -> None:
             MERGE (a)-[:ATTRIBUTED_TO]->(c)
         """)
         session.run("""
-            MATCH (c:Campaign {name: 'SolarWinds Compromise'}), (i:Indicator {value: 'malicious-updates.example.com'})
+            MATCH (c:Campaign {name: 'SolarWinds Compromise'}),
+                  (i:Indicator {value: 'malicious-updates.example.com'})
             MERGE (c)-[:INDICATES]->(i)
         """)
 
