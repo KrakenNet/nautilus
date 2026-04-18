@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://nautilus.krakn.ai
+    about: Check the documentation for guides and API reference.
+  - name: Discussions
+    url: https://github.com/KrakenNet/nautilus/discussions
+    about: Ask questions and discuss ideas with the community.

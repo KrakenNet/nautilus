@@ -11,7 +11,7 @@ on:
       - "scripts/**"
       - ".github/workflows/docs.yml"
   push:
-    branches: [master]
+    branches: [main]
 
 jobs:
   docs:

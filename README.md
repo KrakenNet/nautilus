@@ -5,7 +5,7 @@
 [![PyPI](https://img.shields.io/pypi/v/nautilus-rkm.svg)](https://pypi.org/project/nautilus-rkm/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
-[![CI](https://github.com/KrakenNet/nautilus/actions/workflows/ci.yml/badge.svg)](https://github.com/se-jo-ma/nautilus/actions/workflows/ci.yml)
+[![CI](https://github.com/KrakenNet/nautilus/actions/workflows/ci.yml/badge.svg)](https://github.com/KrakenNet/nautilus/actions/workflows/ci.yml)
 [![Docs](https://github.com/KrakenNet/nautilus/actions/workflows/docs-deploy.yml/badge.svg)](https://nautilus.krakn.ai)
 
 **Current version:** 0.1.1
@@ -166,7 +166,7 @@ Full documentation is available at [nautilus.krakn.ai](https://nautilus.krakn.ai
 ## Development
 
 ```bash
-git clone https://github.com/se-jo-ma/nautilus.git
+git clone https://github.com/KrakenNet/nautilus.git
 cd nautilus
 uv sync
 uv run pytest -m unit            # fast suite, no containers
@@ -176,6 +176,14 @@ uv run mkdocs serve              # docs preview
 ```
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes.
+
+## Contributing
+
+We welcome contributions! Please read our [Contributing Guide](CONTRIBUTING.md) before submitting a pull request. All contributors are expected to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Security
+
+To report a security vulnerability, please see our [Security Policy](SECURITY.md). Do not open a public issue for security concerns.
 
 ## License
 

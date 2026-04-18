@@ -7,7 +7,7 @@ requires-python = ">=3.14"
 license = "MIT"
 # TODO: add author email once the maintainer publishes one.
 authors = [{ name = "se-jo-ma" }]
-keywords = ["fathom", "policy", "broker", "security", "scope", "clips"]
+keywords = ["fathom", "policy", "broker", "security", "scope", "clips", "ai-agent", "data-broker", "routing", "audit", "attestation", "compliance", "nist", "hipaa", "mcp"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -17,6 +17,8 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Topic :: Security",
     "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Systems Administration",
+    "Framework :: FastAPI",
     "Typing :: Typed",
 ]
 dependencies = [
@@ -40,11 +42,11 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/se-jo-ma/nautilus"
-Repository = "https://github.com/se-jo-ma/nautilus"
+Homepage = "https://github.com/KrakenNet/nautilus"
+Repository = "https://github.com/KrakenNet/nautilus"
 Documentation = "https://nautilus.krakn.ai"
-Changelog = "https://github.com/se-jo-ma/nautilus/blob/master/CHANGELOG.md"
-Issues = "https://github.com/se-jo-ma/nautilus/issues"
+Changelog = "https://github.com/KrakenNet/nautilus/blob/main/CHANGELOG.md"
+Issues = "https://github.com/KrakenNet/nautilus/issues"
 
 [project.scripts]
 nautilus = "nautilus.cli:main"
