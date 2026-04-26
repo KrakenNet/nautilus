@@ -6,13 +6,13 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
 [![CI](https://github.com/KrakenNet/nautilus/actions/workflows/ci.yml/badge.svg)](https://github.com/KrakenNet/nautilus/actions/workflows/ci.yml)
-[![Docs](https://github.com/KrakenNet/nautilus/actions/workflows/docs-deploy.yml/badge.svg)](https://nautilus.krakn.ai)
+[![Docs](https://github.com/KrakenNet/nautilus/actions/workflows/docs-deploy.yml/badge.svg)](https://krakennet.github.io/nautilus/)
 
 **Current version:** 0.1.1
 **License:** MIT
 **Language:** Python 3.14+
 **Package Manager:** uv
-**Maintained by:** [se-jo-ma](https://github.com/se-jo-ma)
+**Maintained by:** [KrakenNet](https://github.com/KrakenNet)
 
 ---
 
@@ -56,7 +56,7 @@ finally:
     broker.close()
 ```
 
-See the [Getting Started guide](https://nautilus.krakn.ai/getting-started/) for a full walkthrough.
+See the [Getting Started guide](https://krakennet.github.io/nautilus//getting-started/) for a full walkthrough.
 
 ## What Ships Today
 
@@ -71,7 +71,7 @@ See the [Getting Started guide](https://nautilus.krakn.ai/getting-started/) for 
 
 **Adapters (8 built-in)**
 - PostgreSQL, PgVector, Elasticsearch, Neo4j, REST, ServiceNow, InfluxDB, S3
-- Pluggable via entry points and the [Adapter SDK](https://nautilus.krakn.ai/reference/adapter-sdk/)
+- Pluggable via entry points and the [Adapter SDK](https://krakennet.github.io/nautilus//reference/adapter-sdk/)
 
 **Transports**
 - FastAPI REST server (`POST /v1/request`, health/readiness probes)
@@ -151,12 +151,12 @@ audit:
 
 ## Documentation
 
-Full documentation is available at [nautilus.krakn.ai](https://nautilus.krakn.ai).
+Full documentation is available at [nautilus.krakn.ai](https://krakennet.github.io/nautilus/).
 
-- [Getting Started](https://nautilus.krakn.ai/getting-started/)
-- [Concepts](https://nautilus.krakn.ai/concepts/)
-- [How-to Guides](https://nautilus.krakn.ai/how-to/)
-- [Reference](https://nautilus.krakn.ai/reference/)
+- [Getting Started](https://krakennet.github.io/nautilus//getting-started/)
+- [Concepts](https://krakennet.github.io/nautilus//concepts/)
+- [How-to Guides](https://krakennet.github.io/nautilus//how-to/)
+- [Reference](https://krakennet.github.io/nautilus//reference/)
 
 ## Related Projects
 
