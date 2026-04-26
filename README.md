@@ -160,7 +160,7 @@ Full documentation is available at [nautilus.krakn.ai](https://krakennet.github.
 
 ## Related Projects
 
-- **[Fathom](https://github.com/se-jo-ma/fathom)** — Deterministic reasoning runtime that powers Nautilus routing
+- **[Fathom](https://github.com/KrakenNet/fathom)** — Deterministic reasoning runtime that powers Nautilus routing
 - **Bosun** — Agent governance built on Fathom (fleet analysis, compliance attestation)
 
 ## Development
