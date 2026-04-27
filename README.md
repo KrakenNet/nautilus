@@ -6,9 +6,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
 [![CI](https://github.com/KrakenNet/nautilus/actions/workflows/ci.yml/badge.svg)](https://github.com/KrakenNet/nautilus/actions/workflows/ci.yml)
-[![Docs](https://github.com/KrakenNet/nautilus/actions/workflows/docs-deploy.yml/badge.svg)](https://nautilus.krakn.ai)
+[![Docs](https://github.com/KrakenNet/nautilus/actions/workflows/docs-deploy.yml/badge.svg)](https://krakennet.github.io/nautilus)
 
-**Current version:** 0.1.1
+**Current version:** 0.1.2
 **License:** MIT
 **Language:** Python 3.14+
 **Package Manager:** uv
@@ -56,11 +56,12 @@ finally:
     broker.close()
 ```
 
-See the [Getting Started guide](https://nautilus.krakn.ai/getting-started/) for a full walkthrough.
+See the [Getting Started guide](https://krakennet.github.io/nautilus/getting-started/) for a full walkthrough.
 
 ## What Ships Today
 
 **Core runtime**
+
 - `Broker` facade with sync/async APIs (`request`, `arequest`, `from_config`, `afrom_config`)
 - Fathom-based policy router for intent-aware source selection and scope enforcement
 - Per-source scope constraints (WHERE-clause fragments) with injection-safe field validation
@@ -70,27 +71,30 @@ See the [Getting Started guide](https://nautilus.krakn.ai/getting-started/) for 
 - Cross-agent handoff reasoning with session-backed escalation detection
 
 **Adapters (8 built-in)**
+
 - PostgreSQL, PgVector, Elasticsearch, Neo4j, REST, ServiceNow, InfluxDB, S3
-- Pluggable via entry points and the [Adapter SDK](https://nautilus.krakn.ai/reference/adapter-sdk/)
+- Pluggable via entry points and the [Adapter SDK](https://krakennet.github.io/nautilus/reference/adapter-sdk/)
 
 **Transports**
+
 - FastAPI REST server (`POST /v1/request`, health/readiness probes)
 - MCP transport (stdio and HTTP modes)
 - CLI: `nautilus serve`, `nautilus health`, `nautilus version`
 
 **Rule packs**
+
 - `data-routing-nist` — NIST clearance/classification routing rules
 - `data-routing-hipaa` — HIPAA-compliant routing rules
 
 ## What You Get Per Request
 
-| Step | What happens |
-|------|-------------|
-| **Intent analysis** | Classify intent into data types, entities, temporal scope, sensitivity |
-| **Policy routing** | Fathom evaluates `(clearance, purpose, source)` — route, scope, or deny |
-| **Adapter fan-out** | Routed sources execute concurrently with per-adapter error isolation |
-| **Attestation** | Ed25519 JWS signed over routing decision, bound to `request_id` |
-| **Audit** | JSONL entry appended per request — success, denial, or error |
+| Step                | What happens                                                            |
+| ------------------- | ----------------------------------------------------------------------- |
+| **Intent analysis** | Classify intent into data types, entities, temporal scope, sensitivity  |
+| **Policy routing**  | Fathom evaluates `(clearance, purpose, source)` — route, scope, or deny |
+| **Adapter fan-out** | Routed sources execute concurrently with per-adapter error isolation    |
+| **Attestation**     | Ed25519 JWS signed over routing decision, bound to `request_id`         |
+| **Audit**           | JSONL entry appended per request — success, denial, or error            |
 
 ## Key Differentiator: Session-Aware Routing
 
@@ -103,6 +107,7 @@ Unlike stateless policy engines, Nautilus maintains working memory across reques
 ## Integration Shapes
 
 **As a library**
+
 ```python
 from nautilus import Broker
 broker = Broker.from_config("nautilus.yaml")
@@ -110,6 +115,7 @@ response = broker.request("agent-id", "intent", context)
 ```
 
 **As a REST sidecar**
+
 ```bash
 nautilus serve --config nautilus.yaml --transport rest --bind 0.0.0.0:8000
 curl -H "X-API-Key: $KEY" -X POST localhost:8000/v1/request \
@@ -117,11 +123,13 @@ curl -H "X-API-Key: $KEY" -X POST localhost:8000/v1/request \
 ```
 
 **As an MCP server**
+
 ```bash
 nautilus serve --config nautilus.yaml --transport mcp
 ```
 
 **Air-gapped mode**
+
 ```bash
 nautilus serve --config nautilus.yaml --air-gapped
 ```
@@ -151,12 +159,12 @@ audit:
 
 ## Documentation
 
-Full documentation is available at [nautilus.krakn.ai](https://nautilus.krakn.ai).
+Full documentation is available at [nautilus.krakn.ai](https://krakennet.github.io/nautilus).
 
-- [Getting Started](https://nautilus.krakn.ai/getting-started/)
-- [Concepts](https://nautilus.krakn.ai/concepts/)
-- [How-to Guides](https://nautilus.krakn.ai/how-to/)
-- [Reference](https://nautilus.krakn.ai/reference/)
+- [Getting Started](https://krakennet.github.io/nautilus/getting-started/)
+- [Concepts](https://krakennet.github.io/nautilus/concepts/)
+- [How-to Guides](https://krakennet.github.io/nautilus/how-to/)
+- [Reference](https://krakennet.github.io/nautilus/reference/)
 
 ## Related Projects
 

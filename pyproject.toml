@@ -1,12 +1,12 @@
 [project]
 name = "nautilus-rkm"
-version = "0.1.1"
+version = "0.1.2"
 description = "Nautilus data broker + reasoning engine: intent-aware scoped query execution, multi-agent handoffs, LLM intent analysis, and forensic escalation via Fathom rules"
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 license = "MIT"
-# TODO: add author email once the maintainer publishes one.
-authors = [{ name = "se-jo-ma" }]
+license-files = ["LICEN[CS]E*"]
+authors = [{ name = "Sean Mauk", email = "seanmauk@krakennetworks.com" }]
 keywords = ["fathom", "policy", "broker", "security", "scope", "clips", "ai-agent", "data-broker", "routing", "audit", "attestation", "compliance", "nist", "hipaa", "mcp"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -44,7 +44,7 @@ dependencies = [
 [project.urls]
 Homepage = "https://github.com/KrakenNet/nautilus"
 Repository = "https://github.com/KrakenNet/nautilus"
-Documentation = "https://nautilus.krakn.ai"
+Documentation = "https://krakennet.github.io/nautilus"
 Changelog = "https://github.com/KrakenNet/nautilus/blob/main/CHANGELOG.md"
 Issues = "https://github.com/KrakenNet/nautilus/issues"
 
