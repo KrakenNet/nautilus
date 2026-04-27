@@ -3,7 +3,7 @@ name = "nautilus-rkm"
 version = "0.1.1"
 description = "Nautilus data broker + reasoning engine: intent-aware scoped query execution, multi-agent handoffs, LLM intent analysis, and forensic escalation via Fathom rules"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.13,<3.14"
 license = "MIT"
 # TODO: add author email once the maintainer publishes one.
 authors = [{ name = "se-jo-ma" }]
@@ -107,7 +107,7 @@ exclude = ["tests*", "specs*", "docs*"]
 
 [tool.ruff]
 line-length = 100
-target-version = "py314"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "N", "SIM", "ASYNC"]

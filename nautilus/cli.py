@@ -1,4 +1,4 @@
-"""Nautilus CLI — ``serve``/``health``/``version`` subcommands (FR-30, D-15).
+"""Nautilus CLI — serve / health / version / sources / cost-caps subcommands (FR-30, D-15).
 
 Stdlib :mod:`argparse` only — no click/typer per D-15. The ``health``
 probe uses :func:`urllib.request.urlopen` (no ``requests`` dependency) so
@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+import os
 import sys
 import tempfile
 import urllib.error
@@ -25,7 +26,10 @@ from typing import TYPE_CHECKING, Any, cast
 
 import yaml
 
+from nautilus.core.broker import _merge_cost_caps  # pyright: ignore[reportPrivateUsage]
+
 if TYPE_CHECKING:
+    from nautilus.config.models import CostCapConfig
     from nautilus.core.broker import Broker
 
 _DEFAULT_HEALTH_URL = "http://localhost:8000/readyz"
@@ -37,7 +41,9 @@ def _build_parser() -> argparse.ArgumentParser:
     """Build the top-level argparse parser with three subcommands."""
     parser = argparse.ArgumentParser(
         prog="nautilus",
-        description="Nautilus reasoning-engine CLI (serve / health / version).",
+        description=(
+            "Nautilus reasoning-engine CLI (serve / health / version / sources / cost-caps)."
+        ),
     )
     sub = parser.add_subparsers(dest="command", required=True, metavar="command")
 
@@ -89,6 +95,126 @@ def _build_parser() -> argparse.ArgumentParser:
             "Force analysis.mode='pattern' and refuse any LLM provider "
             "config (NFR-1). WARN is emitted naming each overridden field."
         ),
+    )
+
+    # sources ---------------------------------------------------------
+    p_sources = sub.add_parser(
+        "sources",
+        help=(
+            "Manage per-source enable/disable state (US-3). "
+            "Operates in-process against the configured SourceStateStore."
+        ),
+    )
+    sources_sub = p_sources.add_subparsers(
+        dest="sources_op",
+        required=True,
+        metavar="operation",
+    )
+
+    # sources list
+    p_sources_list = sources_sub.add_parser(
+        "list",
+        help="List all persisted source-state rows as a plain-text table.",
+    )
+    p_sources_list.add_argument(
+        "--config",
+        required=True,
+        help="Path to nautilus.yaml.",
+    )
+
+    # sources disable
+    p_sources_disable = sources_sub.add_parser(
+        "disable",
+        help="Disable a source with an operator-supplied reason.",
+    )
+    p_sources_disable.add_argument("source_id", help="Source identifier (registry key).")
+    p_sources_disable.add_argument(
+        "--reason",
+        required=True,
+        help="Operator-supplied reason string (AC-3.6).",
+    )
+    p_sources_disable.add_argument(
+        "--actor",
+        default=None,
+        help="Principal recording the change (defaults to $USER or 'cli').",
+    )
+    p_sources_disable.add_argument(
+        "--config",
+        required=True,
+        help="Path to nautilus.yaml.",
+    )
+
+    # sources enable
+    p_sources_enable = sources_sub.add_parser(
+        "enable",
+        help="Re-enable a previously disabled source.",
+    )
+    p_sources_enable.add_argument("source_id", help="Source identifier (registry key).")
+    p_sources_enable.add_argument(
+        "--actor",
+        default=None,
+        help="Principal recording the change (defaults to $USER or 'cli').",
+    )
+    p_sources_enable.add_argument(
+        "--config",
+        required=True,
+        help="Path to nautilus.yaml.",
+    )
+
+    # sources schema-ack
+    p_sources_schema_ack = sources_sub.add_parser(
+        "schema-ack",
+        help=(
+            "Record operator acknowledgement of a publisher schema hash "
+            "so a paused source resumes ingest (US-4, AC-4.10)."
+        ),
+    )
+    p_sources_schema_ack.add_argument("source_id", help="Source identifier (registry key).")
+    p_sources_schema_ack.add_argument(
+        "--new-hash",
+        dest="new_hash",
+        required=True,
+        help="Current published schema hash the operator is acknowledging.",
+    )
+    p_sources_schema_ack.add_argument(
+        "--actor",
+        default=None,
+        help="Principal recording the ack (defaults to $USER or 'cli').",
+    )
+    p_sources_schema_ack.add_argument(
+        "--config",
+        required=True,
+        help="Path to nautilus.yaml.",
+    )
+
+    # cost-caps ------------------------------------------------------
+    p_cost_caps = sub.add_parser(
+        "cost-caps",
+        help=(
+            "Inspect effective per-request cost caps (US-2, FR-18/19). "
+            "Loads the config in-process and merges global + per-source overrides."
+        ),
+    )
+    cost_caps_sub = p_cost_caps.add_subparsers(
+        dest="cost_caps_op",
+        required=True,
+        metavar="operation",
+    )
+
+    # cost-caps show
+    p_cost_caps_show = cost_caps_sub.add_parser(
+        "show",
+        help="Render the effective merged caps per source as a plain-text table.",
+    )
+    p_cost_caps_show.add_argument(
+        "--source",
+        default=None,
+        help="Optional single source-id filter (exact match; no glob, no multi-select).",
+    )
+    p_cost_caps_show.add_argument(
+        "--config",
+        required=True,
+        help="Path to nautilus.yaml.",
     )
 
     return parser
@@ -341,6 +467,324 @@ def _cmd_serve(args: argparse.Namespace) -> int:
 
 
 # ----------------------------------------------------------------------
+# sources
+# ----------------------------------------------------------------------
+
+
+def _default_actor() -> str:
+    """Return a best-effort principal identifier for CLI-initiated changes."""
+    return os.environ.get("USER") or "cli"
+
+
+def _fmt_changed_at(value: Any) -> str:
+    """Render ``changed_at`` for the ``list`` table; ``None`` → ``"-"``."""
+    if value is None:
+        return "-"
+    # datetime objects stringify to a stable ISO-ish form; anything else is
+    # handed to ``str()`` so unknown backends don't blow up the table render.
+    return str(value)
+
+
+def _render_sources_table(rows: dict[str, Any]) -> str:
+    """Render ``load_all()`` output as a fixed-width plain-text table.
+
+    Columns: ``source_id | enabled | reason | actor | changed_at``. Plain
+    stdlib printing (no ``rich``) keeps the CLI dependency surface tight
+    (D-15). ``reason=None`` renders as ``"-"``.
+    """
+    header = f"{'source_id':<24} {'enabled':<8} {'reason':<30} {'actor':<16} {'changed_at'}"
+    lines: list[str] = [header, "-" * len(header)]
+    for source_id in sorted(rows):
+        state = rows[source_id]
+        enabled = "true" if bool(state.enabled) else "false"
+        reason = state.reason if state.reason is not None else "-"
+        actor = state.actor
+        changed_at = _fmt_changed_at(state.changed_at)
+        lines.append(f"{source_id:<24} {enabled:<8} {reason:<30} {actor:<16} {changed_at}")
+    return "\n".join(lines)
+
+
+async def _run_sources_list(broker: Broker) -> int:
+    """Print the sources table. Returns process exit code."""
+    store = getattr(broker, "_source_state_store", None)
+    if store is None:
+        print(
+            "ERROR: no SourceStateStore is configured (session_store must be "
+            "postgres; see design §Component Responsibilities).",
+            file=sys.stderr,
+        )
+        return 2
+    rows = await store.load_all()
+    print(_render_sources_table(rows))
+    return 0
+
+
+async def _run_sources_set(
+    broker: Broker,
+    *,
+    source_id: str,
+    enabled: bool,
+    reason: str | None,
+    actor: str,
+) -> int:
+    """Upsert a single row via ``SourceStateStore.set_enabled``."""
+    store = getattr(broker, "_source_state_store", None)
+    if store is None:
+        print(
+            "ERROR: no SourceStateStore is configured (session_store must be "
+            "postgres; see design §Component Responsibilities).",
+            file=sys.stderr,
+        )
+        return 2
+    await store.set_enabled(
+        source_id=source_id,
+        enabled=enabled,
+        reason=reason,
+        actor=actor,
+    )
+    verb = "enabled" if enabled else "disabled"
+    print(f"{verb} source {source_id!r} (actor={actor!r})")
+    return 0
+
+
+async def _run_sources_schema_ack(
+    broker: Broker,
+    *,
+    source_id: str,
+    new_hash: str,
+    actor: str,
+) -> int:
+    """Upsert a ``nautilus_schema_ack`` row via a freshly-built store.
+
+    The broker itself does not expose a ``SchemaAckStore`` attribute
+    (per-adapter :class:`IngestValidator` owns it at ingest-time), so we
+    construct a self-contained store against ``session_store.dsn`` —
+    same DSN used by :class:`~nautilus.core.source_state_store.SourceStateStore`
+    — run ``setup()`` to ensure the table exists, call ``set_ack``, and
+    ``aclose()`` in ``finally`` (AC-4.10 resume flow).
+    """
+    config = broker._config  # pyright: ignore[reportPrivateUsage]
+    sess_cfg = config.session_store
+    if sess_cfg.backend != "postgres":
+        print(
+            "ERROR: sources schema-ack requires session_store.backend=postgres "
+            "(see design §Component Responsibilities).",
+            file=sys.stderr,
+        )
+        return 2
+    dsn = sess_cfg.dsn or os.environ.get("TEST_PG_DSN")
+    if not dsn:
+        print(
+            "ERROR: sources schema-ack requires session_store.dsn (or TEST_PG_DSN).",
+            file=sys.stderr,
+        )
+        return 2
+
+    known_ids = {s.id for s in broker.sources}
+    if source_id not in known_ids:
+        print(
+            f"ERROR: unknown source id: {source_id!r}",
+            file=sys.stderr,
+        )
+        return 2
+
+    from nautilus.ingest.schema_change import SchemaAckStore
+
+    store = SchemaAckStore(dsn, on_failure=sess_cfg.on_failure)
+    try:
+        await store.setup()
+        ack = await store.set_ack(source_id, acked_hash=new_hash, actor=actor)
+    finally:
+        with contextlib.suppress(Exception):
+            await store.aclose()
+
+    hash_prefix = ack.acked_hash[:12]
+    print(
+        f"Schema acknowledgement recorded: source={ack.source_id} "
+        f"hash={hash_prefix}... actor={ack.actor} "
+        f"acked_at={ack.acked_at.isoformat()}",
+    )
+    return 0
+
+
+async def _run_sources(args: argparse.Namespace) -> int:
+    """Async driver for the ``sources`` subcommand group.
+
+    Builds a :class:`Broker` from ``--config``, runs the requested
+    operation, and always awaits :meth:`Broker.aclose` so pooled PG
+    handles release cleanly (NFR-DEGRAD).
+    """
+    from nautilus.core.broker import Broker
+
+    broker = Broker.from_config(Path(args.config))
+    try:
+        await broker.setup()
+        op = args.sources_op
+        if op == "list":
+            return await _run_sources_list(broker)
+        if op == "disable":
+            actor = args.actor or _default_actor()
+            return await _run_sources_set(
+                broker,
+                source_id=args.source_id,
+                enabled=False,
+                reason=args.reason,
+                actor=actor,
+            )
+        if op == "enable":
+            actor = args.actor or _default_actor()
+            return await _run_sources_set(
+                broker,
+                source_id=args.source_id,
+                enabled=True,
+                reason=None,
+                actor=actor,
+            )
+        if op == "schema-ack":
+            actor = args.actor or _default_actor()
+            return await _run_sources_schema_ack(
+                broker,
+                source_id=args.source_id,
+                new_hash=args.new_hash,
+                actor=actor,
+            )
+        # argparse enforces required=True; defensive.
+        print(f"ERROR: unknown sources operation: {op!r}", file=sys.stderr)
+        return 2
+    finally:
+        with contextlib.suppress(Exception):
+            await broker.aclose()
+
+
+def _cmd_sources(args: argparse.Namespace) -> int:
+    """Sync entrypoint for the ``sources`` subcommand group."""
+    config_path = Path(args.config)
+    if not config_path.is_file():
+        print(
+            f"ERROR: config path does not exist or is not a file: {config_path}",
+            file=sys.stderr,
+        )
+        return 2
+
+    from nautilus.config.loader import ConfigError
+
+    try:
+        return asyncio.run(_run_sources(args))
+    except ConfigError as exc:
+        print(f"ERROR: invalid config: {exc}", file=sys.stderr)
+        return 2
+    except KeyboardInterrupt:
+        return 130
+
+
+# ----------------------------------------------------------------------
+# cost-caps
+# ----------------------------------------------------------------------
+
+
+def _fmt_cap_field(value: int | None) -> str:
+    """Render an ``int | None`` cap field for the table; ``None`` → ``"-"``."""
+    return "-" if value is None else str(value)
+
+
+def _render_cost_caps_table(
+    rows: list[tuple[str, CostCapConfig | None]],
+) -> str:
+    """Render merged caps per source as a fixed-width plain-text table.
+
+    Columns: ``source_id | max_tokens | max_duration_seconds | max_tool_calls |
+    enforcement``. ``None`` fields render as ``"-"``. When the merged cap is
+    itself ``None`` (no global + no source override) every numeric column
+    renders ``"-"`` and ``enforcement`` falls back to the ``CostCapConfig``
+    default of ``"hard"`` (AC-2.9).
+    """
+    header = (
+        f"{'source_id':<20} {'max_tokens':<12} "
+        f"{'max_duration_seconds':<20} {'max_tool_calls':<12} {'enforcement':<10}"
+    )
+    lines: list[str] = [header, "-" * len(header)]
+    for source_id, cap in rows:
+        if cap is None:
+            max_tokens = "-"
+            max_duration = "-"
+            max_tool_calls = "-"
+            enforcement = "hard"
+        else:
+            max_tokens = _fmt_cap_field(cap.max_tokens)
+            max_duration = _fmt_cap_field(cap.max_duration_seconds)
+            max_tool_calls = _fmt_cap_field(cap.max_tool_calls)
+            enforcement = cap.enforcement
+        lines.append(
+            f"{source_id:<20} {max_tokens:<12} "
+            f"{max_duration:<20} {max_tool_calls:<12} {enforcement:<10}",
+        )
+    return "\n".join(lines)
+
+
+async def _run_cost_caps_show(broker: Broker, source_filter: str | None) -> int:
+    """Print the merged cost-caps table. Returns process exit code."""
+    sources = broker.sources
+    global_cap = broker._config.cost_caps  # pyright: ignore[reportPrivateUsage]
+
+    if source_filter is not None:
+        match = next((s for s in sources if s.id == source_filter), None)
+        if match is None:
+            print(
+                f"ERROR: unknown source id: {source_filter!r}",
+                file=sys.stderr,
+            )
+            return 2
+        rows = [(match.id, _merge_cost_caps(global_cap, match.cost_caps))]
+    else:
+        rows = [
+            (s.id, _merge_cost_caps(global_cap, s.cost_caps))
+            for s in sorted(sources, key=lambda s: s.id)
+        ]
+
+    print(_render_cost_caps_table(rows))
+    return 0
+
+
+async def _run_cost_caps(args: argparse.Namespace) -> int:
+    """Async driver for the ``cost-caps`` subcommand group."""
+    from nautilus.core.broker import Broker
+
+    broker = Broker.from_config(Path(args.config))
+    try:
+        await broker.setup()
+        op = args.cost_caps_op
+        if op == "show":
+            return await _run_cost_caps_show(broker, args.source)
+        # argparse enforces required=True; defensive.
+        print(f"ERROR: unknown cost-caps operation: {op!r}", file=sys.stderr)
+        return 2
+    finally:
+        with contextlib.suppress(Exception):
+            await broker.aclose()
+
+
+def _cmd_cost_caps(args: argparse.Namespace) -> int:
+    """Sync entrypoint for the ``cost-caps`` subcommand group."""
+    config_path = Path(args.config)
+    if not config_path.is_file():
+        print(
+            f"ERROR: config path does not exist or is not a file: {config_path}",
+            file=sys.stderr,
+        )
+        return 2
+
+    from nautilus.config.loader import ConfigError
+
+    try:
+        return asyncio.run(_run_cost_caps(args))
+    except ConfigError as exc:
+        print(f"ERROR: invalid config: {exc}", file=sys.stderr)
+        return 2
+    except KeyboardInterrupt:
+        return 130
+
+
+# ----------------------------------------------------------------------
 # entry point
 # ----------------------------------------------------------------------
 
@@ -356,6 +800,10 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_health(args.url)
     if args.command == "serve":
         return _cmd_serve(args)
+    if args.command == "sources":
+        return _cmd_sources(args)
+    if args.command == "cost-caps":
+        return _cmd_cost_caps(args)
     # argparse enforces required=True; this is defensive.
     parser.print_help(sys.stderr)
     return 2

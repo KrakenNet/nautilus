@@ -39,6 +39,7 @@ class BrokerRequest(BaseModel):
     agent_id: str
     intent: str
     context: dict[str, Any] = Field(default_factory=dict)
+    fact_set_hash: str | None = None
 
 
 class RoutingDecision(BaseModel):
@@ -154,6 +155,9 @@ class BrokerResponse(BaseModel):
     scope_restrictions: dict[str, list[ScopeConstraint]]
     attestation_token: str | None
     duration_ms: int
+    cap_breached: bool | None = None
+    fact_set_hash: str | None = None
+    source_session_signatures: dict[str, dict[str, Any]] | None = None
 
 
 class HandoffDecision(BaseModel):
@@ -211,10 +215,20 @@ class AuditEntry(BaseModel):
     scope_hash_version: Literal["v1", "v2"] | None = None
     session_id_source: Literal["context", "transport", "stdio_request_id"] | None = None
     session_store_mode: Literal["primary", "degraded_memory"] | None = None
-    event_type: Literal["request", "handoff_declared"] | None = None
+    event_type: (
+        Literal[
+            "request",
+            "handoff_declared",
+            "cap_breached",
+            "source_state_changed",
+            "schema_change_detected",
+        ]
+        | None
+    ) = None
     handoff_id: str | None = None
     handoff_decision: HandoffDecision | None = None
     trace_id: str | None = None
+    fact_set_hash: str | None = None
 
 
 class InferredHandoff(BaseModel):

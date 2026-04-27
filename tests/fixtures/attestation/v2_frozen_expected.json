@@ -1,0 +1,13 @@
+{
+  "_comment": "NFR-ATT-V2-FROZEN golden expected output. Byte-identical canonical output of build_payload() for v2_frozen_input.json under the pre-Task-9 _v2_canonical() path. MUST keep matching after Task 9 ships (proof that conditional-on-presence is strict: no new keys appear when inputs do not populate them).",
+  "version": "v2",
+  "canonical": "{\"agent_id\":\"agent-alpha\",\"iss\":\"nautilus\",\"request_id\":\"req-frozen-0001\",\"rule_trace_hash\":\"sha256:ec42a9b404bdb745aefd2388064dc4674776a38269ef1273bfd87e471d9af4fa\",\"scope_hash\":\"sha256:d95ba39be55cb45c75e99240d1215cd5bfd5ee02efe274bef67d0b8f84451d73\",\"sources_queried\":[\"src-a\",\"src-b\"]}",
+  "payload": {
+    "agent_id": "agent-alpha",
+    "iss": "nautilus",
+    "request_id": "req-frozen-0001",
+    "rule_trace_hash": "sha256:ec42a9b404bdb745aefd2388064dc4674776a38269ef1273bfd87e471d9af4fa",
+    "scope_hash": "sha256:d95ba39be55cb45c75e99240d1215cd5bfd5ee02efe274bef67d0b8f84451d73",
+    "sources_queried": ["src-a", "src-b"]
+  }
+}

@@ -82,13 +82,9 @@ def _extract_endpoints(
                     "p50": rt.get(0.50, 0),
                     "p95": rt.get(0.95, 0),
                     "p99": rt.get(0.99, 0),
-                    "avg": round(
-                        entry.get("avg_response_time", 0.0), 2
-                    ),
+                    "avg": round(entry.get("avg_response_time", 0.0), 2),
                 },
-                "throughput_rps": round(
-                    entry.get("current_rps", 0.0), 2
-                ),
+                "throughput_rps": round(entry.get("current_rps", 0.0), 2),
             }
         )
     return endpoints

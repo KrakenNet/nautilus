@@ -27,7 +27,7 @@ from __future__ import annotations
 import ipaddress
 import time
 from collections.abc import Callable
-from typing import Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, cast
 
 import httpx
 
@@ -44,6 +44,19 @@ from nautilus.config.models import (
     SourceConfig,
 )
 from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
+from nautilus.ingest.validator import (
+    IngestValidators,
+    SchemaValidator,
+    _validate_ingest_integrity,  # pyright: ignore[reportPrivateUsage]
+)
+
+if TYPE_CHECKING:
+    from nautilus.audit.logger import AuditLogger
+    from nautilus.config.secrets import SecretProvider
+    from nautilus.ingest.baseline import BaselineTracker
+    from nautilus.ingest.config import IngestIntegrityConfig
+    from nautilus.ingest.quarantine import QuarantineSink
+    from nautilus.ingest.schema_change import SchemaChangeDetector
 
 # Default row cap applied when the intent does not specify a ``LIMIT``.
 _DEFAULT_LIMIT: int = 1000
@@ -259,7 +272,16 @@ class RestAdapter:
 
     source_type: ClassVar[str] = "rest"
 
-    def __init__(self, client: httpx.AsyncClient | None = None) -> None:
+    def __init__(
+        self,
+        client: httpx.AsyncClient | None = None,
+        *,
+        secret_provider: SecretProvider | None = None,
+        baseline_tracker: BaselineTracker | None = None,
+        schema_change_detector: SchemaChangeDetector | None = None,
+        quarantine_sink: QuarantineSink | None = None,
+        audit_logger: AuditLogger | None = None,
+    ) -> None:
         # ``client`` is optional so unit tests can inject a mocked
         # ``httpx.AsyncClient`` (mirrors the Phase-2 ES/Neo4j adapter shape).
         self._client: httpx.AsyncClient | None = client
@@ -267,6 +289,19 @@ class RestAdapter:
         self._endpoint: EndpointSpec | None = None
         self._base_host: str | None = None
         self._closed: bool = False
+        # Ingest-integrity wiring (US-4, Task 30). The broker injects the
+        # precompiled collaborators at adapter construction; ``None``
+        # collaborators leave the corresponding pipeline step as a no-op so a
+        # source with only schema validation (no baseline, no quarantine)
+        # still flows through :func:`_validate_ingest_integrity` cleanly.
+        self._secret_provider: SecretProvider | None = secret_provider
+        self._baseline_tracker: BaselineTracker | None = baseline_tracker
+        self._schema_change_detector: SchemaChangeDetector | None = schema_change_detector
+        self._quarantine_sink: QuarantineSink | None = quarantine_sink
+        self._audit: AuditLogger | None = audit_logger
+        self._ingest_cfg: IngestIntegrityConfig | None = None
+        self._ingest_validators: IngestValidators | None = None
+        self._source_id: str | None = None
 
     async def connect(self, config: SourceConfig) -> None:
         """Build the ``AsyncClient`` and validate endpoints + base URL.
@@ -279,7 +314,26 @@ class RestAdapter:
         """
         _reject_private_ip_literal(config.connection)
         self._config = config
+        self._source_id = config.id
         self._base_host = httpx.URL(config.connection).host
+
+        # Pre-compile the ingest-integrity validator bundle iff the source
+        # opts in via ``ingest_integrity`` (FR-20 zero-overhead path for
+        # unconfigured sources: the bundle stays ``None`` and ``execute()``
+        # skips the call entirely).
+        if config.ingest_integrity is not None:
+            self._ingest_cfg = config.ingest_integrity
+            schema_validator = SchemaValidator(
+                self._ingest_cfg.schema_,
+                resolver=self._secret_provider,
+            )
+            await schema_validator.compile()
+            self._ingest_validators = IngestValidators(
+                schema_validator=schema_validator,
+                baseline_tracker=self._baseline_tracker,
+                schema_change_detector=self._schema_change_detector,
+                quarantine_sink=self._quarantine_sink,
+            )
 
         # Endpoint allowlist: pick the first declared endpoint as the
         # adapter's call target. Phase-2 REST sources expose a single
@@ -421,6 +475,22 @@ class RestAdapter:
         response.raise_for_status()
         body: Any = response.json()
         rows: list[dict[str, Any]] = _coerce_rows(body, limit=_DEFAULT_LIMIT)
+
+        # Ingest-integrity hook (US-4, Task 30; design §764-768). A single
+        # guarded call preserves the zero-overhead path when a source
+        # doesn't opt in (FR-20); when configured, the orchestrator runs
+        # (1) schema-change check, (2) per-row validation + routing,
+        # (3) baseline/anomaly, and (4) corroboration callback in order.
+        if self._ingest_cfg is not None and self._ingest_validators is not None:
+            current_schema_hash = response.headers.get("x-schema-hash")
+            rows = await _validate_ingest_integrity(
+                rows,
+                self._ingest_cfg,
+                self._config.id,
+                self._ingest_validators,
+                self._audit,
+                current_schema_hash=current_schema_hash,
+            )
 
         return AdapterResult(
             source_id=self._config.id,

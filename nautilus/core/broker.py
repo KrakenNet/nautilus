@@ -55,6 +55,7 @@ from nautilus.config.loader import ConfigError, load_config
 from nautilus.config.models import (
     AnalysisProviderSpec,
     AnthropicProviderSpec,
+    CostCapConfig,
     FileSinkSpec,
     HttpSinkSpec,
     LocalInferenceProviderSpec,
@@ -88,6 +89,7 @@ from nautilus.core.models import (
 )
 from nautilus.core.session import AsyncSessionStore, InMemorySessionStore, SessionStore
 from nautilus.core.session_pg import PostgresSessionStore
+from nautilus.core.source_state import SourceState, SourceStateStore
 from nautilus.core.temporal import TemporalFilter
 from nautilus.observability.metrics import NautilusMetrics
 from nautilus.observability.spans import (
@@ -202,6 +204,42 @@ class _RequestState:
     # so the resulting :class:`AuditEntry` round-trips byte-identically
     # (NFR-5/NFR-6).
     llm_provenance: LLMProvenance | None = None
+    # Per-request snapshot of ``SourceStateStore.load_all()`` (US-3, AC-3.7).
+    # Populated once at the top of ``arequest`` and consumed by ``_route``
+    # to skip disabled sources before any adapter work starts. Empty dict
+    # when no source-state store is wired (Phase-1 / NFR-5 back-compat).
+    source_states: dict[str, SourceState] = field(default_factory=dict[str, SourceState])
+    # US-2 / FR-18-19 — ``True`` once any hard cost-cap breach fires; flipped
+    # by ``_enforce_cost_caps`` and surfaced on :attr:`BrokerResponse.cap_breached`
+    # so downstream attestation + operator tooling can branch on it (AC-2.9).
+    cap_breached: bool = False
+    # Task 20 / AC-2.12 — per-source snapshot of the effective caps evaluated
+    # by :meth:`_enforce_cost_caps` during this request. Keyed by
+    # ``source_id`` so the attestation ``cost_cap_context`` block can list
+    # every source that was subject to caps, breached or not. Empty when no
+    # decisions carried cost caps (no-op for Phase-1 / NFR-5 back-compat).
+    effective_caps_per_source: dict[str, dict[str, Any]] = field(
+        default_factory=dict[str, dict[str, Any]]
+    )
+    # Task 20 / AC-2.12 — request principal captured once at the top of
+    # :meth:`_run_pipeline`. Threaded into ``cap_breached`` audit entries as
+    # the ``actor`` field so the audit line records WHO triggered the
+    # enforcement check (distinct from ``agent_id="<broker>"`` which marks
+    # the emitter). Empty string when unknown (best-effort back-compat).
+    actor_agent_id: str = ""
+    # US-2 / AC-2.6 — per-request ``(source_id, axis)`` dedup set. Populated by
+    # :meth:`Broker._emit_cap_breached_audit` on every emission so the post-flight
+    # :meth:`Broker._check_post_flight_caps` can skip a second audit for a breach
+    # the pre-flight path already recorded (Task 19).
+    cap_breaches_seen: set[tuple[str, str]] = field(default_factory=set[tuple[str, str]])
+    # US-6 / FR-62 / AC-6.1-6.6 — opaque ``fact_set_hash`` from the incoming
+    # :class:`BrokerRequest`. No validation, no recomputation (NFR-ERR-OPAQUE):
+    # empty string, arbitrary UTF-8, and non-ASCII all pass through verbatim.
+    # Surfaced on :attr:`BrokerResponse.fact_set_hash`,
+    # :attr:`AuditEntry.fact_set_hash`, and — when truthy — the signed
+    # attestation payload's ``fact_set_hash`` claim (Task 9 /
+    # :func:`nautilus.core.attestation_payload._has_fact_set_hash`).
+    fact_set_hash: str | None = None
 
     def apply_route_result(self, route_result: RouteResult) -> None:
         """Copy router output into the mutable request state."""
@@ -247,6 +285,41 @@ def _source_error(source_id: str, error_type: str, message: str, request_id: str
     )
 
 
+def _merge_cost_caps(
+    global_cap: CostCapConfig | None,
+    source_cap: CostCapConfig | None,
+) -> CostCapConfig | None:
+    """Field-wise merge — per-source override wins on every non-``None`` field.
+
+    Design §"In-memory pydantic schemas" + FR-18 / AC-2.2: ``NautilusConfig.cost_caps``
+    provides the global default; ``SourceConfig.cost_caps`` is an optional
+    per-source override whose non-``None`` fields take precedence. Returns
+    ``None`` when both inputs are ``None`` so callers can short-circuit (no
+    caps configured → no enforcement).
+    """
+    if global_cap is None and source_cap is None:
+        return None
+    if source_cap is None:
+        return global_cap
+    if global_cap is None:
+        return source_cap
+    # Both present — override field-wise. ``enforcement`` has no ``None``
+    # state (Literal["hard","soft"]) so source_cap.enforcement always wins
+    # when both are set; semantically the per-source override is authoritative.
+    return CostCapConfig(
+        max_tokens=source_cap.max_tokens
+        if source_cap.max_tokens is not None
+        else global_cap.max_tokens,
+        max_duration_seconds=source_cap.max_duration_seconds
+        if source_cap.max_duration_seconds is not None
+        else global_cap.max_duration_seconds,
+        max_tool_calls=source_cap.max_tool_calls
+        if source_cap.max_tool_calls is not None
+        else global_cap.max_tool_calls,
+        enforcement=source_cap.enforcement,
+    )
+
+
 def _build_audit_entry(
     agent_id: str,
     state: _RequestState,
@@ -286,6 +359,9 @@ def _build_audit_entry(
         prompt_version=prov.prompt_version if prov is not None else None,
         raw_response_hash=prov.raw_response_hash if prov is not None else None,
         fallback_used=prov.fallback_used if prov is not None else None,
+        # US-6 / AC-6.6 — opaque pass-through of ``request.fact_set_hash``.
+        # ``None`` preserves byte-identical Phase-1 JSONL (NFR-5 / NFR-BC).
+        fact_set_hash=state.fact_set_hash,
     )
 
 
@@ -310,6 +386,7 @@ class Broker:
         session_store: SessionStore | AsyncSessionStore,
         agent_registry: AgentRegistry | None = None,
         attestation_sink: AttestationSink | None = None,
+        source_state_store: SourceStateStore | None = None,
     ) -> None:
         self._config = config
         self._registry = registry
@@ -320,6 +397,10 @@ class Broker:
         self._audit_logger = audit_logger
         self._attestation = attestation
         self._session_store = session_store
+        # Per-source enable/disable state (US-3, FR-29). ``None`` on Phase-1
+        # configs with no Postgres session store — ``arequest`` treats this as
+        # "all sources enabled" to preserve NFR-5 backwards compatibility.
+        self._source_state_store: SourceStateStore | None = source_state_store
         # Phase-1 YAML (no ``agents:``) yields an empty registry — preserves
         # NFR-5 backwards compatibility. Threaded into ``FathomRouter.route``
         # per design §2.2; the Phase-2 agent-fact enrichment rules consume it,
@@ -399,6 +480,7 @@ class Broker:
         audit_logger = AuditLogger(sink=FileSink(path=audit_path))
 
         session_store = cls._build_session_store(config)
+        source_state_store = cls._build_source_state_store(config, audit_logger)
 
         synthesizer = BasicSynthesizer()
 
@@ -414,6 +496,7 @@ class Broker:
             session_store=session_store,
             agent_registry=agent_registry,
             attestation_sink=attestation_sink,
+            source_state_store=source_state_store,
         )
 
     @classmethod
@@ -511,6 +594,36 @@ class Broker:
                 )
             return PostgresSessionStore(dsn, on_failure=sess_cfg.on_failure)
         return InMemorySessionStore()
+
+    @staticmethod
+    def _build_source_state_store(
+        config: NautilusConfig,
+        audit_logger: AuditLogger,
+    ) -> SourceStateStore | None:
+        """Construct a :class:`SourceStateStore` when Postgres is configured.
+
+        Reuses ``config.session_store.dsn`` (and ``on_failure`` policy) so US-3
+        operators only need a single Postgres DSN in ``nautilus.yaml``. Returns
+        ``None`` for Phase-1 ``memory`` / ``redis`` backends — the broker then
+        treats every source as enabled (NFR-5 backwards-compat).
+
+        ``audit_logger`` is threaded in so ``set_enabled`` can emit a
+        ``source_state_changed`` :class:`AuditEntry` on the same JSONL stream
+        used by request + handoff events (Task 15, FR-59).
+        """
+        sess_cfg = config.session_store
+        if sess_cfg.backend != "postgres":
+            return None
+        import os
+
+        dsn = sess_cfg.dsn or os.environ.get("TEST_PG_DSN")
+        if not dsn:
+            return None
+        return SourceStateStore(
+            dsn,
+            on_failure=sess_cfg.on_failure,
+            audit_logger=audit_logger,
+        )
 
     @staticmethod
     def _build_attestation_sink(config: NautilusConfig) -> AttestationSink:
@@ -614,6 +727,8 @@ class Broker:
         agent_id: str,
         intent: str,
         context: dict[str, Any] | None = None,
+        *,
+        fact_set_hash: str | None = None,
     ) -> BrokerResponse:
         """Sync request: guards against nested event loops, then runs pipeline.
 
@@ -632,13 +747,15 @@ class Broker:
                 "Broker.request() called inside a running event loop. "
                 "Use Broker.arequest() (async) from async contexts."
             )
-        return asyncio.run(self.arequest(agent_id, intent, context))
+        return asyncio.run(self.arequest(agent_id, intent, context, fact_set_hash=fact_set_hash))
 
     async def arequest(
         self,
         agent_id: str,
         intent: str,
         context: dict[str, Any] | None = None,
+        *,
+        fact_set_hash: str | None = None,
     ) -> BrokerResponse:
         """Async request pipeline (design §3.1, §8, §9).
 
@@ -646,13 +763,30 @@ class Broker:
         (`_run_pipeline`, `_build_adapter_jobs`, `_gather_adapter_results`,
         `_build_response`, `_emit_audit`). On policy-engine or unexpected
         failure, a single audit entry is still emitted before re-raising.
+
+        ``fact_set_hash`` — US-6 / FR-62 opaque round-trip. The caller's
+        :class:`BrokerRequest.fact_set_hash` is stashed on the per-request
+        state and echoed onto :attr:`BrokerResponse.fact_set_hash`, the
+        emitted :class:`AuditEntry`, and — when truthy — the signed
+        attestation payload. Empty string, arbitrary UTF-8, and non-ASCII
+        pass through verbatim (NFR-ERR-OPAQUE). ``None`` preserves
+        byte-identical Phase-1 behavior (NFR-5 / NFR-BC).
         """
         context = dict(context) if context else {}
         state = _new_request_state(context, intent)
+        state.fact_set_hash = fact_set_hash
         _started = time.perf_counter()
         with broker_span(SPAN_BROKER_REQUEST, build_request_attributes(agent_id)):
             _metrics.requests_total.add(1)
             try:
+                # US-3 / AC-3.7: snapshot per-source enable state ONCE per
+                # request so the disable gate fires before any adapter
+                # connect/execute in ``_route()``. Errors propagate: the
+                # surrounding ``except Exception`` emits a single audit
+                # entry + re-raises (``fail_closed`` semantics are enforced
+                # by :class:`SourceStateStore` itself).
+                if self._source_state_store is not None:
+                    state.source_states = await self._source_state_store.load_all()
                 await self._run_pipeline(agent_id, intent, context, state)
             except PolicyEngineError:
                 with broker_span(SPAN_AUDIT_EMIT):
@@ -879,6 +1013,10 @@ class Broker:
         state: _RequestState,
     ) -> None:
         """Happy-path pipeline body — mutates ``state`` in place."""
+        # Task 20 / AC-2.12 — stash the request principal so the
+        # ``cap_breached`` audit emitter can record it as ``actor`` without
+        # threading an extra kwarg through every helper on the pipeline.
+        state.actor_agent_id = agent_id
         with broker_span(SPAN_INTENT_ANALYSIS):
             await self._analyze_intent(intent, context, state)
         with broker_span(SPAN_FATHOM_ROUTING):
@@ -886,6 +1024,17 @@ class Broker:
             _metrics.routing_decisions_total.add(1)
         self._merge_context_scope_constraints(context, state)
         self._apply_temporal_filter(state)
+        # US-2 / FR-18-19: pre-flight cost-cap enforcement sits between the
+        # router output and adapter fan-out. Skipped decisions are stripped
+        # from ``state.routing_decisions`` so :meth:`_build_adapter_jobs`
+        # never dispatches them; their markers are appended to
+        # ``state.sources_skipped`` for audit + response visibility.
+        surviving, cap_markers, _ = await self._enforce_cost_caps(
+            state.routing_decisions, state, state.started
+        )
+        if cap_markers:
+            state.routing_decisions = surviving
+            state.sources_skipped = state.sources_skipped + cap_markers
         with broker_span(SPAN_ADAPTER_FAN_OUT):
             tasks, task_source_ids = await self._build_adapter_jobs(state, context)
             successful = await self._gather_adapter_results(
@@ -904,6 +1053,7 @@ class Broker:
                     scope_by_source=state.scope_by_source,
                     rule_trace=state.rule_trace,
                     session_id=state.session_id,
+                    state=state,
                 )
             state.attestation_token = token
             state.scope_hash_version = scope_hash_version
@@ -1008,11 +1158,388 @@ class Broker:
         )
         state.apply_route_result(route_result)
         state.sources_denied = sorted({d.source_id for d in state.denial_records})
+        # US-3 / AC-3.7: strip disabled sources from the router's selection
+        # BEFORE any adapter dispatch. The filter consults the per-request
+        # snapshot loaded in ``arequest`` so a mid-flight operator disable
+        # cannot leak through. Each dropped source surfaces in
+        # ``sources_skipped`` with the ``source_disabled:`` prefix so audit
+        # readers can distinguish it from a router-rejected skip (FR-29).
+        disabled_ids: set[str] = {sid for sid, st in state.source_states.items() if not st.enabled}
+        if disabled_ids:
+            state.routing_decisions = [
+                rd for rd in state.routing_decisions if rd.source_id not in disabled_ids
+            ]
         selected_ids = {rd.source_id for rd in state.routing_decisions}
         denied_ids = set(state.sources_denied)
-        state.sources_skipped = sorted(
-            s.id for s in self._registry if s.id not in selected_ids and s.id not in denied_ids
+        disabled_skipped = [
+            f"source_disabled:{sid}" for sid in sorted(disabled_ids) if sid not in denied_ids
+        ]
+        router_skipped = [
+            s.id
+            for s in self._registry
+            if s.id not in selected_ids and s.id not in denied_ids and s.id not in disabled_ids
+        ]
+        state.sources_skipped = sorted(router_skipped) + disabled_skipped
+
+    async def _enforce_cost_caps(
+        self,
+        decisions: list[RoutingDecision],
+        state: _RequestState,
+        request_start: float,
+    ) -> tuple[list[RoutingDecision], list[str], list[AuditEntry]]:
+        """Pre-flight cost-cap enforcement (design line 839-846, FR-18 / FR-19 / AC-2.x).
+
+        Runs AFTER :meth:`_route` and BEFORE :meth:`_build_adapter_jobs`.
+        Returns ``(surviving_decisions, sources_skipped_markers, cap_breach_audits)``.
+
+        Per-decision logic:
+
+        1. Compute the effective cap — field-wise merge of
+           :attr:`NautilusConfig.cost_caps` (global default) under
+           :attr:`SourceConfig.cost_caps` (per-source override); source-side
+           non-``None`` fields win (AC-2.2).
+        2. **Pre-flight ``max_tokens`` (LLM only).** If ``source.type == "llm"``
+           and ``effective.max_tokens`` is set, call
+           ``adapter.estimate_cost(intent, context)`` and compare
+           ``estimate.input_tokens`` against the cap; on hard breach append
+           ``"cap_breached:max_tokens:<source_id>"`` to ``sources_skipped``
+           and drop the decision. **Pre-flight max_tokens becomes functional
+           after** :meth:`LLMAdapter.estimate_cost` **lands in Task 39**; until
+           then the branch catches :class:`AttributeError` and degrades to
+           soft-breach (log + pass-through + audit).
+        3. **``max_duration_seconds`` (all adapter types).** Re-checked before
+           every surviving decision so the cap fires as eagerly as the
+           pre-flight seam allows. On hard breach, every remaining decision
+           is skipped with ``"cap_breached:max_duration_seconds"`` and
+           :attr:`_RequestState.cap_breached` is flipped to ``True``.
+        4. ``max_tool_calls`` is post-flight only (Task 19 owns the hook;
+           this method intentionally ignores it).
+
+        Emission choice: ``cap_breached`` :class:`AuditEntry` records are
+        emitted INLINE via :attr:`_audit_logger` from this method so the
+        audit trail stays append-only regardless of where in the pipeline
+        the breach is detected (mirrors :meth:`_emit_handoff_audit` style).
+        The returned list is always empty but kept in the signature so
+        Task 20 can flip to buffered emission without a caller change.
+        """
+        cap_audits: list[AuditEntry] = []
+        if decisions == []:
+            return decisions, [], cap_audits
+
+        global_cap = self._config.cost_caps
+        sources_by_id: dict[str, SourceConfig] = {s.id: s for s in self._registry.sources}
+        surviving: list[RoutingDecision] = []
+        skipped_markers: list[str] = []
+
+        for idx, rd in enumerate(decisions):
+            source = sources_by_id.get(rd.source_id)
+            if source is None:
+                # Router referenced an unregistered source — let the adapter
+                # dispatch layer record the error; no caps to evaluate.
+                surviving.append(rd)
+                continue
+
+            effective = _merge_cost_caps(global_cap, source.cost_caps)
+            if effective is None:
+                surviving.append(rd)
+                continue
+
+            # Task 20 / AC-2.12 — snapshot the effective caps for every
+            # decision that carried configured caps (breached or not). The
+            # attestation ``cost_cap_context`` block consumes this via a
+            # duck-typed response shim in :meth:`_sign` so verifiers see
+            # exactly WHICH caps applied to WHICH source on this request.
+            state.effective_caps_per_source[rd.source_id] = {
+                "max_tokens": effective.max_tokens,
+                "max_duration_seconds": effective.max_duration_seconds,
+                "max_tool_calls": effective.max_tool_calls,
+                "enforcement": effective.enforcement,
+            }
+
+            # (3) Duration cap — all adapter types. Evaluated per-decision so
+            # the check fires before each would-be dispatch (the pre-flight
+            # seam runs once, but this loop walks decisions in order).
+            if effective.max_duration_seconds is not None:
+                elapsed = time.perf_counter() - request_start
+                if elapsed > effective.max_duration_seconds and effective.enforcement == "hard":
+                    # Skip THIS decision and every one after it — the clock
+                    # only moves forward so later decisions would breach too.
+                    state.cap_breached = True
+                    skipped_markers.append("cap_breached:max_duration_seconds")
+                    self._emit_cap_breached_audit(
+                        state=state,
+                        source_id=rd.source_id,
+                        axis="max_duration_seconds",
+                        observed=elapsed,
+                        limit=effective.max_duration_seconds,
+                        enforcement="hard",
+                    )
+                    # Mark remaining decisions skipped under the same axis —
+                    # one marker each so audit readers can count per-source.
+                    for remaining in decisions[idx + 1 :]:
+                        skipped_markers.append("cap_breached:max_duration_seconds")
+                        self._emit_cap_breached_audit(
+                            state=state,
+                            source_id=remaining.source_id,
+                            axis="max_duration_seconds",
+                            observed=elapsed,
+                            limit=effective.max_duration_seconds,
+                            enforcement="hard",
+                        )
+                    return surviving, skipped_markers, cap_audits
+
+            # (2) Pre-flight max_tokens — LLM adapters only. Looks up the
+            # adapter by id; guards on ``source.type == "llm"`` so non-LLM
+            # sources never pay the estimate_cost round-trip (AC-2.8).
+            # NOTE: ``"llm"`` is not yet in ``SourceConfig.type`` literal union
+            # (Task 39 adds it); pyright flags the comparison as always-False
+            # today. Cast through ``Any`` so the branch stays reachable until
+            # then — the runtime check is still correct against any value.
+            source_type: Any = source.type
+            if source_type == "llm" and effective.max_tokens is not None:
+                adapter: Any = self._adapters.get(rd.source_id)
+                try:
+                    estimate_cost: Any = adapter.estimate_cost
+                except AttributeError:
+                    # Task 39 hasn't shipped :meth:`LLMAdapter.estimate_cost`
+                    # yet — degrade to soft-breach + pass-through. The audit
+                    # entry still fires so Task 20 / operator tooling can
+                    # enumerate cap events against the stubbed hook.
+                    log.warning(
+                        "LLMAdapter.estimate_cost() unavailable for source '%s' "
+                        "(Task 39 pending); treating as soft cap_breached breach.",
+                        rd.source_id,
+                    )
+                    self._emit_cap_breached_audit(
+                        state=state,
+                        source_id=rd.source_id,
+                        axis="max_tokens",
+                        observed=0,
+                        limit=effective.max_tokens,
+                        enforcement="soft",
+                    )
+                    surviving.append(rd)
+                    continue
+                estimate: Any = await estimate_cost(state.intent_analysis, {})
+                input_tokens: int = int(getattr(estimate, "input_tokens", 0) or 0)
+                if input_tokens > effective.max_tokens:
+                    if effective.enforcement == "hard":
+                        state.cap_breached = True
+                        skipped_markers.append(f"cap_breached:max_tokens:{rd.source_id}")
+                        self._emit_cap_breached_audit(
+                            state=state,
+                            source_id=rd.source_id,
+                            axis="max_tokens",
+                            observed=input_tokens,
+                            limit=effective.max_tokens,
+                            enforcement="hard",
+                        )
+                        continue
+                    # Soft breach — log + audit + pass through.
+                    log.warning(
+                        "cap_breached max_tokens soft: source='%s' observed=%d limit=%d",
+                        rd.source_id,
+                        input_tokens,
+                        effective.max_tokens,
+                    )
+                    self._emit_cap_breached_audit(
+                        state=state,
+                        source_id=rd.source_id,
+                        axis="max_tokens",
+                        observed=input_tokens,
+                        limit=effective.max_tokens,
+                        enforcement="soft",
+                    )
+
+            surviving.append(rd)
+
+        return surviving, skipped_markers, cap_audits
+
+    def _emit_cap_breached_audit(
+        self,
+        *,
+        state: _RequestState,
+        source_id: str,
+        axis: Literal["max_tokens", "max_duration_seconds", "max_tool_calls"],
+        observed: float,
+        limit: int,
+        enforcement: Literal["hard", "soft"],
+    ) -> None:
+        """Write a single ``event_type="cap_breached"`` :class:`AuditEntry` (Task 20 / AC-2.12).
+
+        Emits one audit entry per breach. A single request may emit multiple
+        entries when several sources (or axes) breach.
+
+        Breach payload encoding choice: the breach-specific fields
+        (``source_id``, ``axis``, ``observed``, ``limit``, ``enforcement``,
+        ``actor``) are stashed both (a) as a human-readable message on a
+        single-entry ``error_records`` list and (b) as a structured
+        key=value line on ``rule_trace``. Encoding (b) makes the payload
+        round-trip through :class:`AuditEntry.model_validate_json` /
+        :func:`decode_nautilus_entry` without loss — callers can rebuild
+        the breach dict by splitting on the ``cap_breached:`` prefix. This
+        avoids extending :class:`AuditEntry` with cap-specific fields,
+        preserving NFR-BC (backwards-compat) on the on-disk JSONL shape.
+
+        ``agent_id`` stays ``"<broker>"`` so the audit line marks the
+        broker as the emitter (mirrors :meth:`_emit_handoff_audit`). The
+        request principal that triggered the enforcement check is recorded
+        separately as the ``actor=`` field on the structured ``rule_trace``
+        line.
+        """
+        actor = state.actor_agent_id or "<unknown>"
+        message = (
+            f"cap_breached axis={axis} source_id={source_id} "
+            f"observed={observed} limit={limit} enforcement={enforcement} "
+            f"actor={actor}"
         )
+        rule_trace_line = (
+            f"cap_breached:source_id={source_id},axis={axis},"
+            f"observed={observed},limit={limit},"
+            f"enforcement={enforcement},actor={actor}"
+        )
+        entry = AuditEntry(
+            timestamp=AuditLogger.utcnow(),
+            request_id=state.request_id,
+            agent_id="<broker>",
+            session_id=state.session_id or None,
+            raw_intent=state.intent,
+            intent_analysis=None,
+            facts_asserted_summary={},
+            routing_decisions=[],
+            scope_constraints=[],
+            denial_records=[],
+            error_records=[
+                ErrorRecord(
+                    source_id=source_id,
+                    error_type="CostCapBreach",
+                    message=message,
+                    trace_id=state.request_id,
+                )
+            ],
+            rule_trace=[rule_trace_line],
+            sources_queried=[],
+            sources_denied=[],
+            sources_skipped=[],
+            sources_errored=[source_id],
+            attestation_token=None,
+            duration_ms=state.duration_ms(),
+            event_type="cap_breached",
+        )
+        self._audit_logger.emit(entry)
+        # Dedup key for Task 19's post-flight check — record every emission so
+        # the post-flight hook does not re-emit for a breach the pre-flight
+        # path already handled (AC-2.6).
+        state.cap_breaches_seen.add((source_id, axis))
+
+    def _check_post_flight_caps(
+        self,
+        result: AdapterResult,
+        effective_caps: CostCapConfig | None,
+        state: _RequestState,
+        source_id: str,
+    ) -> tuple[bool, list[str]]:
+        """Post-flight cost-cap check, companion to :meth:`_enforce_cost_caps`.
+
+        Design line 845-846: runs AFTER each adapter returns, BEFORE the result
+        is committed to ``state.data`` via :class:`BasicSynthesizer`. Reads
+        observed usage from ``result.meta["usage"]`` (populated by
+        :class:`LLMAdapter`; absent / empty on non-LLM adapters and Task 19
+        no-ops in that case).
+
+        Returns ``(breach_detected, skip_markers)``:
+
+        * ``(False, [])`` — no breach; caller keeps the result.
+        * ``(True, [])`` — soft breach; caller keeps the result. Audit entry
+          emitted, :attr:`_RequestState.cap_breached` flipped so downstream
+          attestation + response surfaces still see the signal (AC-2.9 / AC-2.10).
+        * ``(True, [marker, ...])`` — hard breach; caller discards the result
+          from ``successful``, appends ``skip_markers`` to
+          ``state.sources_skipped``. :attr:`_RequestState.cap_breached` flipped.
+
+        Axes checked (post-flight):
+
+        * ``max_tool_calls`` — observed ``result.meta["usage"]["tool_calls"]``
+          vs. ``effective_caps.max_tool_calls``. LLM-only in practice but
+          enforced whenever the cap is set and the adapter surfaces the count
+          (AC-2.8 leaves non-LLM silent by returning zero / missing usage).
+        * ``max_tokens`` — observed ``result.meta["usage"]["tokens"]`` vs.
+          ``effective_caps.max_tokens``. Pre-flight (in
+          :meth:`_enforce_cost_caps`) estimates; post-flight is the ground
+          truth from provider ``usage``. Deduped via
+          :attr:`_RequestState.cap_breaches_seen` so a pre-flight hit for the
+          same ``(source_id, "max_tokens")`` suppresses the post-flight audit.
+
+        ``max_duration_seconds`` is a pre-flight / eager check; not re-checked
+        here (it gates dispatch, not per-result commits).
+        """
+        if effective_caps is None:
+            return False, []
+
+        meta_raw: Any = getattr(result, "meta", None)
+        if not isinstance(meta_raw, dict):
+            return False, []
+        meta: dict[str, Any] = meta_raw  # pyright: ignore[reportUnknownVariableType]
+        usage_raw: Any = meta.get("usage")
+        if not isinstance(usage_raw, dict):
+            return False, []
+        usage: dict[str, Any] = usage_raw  # pyright: ignore[reportUnknownVariableType]
+
+        breach_detected = False
+        skip_markers: list[str] = []
+
+        # (1) max_tool_calls — post-flight ground truth from adapter usage.
+        if effective_caps.max_tool_calls is not None:
+            observed_calls = int(usage.get("tool_calls", 0) or 0)
+            if observed_calls > effective_caps.max_tool_calls:
+                breach_detected = True
+                state.cap_breached = True
+                if (source_id, "max_tool_calls") not in state.cap_breaches_seen:
+                    self._emit_cap_breached_audit(
+                        state=state,
+                        source_id=source_id,
+                        axis="max_tool_calls",
+                        observed=observed_calls,
+                        limit=effective_caps.max_tool_calls,
+                        enforcement=effective_caps.enforcement,
+                    )
+                if effective_caps.enforcement == "hard":
+                    skip_markers.append(f"cap_breached:max_tool_calls:{source_id}")
+                else:
+                    log.warning(
+                        "cap_breached max_tool_calls soft: source='%s' observed=%d limit=%d",
+                        source_id,
+                        observed_calls,
+                        effective_caps.max_tool_calls,
+                    )
+
+        # (2) max_tokens — post-flight ground truth; deduped against pre-flight.
+        if effective_caps.max_tokens is not None:
+            tokens_raw: Any = usage.get("tokens", usage.get("total_tokens", 0))
+            observed_tokens = int(tokens_raw or 0)
+            if observed_tokens > effective_caps.max_tokens:
+                breach_detected = True
+                state.cap_breached = True
+                if (source_id, "max_tokens") not in state.cap_breaches_seen:
+                    self._emit_cap_breached_audit(
+                        state=state,
+                        source_id=source_id,
+                        axis="max_tokens",
+                        observed=observed_tokens,
+                        limit=effective_caps.max_tokens,
+                        enforcement=effective_caps.enforcement,
+                    )
+                if effective_caps.enforcement == "hard":
+                    skip_markers.append(f"cap_breached:max_tokens:{source_id}")
+                else:
+                    log.warning(
+                        "cap_breached max_tokens soft: source='%s' observed=%d limit=%d",
+                        source_id,
+                        observed_tokens,
+                        effective_caps.max_tokens,
+                    )
+
+        return breach_detected, skip_markers
 
     async def _update_session(self, state: _RequestState) -> None:
         """Cumulative-exposure bookkeeping (design §3.9 — update at end).
@@ -1102,9 +1629,20 @@ class Broker:
         tasks: list[asyncio.Task[AdapterResult]],
         task_source_ids: list[str],
     ) -> list[AdapterResult]:
-        """Await ``tasks`` and split into successes / errors (into state)."""
+        """Await ``tasks`` and split into successes / errors (into state).
+
+        Also invokes :meth:`_check_post_flight_caps` on every successful
+        adapter result (Task 19, US-2, AC-2.6). On a hard post-flight cap
+        breach the partial result is discarded from the ``successful`` list
+        and a ``cap_breached:<axis>:<source_id>`` marker is appended to
+        ``state.sources_skipped``; on a soft breach the result is kept but
+        :attr:`_RequestState.cap_breached` is flipped and the audit entry
+        is still emitted (AC-2.10).
+        """
         raw = await asyncio.gather(*tasks, return_exceptions=True)
         successful: list[AdapterResult] = []
+        sources_by_id: dict[str, SourceConfig] = {s.id: s for s in self._registry.sources}
+        global_cap = self._config.cost_caps
         for source_id, res in zip(task_source_ids, raw, strict=True):
             if isinstance(res, BaseException):
                 state.errored.append(
@@ -1114,12 +1652,30 @@ class Broker:
             if res.error is not None:
                 state.errored.append(res.error)
                 continue
+            # Post-flight cost-cap check (AC-2.6). Evaluates observed usage
+            # from ``res.meta["usage"]`` against the effective per-source cap
+            # and discards the partial result on a hard breach.
+            source = sources_by_id.get(source_id)
+            effective = _merge_cost_caps(
+                global_cap, source.cost_caps if source is not None else None
+            )
+            breach_detected, skip_markers = self._check_post_flight_caps(
+                res, effective, state, source_id
+            )
+            if breach_detected and skip_markers:
+                state.sources_skipped = state.sources_skipped + skip_markers
+                continue
             successful.append(res)
             state.sources_queried.append(source_id)
         return successful
 
     def _build_response(self, state: _RequestState) -> BrokerResponse:
-        """Materialize the user-facing :class:`BrokerResponse` from ``state``."""
+        """Materialize the user-facing :class:`BrokerResponse` from ``state``.
+
+        US-6 / AC-6.1-6.4 — ``state.fact_set_hash`` (the opaque round-trip
+        of ``request.fact_set_hash``) is echoed verbatim onto the response.
+        ``None`` preserves byte-identical Phase-1 behavior (NFR-BC).
+        """
         return BrokerResponse(
             request_id=state.request_id,
             data=state.data,
@@ -1130,6 +1686,8 @@ class Broker:
             scope_restrictions=state.scope_by_source,
             attestation_token=state.attestation_token,
             duration_ms=state.duration_ms(),
+            cap_breached=state.cap_breached or None,
+            fact_set_hash=state.fact_set_hash,
         )
 
     def _emit_audit(
@@ -1200,6 +1758,7 @@ class Broker:
         scope_by_source: dict[str, list[ScopeConstraint]],
         rule_trace: list[str],
         session_id: str,
+        state: _RequestState | None = None,
     ) -> tuple[str, Literal["v1", "v2"], dict[str, Any]]:
         """Compose the Nautilus attestation payload and sign it (design §9.3).
 
@@ -1221,10 +1780,36 @@ class Broker:
         raw :class:`ScopeConstraint` attributes; the v1 path flattens it
         back to the Phase-1 4-key shape in the legacy iteration order so
         Phase-1 tokens remain bit-for-bit reproducible (NFR-6).
+
+        Task 20 / AC-2.12 — when ``state`` is provided, a duck-typed
+        response shim carrying ``cap_breached`` and
+        ``effective_caps_per_source`` is passed to :func:`build_payload` so
+        the v2 ``cost_cap_context`` extension can enumerate which caps
+        applied to which queried source. When ``state`` is ``None`` (legacy
+        callers) the shim is omitted — payload bytes remain identical to
+        the pre-Task-20 output (NFR-ATT-V2-FROZEN).
         """
         if self._attestation is None:
             # pragma: no cover — caller guards on self._attestation
             raise RuntimeError("attestation is disabled")
+
+        response_shim: SimpleNamespace | None = None
+        if state is not None and (state.cap_breached or state.effective_caps_per_source):
+            response_shim = SimpleNamespace(
+                cap_breached=state.cap_breached,
+                effective_caps_per_source=dict(state.effective_caps_per_source),
+            )
+
+        # US-6 / FR-62 / AC-6.3 — when the caller supplied a truthy
+        # ``request.fact_set_hash``, surface it to :func:`build_payload` via a
+        # duck-typed request shim so the v2 payload picks up the
+        # ``fact_set_hash`` conditional key (Task 9 /
+        # :func:`attestation_payload._has_fact_set_hash`). ``None`` / empty
+        # string → no shim → payload bytes are identical to the pre-US-6
+        # output (NFR-ATT-V2-FROZEN).
+        request_shim: SimpleNamespace | None = None
+        if state is not None and state.fact_set_hash:
+            request_shim = SimpleNamespace(fact_set_hash=state.fact_set_hash)
 
         nautilus_payload, scope_hash_version = build_payload(
             request_id,
@@ -1232,6 +1817,8 @@ class Broker:
             sources_queried,
             scope_by_source,
             list(rule_trace),
+            request=request_shim,
+            response=response_shim,
         )
 
         # Nautilus-specific decision marker; the Fathom JWT carries this as
@@ -1265,10 +1852,13 @@ class Broker:
         Calls :meth:`PostgresSessionStore.setup` when the broker is wired with
         a Postgres-backed session store (design §3.2, UQ-1 / D-2). No-op for
         the Phase-1 :class:`~nautilus.core.session.InMemorySessionStore`.
+        Also runs :meth:`SourceStateStore.setup` when wired (US-3 / FR-29).
         Safe to call multiple times; each implementer owns its own idempotency.
         """
         if isinstance(self._session_store, PostgresSessionStore):
             await self._session_store.setup()
+        if self._source_state_store is not None:
+            await self._source_state_store.setup()
 
     def close(self) -> None:
         """Idempotent sync close — FR-17, AC-8.6."""
@@ -1301,6 +1891,12 @@ class Broker:
         if hasattr(self._session_store, "aclose"):
             with contextlib.suppress(Exception):
                 await self._session_store.aclose()  # type: ignore[attr-defined]
+        # 1b. SourceStateStore (US-3): closed alongside the session store —
+        #     both are Postgres-backed and carry no ordering dependency on
+        #     the attestation sink or adapters.
+        if self._source_state_store is not None:
+            with contextlib.suppress(Exception):
+                await self._source_state_store.aclose()
         # 2. Attestation sink: release the store-and-forward handle AFTER
         #    session writes have flushed but BEFORE adapter pools go down —
         #    in-flight emits from step 1's session-state finalization may

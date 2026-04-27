@@ -8,6 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
+
 def main() -> int:
     pyproject = ROOT / "pyproject.toml"
     init = ROOT / "nautilus" / "__init__.py"
@@ -29,6 +30,7 @@ def main() -> int:
 
     print(f"OK: version {pp_ver}")
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

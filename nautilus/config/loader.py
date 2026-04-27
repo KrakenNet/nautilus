@@ -5,6 +5,7 @@ Implements FR-1, FR-2 (design §4.1, §4.10).
 
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 from pathlib import Path
@@ -13,6 +14,8 @@ from typing import Any, cast
 import yaml
 
 from nautilus.config.models import NautilusConfig
+from nautilus.config.secrets import has_scheme
+from nautilus.config.secrets import resolve as resolve_secret
 
 _ENV_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 # Phase-2 adds 4 new adapter kinds (design §3.5); unknown kinds still raise
@@ -84,7 +87,19 @@ class EnvInterpolator:
                 raise ConfigError(f"Missing env var '{var}' referenced by source id='{source_id}'")
             return self._env[var]
 
-        return _ENV_PATTERN.sub(_sub, value)
+        # ${VAR} pass runs first (per Task 4 spec) so users can compose with URIs.
+        interpolated = _ENV_PATTERN.sub(_sub, value)
+        # URI dispatch hook (design TD-3): if the post-interpolation string matches a
+        # registered secret scheme, resolve it. Using asyncio.run keeps load_config sync
+        # (least-invasive integration; prevents re-entrancy inside a running loop).
+        if has_scheme(interpolated):
+            try:
+                return asyncio.run(resolve_secret(interpolated))
+            except ValueError as exc:
+                raise ConfigError(
+                    f"Failed to resolve secret reference in source id='{source_id}': {exc}"
+                ) from exc
+        return interpolated
 
 
 def load_config(path: str | Path) -> NautilusConfig:

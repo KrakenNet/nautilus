@@ -61,6 +61,10 @@ class NautilusMetrics:
                 "nautilus.session.exposure_flags.total",
                 description="Session exposure flags emitted",
             )
+            self.ingest_quarantine_total = _meter.create_counter(
+                "nautilus.ingest.quarantine.total",
+                description="Rows appended to nautilus_quarantine_log",
+            )
 
             # -- Histograms --
             self.request_duration = _meter.create_histogram(
@@ -86,6 +90,7 @@ class NautilusMetrics:
             self.attestation_total = _NOOP
             self.adapter_errors_total = _NOOP
             self.session_exposure_flags_total = _NOOP
+            self.ingest_quarantine_total = _NOOP
             self.request_duration = _NOOP
             self.adapter_latency = _NOOP
             self.fathom_evaluation_duration = _NOOP

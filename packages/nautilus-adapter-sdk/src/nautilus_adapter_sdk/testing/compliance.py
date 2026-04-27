@@ -66,9 +66,7 @@ class AdapterComplianceSuite:
         """Test full adapter lifecycle: connect -> execute -> close."""
         adapter: Adapter = self.adapter_factory()
         await adapter.connect(self.source_config)
-        result = await adapter.execute(
-            self._make_intent(), self._make_scope(), {}
-        )
+        result = await adapter.execute(self._make_intent(), self._make_scope(), {})
         assert isinstance(result, AdapterResult), (
             f"execute() must return AdapterResult, got {type(result).__name__}"
         )
@@ -79,9 +77,7 @@ class AdapterComplianceSuite:
         adapter: Adapter = self.adapter_factory()
         await adapter.connect(self.source_config)
         try:
-            result = await adapter.execute(
-                self._make_intent(), self._make_scope("eq"), {}
-            )
+            result = await adapter.execute(self._make_intent(), self._make_scope("eq"), {})
             assert isinstance(result, AdapterResult)
         finally:
             await adapter.close()
@@ -100,9 +96,7 @@ class AdapterComplianceSuite:
                 )
             except ScopeEnforcementError:
                 raised = True
-            assert raised, (
-                "execute() with invalid operator must raise ScopeEnforcementError"
-            )
+            assert raised, "execute() with invalid operator must raise ScopeEnforcementError"
         finally:
             await adapter.close()
 
@@ -129,8 +123,7 @@ class AdapterComplianceSuite:
             result = await adapter.execute(bad_intent, self._make_scope(), {})
             # Adapter may return AdapterResult or ErrorRecord
             assert isinstance(result, (AdapterResult, ErrorRecord)), (
-                f"Error path must return AdapterResult or ErrorRecord, "
-                f"got {type(result).__name__}"
+                f"Error path must return AdapterResult or ErrorRecord, got {type(result).__name__}"
             )
         finally:
             await adapter.close()

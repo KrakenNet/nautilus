@@ -35,11 +35,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from fastapi import Depends, FastAPI, Request, Response, status
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 from nautilus.core.broker import Broker
 from nautilus.core.models import BrokerRequest, BrokerResponse
+from nautilus.core.source_state import SourceState
 from nautilus.transport.auth import api_key_header, proxy_trust_dependency, verify_api_key
 from nautilus.ui import create_admin_router
 
@@ -48,6 +50,22 @@ if TYPE_CHECKING:
 
 
 _READY_PROBE_KEY = "_ready_probe_"
+
+
+class DisableSourceRequest(BaseModel):
+    """Request body for ``POST /v1/sources/{id}/disable`` (US-3, AC-3.4)."""
+
+    reason: str = Field(min_length=1)
+
+
+def _serialize_source_state(state: SourceState) -> dict[str, Any]:
+    """Project a :class:`SourceState` onto JSON-safe primitives."""
+    return {
+        "enabled": state.enabled,
+        "reason": state.reason,
+        "actor": state.actor,
+        "changed_at": state.changed_at.isoformat(),
+    }
 
 
 def _resolve_auth_config(broker: Broker | None) -> tuple[str, list[str]]:
@@ -190,7 +208,46 @@ def create_app(
             body.agent_id,
             body.intent,
             body.context,
+            fact_set_hash=body.fact_set_hash,
         )
+
+    async def _mutate_source_state(
+        request: Request,
+        source_id: str,
+        *,
+        enabled: bool,
+        reason: str | None,
+        actor: str,
+    ) -> dict[str, Any]:
+        """Shared body for ``POST /v1/sources/{id}/{disable,enable}`` (US-3).
+
+        * 404 when ``source_id`` is not in the broker's source registry.
+        * 503 when the broker has no ``SourceStateStore`` wired — state
+          writes cannot be persisted under the Phase-1 memory/redis
+          session backend (design §3.2 / US-3 prereq).
+        """
+        broker: Broker | None = getattr(request.app.state, "broker", None)
+        if broker is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Broker not ready",
+            )
+        known_ids = {s.id for s in broker.sources}
+        if source_id not in known_ids:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Unknown source id: {source_id}",
+            )
+        store = getattr(broker, "_source_state_store", None)
+        if store is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="source_state_store not configured",
+            )
+        new_state: SourceState = await store.set_enabled(
+            source_id, enabled=enabled, reason=reason, actor=actor
+        )
+        return {"source_id": source_id, **_serialize_source_state(new_state)}
 
     # ------------------------------------------------------------------
     # Route registrations
@@ -226,22 +283,79 @@ def create_app(
     async def get_sources(  # pyright: ignore[reportUnusedFunction]
         request: Request,
     ) -> dict[str, list[dict[str, Any]]]:
-        """Metadata-only source listing (AC-12.3 — no DSN / credentials)."""
+        """Metadata-only source listing (AC-12.3 — no DSN / credentials).
+
+        Extended for US-3 to additionally surface per-source enable state
+        (``enabled``, ``reason``, ``actor``, ``changed_at``). Unknown /
+        never-toggled sources default to ``enabled=True`` with ``reason``,
+        ``actor``, ``changed_at`` all ``None`` so Phase-1 YAML configs
+        remain byte-compatible (NFR-5).
+        """
         broker: Broker | None = getattr(request.app.state, "broker", None)
         if broker is None:
             return {"sources": []}
-        return {
-            "sources": [
-                {
-                    "id": s.id,
-                    "type": s.type,
-                    "description": s.description,
-                    "classification": s.classification,
-                    "data_types": list(s.data_types),
-                }
-                for s in broker.sources
-            ],
-        }
+        states: dict[str, SourceState] = {}
+        store = getattr(broker, "_source_state_store", None)
+        if store is not None:
+            states = await store.load_all()
+        out: list[dict[str, Any]] = []
+        for s in broker.sources:
+            row: dict[str, Any] = {
+                "id": s.id,
+                "type": s.type,
+                "description": s.description,
+                "classification": s.classification,
+                "data_types": list(s.data_types),
+                "enabled": True,
+                "reason": None,
+                "actor": None,
+                "changed_at": None,
+            }
+            st = states.get(s.id)
+            if st is not None:
+                row.update(_serialize_source_state(st))
+            out.append(row)
+        return {"sources": out}
+
+    @app.post(
+        "/v1/sources/{source_id}/disable",
+        dependencies=[Depends(_write_guard)],
+        tags=["broker"],
+    )
+    async def post_source_disable(  # pyright: ignore[reportUnusedFunction]
+        source_id: str,
+        body: DisableSourceRequest,
+        request: Request,
+        actor: str = Depends(_write_guard),
+    ) -> dict[str, Any]:
+        """Disable a source (US-3, AC-3.4 / AC-3.5 / AC-3.6).
+
+        Idempotent: calling twice with the same payload is a 200 on each
+        call and refreshes ``changed_at`` on every write (AC-3.6).
+        Unknown ``source_id`` → 404 (AC-3.5).
+        """
+        return await _mutate_source_state(
+            request, source_id, enabled=False, reason=body.reason, actor=actor
+        )
+
+    @app.post(
+        "/v1/sources/{source_id}/enable",
+        dependencies=[Depends(_write_guard)],
+        tags=["broker"],
+    )
+    async def post_source_enable(  # pyright: ignore[reportUnusedFunction]
+        source_id: str,
+        request: Request,
+        actor: str = Depends(_write_guard),
+    ) -> dict[str, Any]:
+        """Re-enable a source (US-3, AC-3.4).
+
+        No request body — ``reason`` is cleared to ``None``. Unknown
+        ``source_id`` → 404 (AC-3.5).
+        """
+        return await _mutate_source_state(
+            request, source_id, enabled=True, reason=None, actor=actor
+        )
 
     @app.get("/healthz", tags=["probes"])
     async def healthz() -> dict[str, str]:  # pyright: ignore[reportUnusedFunction]

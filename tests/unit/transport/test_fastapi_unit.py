@@ -98,6 +98,8 @@ def _make_broker(
     store.aget = AsyncMock(return_value=None)
     broker.session_store = store
     broker.sources = [_fake_source("nvd")]
+    # Phase-1 default: no source-state store wired (NFR-5 compat).
+    broker._source_state_store = None
     broker._config = SimpleNamespace(
         api=SimpleNamespace(
             auth=SimpleNamespace(mode=mode),

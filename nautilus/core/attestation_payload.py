@@ -110,6 +110,35 @@ def _has_temporal_slot(constraints: Any) -> bool:
     return False
 
 
+def _has_cost_cap_context(request: Any, response: Any) -> bool:
+    """True iff a cost-cap summary should be emitted on the v2 payload.
+
+    Mirrors the design's Cross-Cutting Concerns block: fire when the
+    response flags a cap breach, OR when any queried source declared
+    non-None effective caps that contributed to an enforcement decision
+    (Task 20 / AC-2.12). The second branch picks up
+    ``effective_caps_per_source`` — a dict duck-typed onto the response
+    shim by :meth:`nautilus.core.broker.Broker._sign`. ``None`` response
+    short-circuits to False so legacy callers (back-compat fixtures,
+    NFR-ATT-V2-FROZEN) keep byte-identical output.
+    """
+    if response is None:
+        return False
+    if getattr(response, "cap_breached", None):
+        return True
+    return bool(getattr(response, "effective_caps_per_source", None))
+
+
+def _has_fact_set_hash(request: Any) -> bool:
+    """True iff the incoming request carries a non-empty ``fact_set_hash``."""
+    return bool(request is not None and getattr(request, "fact_set_hash", None))
+
+
+def _has_session_signatures(response: Any) -> bool:
+    """True iff the response carries non-empty ``source_session_signatures``."""
+    return bool(response is not None and getattr(response, "source_session_signatures", None))
+
+
 def _v1_payload(constraints: Any) -> Any:
     """Return the Phase-1 scope payload to hash for v1 (FROZEN).
 
@@ -172,6 +201,9 @@ def build_payload(
     sources_queried: list[str],
     scope_constraints: Any,
     rule_trace: Any,
+    *,
+    request: Any | None = None,
+    response: Any | None = None,
 ) -> tuple[dict[str, Any], Literal["v1", "v2"]]:
     """Build the Nautilus attestation payload + its scope-hash version.
 
@@ -191,6 +223,16 @@ def build_payload(
     payload is hashed as-received when pre-flattened, or flattened to
     the Phase-1 4-key list when passed as the internal dict shape —
     either way bit-for-bit reproducible with Phase-1 output, NFR-6).
+
+    ``request`` / ``response`` are optional keyword-only handles on the
+    surrounding :class:`BrokerRequest` / :class:`BrokerResponse` (passed
+    by attribute name to avoid a circular import). When supplied and
+    populated, they opt the payload into three conditional v2 extensions
+    (design Cross-Cutting Concerns block): ``cost_cap_context``,
+    ``fact_set_hash``, and ``session_signatures``. When either is
+    ``None`` (or when every ``_has_*()`` guard returns False), the
+    emitted payload is byte-identical to the pre-spec output — the
+    NFR-ATT-V2-FROZEN guarantee.
     """
     if _has_temporal_slot(scope_constraints):
         scope_hash = _sha256(_v2_canonical(scope_constraints))
@@ -198,7 +240,7 @@ def build_payload(
     else:
         scope_hash = _sha256(_v1_payload(scope_constraints))
         version = "v1"
-    payload = {
+    payload: dict[str, Any] = {
         "iss": "nautilus",
         "request_id": request_id,
         "agent_id": agent_id,
@@ -206,6 +248,27 @@ def build_payload(
         "scope_hash": scope_hash,
         "rule_trace_hash": _sha256(rule_trace),
     }
+    # Conditional-on-presence extensions (design Cross-Cutting Concerns
+    # Summary). Each guard returns False when its input is None, so
+    # legacy 5-positional-arg callers keep byte-identical output.
+    if _has_fact_set_hash(request) and request is not None:
+        payload["fact_set_hash"] = request.fact_set_hash
+    if _has_session_signatures(response) and response is not None:
+        payload["session_signatures"] = response.source_session_signatures
+    if _has_cost_cap_context(request, response) and response is not None:
+        # Task 20 / AC-2.12 — enrich the cost-cap context with the
+        # per-source effective caps that applied to this request (if any).
+        # The ``effective_caps_per_source`` attribute is duck-typed onto
+        # the response shim by :meth:`Broker._sign`; when absent the block
+        # collapses to the minimal Task-9 shape so fixtures that only set
+        # ``cap_breached`` stay backward-compatible.
+        cost_cap_context: dict[str, Any] = {
+            "cap_breached": bool(getattr(response, "cap_breached", False))
+        }
+        effective = getattr(response, "effective_caps_per_source", None)
+        if effective:
+            cost_cap_context["effective_caps_per_source"] = dict(effective)
+        payload["cost_cap_context"] = cost_cap_context
     return payload, version
 
 

@@ -14,6 +14,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
+from nautilus.ingest.config import IngestIntegrityConfig
+
 # ---------------------------------------------------------------------------
 # Phase 2 auth discriminated union (design §3.5).
 # ---------------------------------------------------------------------------
@@ -71,6 +73,28 @@ class EndpointSpec(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Phase 2 cost-cap config (design §"In-memory pydantic schemas", FR-18/19).
+# ---------------------------------------------------------------------------
+
+
+class CostCapConfig(BaseModel):
+    """Per-request cost caps (design §"In-memory pydantic schemas", FR-19, AC-2.1).
+
+    Each axis is individually optional; ``None`` disables enforcement on that
+    axis so operators can cap only the dimensions they care about. ``max_tokens``
+    and ``max_tool_calls`` are silently ignored for non-LLM adapters (AC-2.8);
+    ``max_duration_seconds`` applies globally to all adapter types (AC-2.7).
+    ``enforcement`` gates hard-abort (``"hard"``) vs. warn-and-continue
+    (``"soft"``) behaviour when a cap is breached (AC-2.9 / AC-2.10).
+    """
+
+    max_tokens: int | None = None
+    max_duration_seconds: int | None = None
+    max_tool_calls: int | None = None
+    enforcement: Literal["hard", "soft"] = "hard"
+
+
+# ---------------------------------------------------------------------------
 # SourceConfig (Phase 1 fields + Phase 2 additive fields).
 # ---------------------------------------------------------------------------
 
@@ -114,6 +138,10 @@ class SourceConfig(BaseModel):
     compartments: str = ""
     sub_category: str = ""
     like_style: Literal["starts_with", "regex"] = "starts_with"
+    # Phase-2 cost-cap override (design §"In-memory pydantic schemas", FR-18, AC-2.2).
+    cost_caps: CostCapConfig | None = None
+    # Phase-5 ingest-integrity config (design §"In-memory pydantic schemas", US-4, AC-4.2/AC-4.3).
+    ingest_integrity: IngestIntegrityConfig | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -325,3 +353,5 @@ class NautilusConfig(BaseModel):
     api: ApiConfig = Field(default_factory=ApiConfig)
     mcp: MCPConfig = Field(default_factory=MCPConfig)
     session_store: SessionStoreConfig = Field(default_factory=SessionStoreConfig)
+    # Phase-2 global cost-cap default (design §"In-memory pydantic schemas", FR-18, AC-2.2).
+    cost_caps: CostCapConfig | None = None

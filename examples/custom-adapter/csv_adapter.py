@@ -79,9 +79,7 @@ class CsvAdapter:
         for constraint in scope:
             op = constraint.operator
             if op not in _VALID_OPERATORS:
-                raise ScopeEnforcementError(
-                    f"CsvAdapter: unsupported operator '{op}'"
-                )
+                raise ScopeEnforcementError(f"CsvAdapter: unsupported operator '{op}'")
 
             field = constraint.field
             value = constraint.value

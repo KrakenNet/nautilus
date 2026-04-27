@@ -1,0 +1,25 @@
+{
+  "_comment": "NFR-ATT-V2-FROZEN golden input. Hand-crafted v2 input (temporal slot populated) with NO new-fields (no cap_breached, no fact_set_hash, no source_session_signatures). Used to prove that conditional-on-presence in _v2_canonical() does NOT add keys to payloads whose inputs do not populate them.",
+  "request_id": "req-frozen-0001",
+  "agent_id": "agent-alpha",
+  "sources_queried": ["src-a", "src-b"],
+  "scope_constraints": [
+    {
+      "source_id": "src-a",
+      "field": "role",
+      "operator": "=",
+      "value": "viewer",
+      "expires_at": "2099-12-31T23:59:59Z",
+      "valid_from": ""
+    },
+    {
+      "source_id": "src-b",
+      "field": "team",
+      "operator": "IN",
+      "value": ["red", "blue"],
+      "expires_at": "",
+      "valid_from": "2026-01-01T00:00:00Z"
+    }
+  ],
+  "rule_trace": ["rule-1", "rule-2"]
+}

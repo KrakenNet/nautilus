@@ -72,6 +72,9 @@ def _make_fake_broker(
     store.aget = session_store_aget or AsyncMock(return_value=None)
     broker.session_store = store
     broker.sources = [_make_fake_source("nvd")]
+    # Phase-1 default: no source-state store wired — GET /v1/sources should
+    # surface defaults (enabled=True, reason=None, actor=None, changed_at=None).
+    broker._source_state_store = None
     broker._config = _make_config(mode=mode, keys=keys if keys is not None else ["k1"])
     return broker
 
@@ -216,6 +219,7 @@ def test_resolve_auth_config_defaults_when_config_missing() -> None:
     broker.aclose = AsyncMock()
     broker.session_store = MagicMock(aget=AsyncMock(return_value=None))
     broker.sources = []
+    broker._source_state_store = None
     # No _config attribute at all — defensive path.
     broker._config = None
     app = create_app(None, existing_broker=broker)
