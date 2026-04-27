@@ -1,0 +1,3 @@
+# Lock prompt templates to LF so SHA-256 snapshot tests (FR-15) hash
+# identically across Windows/Linux/macOS checkouts.
+nautilus/analysis/llm/prompts/*.txt text eol=lf
