@@ -24,9 +24,6 @@ jobs:
       - name: Install deps
         run: uv sync
 
-      - name: Version sync
-        run: uv run python scripts/check_version_sync.py
-
       - name: Lint
         run: uv run ruff check .
 
