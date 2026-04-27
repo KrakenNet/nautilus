@@ -22,7 +22,7 @@ jobs:
           python-version: "3.14"
 
       - name: Install deps
-        run: uv sync
+        run: uv sync --extra dev
 
       - name: Version sync
         run: uv run python scripts/check_version_sync.py
