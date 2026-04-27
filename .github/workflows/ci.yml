@@ -38,3 +38,33 @@ jobs:
 
       - name: Test
         run: uv run pytest -m unit --tb=short -q
+
+  # nautilus-update-1 / Task 55 — replay-mode Nautobot integration coverage.
+  # Runs the cassette-replay path only (no Docker / no testcontainer); designed
+  # to finish in < 60s so it can run on every PR. The companion workflow
+  # ``nightly-cassette-refresh.yml`` re-records cassettes against a fresh
+  # ``networktocode/nautobot:3.1`` container nightly and opens an issue if more
+  # than five cassettes drift.
+  test-nautobot-replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: test
+    env:
+      VCR_MODE: replay
+      PYTHONPATH: packages/nautilus-adapter-sdk/src:packages/nautilus-adapter-nautobot/src
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.14"
+
+      - name: Install deps
+        run: uv sync
+
+      - name: Replay Nautobot cassettes
+        run: |
+          uv run pytest -m integration \
+            packages/nautilus-adapter-nautobot/tests/integration/ \
+            --tb=short -q

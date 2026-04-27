@@ -56,6 +56,8 @@ __all__ = ["REGISTRY", "SecretProvider", "has_scheme", "register", "resolve"]
 def _load_builtin_providers() -> None:
     """Import built-in providers so their ``@register`` side effects fire."""
     from nautilus.config.secrets import env as _env  # noqa: I001, F401  # pyright: ignore[reportUnusedImport]
+    from nautilus.config.secrets import vault_kv as _vault_kv  # noqa: I001, F401  # pyright: ignore[reportUnusedImport]
+    from nautilus.config.secrets import vault_transit as _vault_transit  # noqa: I001, F401  # pyright: ignore[reportUnusedImport]
 
 
 _load_builtin_providers()

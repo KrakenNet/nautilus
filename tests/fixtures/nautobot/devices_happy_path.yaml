@@ -1,0 +1,82 @@
+# Synthesized VCR cassette for the Nautobot adapter device-query happy path.
+#
+# Captures the GraphQL ``__type(name:"DeviceType")`` introspection plus a
+# single-page ``devices`` query against ``networktocode/nautobot:3.1``. The
+# response shape mirrors the live container's GraphQL output precisely
+# enough that the adapter's parser, custom-field prefix discovery, and
+# ``{data, errors}`` envelope handling exercise the true v3.1 contract.
+#
+# Re-record with: VCR_MODE=record uv run pytest -m nautobot_live \
+#                 packages/nautilus-adapter-nautobot/tests/integration/
+interactions:
+  - request:
+      method: POST
+      uri: http://nautobot.test/api/graphql/
+      body:
+        encoding: utf-8
+        string: '{"query": "query DeviceTypeIntrospection {\n  __type(name: \"DeviceType\") {\n    fields { name }\n  }\n}", "variables": {}}'
+      headers:
+        Authorization: ['Token 0123456789abcdef0123456789abcdef01234567']
+        Content-Type: ['application/json']
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        Content-Type: ['application/json']
+      body:
+        string: |
+          {
+            "data": {
+              "__type": {
+                "fields": [
+                  {"name": "id"},
+                  {"name": "name"},
+                  {"name": "serial"},
+                  {"name": "device_type"},
+                  {"name": "cf_owner_team"},
+                  {"name": "cf_lifecycle_stage"}
+                ]
+              }
+            }
+          }
+
+  - request:
+      method: POST
+      uri: http://nautobot.test/api/graphql/
+      body:
+        encoding: utf-8
+        string: '{"query": "query Devices($limit: Int!, $offset: Int!) {\n  devices(limit: $limit, offset: $offset) {\n    id\n    name\n    serial\n    status { name }\n    role { name }\n    device_type { model }\n  }\n}", "variables": {"limit": 500, "offset": 0}}'
+      headers:
+        Authorization: ['Token 0123456789abcdef0123456789abcdef01234567']
+        Content-Type: ['application/json']
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        Content-Type: ['application/json']
+      body:
+        string: |
+          {
+            "data": {
+              "devices": [
+                {
+                  "id": "8c4f4f01-1111-2222-3333-444455556666",
+                  "name": "edge-router-01",
+                  "serial": "ABC123XYZ",
+                  "status": {"name": "Active"},
+                  "role": {"name": "edge-router"},
+                  "device_type": {"model": "QFX5120-48Y"}
+                },
+                {
+                  "id": "8c4f4f01-1111-2222-3333-777788889999",
+                  "name": "spine-switch-02",
+                  "serial": "DEF456UVW",
+                  "status": {"name": "Active"},
+                  "role": {"name": "spine"},
+                  "device_type": {"model": "QFX5120-32C"}
+                }
+              ]
+            }
+          }

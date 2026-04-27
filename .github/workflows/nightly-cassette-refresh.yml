@@ -1,0 +1,69 @@
+name: nightly-cassette-refresh
+
+# nautilus-update-1 / Task 56 — refresh Nautobot integration cassettes against
+# a fresh ``networktocode/nautobot:3.1`` container nightly. If more than five
+# cassettes drift, fail the workflow and open a tracking issue so operators can
+# triage upstream Nautobot changes before the cassettes silently diverge from
+# reality.
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # 03:00 UTC nightly
+  workflow_dispatch:      # allow manual triggers
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VCR_MODE: record
+      PYTHONPATH: packages/nautilus-adapter-sdk/src:packages/nautilus-adapter-nautobot/src
+      NAUTOBOT_TOKEN: '0123456789abcdef0123456789abcdef01234567'
+    services:
+      docker:
+        image: docker:dind
+        options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          python-version: "3.14"
+
+      - name: Install deps
+        run: uv sync
+
+      - name: Re-record Nautobot cassettes (testcontainer cold-start ~60-90s)
+        run: |
+          uv run pytest -m nautobot_live \
+            packages/nautilus-adapter-nautobot/tests/integration/ \
+            --tb=short
+
+      - name: Detect cassette drift
+        id: drift
+        run: |
+          set -euo pipefail
+          changed=$(git diff --stat tests/fixtures/nautobot/ | tail -1 || true)
+          changes=$(git diff --name-only tests/fixtures/nautobot/ | wc -l)
+          echo "changed=$changes" >> "$GITHUB_OUTPUT"
+          echo "summary<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$changed" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          if [ "$changes" -gt 5 ]; then
+            echo "::error::More than 5 cassettes drifted ($changes); failing workflow."
+            exit 1
+          fi
+
+      - name: Open drift issue
+        if: failure() && steps.drift.outputs.changed != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "nautobot cassette drift: ${{ steps.drift.outputs.changed }} files changed" \
+            --body "Nightly cassette refresh detected drift against networktocode/nautobot:3.1.\n\n\`\`\`\n${{ steps.drift.outputs.summary }}\n\`\`\`\n\nRe-run with VCR_MODE=record locally and commit the refreshed cassettes."

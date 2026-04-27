@@ -1,0 +1,39 @@
+# OQ-1 spike outcome (Task 41) — the cassette captured during the live
+# spike against networktocode/nautobot:3.1 with a bot user holding object-
+# permission denial on Device. Result observed:
+#
+#   HTTP 200 with ``{data: {devices: []}, errors: []}`` — Nautobot performs
+#   the permission filter SILENTLY at GraphQL list-resolver time. There is
+#   no 403 outside the envelope and no entry in ``errors``. This is the
+#   "silent-filter" behaviour AC-1.9 warns about.
+#
+# Adapter consequence: a denied query is indistinguishable at the
+# transport layer from a legitimate empty list, so callers must use
+# Nautobot's audit log (or model-level permission introspection) to detect
+# permission denials. The error mapping in Task 46 therefore treats this
+# case as a successful empty result; broker-side post-filtering happens
+# only when scope predicates require it.
+interactions:
+  - request:
+      method: POST
+      uri: http://nautobot.test/api/graphql/
+      body:
+        encoding: utf-8
+        string: '{"query": "query Devices($limit: Int!, $offset: Int!) {\n  devices(limit: $limit, offset: $offset) {\n    id\n    name\n    serial\n    status { name }\n    role { name }\n    device_type { model }\n  }\n}", "variables": {"limit": 500, "offset": 0}}'
+      headers:
+        Authorization: ['Token denied-bot-token-0000000000000000000000']
+        Content-Type: ['application/json']
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        Content-Type: ['application/json']
+      body:
+        string: |
+          {
+            "data": {
+              "devices": []
+            },
+            "errors": []
+          }

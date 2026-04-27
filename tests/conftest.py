@@ -132,3 +132,54 @@ def pg_container() -> Iterator[str]:
         os.environ.pop("TEST_PG_DSN", None)
         os.environ.pop("TEST_PGV_DSN", None)
         container.stop()
+
+
+# ---------------------------------------------------------------------------
+# nautilus-update-1 / Task 47 — Nautobot testcontainer fixture (TD-9).
+#
+# Hybrid strategy: by default tests replay VCR cassettes (``VCR_MODE=replay``,
+# < 60s in branch CI, no Docker needed). Setting ``VCR_MODE=record`` and
+# selecting ``-m nautobot_live`` spins a fresh ``networktocode/nautobot:3.1``
+# container (~60-90s cold start), seeds it via the bundled fixture data,
+# re-records the four happy-path cassettes under ``tests/fixtures/nautobot/``,
+# and tears down. Branch CI never runs the live mode.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def nautobot_container() -> Iterator[dict[str, str]]:
+    """Spin a session-scoped Nautobot 3.1 testcontainer (live record mode).
+
+    Skipped automatically unless ``VCR_MODE=record`` is set in the environment
+    AND the test is collected with ``-m nautobot_live``. Returns the resolved
+    ``url`` + ``token`` for the container.
+    """
+    if os.environ.get("VCR_MODE", "replay") != "record":
+        pytest.skip("nautobot_container fixture only spins in VCR_MODE=record")
+    try:
+        from testcontainers.compose import DockerCompose  # pyright: ignore[reportMissingTypeStubs]
+    except ImportError:
+        pytest.skip("testcontainers compose extra is not installed")
+
+    fixtures_dir = Path(__file__).parent / "fixtures" / "nautobot"
+    compose_file = fixtures_dir / "docker-compose.nautobot.yml"
+    if not compose_file.exists():
+        pytest.skip(
+            f"nautobot compose file not present at {compose_file}; "
+            "supply it before running ``-m nautobot_live``"
+        )
+    project = DockerCompose(str(fixtures_dir), compose_file_name=compose_file.name)
+    project.start()
+    try:
+        host = project.get_service_host("nautobot", 8080)
+        port = project.get_service_port("nautobot", 8080)
+        url = f"http://{host}:{port}"
+        # Token must be seeded by the compose stack's bootstrap step. Tests
+        # rely on ``NAUTOBOT_TOKEN`` env var so production-style flow is
+        # exercised end-to-end.
+        token = os.environ.get("NAUTOBOT_TOKEN", "0123456789abcdef0123456789abcdef01234567")
+        os.environ.setdefault("NAUTOBOT_URL", url)
+        os.environ.setdefault("NAUTOBOT_TOKEN", token)
+        yield {"url": url, "token": token}
+    finally:
+        project.stop()

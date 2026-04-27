@@ -60,6 +60,13 @@ nav:
       - CLI: reference/cli.md
       - Rule Packs: reference/rule-packs.md
       - Adapter SDK: reference/adapter-sdk.md
+      # nautilus-update-1 / Task 54 — per-adapter docs convention (AC-7.2).
+      - Adapter Implementations:
+          - Overview: reference/adapters/index.md
+          - REST: reference/adapters/rest.md
+          - ServiceNow: reference/adapters/servicenow.md
+          - Nautobot: reference/adapters/nautobot.md
+          - LLM: reference/adapters/llm.md
       - Adapter SDK Docs:
           - Overview: sdk/docs/index.md
           - Tutorial: sdk/docs/tutorial.md

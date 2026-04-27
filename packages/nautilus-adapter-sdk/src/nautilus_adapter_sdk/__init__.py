@@ -9,6 +9,11 @@ __version__ = "0.1.0"
 
 from .config import SourceConfig
 from .exceptions import AdapterError, ScopeEnforcementError
+from .protection import (
+    SSRFBlockedError,
+    enforce_no_cross_host_redirect,
+    reject_private_ip_literal,
+)
 from .protocols import Adapter, Embedder
 from .scope import render_field, validate_field, validate_operator
 from .types import (
@@ -30,8 +35,11 @@ __all__ = [
     "ErrorRecord",
     "IntentAnalysis",
     "ScopeConstraint",
+    "SSRFBlockedError",
     "ScopeEnforcementError",
     "SourceConfig",
+    "enforce_no_cross_host_redirect",
+    "reject_private_ip_literal",
     "render_field",
     "validate_field",
     "validate_operator",

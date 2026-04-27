@@ -25,6 +25,7 @@ from nautilus.adapters.embedder import (
     EmbeddingUnavailableError,
     NoopEmbedder,
 )
+from nautilus.adapters.llm import LLMAdapter
 from nautilus.adapters.neo4j import Neo4jAdapter
 from nautilus.adapters.pgvector import PgVectorAdapter
 from nautilus.adapters.postgres import PostgresAdapter
@@ -42,6 +43,8 @@ ADAPTER_REGISTRY: dict[str, type[Any]] = {
     "neo4j": Neo4jAdapter,
     "rest": RestAdapter,
     "servicenow": ServiceNowAdapter,
+    # nautilus-update-1 Phase 6 / Task 37: first-party LLM adapter (TD-2).
+    "llm": LLMAdapter,
 }
 
 __all__ = [
@@ -51,6 +54,7 @@ __all__ = [
     "ElasticsearchAdapter",
     "Embedder",
     "EmbeddingUnavailableError",
+    "LLMAdapter",
     "Neo4jAdapter",
     "NoopEmbedder",
     "PgVectorAdapter",

@@ -240,6 +240,12 @@ class _RequestState:
     # attestation payload's ``fact_set_hash`` claim (Task 9 /
     # :func:`nautilus.core.attestation_payload._has_fact_set_hash`).
     fact_set_hash: str | None = None
+    # US-5 / AC-5.14 — DSSE envelopes per source from the LLM adapter's
+    # boundary signing. Empty when no signed sources participated; populated
+    # by :meth:`_gather_adapter_results` from ``AdapterResult.signature``.
+    source_session_signatures: dict[str, dict[str, Any]] = field(
+        default_factory=dict[str, dict[str, Any]]
+    )
 
     def apply_route_result(self, route_result: RouteResult) -> None:
         """Copy router output into the mutable request state."""
@@ -1665,6 +1671,11 @@ class Broker:
             if breach_detected and skip_markers:
                 state.sources_skipped = state.sources_skipped + skip_markers
                 continue
+            # US-5 / AC-5.14 — capture session signatures from the LLM adapter.
+            # Non-LLM adapters leave ``signature`` ``None`` so non-signed
+            # request flows produce a byte-identical attestation to Phase-1.
+            if res.signature is not None:
+                state.source_session_signatures[source_id] = res.signature
             successful.append(res)
             state.sources_queried.append(source_id)
         return successful
@@ -1688,6 +1699,9 @@ class Broker:
             duration_ms=state.duration_ms(),
             cap_breached=state.cap_breached or None,
             fact_set_hash=state.fact_set_hash,
+            # US-5 / AC-5.14 — emit ``None`` when empty so a request with no
+            # signed sources matches Phase-1 byte-identical (NFR-BC).
+            source_session_signatures=(state.source_session_signatures or None),
         )
 
     def _emit_audit(

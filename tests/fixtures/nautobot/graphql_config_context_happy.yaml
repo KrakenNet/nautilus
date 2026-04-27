@@ -1,0 +1,36 @@
+# Synthesized cassette for ``config_contexts`` GraphQL query against
+# ``networktocode/nautobot:3.1``. The adapter promotes config-context as a
+# native data_type (``config_context``) and falls back to REST
+# ``?include=config_context`` only when the caller explicitly asks for the
+# device-context join. This cassette exercises only the GraphQL native path.
+interactions:
+  - request:
+      method: POST
+      uri: http://nautobot.test/api/graphql/
+      body:
+        encoding: utf-8
+        string: '{"query": "query ConfigContexts($limit: Int!, $offset: Int!) {\n  config_contexts(limit: $limit, offset: $offset) {\n    id\n    name\n    weight\n    description\n    is_active\n  }\n}", "variables": {"limit": 500, "offset": 0}}'
+      headers:
+        Authorization: ['Token 0123456789abcdef0123456789abcdef01234567']
+        Content-Type: ['application/json']
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        Content-Type: ['application/json']
+      body:
+        string: |
+          {
+            "data": {
+              "config_contexts": [
+                {
+                  "id": "1a2b3c4d-1111-2222-3333-444455556666",
+                  "name": "edge-default",
+                  "weight": 1000,
+                  "description": "Default config-context for edge devices",
+                  "is_active": true
+                }
+              ]
+            }
+          }

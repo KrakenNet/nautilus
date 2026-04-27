@@ -130,12 +130,21 @@ class AdapterResult(BaseModel):
     Success case populates ``rows`` and leaves ``error`` ``None``; failure
     case returns an empty ``rows`` list with ``error`` set so the broker
     can bucket it into ``sources_errored`` without raising.
+
+    ``meta`` carries adapter-specific telemetry (e.g. unified LLM usage:
+    ``{input_tokens, output_tokens, cached_tokens, total_tokens,
+    tool_call_count, duration_ms}`` per AC-5.5). ``signature`` carries a
+    DSSE envelope when the adapter signed the response at its boundary
+    (AC-5.9, AC-5.14). Both default ``None`` for NFR-BC.
     """
 
     source_id: str
     rows: list[dict[str, Any]]
     duration_ms: int
     error: ErrorRecord | None = None
+    meta: dict[str, Any] | None = None
+    signature: dict[str, Any] | None = None
+    warnings: list[str] | None = None
 
 
 class BrokerResponse(BaseModel):

@@ -39,6 +39,16 @@ dependencies = [
     "jinja2>=3.1",
     "influxdb-client>=1.40",
     "aiobotocore>=2.12",
+    # nautilus-update-1 Phase 9 / Task 57 (FR-12, AC-4.4, AC-5.4): direct deps
+    # required by ingest-integrity validators (jsonschema), session-signing
+    # canonicalization (rfc8785), the LLM adapter providers (openai/anthropic/
+    # tiktoken), and Vault KV/transit secret resolution (hvac).
+    "jsonschema>=4.0",
+    "rfc8785",
+    "openai>=1.50",
+    "anthropic>=0.40",
+    "tiktoken",
+    "hvac",
 ]
 
 [project.urls]
@@ -68,6 +78,8 @@ dev = [
     "mkdocs-material>=9.0",
     "mkdocstrings[python]>=0.24",
     "copier>=9.0",
+    # nautilus-update-1 Task 57: gql is dev-only for Nautobot adapter test helpers.
+    "gql[httpx]",
 ]
 otel = [
     "opentelemetry-sdk>=1.20",
@@ -76,8 +88,6 @@ otel = [
     "opentelemetry-exporter-otlp-proto-http>=1.20",
     "prometheus-client>=0.20",
 ]
-llm-anthropic = ["anthropic>=0.40"]
-llm-openai = ["openai>=1.50"]
 docs = [
     "mkdocs-material>=9.5",
     "mkdocstrings[python]>=0.24",
@@ -91,6 +101,10 @@ data-routing-hipaa = "nautilus.rule_packs.data_routing_hipaa"
 [project.entry-points."nautilus.adapters"]
 influxdb = "nautilus.adapters.influxdb"
 s3 = "nautilus.adapters.s3"
+# nautilus-update-1 Phase 6 / Task 37 (TD-2): LLM adapter is first-party. Listed
+# here for entry-point discovery parity with influxdb/s3 even though the core
+# ADAPTER_REGISTRY also imports it directly.
+llm = "nautilus.adapters.llm"
 
 [build-system]
 requires = ["setuptools>=77.0"]
@@ -115,7 +129,10 @@ select = ["E", "F", "W", "I", "B", "UP", "N", "SIM", "ASYNC"]
 [tool.pyright]
 strict = ["nautilus", "tests"]
 include = ["nautilus", "tests"]
-extraPaths = ["packages/nautilus-adapter-sdk/src"]
+extraPaths = [
+    "packages/nautilus-adapter-sdk/src",
+    "packages/nautilus-adapter-nautobot/src",
+]
 venvPath = "."
 venv = ".venv"
 
@@ -127,5 +144,9 @@ markers = [
     "integration: integration tests",
     "slow: slow tests (e.g. latency harness with 1000 requests)",
     "docker: tests that require a local Docker daemon",
+    # nautilus-update-1 / Task 47 — Nautobot testcontainer marker. Tests
+    # marked with ``nautobot_live`` spin a fresh ``networktocode/nautobot:3.1``
+    # container. Branch CI runs in cassette-replay mode (VCR_MODE=replay).
+    "nautobot_live: tests that hit a live Nautobot testcontainer",
 ]
 addopts = "--strict-markers --cov=nautilus --cov-branch"

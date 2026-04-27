@@ -1,10 +1,17 @@
-"""Unit tests for the secret-provider Protocol, registry, and EnvProvider (Task 4)."""
+"""Unit tests for the secret-provider Protocol, registry, EnvProvider (Task 4),
+and the Vault KV / transit providers (Task 33)."""
 
 from __future__ import annotations
 
+import httpx
 import pytest
+import respx
 
 from nautilus.config.secrets import REGISTRY, has_scheme, resolve
+from nautilus.config.secrets.vault_transit import (
+    TransitKeyRef,
+    build_transit_signer_ref,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -58,9 +65,108 @@ def test_env_provider_registered() -> None:
     assert "env" in REGISTRY
 
 
-# Parameterized placeholders for Task 33 (vault providers). Un-skip when landing.
-@pytest.mark.skip(reason="Task 33 lands vault providers")
-@pytest.mark.parametrize("scheme", ["vault", "vault-transit"])
-async def test_vault_provider_stub(scheme: str) -> None:
-    ref = f"{scheme}://secret/data/foo#password"
-    await resolve(ref)
+# ---------------------------------------------------------------------------
+# Task 33 — Vault KV provider.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_vault_kv_provider_resolves_field(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VAULT_ADDR", "https://vault.example.com")
+    monkeypatch.setenv("VAULT_TOKEN", "s.test-token")
+    with respx.mock(base_url="https://vault.example.com") as router:
+        router.get("/v1/secret/data/nautobot").mock(
+            return_value=httpx.Response(
+                200,
+                json={"data": {"data": {"token": "abc-123"}, "metadata": {}}},
+            )
+        )
+        result = await resolve("vault://secret/data/nautobot#token")
+    assert result == "abc-123"
+
+
+@pytest.mark.asyncio
+async def test_vault_kv_provider_404_redacts_field(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VAULT_ADDR", "https://vault.example.com")
+    monkeypatch.setenv("VAULT_TOKEN", "s.test-token")
+    with respx.mock(base_url="https://vault.example.com") as router:
+        router.get("/v1/secret/data/missing").mock(return_value=httpx.Response(404, json={}))
+        with pytest.raises(ValueError) as excinfo:
+            await resolve("vault://secret/data/missing#password")
+    msg = str(excinfo.value)
+    # NFR-SEC-SECRETS: the field selector must NOT appear in the error message.
+    assert "password" not in msg
+    assert "missing" in msg
+
+
+@pytest.mark.asyncio
+async def test_vault_kv_provider_500_does_not_leak_body(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VAULT_ADDR", "https://vault.example.com")
+    monkeypatch.setenv("VAULT_TOKEN", "s.test-token")
+    with respx.mock(base_url="https://vault.example.com") as router:
+        router.get("/v1/secret/data/foo").mock(
+            return_value=httpx.Response(500, text="Vault internal error: leaked stack trace")
+        )
+        with pytest.raises(ValueError) as excinfo:
+            await resolve("vault://secret/data/foo#password")
+    msg = str(excinfo.value)
+    assert "leaked stack trace" not in msg
+    assert "password" not in msg
+    assert "500" in msg
+
+
+@pytest.mark.asyncio
+async def test_vault_kv_provider_missing_addr(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("VAULT_ADDR", raising=False)
+    monkeypatch.setenv("VAULT_TOKEN", "s.test-token")
+    with pytest.raises(ValueError, match="VAULT_ADDR"):
+        await resolve("vault://secret/data/foo#bar")
+
+
+@pytest.mark.asyncio
+async def test_vault_kv_provider_missing_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("VAULT_ADDR", "https://vault.example.com")
+    monkeypatch.delenv("VAULT_TOKEN", raising=False)
+    with pytest.raises(ValueError) as excinfo:
+        await resolve("vault://secret/data/foo#bar")
+    # The token value must never appear; the var name is fine.
+    assert "VAULT_TOKEN" in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+async def test_vault_kv_provider_rejects_missing_field() -> None:
+    with pytest.raises(ValueError, match="missing '#field'"):
+        await resolve("vault://secret/data/foo")
+
+
+# ---------------------------------------------------------------------------
+# Task 33 — Vault transit provider (signing-key reference parser only).
+# ---------------------------------------------------------------------------
+
+
+def test_vault_transit_parses_key_name() -> None:
+    parsed = build_transit_signer_ref("vault-transit://nautilus-session-prod")
+    assert isinstance(parsed, TransitKeyRef)
+    assert parsed.key_name == "nautilus-session-prod"
+
+
+def test_vault_transit_rejects_path_separator() -> None:
+    with pytest.raises(ValueError, match="single path segment"):
+        build_transit_signer_ref("vault-transit://nautilus/with/slash")
+
+
+def test_vault_transit_rejects_empty_key() -> None:
+    with pytest.raises(ValueError, match="single path segment"):
+        build_transit_signer_ref("vault-transit://")
+
+
+@pytest.mark.asyncio
+async def test_vault_transit_resolve_is_error() -> None:
+    """resolve() on vault-transit must reject; the value is a key, not a secret."""
+    with pytest.raises(ValueError, match="signing-key reference"):
+        await resolve("vault-transit://nautilus-session-prod")
+
+
+def test_vault_providers_registered() -> None:
+    assert "vault" in REGISTRY
+    assert "vault-transit" in REGISTRY

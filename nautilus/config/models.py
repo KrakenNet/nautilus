@@ -95,6 +95,27 @@ class CostCapConfig(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# US-5 session-signing config (design §"In-memory pydantic schemas", AC-5.8).
+# ---------------------------------------------------------------------------
+
+
+class SessionSigningConfig(BaseModel):
+    """Per-source session-signing knobs for the LLM adapter (AC-5.8).
+
+    ``key_ref`` accepts ``env://VAR`` (dev/test, 32-byte hex seed),
+    ``vault-transit://<key-name>`` (prod, signing key never leaves Vault), or
+    ``vault://<path>#<field>`` (KV-stored hex seed for staging). ``ttl`` is
+    interpreted by the Vault transit engine as the auto-rotation window
+    (NOT the session lifetime); for in-process signing ``ttl`` is advisory.
+    """
+
+    enabled: bool = False
+    key_ref: str = ""
+    algorithm: Literal["ed25519"] = "ed25519"
+    ttl: str = "24h"
+
+
+# ---------------------------------------------------------------------------
 # SourceConfig (Phase 1 fields + Phase 2 additive fields).
 # ---------------------------------------------------------------------------
 
@@ -117,12 +138,15 @@ class SourceConfig(BaseModel):
         "servicenow",
         "influxdb",
         "s3",
+        "llm",
+        "nautobot",
     ]
     description: str
     classification: str
     data_types: list[str]
     allowed_purposes: list[str] | None = None
-    connection: str  # post-interpolation DSN / base URL
+    connection: str = ""  # post-interpolation DSN / base URL (optional for adapters that
+    # use ``endpoint`` directly, e.g. LLM)
     # pgvector-only
     table: str | None = None
     embedding_column: str | None = None
@@ -142,6 +166,16 @@ class SourceConfig(BaseModel):
     cost_caps: CostCapConfig | None = None
     # Phase-5 ingest-integrity config (design §"In-memory pydantic schemas", US-4, AC-4.2/AC-4.3).
     ingest_integrity: IngestIntegrityConfig | None = None
+    # Phase-6 LLM adapter (US-5, AC-5.3).
+    llm_provider: Literal["openai", "anthropic", "vllm"] | None = None
+    llm_model: str | None = None
+    surface: Literal["chat", "embeddings"] | None = None
+    endpoint: str | None = None  # provider base URL override (vLLM self-hosted)
+    stream: bool = False  # AC-5.6 — must be False in v1; non-False rejected at connect()
+    session_signing: SessionSigningConfig | None = None
+    # Phase-7 Nautobot adapter (US-1, AC-1.5).
+    url: str | None = None  # Nautobot base URL
+    token_secret_ref: str | None = None  # vault://, env://, or bare ${VAR}
 
 
 # ---------------------------------------------------------------------------

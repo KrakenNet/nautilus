@@ -1,0 +1,58 @@
+# Synthesized cassette for offset/limit pagination over the GraphQL
+# ``devices`` query. AC-1.10 mandates iteration until an empty page; this
+# cassette captures three pages: two full, one empty.
+interactions:
+  - request:
+      method: POST
+      uri: http://nautobot.test/api/graphql/
+      body:
+        encoding: utf-8
+        string: '{"query": "query Devices($limit: Int!, $offset: Int!) {\n  devices(limit: $limit, offset: $offset) {\n    id\n    name\n    serial\n    status { name }\n    role { name }\n    device_type { model }\n  }\n}", "variables": {"limit": 2, "offset": 0}}'
+      headers:
+        Authorization: ['Token 0123456789abcdef0123456789abcdef01234567']
+        Content-Type: ['application/json']
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        Content-Type: ['application/json']
+      body:
+        string: |
+          {"data": {"devices": [{"id": "p1-1", "name": "host-1"}, {"id": "p1-2", "name": "host-2"}]}}
+  - request:
+      method: POST
+      uri: http://nautobot.test/api/graphql/
+      body:
+        encoding: utf-8
+        string: '{"query": "query Devices($limit: Int!, $offset: Int!) {\n  devices(limit: $limit, offset: $offset) {\n    id\n    name\n    serial\n    status { name }\n    role { name }\n    device_type { model }\n  }\n}", "variables": {"limit": 2, "offset": 2}}'
+      headers:
+        Authorization: ['Token 0123456789abcdef0123456789abcdef01234567']
+        Content-Type: ['application/json']
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        Content-Type: ['application/json']
+      body:
+        string: |
+          {"data": {"devices": [{"id": "p2-1", "name": "host-3"}, {"id": "p2-2", "name": "host-4"}]}}
+  - request:
+      method: POST
+      uri: http://nautobot.test/api/graphql/
+      body:
+        encoding: utf-8
+        string: '{"query": "query Devices($limit: Int!, $offset: Int!) {\n  devices(limit: $limit, offset: $offset) {\n    id\n    name\n    serial\n    status { name }\n    role { name }\n    device_type { model }\n  }\n}", "variables": {"limit": 2, "offset": 4}}'
+      headers:
+        Authorization: ['Token 0123456789abcdef0123456789abcdef01234567']
+        Content-Type: ['application/json']
+    response:
+      status:
+        code: 200
+        message: OK
+      headers:
+        Content-Type: ['application/json']
+      body:
+        string: |
+          {"data": {"devices": []}}

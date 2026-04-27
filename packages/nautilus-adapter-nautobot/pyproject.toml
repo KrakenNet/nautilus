@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68.0", "setuptools-scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nautilus-adapter-nautobot"
+version = "0.1.0"
+description = "Nautobot 3.1 adapter for the Nautilus broker (GraphQL primary, REST fallback)"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Sean Mauk", email = "seanmauk@krakennetworks.com" }]
+dependencies = [
+    "nautilus-adapter-sdk>=0.1.0",
+    "httpx>=0.27",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "respx>=0.21",
+    "pytest-recording>=0.13",
+    "ruff>=0.5",
+    "pyright>=1.1.370",
+    "testcontainers[postgres]>=4.0",
+]
+
+[project.entry-points."nautilus.adapters"]
+nautobot = "nautilus_adapter_nautobot:NautobotAdapter"
+
+[tool.setuptools.packages.find]
+where = ["src"]
