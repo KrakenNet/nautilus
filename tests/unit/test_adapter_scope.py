@@ -15,9 +15,9 @@ from unittest.mock import AsyncMock
 import pytest
 
 from nautilus.adapters.base import ScopeEnforcementError
-from nautilus.adapters.influxdb import (  # pyright: ignore[reportPrivateUsage]
+from nautilus.adapters.influxdb import (
     InfluxDBAdapter,
-    _flux_escape,
+    _flux_escape,  # pyright: ignore[reportPrivateUsage]
 )
 from nautilus.adapters.s3 import S3Adapter
 from nautilus.config.models import SourceConfig

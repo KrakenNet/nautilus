@@ -137,7 +137,7 @@ async def logout() -> Response:
 async def playground(
     request: Request,
     user: Annotated[str | Response, Depends(_safe_auth_user)],
-) -> HTMLResponse:
+) -> HTMLResponse | Response:
     """Playground page — submit queries to the broker interactively."""
     if isinstance(user, Response):
         return user
@@ -185,7 +185,7 @@ async def source_status(
     request: Request,
     broker: Annotated[Broker | None, Depends(_safe_broker)],
     user: Annotated[str | Response, Depends(_safe_auth_user)],
-) -> HTMLResponse:
+) -> HTMLResponse | Response:
     """Source status page — lists configured sources with metadata.
 
     SECURITY: ``SourceConfig.connection`` is never passed to the template
@@ -236,7 +236,7 @@ async def decisions(
     end: str | None = None,
     outcome: str | None = None,
     search: str | None = None,
-) -> HTMLResponse:
+) -> HTMLResponse | Response:
     """Decisions page — lists audit entries with filters.
 
     Query params ``agent_id``, ``start``, ``end``, ``outcome``, and
@@ -325,7 +325,7 @@ async def decision_detail(
     request_id: str,
     audit_path: Annotated[str | None, Depends(_safe_audit_path)],
     user: Annotated[str | Response, Depends(_safe_auth_user)],
-) -> HTMLResponse:
+) -> HTMLResponse | Response:
     """Decision detail modal — returns the full trace for a specific request.
 
     Returns a ``decision_detail.html`` modal fragment containing rule trace,
@@ -379,7 +379,7 @@ async def audit(
     end: str | None = None,
     cursor: str | None = None,
     sort: str = "-timestamp",
-) -> HTMLResponse:
+) -> HTMLResponse | Response:
     """Audit event log — paginated view of all audit entries.
 
     Query params filter by ``agent_id``, ``source_id``, ``event_type``,
@@ -462,7 +462,7 @@ async def attestation(
     request: Request,
     broker: Annotated[Broker | None, Depends(_safe_broker)],
     user: Annotated[str | Response, Depends(_safe_auth_user)],
-) -> HTMLResponse:
+) -> HTMLResponse | Response:
     """Attestation verification page — form for verifying EdDSA JWTs."""
     if isinstance(user, Response):
         return user
@@ -481,7 +481,7 @@ async def attestation_verify(
     broker: Annotated[Broker | None, Depends(_safe_broker)],
     user: Annotated[str | Response, Depends(_safe_auth_user)],
     token: str = Form(...),
-) -> HTMLResponse:
+) -> HTMLResponse | Response:
     """Verify an attestation token (EdDSA JWT)."""
     if isinstance(user, Response):
         return user
