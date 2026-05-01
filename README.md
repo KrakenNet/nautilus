@@ -4,13 +4,13 @@
 
 [![PyPI](https://img.shields.io/pypi/v/nautilus-rkm.svg)](https://pypi.org/project/nautilus-rkm/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![CI](https://github.com/KrakenNet/nautilus/actions/workflows/ci.yml/badge.svg)](https://github.com/KrakenNet/nautilus/actions/workflows/ci.yml)
 [![Docs](https://github.com/KrakenNet/nautilus/actions/workflows/docs-deploy.yml/badge.svg)](https://krakennet.github.io/nautilus/)
 
 **Current version:** 0.1.2
-**License:** Apache-2.0
-**Language:** Python 3.14+
+**License:** MIT
+**Language:** Python 3.13+
 **Package Manager:** uv
 **Maintained by:** [KrakenNet](https://github.com/KrakenNet)
 
