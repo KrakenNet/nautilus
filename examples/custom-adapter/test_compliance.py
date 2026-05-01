@@ -99,12 +99,14 @@ class TestCsvAdapter:
                 purpose="lookup",
                 confidence=1.0,
             ),
-            [ScopeConstraint(
-                source_id="test-csv",
-                operator="=",
-                field="department",
-                value="Engineering",
-            )],
+            [
+                ScopeConstraint(
+                    source_id="test-csv",
+                    operator="=",
+                    field="department",
+                    value="Engineering",
+                )
+            ],
             {},
         )
 
@@ -127,12 +129,14 @@ class TestCsvAdapter:
                 purpose="lookup",
                 confidence=1.0,
             ),
-            [ScopeConstraint(
-                source_id="test-csv",
-                operator="LIKE",
-                field="name",
-                value="%ali%",
-            )],
+            [
+                ScopeConstraint(
+                    source_id="test-csv",
+                    operator="LIKE",
+                    field="name",
+                    value="%ali%",
+                )
+            ],
             {},
         )
 
