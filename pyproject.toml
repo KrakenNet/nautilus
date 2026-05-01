@@ -1,10 +1,10 @@
 [project]
 name = "nautilus-rkm"
-version = "0.1.1"
+version = "0.1.2"
 description = "Nautilus data broker + reasoning engine: intent-aware scoped query execution, multi-agent handoffs, LLM intent analysis, and forensic escalation via Fathom rules"
 readme = "README.md"
 requires-python = ">=3.14"
-license = "MIT"
+license = "Apache-2.0"
 # TODO: add author email once the maintainer publishes one.
 authors = [{ name = "se-jo-ma" }]
 keywords = ["fathom", "policy", "broker", "security", "scope", "clips", "ai-agent", "data-broker", "routing", "audit", "attestation", "compliance", "nist", "hipaa", "mcp"]
