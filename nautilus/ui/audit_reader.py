@@ -70,7 +70,7 @@ class AuditReader:
             decoded = base64.urlsafe_b64decode(cursor.encode()).decode()
             offset = int(decoded)
             return max(offset, 0)
-        except ValueError, Exception:
+        except (ValueError, Exception):
             log.warning("Invalid audit cursor %r — resetting to page 1", cursor)
             return 0
 
@@ -266,7 +266,7 @@ class AuditReader:
             raw = json.loads(line)
             record = AuditRecord.model_validate(raw)
             return decode_nautilus_entry(record)
-        except json.JSONDecodeError, KeyError, Exception:
+        except (json.JSONDecodeError, KeyError, Exception):
             log.warning("Skipping corrupt audit line: %.120s", line)
             return None
 

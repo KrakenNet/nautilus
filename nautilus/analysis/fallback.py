@@ -90,7 +90,7 @@ class FallbackIntentAnalyzer:
         try:
             async with asyncio.timeout(self._timeout_s):
                 analysis = await self._primary.analyze(intent, context)
-        except TimeoutError, LLMProviderError, ValidationError:
+        except (TimeoutError, LLMProviderError, ValidationError):
             if self._mode == "llm-only":
                 raise
             fallback_analysis = self._fallback.analyze(intent, context)
