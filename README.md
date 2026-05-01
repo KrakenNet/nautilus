@@ -8,8 +8,8 @@
 [![CI](https://github.com/KrakenNet/nautilus/actions/workflows/ci.yml/badge.svg)](https://github.com/KrakenNet/nautilus/actions/workflows/ci.yml)
 [![Docs](https://github.com/KrakenNet/nautilus/actions/workflows/docs-deploy.yml/badge.svg)](https://krakennet.github.io/nautilus/)
 
-**Current version:** 0.1.1
-**License:** MIT
+**Current version:** 0.1.2
+**License:** Apache-2.0
 **Language:** Python 3.14+
 **Package Manager:** uv
 **Maintained by:** [KrakenNet](https://github.com/KrakenNet)
