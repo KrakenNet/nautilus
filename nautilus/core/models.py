@@ -39,6 +39,7 @@ class BrokerRequest(BaseModel):
     agent_id: str
     intent: str
     context: dict[str, Any] = Field(default_factory=dict)
+    fact_set_hash: str | None = None
 
 
 class RoutingDecision(BaseModel):
@@ -154,6 +155,9 @@ class BrokerResponse(BaseModel):
     scope_restrictions: dict[str, list[ScopeConstraint]]
     attestation_token: str | None
     duration_ms: int
+    cap_breached: bool | None = None
+    fact_set_hash: str | None = None
+    source_session_signatures: dict[str, dict[str, Any]] | None = None
 
 
 class HandoffDecision(BaseModel):

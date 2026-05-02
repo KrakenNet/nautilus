@@ -5,6 +5,19 @@ All notable changes to `nautilus-rkm` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] - 2026-05-01
+
+### Added
+- `BrokerRequest.fact_set_hash` and `Broker.{request,arequest}(..., fact_set_hash=...)` keyword surface so callers can pin a request to a specific fact-set snapshot
+- `BrokerResponse.fact_set_hash` echoes the caller's hash back on success
+- `BrokerResponse.cap_breached` and `BrokerResponse.source_session_signatures` re-introduced (defaulted `None`) for forward-compat with budget-cap and per-source signature surfaces
+
+## [0.1.4] - 2026-05-01
+
+### Fixed
+- Restore Python 3.13 compatibility: replace bare `except A, B:` (Python 3.14 syntax) with `except (A, B):` in `analysis/fallback.py`, `forensics/handoff_worker.py`, `ui/router.py`, and `ui/audit_reader.py`
+- Lower `[tool.ruff] target-version` from `py314` to `py313` to keep parens on multi-exception except clauses
+
 ## [0.1.1] - 2026-04-17
 
 ### Fixed
