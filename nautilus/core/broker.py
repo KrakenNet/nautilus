@@ -202,6 +202,9 @@ class _RequestState:
     # so the resulting :class:`AuditEntry` round-trips byte-identically
     # (NFR-5/NFR-6).
     llm_provenance: LLMProvenance | None = None
+    # Caller-supplied fact-set hash echoed back on the response so client
+    # session stores can pin a request to a specific fact snapshot.
+    fact_set_hash: str | None = None
 
     def apply_route_result(self, route_result: RouteResult) -> None:
         """Copy router output into the mutable request state."""
@@ -614,6 +617,8 @@ class Broker:
         agent_id: str,
         intent: str,
         context: dict[str, Any] | None = None,
+        *,
+        fact_set_hash: str | None = None,
     ) -> BrokerResponse:
         """Sync request: guards against nested event loops, then runs pipeline.
 
@@ -621,6 +626,10 @@ class Broker:
         raises :class:`RuntimeError` whose message mentions ``arequest``
         (UQ-4, AC-8.5). Outside a loop, we delegate to
         :meth:`arequest` via ``asyncio.run``.
+
+        ``fact_set_hash`` (US-6 / FR-62 opaque round-trip) is accepted
+        and echoed onto :attr:`BrokerResponse.fact_set_hash`; populating
+        the audit/cost-cap pipeline that consumes it is staged work.
         """
         try:
             asyncio.get_running_loop()
@@ -632,13 +641,15 @@ class Broker:
                 "Broker.request() called inside a running event loop. "
                 "Use Broker.arequest() (async) from async contexts."
             )
-        return asyncio.run(self.arequest(agent_id, intent, context))
+        return asyncio.run(self.arequest(agent_id, intent, context, fact_set_hash=fact_set_hash))
 
     async def arequest(
         self,
         agent_id: str,
         intent: str,
         context: dict[str, Any] | None = None,
+        *,
+        fact_set_hash: str | None = None,
     ) -> BrokerResponse:
         """Async request pipeline (design §3.1, §8, §9).
 
@@ -649,6 +660,7 @@ class Broker:
         """
         context = dict(context) if context else {}
         state = _new_request_state(context, intent)
+        state.fact_set_hash = fact_set_hash
         _started = time.perf_counter()
         with broker_span(SPAN_BROKER_REQUEST, build_request_attributes(agent_id)):
             _metrics.requests_total.add(1)
@@ -1130,6 +1142,7 @@ class Broker:
             scope_restrictions=state.scope_by_source,
             attestation_token=state.attestation_token,
             duration_ms=state.duration_ms(),
+            fact_set_hash=state.fact_set_hash,
         )
 
     def _emit_audit(
