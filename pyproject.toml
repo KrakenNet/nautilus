@@ -1,6 +1,6 @@
 [project]
 name = "nautilus-rkm"
-version = "0.1.5"
+dynamic = ["version"]
 description = "Nautilus data broker + reasoning engine: intent-aware scoped query execution, multi-agent handoffs, LLM intent analysis, and forensic escalation via Fathom rules"
 readme = "README.md"
 requires-python = ">=3.13"
@@ -93,8 +93,11 @@ influxdb = "nautilus.adapters.influxdb"
 s3 = "nautilus.adapters.s3"
 
 [build-system]
-requires = ["setuptools>=77.0"]
+requires = ["setuptools>=77.0", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+fallback_version = "0.0.0+unknown"
 
 [tool.setuptools.packages.find]
 include = ["nautilus*"]
