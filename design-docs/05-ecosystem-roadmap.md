@@ -478,6 +478,48 @@ The promotion threshold is lower (6 weekly observations vs. 10 sequential) becau
 - [ ] ServiceNow adapter
 - [ ] Air-gapped deployment mode
 
+**Weeks 22.5: Write surface (gated, dual-control, defer-by-default)**
+
+> Discovered while integrating cve_remediation pilot (Harbor v0.x): adapter
+> `execute()` is GET-only by design (`nautilus/adapters/servicenow.py:258`).
+> Real-world remediation pipelines need the broker to *propose* a write
+> (CR creation, doc publish, KG writeback) AND have governance still
+> hold. Today, callers are forced to bypass the broker for any mutation,
+> which loses the policy + attestation chain. v2 should give back that
+> coverage WITHOUT compromising the read-only safety guarantees that
+> drove the original choice.
+>
+> Hard requirements before any write surface ships:
+>
+> - [ ] **Two-key control.** A write request fires only when (1) policy
+>       engine returns `allow` AND (2) a separate, configurable approval
+>       channel signs off (HITL token, Bosun rule, or attestation chain
+>       prereq). No single rule can authorize a write end-to-end.
+> - [ ] **Per-source `write_allowed: false` default.** Source config must
+>       explicitly opt in. Adapters that don't override `awrite()` raise
+>       `WriteNotSupportedError` rather than silently fall back to read.
+> - [ ] **Per-purpose `write_allowed_purposes` allowlist** distinct from
+>       `allowed_purposes`. Reading and writing get separate gates.
+> - [ ] **Idempotency tokens** — every write carries a caller-supplied
+>       key; adapter must dedupe within a configurable TTL window so
+>       retries / replays don't produce duplicate side effects.
+> - [ ] **Write attestation** — JWS chain extended with a separate
+>       `write_attestation` claim block carrying request hash, dedupe
+>       key, and the second-key signature. Sandwich a fresh attestation
+>       around every write call.
+> - [ ] **Default-off rule pack** — ship `nautilus-write-default-deny`
+>       in the built-ins so a freshly installed broker cannot write
+>       anything until an operator wires the pack.
+> - [ ] **Audit fields** — `event_type: write_request` distinct from
+>       `request`; `dry_run: bool` envelope flag stamped into audit so
+>       prod runs and rehearsals are visible at a glance.
+> - [ ] **Write rate limit** — per-source `max_writes_per_minute` cap
+>       with a hard ceiling. Exceeding the cap escalates to `deny` and
+>       rage-quits the session.
+> - [ ] **Reverse-proxy / break-glass mode** — every write endpoint can
+>       be flipped read-only at runtime via SIGHUP / config reload
+>       without redeploy.
+
 **Weeks 23-24: Ecosystem, Admin, and Expert Networks**
 - [ ] Admin UI: knowledge landscape viewer, rule proposals, audit trail
 - [ ] Admin UI: schema drift quarantine dashboard
