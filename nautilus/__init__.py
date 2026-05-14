@@ -5,7 +5,8 @@ Top-level re-exports for the public SDK surface.
 
 from __future__ import annotations
 
-from importlib.metadata import PackageNotFoundError, version as _pkg_version
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as _pkg_version
 
 from nautilus.core.broker import Broker
 from nautilus.core.models import BrokerResponse
