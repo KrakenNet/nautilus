@@ -100,11 +100,15 @@ def _b_in(field: str, value: Any) -> list[tuple[str, str]]:
 
 
 def _b_not_in_default(field: str, value: Any) -> list[tuple[str, str]]:
-    """Placeholder to make the allowlist check emit a stable error.
+    """Default builder for ``NOT IN`` — fail-closed (AC-9.3).
 
-    Never invoked because :meth:`RestAdapter._resolve_template` rejects
-    ``NOT IN`` up-front unless the endpoint declares it. Kept here so the
-    builder table is exhaustive for pyright.
+    ``NOT IN`` has no portable REST-query semantics, so the default
+    builder raises :class:`ScopeEnforcementError`. Endpoints that need
+    ``NOT IN`` opt in by declaring an
+    :attr:`EndpointSpec.operator_templates` entry; the resolver swaps in
+    :func:`_b_not_in_rendered` for that endpoint. Kept in
+    ``_DEFAULT_BUILDERS`` so the operator-allowlist check has a uniform
+    error shape for the un-declared case.
     """
     del field, value
     raise ScopeEnforcementError(
@@ -143,9 +147,10 @@ def _b_is_null(field: str, value: Any) -> list[tuple[str, str]]:
     return [(f"{field}__isnull", "true")]
 
 
-# Default operator -> builder table. ``NOT IN`` is present as a stub so the
-# allowlist-miss path has a single uniform error shape; callers never reach
-# the stub because :meth:`RestAdapter._resolve_template` intercepts.
+# Default operator -> builder table. ``NOT IN`` maps to a fail-closed
+# default that raises :class:`ScopeEnforcementError`; endpoints that need
+# it opt in via :attr:`EndpointSpec.operator_templates`, which the
+# resolver substitutes with :func:`_b_not_in_rendered`.
 _DEFAULT_BUILDERS: dict[str, _BuilderFn] = {
     "=": _b_eq,
     "!=": _b_ne,
