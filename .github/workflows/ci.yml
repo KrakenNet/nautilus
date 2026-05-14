@@ -21,8 +21,13 @@ jobs:
         with:
           python-version: "3.14"
 
+      # ``--all-extras`` so pyright sees the optional LLM providers
+      # (anthropic, openai) and OTel/docs deps. Without them, pyright
+      # ``strict = ["nautilus"]`` fails with reportMissingImports on
+      # ``nautilus/analysis/llm/{anthropic,local}_provider.py`` even
+      # though those modules guard their imports at runtime.
       - name: Install deps
-        run: uv sync
+        run: uv sync --all-extras
 
       - name: Lint
         run: uv run ruff check .

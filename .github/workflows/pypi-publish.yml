@@ -6,30 +6,28 @@ on:
       - "v*.*.*"
   workflow_dispatch: {}
 
-permissions:
-  id-token: write
-
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v7
-        with:
-          python-version: "3.14"
-
-      - run: uv sync --extra dev
-      - run: uv run ruff check .
-      - run: uv run pytest -m unit --tb=short -q
-
+  # ci.yml runs lint + unit tests on every push to main and every PR; tags
+  # are pushed after merge, so the merge commit has already passed CI.
+  # Re-running the suite here just adds a second failure surface for the
+  # same merge — packaging regressions are surfaced by ``uv build`` below
+  # and by twine inside the publish action.
   publish:
-    needs: test
+    name: Publish to PyPI (trusted publisher)
     runs-on: ubuntu-latest
-    environment: pypi
+    # PyPI's trusted-publisher config typically pins to a GitHub environment
+    # so secrets/approvals can gate the publish. Configure on PyPI:
+    #   https://pypi.org/manage/project/nautilus-rkm/settings/publishing/
+    # with: owner=KrakenNet, repo=nautilus, workflow=pypi-publish.yml,
+    #       environment=pypi.
+    # The OIDC handshake fails (and the action falls back to looking for a
+    # token) if any of those four don't match the run's GITHUB_* claims.
+    environment:
+      name: pypi
+      url: https://pypi.org/p/nautilus-rkm
+    permissions:
+      id-token: write   # OIDC token for trusted publishing
+      contents: read    # explicit because setting any permission zeros the rest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -48,3 +46,6 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          attestations: true
+          # No `password:` — action defaults to OIDC trusted publishing.

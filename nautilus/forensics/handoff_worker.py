@@ -125,7 +125,7 @@ def _aggregate_inferred(
         )
         try:
             conf = float(fact.get("confidence", 0.0))
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             conf = 0.0
         signals_raw = str(fact.get("signals", ""))
         signal_tokens = [tok for tok in signals_raw.split() if tok]

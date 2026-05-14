@@ -28,8 +28,7 @@ def validate_operator(operator: str) -> None:
     """
     if operator not in VALID_OPERATORS:
         raise ScopeEnforcementError(
-            f"Invalid operator '{operator}'. "
-            f"Must be one of: {', '.join(sorted(VALID_OPERATORS))}"
+            f"Invalid operator '{operator}'. Must be one of: {', '.join(sorted(VALID_OPERATORS))}"
         )
 
 
@@ -41,8 +40,7 @@ def validate_field(field: str, allowed_fields: set[str]) -> None:
     """
     if field not in allowed_fields:
         raise ScopeEnforcementError(
-            f"Field '{field}' is not allowed. "
-            f"Must be one of: {', '.join(sorted(allowed_fields))}"
+            f"Field '{field}' is not allowed. Must be one of: {', '.join(sorted(allowed_fields))}"
         )
 
 

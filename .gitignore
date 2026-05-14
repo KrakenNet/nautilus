@@ -248,3 +248,4 @@ specs/operator-platform/.progress-task-2-1.md
 **/.tasks.lock
 **/.git-commit.lock
 .playwright-mcp
+graphify-out/.graphify_python

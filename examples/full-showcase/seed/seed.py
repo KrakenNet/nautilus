@@ -331,9 +331,7 @@ def seed_neo4j() -> None:
         )
 
         # Create TTPs (MITRE ATT&CK)
-        session.run(
-            "MERGE (t:Technique {id: 'T1566', name: 'Phishing', tactic: 'Initial Access'})"
-        )
+        session.run("MERGE (t:Technique {id: 'T1566', name: 'Phishing', tactic: 'Initial Access'})")
         session.run(
             "MERGE (t:Technique {id: 'T1078', name: 'Valid Accounts', tactic: 'Persistence'})"
         )
