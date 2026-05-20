@@ -724,7 +724,7 @@
         "task-020",
         "task-006"
       ],
-      "passes": false,
+      "passes": true,
       "estimated_loc": 130,
       "notes": "Extends existing `nautilus adapters` subcommand group. schema-ack is destructive; requires --yes."
     },

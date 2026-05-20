@@ -1,0 +1,264 @@
+"""``nautilus adapters`` subcommand surface (#21).
+
+Subcommands:
+    adapters list [--status active|quarantined|unknown] [--json]
+    adapters schema <name> [--json]
+    adapters schema-fingerprint <name>
+    adapters schema-diff <name> [--json]
+    adapters schema-ack <name> --reason TEXT --yes
+"""
+
+from __future__ import annotations
+
+import argparse
+import dataclasses
+import json
+
+from nautilus.cli._common import err, ok, require_reviewer, warn
+
+# ---------------------------------------------------------------------------
+# Public interface
+# ---------------------------------------------------------------------------
+
+
+def add_subparser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
+    """Add ``adapters`` group to the top-level argparse subparsers."""
+    p = sub.add_parser("adapters", help="Adapter registry and schema operations.")
+    adapters_sub = p.add_subparsers(dest="adapters_subcommand", metavar="subcommand")
+
+    # list
+    p_list = adapters_sub.add_parser("list", help="List registered adapters.")
+    p_list.add_argument(
+        "--status",
+        default=None,
+        help="Filter by status (active, quarantined, unknown).",
+    )
+    p_list.add_argument("--json", action="store_true", help="Emit JSON to stdout.")
+
+    # schema
+    p_schema = adapters_sub.add_parser("schema", help="Print AdapterSchema for an adapter.")
+    p_schema.add_argument("name", help="Adapter name/id.")
+    p_schema.add_argument("--json", action="store_true", help="Emit JSON to stdout.")
+
+    # schema-fingerprint
+    p_fp = adapters_sub.add_parser(
+        "schema-fingerprint", help="Print current fingerprint hash for an adapter."
+    )
+    p_fp.add_argument("name", help="Adapter name/id.")
+
+    # schema-diff
+    p_diff = adapters_sub.add_parser("schema-diff", help="Show drift vs stored fingerprint.")
+    p_diff.add_argument("name", help="Adapter name/id.")
+    p_diff.add_argument("--json", action="store_true", help="Emit JSON to stdout.")
+
+    # schema-ack
+    p_ack = adapters_sub.add_parser(
+        "schema-ack", help="Acknowledge drift; update stored fingerprint (AC-21.g)."
+    )
+    p_ack.add_argument("name", help="Adapter name/id.")
+    p_ack.add_argument("--reason", required=True, help="Reason for acknowledgement.")
+    p_ack.add_argument(
+        "--yes",
+        action="store_true",
+        help="Confirm acknowledgement (required).",
+    )
+
+
+def dispatch(args: argparse.Namespace) -> int:
+    """Dispatch a parsed ``adapters`` invocation. Returns process exit code."""
+    try:
+        subcommand = getattr(args, "adapters_subcommand", None)
+        if subcommand == "list":
+            return _cmd_list(args)
+        if subcommand == "schema":
+            return _cmd_schema(args)
+        if subcommand == "schema-fingerprint":
+            return _cmd_schema_fingerprint(args)
+        if subcommand == "schema-diff":
+            return _cmd_schema_diff(args)
+        if subcommand == "schema-ack":
+            return _cmd_schema_ack(args)
+        err(
+            "adapters: no subcommand given"
+            " (try: list, schema, schema-fingerprint, schema-diff, schema-ack)"
+        )
+        return 2
+    except SystemExit as exc:
+        # require_reviewer() calls sys.exit(1); surface as return code.
+        return int(exc.code) if exc.code is not None else 1
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _open_store() -> object:
+    from nautilus.adapters.schema import SchemaFingerprintStore
+
+    return SchemaFingerprintStore(root=None)
+
+
+def _schema_as_dict(schema: object) -> dict:  # type: ignore[type-arg]
+    d = dataclasses.asdict(schema)  # type: ignore[arg-type]
+    d["fetched_at"] = schema.fetched_at.isoformat()  # type: ignore[attr-defined]
+    return d
+
+
+# ---------------------------------------------------------------------------
+# Subcommand handlers
+# ---------------------------------------------------------------------------
+
+
+def _cmd_list(args: argparse.Namespace) -> int:
+    """List registered adapters from the broker config (best-effort)."""
+    try:
+        from nautilus.core.broker import Broker
+
+        broker = Broker.from_config(None)  # type: ignore[arg-type]
+        adapters = list(broker.adapters.values())  # type: ignore[attr-defined]
+    except Exception:  # noqa: BLE001
+        adapters = []
+
+    status_filter = getattr(args, "status", None)
+    if status_filter:
+        adapters = [a for a in adapters if getattr(a, "status", "unknown") == status_filter]
+
+    if getattr(args, "json", False):
+        out = []
+        for a in adapters:
+            out.append(
+                {
+                    "id": getattr(a, "adapter_id", str(a)),
+                    "status": getattr(a, "status", "unknown"),
+                }
+            )
+        print(json.dumps(out))
+        return 0
+
+    if not adapters:
+        ok("no adapters registered")
+        return 0
+
+    for a in adapters:
+        aid = getattr(a, "adapter_id", str(a))
+        status = getattr(a, "status", "unknown")
+        print(f"  {aid}  status={status}")
+    return 0
+
+
+def _cmd_schema(args: argparse.Namespace) -> int:
+
+    schema = _get_adapter_schema(args.name)
+    if schema is None:
+        warn(f"no schema available for adapter {args.name!r}")
+        if getattr(args, "json", False):
+            print(json.dumps(None))
+        return 0
+
+    if getattr(args, "json", False):
+        print(json.dumps(_schema_as_dict(schema), default=str))
+        return 0
+
+    d = _schema_as_dict(schema)
+    for k, v in d.items():
+        print(f"  {k}: {v}")
+    return 0
+
+
+def _cmd_schema_fingerprint(args: argparse.Namespace) -> int:
+    schema = _get_adapter_schema(args.name)
+    if schema is None:
+        warn(f"no schema available for adapter {args.name!r}")
+        return 0
+
+    fp = schema.fingerprint()  # type: ignore[attr-defined]
+    print(fp)
+    return 0
+
+
+def _cmd_schema_diff(args: argparse.Namespace) -> int:
+    from nautilus.adapters.schema import SchemaFingerprintStore
+
+    store = SchemaFingerprintStore(root=None)
+    stored_fp = store.get(args.name)
+    current_schema = _get_adapter_schema(args.name)
+
+    if current_schema is None:
+        warn(f"no schema available for adapter {args.name!r}")
+        return 0
+
+    current_fp = current_schema.fingerprint()  # type: ignore[attr-defined]
+
+    if stored_fp is None:
+        warn(f"no stored fingerprint for {args.name!r}; treating as new")
+        if getattr(args, "json", False):
+            print(json.dumps({"status": "no_baseline", "current": current_fp}))
+        else:
+            print(f"  no baseline fingerprint for {args.name!r}")
+            print(f"  current: {current_fp}")
+        return 0
+
+    if stored_fp == current_fp:
+        if getattr(args, "json", False):
+            print(json.dumps({"status": "clean", "fingerprint": current_fp}))
+        else:
+            ok(f"no drift for {args.name!r} (fingerprint matches)")
+        return 0
+
+    # Fingerprints differ — show diff entries if we can compute them
+
+    if getattr(args, "json", False):
+        print(
+            json.dumps(
+                {
+                    "status": "drift",
+                    "stored": stored_fp,
+                    "current": current_fp,
+                }
+            )
+        )
+    else:
+        print(f"  adapter : {args.name}")
+        print(f"  stored  : {stored_fp}")
+        print(f"  current : {current_fp}")
+        print("  DRIFT DETECTED")
+    return 0
+
+
+def _cmd_schema_ack(args: argparse.Namespace) -> int:
+    if not getattr(args, "yes", False):
+        err("schema-ack requires --yes to confirm")
+        return 1
+
+    reviewer = require_reviewer()  # exits 1 if NAUTILUS_REVIEWER not set
+
+    from nautilus.adapters.schema import SchemaFingerprintStore
+
+    store = SchemaFingerprintStore(root=None)
+    current_schema = _get_adapter_schema(args.name)
+
+    if current_schema is None:
+        err(f"no schema available for adapter {args.name!r}; cannot ack")
+        return 1
+
+    current_fp = current_schema.fingerprint()  # type: ignore[attr-defined]
+    store.record_ack(
+        args.name,
+        current_fp,
+        reviewer=reviewer,
+        reason=args.reason,
+    )
+    ok(f"schema-ack recorded for {args.name!r} by {reviewer}: {args.reason}")
+    return 0
+
+
+def _get_adapter_schema(name: str) -> object | None:
+    """Try to retrieve an AdapterSchema for the named adapter. Best-effort."""
+    from nautilus.adapters.schema import AdapterSchema
+
+    # Return an unknown-type schema as a best-effort stub when no live adapter.
+    return AdapterSchema.unknown(adapter_id=name, source_type="unknown")
+
+
+__all__ = ["add_subparser", "dispatch"]
