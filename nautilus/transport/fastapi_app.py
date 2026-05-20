@@ -49,6 +49,7 @@ from nautilus.attestation.jwks import export_jwks
 from nautilus.attestation.key_ring import KeyRing
 from nautilus.attestation.session_token import SessionTokenService
 from nautilus.core.broker import Broker
+from nautilus.core.metrics import register_rkm_queue
 from nautilus.core.models import BrokerRequest, BrokerResponse
 from nautilus.transport.auth import api_key_header, proxy_trust_dependency, verify_api_key
 from nautilus.ui import create_admin_router
@@ -138,6 +139,8 @@ def create_app(
         app.state.key_ring = KeyRing()
         app.state.broker_instance_id = getattr(broker, "_instance_id", "default")
         app.state.ready = True
+        # Wire Prometheus RKM queue collector (AC-35.9.f).
+        register_rkm_queue(lambda: getattr(app.state, "proposal_queue", None))
         try:
             from nautilus.observability import setup_otel
 
@@ -388,6 +391,18 @@ def create_app(
                 detail=f"Schema fetch failed: {exc}",
             ) from exc
         return dataclasses.asdict(schema)
+
+    # ------------------------------------------------------------------
+    # Prometheus metrics endpoint — AC-35.9.f
+    # ------------------------------------------------------------------
+
+    @app.get("/metrics", tags=["observability"], include_in_schema=False)
+    async def get_metrics() -> Response:  # pyright: ignore[reportUnusedFunction]
+        """Prometheus metrics scrape endpoint (AC-35.9.f)."""
+        from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
+        data = generate_latest()
+        return Response(content=data, media_type=CONTENT_TYPE_LATEST)
 
     # ------------------------------------------------------------------
     # RKM queue endpoints — AC-35.9.b/c/d (thin wrappers over review.py)
