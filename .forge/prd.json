@@ -83,7 +83,7 @@
         ".forge/contracts/postman/attestation.postman.json"
       ],
       "depends_on": [],
-      "passes": false,
+      "passes": true,
       "estimated_loc": 120,
       "notes": "Per-response only in v2.0 per AC-19.d. hash_skipped=true for non-deterministic adapters per AC-19.g (DQ2 locked). Reuses existing _stable_json and _sha256 infrastructure."
     },
