@@ -542,9 +542,10 @@
         "task-007",
         "task-008"
       ],
-      "passes": false,
+      "passes": true,
       "estimated_loc": 180,
-      "notes": "Ties together queue + lineage + router. Promotion path: queue.approved \u2192 review.promote_rule \u2192 fathom_router.reload + lineage.insert."
+      "notes": "Ties together queue + lineage + router. Promotion path: queue.approved \u2192 review.promote_rule \u2192 fathom_router.reload + lineage.insert.",
+      "attempts": 1
     },
     {
       "id": "task-018",

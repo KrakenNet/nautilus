@@ -21,6 +21,8 @@ RouteResult`` imports keep working.
 
 from __future__ import annotations
 
+import contextlib
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -333,6 +335,34 @@ class FathomRouter:
                     "action": rule.action,
                 },
             )
+
+    def reload_rule(self, rule_name: str, rule_yaml: str) -> None:
+        """Load/reload a single rule into the active CLIPS environment.
+
+        Writes ``rule_yaml`` to a temp file then calls ``engine.load_rules``.
+        Raises :class:`~nautilus.core.PolicyEngineError` if the engine rejects
+        the rule (caller should mark proposal ``promotion_failed`` and re-raise).
+        """
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                suffix=".yaml",
+                delete=False,
+                encoding="utf-8",
+            ) as tmp:
+                tmp.write(rule_yaml)
+                tmp_path = tmp.name
+            self._engine.load_rules(tmp_path)
+        except PolicyEngineError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise PolicyEngineError(
+                f"FathomRouter.reload_rule() failed for rule_name={rule_name!r}: {exc}"
+            ) from exc
+        finally:
+            import os as _os
+            with contextlib.suppress(OSError):
+                _os.unlink(tmp_path)  # type: ignore[possibly-undefined]
 
     def close(self) -> None:
         """No-op for the Phase 1 in-process Engine (kept for Protocol parity)."""

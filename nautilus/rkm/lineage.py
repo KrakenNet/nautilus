@@ -12,7 +12,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -213,7 +213,6 @@ class LineageStore:
         record = self._load_record(rule_name, version)
         if record is None:
             raise KeyError(f"lineage record not found: {rule_name} v{version}")
-        from dataclasses import replace
         updated = replace(
             record,
             retired_at=datetime.now(UTC),
@@ -221,8 +220,39 @@ class LineageStore:
             retire_reviewer=reviewer,
         )
         self._store_record(updated)
-        affected = self.descendants(rule_name)
+        if cascade == "cascade":
+            # Retire all transitive descendants.
+            affected = self._transitive_descendants(rule_name)
+            now = datetime.now(UTC)
+            for desc_name in affected:
+                desc = self.get(desc_name)
+                if desc is not None:
+                    self._store_record(replace(
+                        desc,
+                        retired_at=now,
+                        retire_reason=f"cascade from {rule_name}",
+                        retire_reviewer=reviewer,
+                    ))
+        elif cascade == "orphan-children":
+            # Flag direct descendants but do not retire them.
+            affected = self.descendants(rule_name)
+        else:
+            affected = []
         return affected
+
+    def _transitive_descendants(self, rule_name: str) -> list[str]:
+        """BFS over all descendants (direct + transitive)."""
+        result: list[str] = []
+        visited: set[str] = set()
+        queue: list[str] = [rule_name]
+        while queue:
+            current = queue.pop(0)
+            for child in self.descendants(current):
+                if child not in visited:
+                    visited.add(child)
+                    result.append(child)
+                    queue.append(child)
+        return result
 
     def list_by_derived_from(self, parent_id: str) -> tuple[LineageRecord, ...]:
         """All records listing ``parent_id`` in ``derived_from``. AC-35.10.c."""
