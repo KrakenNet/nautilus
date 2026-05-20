@@ -249,3 +249,4 @@ specs/operator-platform/.progress-task-2-1.md
 **/.git-commit.lock
 .playwright-mcp
 graphify-out/.graphify_python
+.forge/
