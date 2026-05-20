@@ -9,9 +9,6 @@ allowlist:
     reason: scaffold-stage
     expires_at: "2026-08-31"
     paths:
-      - "nautilus/attestation/session_token.py"
-      - "nautilus/attestation/key_ring.py"
-      - "nautilus/attestation/jwks.py"
       - "nautilus/adapters/schema.py"
       - "nautilus/rkm/queue.py"
       - "nautilus/rkm/lineage.py"
@@ -42,6 +39,11 @@ allowlist:
     expires_at: "2026-08-31"
     paths:
       - "nautilus/cli/__init__.py"
+  - pattern: EMPTY_BODY
+    reason: "ImportError pass on optional observability dep is idiomatic Python, not a stub"
+    expires_at: "2026-08-31"
+    paths:
+      - "nautilus/transport/fastapi_app.py"
   - pattern: NOT_IMPLEMENTED
     reason: "Phase C placeholder — test is intentionally deferred until Phase C"
     expires_at: "2026-08-31"

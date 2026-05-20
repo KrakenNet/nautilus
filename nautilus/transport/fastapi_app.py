@@ -38,6 +38,9 @@ from typing import TYPE_CHECKING, Any
 from fastapi import Depends, FastAPI, Request, Response, status
 from fastapi.staticfiles import StaticFiles
 
+from nautilus.attestation.jwks import export_jwks
+from nautilus.attestation.key_ring import KeyRing
+from nautilus.attestation.session_token import SessionTokenService
 from nautilus.core.broker import Broker
 from nautilus.core.models import BrokerRequest, BrokerResponse
 from nautilus.transport.auth import api_key_header, proxy_trust_dependency, verify_api_key
@@ -123,6 +126,10 @@ def create_app(
         mode, keys = _resolve_auth_config(broker)
         app.state.auth_mode = mode
         app.state.api_keys = keys
+        # Key ring for session-token endpoints (AC-18.a–g). One shared
+        # instance per process; rotated in-place via KeyRing.rotate().
+        app.state.key_ring = KeyRing()
+        app.state.broker_instance_id = getattr(broker, "_instance_id", "default")
         app.state.ready = True
         try:
             from nautilus.observability import setup_otel
@@ -279,6 +286,55 @@ def create_app(
             response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
             return {"status": "not_ready", "reason": type(exc).__name__}
         return {"status": "ok"}
+
+    # ------------------------------------------------------------------
+    # Session-token endpoints (AC-18.a–g)
+    # ------------------------------------------------------------------
+
+    @app.get("/v1/keys/jwks.json", tags=["attestation"])
+    async def get_jwks(  # pyright: ignore[reportUnusedFunction]
+        request: Request,
+    ) -> dict[str, Any]:
+        """JWKS endpoint per RFC 7517 (AC-18.c)."""
+        key_ring: KeyRing | None = getattr(request.app.state, "key_ring", None)
+        if key_ring is None:
+            return {"keys": []}
+        return export_jwks(key_ring)
+
+    @app.post("/v1/sessions", tags=["attestation"])
+    async def post_sessions(  # pyright: ignore[reportUnusedFunction]
+        body: dict[str, Any],
+        request: Request,
+    ) -> dict[str, Any]:
+        """Issue a session token (AC-18.a). Body: session_id, agent_id, purpose, clearance."""
+        key_ring: KeyRing | None = getattr(request.app.state, "key_ring", None)
+        if key_ring is None:
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Key ring not ready",
+            )
+        broker_instance_id: str = getattr(request.app.state, "broker_instance_id", "default")
+        service = SessionTokenService(key_ring=key_ring, broker_instance_id=broker_instance_id)
+        token = service.issue(
+            session_id=body.get("session_id", ""),
+            agent_id=body.get("agent_id", ""),
+            purpose=body.get("purpose", ""),
+            clearance=body.get("clearance", ""),
+        )
+        claims = service.verify(token)
+        return {
+            "token": token,
+            "session_id": claims.session_id,
+            "agent_id": claims.agent_id,
+            "purpose": claims.purpose,
+            "clearance": claims.clearance,
+            "issued_at": claims.issued_at,
+            "expires_at": claims.expires_at,
+            "broker_instance_id": claims.broker_instance_id,
+            "kid": claims.kid,
+        }
 
     # ------------------------------------------------------------------
     # Root redirect — / → /admin

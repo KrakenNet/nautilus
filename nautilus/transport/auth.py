@@ -25,7 +25,12 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import APIKeyHeader
 
 if TYPE_CHECKING:
-    from starlette.requests import Request
+    from starlette.requests import Request  # noqa: TC002
+
+    from nautilus.attestation.session_token import SessionTokenClaims
+
+# Optional session-token header for AC-18.f verification.
+_SESSION_TOKEN_HEADER = "X-Nautilus-Session-Token"
 
 
 # Module-level APIKeyHeader instance — FastAPI caches dependency providers
@@ -110,9 +115,43 @@ async def proxy_trust_dependency(request: Request) -> str:
     return user
 
 
+async def verify_session_token(
+    request: Request,
+) -> SessionTokenClaims | None:
+    """Optional FastAPI dependency — validate ``X-Nautilus-Session-Token`` if present.
+
+    Returns the decoded :class:`~nautilus.attestation.session_token.SessionTokenClaims`
+    when the header is present and valid. Returns ``None`` when the header is
+    absent (the token is not required by all endpoints). Raises ``HTTPException``
+    401 when the header is present but invalid (AC-18.d).
+
+    The ``KeyRing`` is read from ``app.state.key_ring``; if the state attribute
+    is absent the dependency is a no-op and returns ``None`` so existing tests
+    that don't populate the state continue to pass.
+    """
+    token_value = request.headers.get(_SESSION_TOKEN_HEADER)
+    if not token_value:
+        return None
+    key_ring = getattr(request.app.state, "key_ring", None)
+    if key_ring is None:
+        return None
+    from nautilus.attestation.session_token import SessionTokenError, SessionTokenService
+
+    broker_instance_id = getattr(request.app.state, "broker_instance_id", "unknown")
+    service = SessionTokenService(key_ring=key_ring, broker_instance_id=broker_instance_id)
+    try:
+        return service.verify(token_value)
+    except SessionTokenError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid session token: {exc.reason_code}",
+        ) from exc
+
+
 __all__ = [
     "api_key_header",
     "proxy_trust_dependency",
     "require_api_key",
     "verify_api_key",
+    "verify_session_token",
 ]

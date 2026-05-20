@@ -52,6 +52,9 @@ from nautilus.core.broker import Broker
 from nautilus.core.models import BrokerResponse, HandoffDecision
 from nautilus.transport.auth import verify_api_key
 
+# Session-token header name shared with fastapi_app.py (AC-18.f).
+_SESSION_TOKEN_HEADER = "x-nautilus-session-token"
+
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
