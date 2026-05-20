@@ -65,7 +65,7 @@ from nautilus.config.models import (
 )
 from nautilus.config.registry import SourceRegistry
 from nautilus.core import PolicyEngineError
-from nautilus.core.attestation_payload import build_payload
+from nautilus.core.attestation_payload import build_payload, compute_response_hash
 from nautilus.core.attestation_sink import (
     AttestationPayload,
     AttestationSink,
@@ -916,16 +916,18 @@ class Broker:
                     scope_by_source=state.scope_by_source,
                     rule_trace=state.rule_trace,
                     session_id=state.session_id,
+                    response=state.data or None,
                 )
             state.attestation_token = token
             state.scope_hash_version = scope_hash_version
-            await self._emit_attestation(token, nautilus_payload)
+            await self._emit_attestation(token, nautilus_payload, state.request_id)
         await self._update_session(state)
 
     async def _emit_attestation(
         self,
         token: str,
         nautilus_payload: dict[str, Any],
+        request_id: str,
     ) -> None:
         """Store-and-forward the attestation payload; NEVER fails the hot path.
 
@@ -934,6 +936,10 @@ class Broker:
         emitted regardless — the audit-first invariant means a sink outage
         cannot gate the request response. Per design §3.14 the token is
         still returned on :class:`BrokerResponse` (AC-14.4).
+
+        Emits an ``attestation_emitted`` audit event (AC-19.b) after a
+        successful sink write attempt. The event is schema_version=2 per
+        design §4.9 / shared.md line 799.
         """
         payload = AttestationPayload(
             token=token,
@@ -944,6 +950,29 @@ class Broker:
             await self._attestation_sink.emit(payload)
         except Exception as exc:  # noqa: BLE001 — audit-first invariant (AC-14.5)
             log.warning("attestation_sink.emit failed: %s", exc)
+        # AC-19.b — emit attestation_emitted audit event regardless of sink outcome.
+        response_hash: str | None = nautilus_payload.get("response_hash")
+        hash_skipped: bool = bool(nautilus_payload.get("hash_skipped", False))
+        legacy: bool = response_hash is None and not hash_skipped
+        self._audit_logger.emit(
+            AuditEntry(
+                timestamp=AuditLogger.utcnow(),
+                request_id=request_id,
+                agent_id="",
+                facts_asserted_summary={},
+                denial_records=[],
+                error_records=[],
+                rule_trace=[],
+                sources_queried=[],
+                sources_denied=[],
+                sources_errored=[],
+                duration_ms=0,
+                event_type="attestation_emitted",
+                schema_version=2,
+                trace_id=request_id,
+                raw_response_hash=response_hash if not legacy else None,
+            )
+        )
 
     @staticmethod
     def _merge_context_scope_constraints(
@@ -1213,6 +1242,7 @@ class Broker:
         scope_by_source: dict[str, list[ScopeConstraint]],
         rule_trace: list[str],
         session_id: str,
+        response: dict[str, Any] | None = None,
     ) -> tuple[str, Literal["v1", "v2"], dict[str, Any]]:
         """Compose the Nautilus attestation payload and sign it (design §9.3).
 
@@ -1239,12 +1269,28 @@ class Broker:
             # pragma: no cover — caller guards on self._attestation
             raise RuntimeError("attestation is disabled")
 
+        # AC-19.g — if any queried adapter declares non-deterministic capability,
+        # skip hashing and sign a hash_skipped=True claim instead (DQ2 LOCKED).
+        # Adapters without a ``capabilities`` attribute default to deterministic.
+        hash_skipped = any(
+            "non_deterministic" in getattr(self._adapters.get(sid), "capabilities", set())
+            for sid in sources_queried
+        )
+        # AC-19.a — compute response hash; omit for non-deterministic adapters
+        # and for legacy path (response=None, e.g. no data returned).
+        if hash_skipped or response is None:
+            response_hash: str | None = None
+        else:
+            response_hash = compute_response_hash(response)
+
         nautilus_payload, scope_hash_version = build_payload(
             request_id,
             agent_id,
             sources_queried,
             scope_by_source,
             list(rule_trace),
+            response_hash=response_hash,
+            hash_skipped=hash_skipped,
         )
 
         # Nautilus-specific decision marker; the Fathom JWT carries this as

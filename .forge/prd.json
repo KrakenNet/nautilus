@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "feature": "Nautilus v2 — RKM Foundation + P0 attestation primitives",
+  "feature": "Nautilus v2 \u2014 RKM Foundation + P0 attestation primitives",
   "created": "2026-05-20T01:30:00.000000Z",
   "tasks": [
     {
@@ -131,7 +131,7 @@
       ],
       "passes": true,
       "estimated_loc": 380,
-      "notes": "Disjoint from Fathom AttestationService per Risk #5. Uses existing cryptography+PyJWT deps. Key rotation window enables ≥2 active keys per AC-18.e. Audit emission for session_token_issued/verification_failed wired here."
+      "notes": "Disjoint from Fathom AttestationService per Risk #5. Uses existing cryptography+PyJWT deps. Key rotation window enables \u22652 active keys per AC-18.e. Audit emission for session_token_issued/verification_failed wired here."
     },
     {
       "id": "task-005",
@@ -163,9 +163,10 @@
         "task-003",
         "task-004"
       ],
-      "passes": false,
+      "passes": true,
       "estimated_loc": 100,
-      "notes": "Surgical change; only modifies _sign call site. Handles legacy adapters gracefully per AC-19.e (missing hash = null, legacy=true). Replay-protection achieved via asymmetric signing."
+      "notes": "Surgical change; only modifies _sign call site. Handles legacy adapters gracefully per AC-19.e (missing hash = null, legacy=true). Replay-protection achieved via asymmetric signing.",
+      "attempts": 1
     },
     {
       "id": "task-006",
@@ -215,7 +216,7 @@
       "id": "task-007",
       "phase": "C",
       "title": "Implement ProposalQueue with JSONL + lockf persistence",
-      "description": "Create nautilus/rkm/queue.py with ProposalQueue class implementing JSONL append-only queue at .nautilus/rkm/queue/ per DQ3 (fcntl.lockf filesystem lock). Implement list()/get()/append() methods persisting proposal records (schema per design.md lines 145–178). Add lockf contention handling with timeout per AC-35.9.a. Tests verify lockf contention under concurrent writes per task-007 focus.",
+      "description": "Create nautilus/rkm/queue.py with ProposalQueue class implementing JSONL append-only queue at .nautilus/rkm/queue/ per DQ3 (fcntl.lockf filesystem lock). Implement list()/get()/append() methods persisting proposal records (schema per design.md lines 145\u2013178). Add lockf contention handling with timeout per AC-35.9.a. Tests verify lockf contention under concurrent writes per task-007 focus.",
       "covers_acs": [
         "AC-35.9.a"
       ],
@@ -269,7 +270,7 @@
       "id": "task-009",
       "phase": "C",
       "title": "Create RKM relationship templates + manual facts loader",
-      "description": "Create nautilus/rules/templates/rkm.yaml with source_relationship and data_type_affinity CLIPS templates per AC-35.2.a (template syntax, slot definitions). Create nautilus/rules/modules/curator.yaml defining curator module per AC-35.3.a (module registration, not isolated meta-rules — those land in phase-D). Create facts/relationships/ directory with manual relationship YAML loader reading *.yaml files per AC-35.2.b. Implement nautilus/rules/facts.py with load_manual_relationships() function asserting facts into broker environment at startup. Validate slots (relationship_type enum, confidence 0.0–1.0 range) at load time per AC-35.2.e with structured error messages per file:line.",
+      "description": "Create nautilus/rules/templates/rkm.yaml with source_relationship and data_type_affinity CLIPS templates per AC-35.2.a (template syntax, slot definitions). Create nautilus/rules/modules/curator.yaml defining curator module per AC-35.3.a (module registration, not isolated meta-rules \u2014 those land in phase-D). Create facts/relationships/ directory with manual relationship YAML loader reading *.yaml files per AC-35.2.b. Implement nautilus/rules/facts.py with load_manual_relationships() function asserting facts into broker environment at startup. Validate slots (relationship_type enum, confidence 0.0\u20131.0 range) at load time per AC-35.2.e with structured error messages per file:line.",
       "covers_acs": [
         "AC-35.2.a",
         "AC-35.2.b",
@@ -373,7 +374,7 @@
       "id": "task-012",
       "phase": "E",
       "title": "Implement static-analysis validator wrapping Fathom.validate()",
-      "description": "Create nautilus/rkm/validator/static.py with validate_rule_yaml(rule_yaml_str) -> (bool, list[ValidationError]) wrapping Fathom.validate(). Detect: YAML→CLIPS compilation errors, unknown template references, unknown/mistyped slots, duplicate rule names within module, cross-module fact references not in allowlist per AC-35.5.b. Return structured ValidationError with file:line and remediation hint per AC-35.5.d. Optimize to <500ms per single rule per AC-35.5.c. Wire CLI `nautilus rules validate <file>` subcommand in task-027 (cli/rules.py).",
+      "description": "Create nautilus/rkm/validator/static.py with validate_rule_yaml(rule_yaml_str) -> (bool, list[ValidationError]) wrapping Fathom.validate(). Detect: YAML\u2192CLIPS compilation errors, unknown template references, unknown/mistyped slots, duplicate rule names within module, cross-module fact references not in allowlist per AC-35.5.b. Return structured ValidationError with file:line and remediation hint per AC-35.5.d. Optimize to <500ms per single rule per AC-35.5.c. Wire CLI `nautilus rules validate <file>` subcommand in task-027 (cli/rules.py).",
       "covers_acs": [
         "AC-35.5.a",
         "AC-35.5.b",
@@ -402,7 +403,7 @@
       "id": "task-013",
       "phase": "E",
       "title": "Implement shadow/subsumption check validator + fixture suite",
-      "description": "Create nautilus/rkm/validator/shadow.py with shadow_check(proposed_rule, existing_rules) -> list[(existing_rule, relation)] function detecting subsumption/shadowing/salience-inversion per AC-35.6.a. Create fixture suite under tests/fixtures/rkm/shadow-pairs/ with ≥20 hand-curated rule pairs (rule_a.yaml, rule_b.yaml, expected_relation.txt) per AC-35.6.a. Implement fixture loader in tests/integration/test_rkm_pipeline.py validating against fixture suite (fail if false-negative; false-positives acceptable per AC-35.6.b). Attach shadow_flags to proposal record per AC-35.6.c.",
+      "description": "Create nautilus/rkm/validator/shadow.py with shadow_check(proposed_rule, existing_rules) -> list[(existing_rule, relation)] function detecting subsumption/shadowing/salience-inversion per AC-35.6.a. Create fixture suite under tests/fixtures/rkm/shadow-pairs/ with \u226520 hand-curated rule pairs (rule_a.yaml, rule_b.yaml, expected_relation.txt) per AC-35.6.a. Implement fixture loader in tests/integration/test_rkm_pipeline.py validating against fixture suite (fail if false-negative; false-positives acceptable per AC-35.6.b). Attach shadow_flags to proposal record per AC-35.6.c.",
       "covers_acs": [
         "AC-35.6.a",
         "AC-35.6.b",
@@ -424,7 +425,7 @@
       ],
       "passes": false,
       "estimated_loc": 240,
-      "notes": "Test infrastructure budget: ≥20 hand-curated pairs is real work, not free. Conservative heuristic-based implementation acceptable for v2.0. Fixture suite itself ≈200 LOC (YAML pairs)."
+      "notes": "Test infrastructure budget: \u226520 hand-curated pairs is real work, not free. Conservative heuristic-based implementation acceptable for v2.0. Fixture suite itself \u2248200 LOC (YAML pairs)."
     },
     {
       "id": "task-014",
@@ -461,7 +462,7 @@
       "id": "task-015",
       "phase": "E",
       "title": "Implement confidence scoring pure function",
-      "description": "Create nautilus/rkm/validator/scoring.py with score_proposal(sandbox_result, shadow_flags, static_result, proposal) -> (float, ConfidenceBreakdown) pure function per AC-35.8.a. Base 1.0; apply penalties per design-doc formula: −0.3/regression, −0.2/relaxation, −0.1/shadow, −0.1 if fire-rate <5%, −0.05/cascade-warn. No I/O. Unit test boundary values 0.6, 0.9 per AC-35.8.b-c. Score >0.9 eligible for auto-promotion (gated by feature flag per AC-35.8.b); 0.6–0.9 human review; <0.6 reject per AC-35.8.d.",
+      "description": "Create nautilus/rkm/validator/scoring.py with score_proposal(sandbox_result, shadow_flags, static_result, proposal) -> (float, ConfidenceBreakdown) pure function per AC-35.8.a. Base 1.0; apply penalties per design-doc formula: \u22120.3/regression, \u22120.2/relaxation, \u22120.1/shadow, \u22120.1 if fire-rate <5%, \u22120.05/cascade-warn. No I/O. Unit test boundary values 0.6, 0.9 per AC-35.8.b-c. Score >0.9 eligible for auto-promotion (gated by feature flag per AC-35.8.b); 0.6\u20130.9 human review; <0.6 reject per AC-35.8.d.",
       "covers_acs": [
         "AC-35.8.a",
         "AC-35.8.b",
@@ -512,7 +513,7 @@
       "id": "task-017",
       "phase": "F",
       "title": "Implement review queue operations + promotion logic",
-      "description": "Create nautilus/rkm/review.py with review-queue operations: approve_proposal(proposal_id, reviewer_identity) → marks approved, emits proposal_approved audit event, promotes rule into FathomRouter, inserts lineage record per AC-35.10.a-b; reject_proposal(proposal_id, reviewer_identity, reason) → marks rejected, emits proposal_rejected. Handle idempotent approve (already_approved returns 409 per design.md) per AC-35.9.e. Implement cascade retraction logic for AC-35.10.d (--cascade vs --orphan-children flags wired in CLI per task-025).",
+      "description": "Create nautilus/rkm/review.py with review-queue operations: approve_proposal(proposal_id, reviewer_identity) \u2192 marks approved, emits proposal_approved audit event, promotes rule into FathomRouter, inserts lineage record per AC-35.10.a-b; reject_proposal(proposal_id, reviewer_identity, reason) \u2192 marks rejected, emits proposal_rejected. Handle idempotent approve (already_approved returns 409 per design.md) per AC-35.9.e. Implement cascade retraction logic for AC-35.10.d (--cascade vs --orphan-children flags wired in CLI per task-025).",
       "covers_acs": [
         "AC-35.9.a",
         "AC-35.9.b",
@@ -541,7 +542,7 @@
       ],
       "passes": false,
       "estimated_loc": 180,
-      "notes": "Ties together queue + lineage + router. Promotion path: queue.approved → review.promote_rule → fathom_router.reload + lineage.insert."
+      "notes": "Ties together queue + lineage + router. Promotion path: queue.approved \u2192 review.promote_rule \u2192 fathom_router.reload + lineage.insert."
     },
     {
       "id": "task-018",
@@ -625,13 +626,13 @@
       "depends_on": [],
       "passes": false,
       "estimated_loc": 100,
-      "notes": "Foundational CLI work; no new features. All subcommand modules (task-021–026) import from _common.py. OQ4 resolution: split into package structure per Harbor template."
+      "notes": "Foundational CLI work; no new features. All subcommand modules (task-021\u2013026) import from _common.py. OQ4 resolution: split into package structure per Harbor template."
     },
     {
       "id": "task-021",
       "phase": "G",
       "title": "Implement RKM CLI surface (queue + lineage commands)",
-      "description": "Create nautilus/cli/rkm.py with subcommands: queue list (--status, --min-confidence, --json), queue show <id> (--json), queue approve <id>, queue reject <id> --reason, queue diff <id>, lineage <proposal_id|rule_name> (--depth, --json) per AC-35.9.b and design.md screens §nautilus rkm queue. Wire to REST endpoints from task-018. Use _common.py helpers for output formatting (OK/ERROR/WARN prefixes, --json JSON-lines, --yes validation). Handle error states per design.md (Empty, Loading, Error, Success for list; Not Found, Success for show).",
+      "description": "Create nautilus/cli/rkm.py with subcommands: queue list (--status, --min-confidence, --json), queue show <id> (--json), queue approve <id>, queue reject <id> --reason, queue diff <id>, lineage <proposal_id|rule_name> (--depth, --json) per AC-35.9.b and design.md screens \u00a7nautilus rkm queue. Wire to REST endpoints from task-018. Use _common.py helpers for output formatting (OK/ERROR/WARN prefixes, --json JSON-lines, --yes validation). Handle error states per design.md (Empty, Loading, Error, Success for list; Not Found, Success for show).",
       "covers_acs": [
         "AC-35.9.b",
         "AC-35.9.c",
@@ -659,7 +660,7 @@
       ],
       "passes": false,
       "estimated_loc": 180,
-      "notes": "DQ4: reviewer identity from NAUTILUS_REVIEWER env var (no auto-detect; honor-system per design.md). ~20 LOC per subcommand; 50–150 LOC total for rkm.py group."
+      "notes": "DQ4: reviewer identity from NAUTILUS_REVIEWER env var (no auto-detect; honor-system per design.md). ~20 LOC per subcommand; 50\u2013150 LOC total for rkm.py group."
     },
     {
       "id": "task-022",
@@ -812,7 +813,7 @@
       "id": "task-027",
       "phase": "H",
       "title": "Event-sourcing design spike: decision document + POC",
-      "description": "Create design-docs/rkm-event-sourcing-spike.md (≤10 pages per AC-35.1.a) answering: can single append-only event log back both audit and Blackboard-worker persistence? Recommendation: yes/no/hybrid with concrete schema sketch. Create spikes/event-sourcing/ POC replaying ≥10k synthetic events from JSONL into fresh CLIPS env per AC-35.1.b-c. Record storage delta (bytes/event) and replay time at 10k/100k/1M scales. Assert hash-equality of resulting fact set vs known-good snapshot per AC-35.1.b. Decision artifact only; no production wiring per AC-35.1.d.",
+      "description": "Create design-docs/rkm-event-sourcing-spike.md (\u226410 pages per AC-35.1.a) answering: can single append-only event log back both audit and Blackboard-worker persistence? Recommendation: yes/no/hybrid with concrete schema sketch. Create spikes/event-sourcing/ POC replaying \u226510k synthetic events from JSONL into fresh CLIPS env per AC-35.1.b-c. Record storage delta (bytes/event) and replay time at 10k/100k/1M scales. Assert hash-equality of resulting fact set vs known-good snapshot per AC-35.1.b. Decision artifact only; no production wiring per AC-35.1.d.",
       "covers_acs": [
         "AC-35.1.a",
         "AC-35.1.b",

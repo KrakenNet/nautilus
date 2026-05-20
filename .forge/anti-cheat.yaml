@@ -40,6 +40,11 @@ allowlist:
     paths:
       - "nautilus/cli/__init__.py"
   - pattern: EMPTY_BODY
+    reason: "except RuntimeError: pass is idiomatic event-loop detection, not a stub"
+    expires_at: "2026-08-31"
+    paths:
+      - "nautilus/core/broker.py"
+  - pattern: EMPTY_BODY
     reason: "ImportError pass on optional observability dep is idiomatic Python, not a stub"
     expires_at: "2026-08-31"
     paths:
