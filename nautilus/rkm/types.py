@@ -7,7 +7,7 @@ without circular dependencies.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
 
@@ -35,6 +35,7 @@ class Proposal:
     validation: dict[str, Any]
     lineage: dict[str, Any]
     decisions: list[dict[str, Any]]
+    shadow_flags: tuple[Any, ...] = field(default_factory=tuple)  # AC-35.6.c
 
 
 @dataclass(frozen=True)

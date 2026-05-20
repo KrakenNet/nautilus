@@ -1,0 +1,8 @@
+# pair_05: a_subsumes_b
+# A has empty LHS (matches any fact set) — universal subsumer
+name: catch_all_rule
+salience: 0
+lhs: []
+rhs:
+  - action: log
+    message: "catch all"

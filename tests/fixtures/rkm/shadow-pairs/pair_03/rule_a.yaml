@@ -1,0 +1,11 @@
+# pair_03: a_subsumes_b
+# Multi-condition: A matches agent+session with fewer constraints
+name: loose_compound_rule
+salience: 5
+lhs:
+  - template: agent
+    slots: {}
+  - template: session
+    slots: {}
+rhs:
+  - action: audit

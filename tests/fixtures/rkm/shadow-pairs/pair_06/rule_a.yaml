@@ -1,0 +1,10 @@
+# pair_06: a_shadows_b
+# Same LHS conditions, A has higher salience
+name: high_priority_deny
+salience: 100
+lhs:
+  - template: agent
+    slots:
+      status: blocked
+rhs:
+  - action: deny

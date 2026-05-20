@@ -1,0 +1,10 @@
+# pair_01: a_subsumes_b
+# A has no slot constraints (matches all agents), B is specific to one agent
+name: broad_agent_rule
+salience: 0
+lhs:
+  - template: agent
+    slots: {}
+rhs:
+  - action: log
+    message: "agent matched"

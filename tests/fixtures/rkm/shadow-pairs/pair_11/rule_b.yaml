@@ -1,0 +1,14 @@
+# pair_11: salience_inversion
+# B is more general (any user, any delete), low salience
+# The broader rule B should fire as a catch-all but A fires first
+name: general_delete_low
+salience: 5
+lhs:
+  - template: user
+    slots: {}
+  - template: action
+    slots:
+      type: delete
+rhs:
+  - action: deny
+    reason: delete_requires_approval

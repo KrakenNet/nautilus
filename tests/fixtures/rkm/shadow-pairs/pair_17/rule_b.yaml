@@ -1,0 +1,13 @@
+# pair_17: none
+# Different template combination — no overlap with pair_17/rule_a.yaml
+name: session_plus_action_rule
+salience: 20
+lhs:
+  - template: session
+    slots:
+      status: active
+  - template: action
+    slots:
+      type: read
+rhs:
+  - action: allow

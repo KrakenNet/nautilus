@@ -1,0 +1,10 @@
+# pair_14: none
+# Different template (session vs agent) — no relation
+name: session_rule
+salience: 0
+lhs:
+  - template: session
+    slots:
+      status: active
+rhs:
+  - action: log

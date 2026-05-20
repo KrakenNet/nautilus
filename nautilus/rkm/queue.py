@@ -60,6 +60,8 @@ def _proposal_from_dict(d: dict[str, Any]) -> Proposal:
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=UTC)
         d["proposed_at"] = dt
+    # shadow_flags absent in records written before AC-35.6.c
+    d.setdefault("shadow_flags", ())
     return Proposal(**d)
 
 

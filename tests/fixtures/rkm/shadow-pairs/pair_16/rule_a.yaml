@@ -1,0 +1,10 @@
+# pair_16: none
+# Same template, same salience, one slot each but different keys — disjoint
+name: rule_method_post
+salience: 10
+lhs:
+  - template: request
+    slots:
+      method: POST
+rhs:
+  - action: validate_body

@@ -1,0 +1,11 @@
+# pair_10: a_shadows_b
+# Single-slot LHS, both same, A higher salience
+name: rule_deny_guest_high
+salience: 75
+lhs:
+  - template: user
+    slots:
+      role: guest
+rhs:
+  - action: deny
+    reason: guest_not_allowed

@@ -1,0 +1,11 @@
+# pair_10: a_shadows_b
+# Same LHS, lower salience — B never fires
+name: rule_log_guest_low
+salience: 25
+lhs:
+  - template: user
+    slots:
+      role: guest
+rhs:
+  - action: log
+    message: guest_access_attempt

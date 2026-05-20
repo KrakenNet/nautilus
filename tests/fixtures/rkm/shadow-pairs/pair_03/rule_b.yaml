@@ -1,0 +1,13 @@
+# pair_03: a_subsumes_b
+# Multi-condition: B is more specific (constrained slots)
+name: strict_compound_rule
+salience: 0
+lhs:
+  - template: agent
+    slots:
+      role: admin
+  - template: session
+    slots:
+      status: active
+rhs:
+  - action: audit

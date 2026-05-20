@@ -1,0 +1,11 @@
+# pair_18: none
+# Same salience, same LHS (would shadow only if different salience)
+# Identical LHS + identical salience => equal priority, neither shadows
+name: equal_salience_rule_a
+salience: 50
+lhs:
+  - template: agent
+    slots:
+      role: operator
+rhs:
+  - action: allow

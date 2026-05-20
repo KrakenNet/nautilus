@@ -1,0 +1,10 @@
+# pair_07: b_shadows_a
+# Same LHS, B has higher salience
+name: low_salience_allow
+salience: 5
+lhs:
+  - template: request
+    slots:
+      method: GET
+rhs:
+  - action: allow

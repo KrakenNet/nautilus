@@ -1,0 +1,12 @@
+# pair_20: none
+# Single condition, different template (quota vs user) — no overlap
+name: quota_check_rule
+salience: 30
+lhs:
+  - template: quota
+    slots:
+      resource: api_calls
+      exceeded: "true"
+rhs:
+  - action: deny
+    reason: quota_exceeded

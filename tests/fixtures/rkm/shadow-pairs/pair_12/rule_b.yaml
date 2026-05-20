@@ -1,0 +1,12 @@
+# pair_12: salience_inversion
+# B is broader (any resource in production), low salience
+# B is intended as the catch-all deny but A's higher salience fires first
+name: broad_production_low
+salience: 10
+lhs:
+  - template: resource
+    slots:
+      env: production
+rhs:
+  - action: deny
+    reason: production_lockdown

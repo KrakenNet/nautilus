@@ -1,0 +1,10 @@
+# pair_04: b_subsumes_a
+# B has only one slot constraint (method=POST) — broader, subsumes A
+name: post_method_rule
+salience: 10
+lhs:
+  - template: request
+    slots:
+      method: POST
+rhs:
+  - action: rate_limit

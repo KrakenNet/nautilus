@@ -1,0 +1,8 @@
+# pair_19: none
+# Both empty LHS, same salience — no strict subsumption, no shadow
+name: catch_all_b
+salience: 0
+lhs: []
+rhs:
+  - action: log
+    level: info

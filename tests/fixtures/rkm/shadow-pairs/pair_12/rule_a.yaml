@@ -1,0 +1,13 @@
+# pair_12: salience_inversion
+# A is narrow (specific resource type + specific method), high salience
+# B covers any resource (lower salience) — A fires first blocking B's broader policy
+name: specific_resource_high
+salience: 80
+lhs:
+  - template: resource
+    slots:
+      type: secret
+      env: production
+rhs:
+  - action: allow
+    requester: system

@@ -1,0 +1,11 @@
+# pair_13: salience_inversion
+# B is the broad safety net (any agent), low salience
+# B should fire for all agents but A takes priority for bots+scrape
+name: broad_agent_safety_net
+salience: 2
+lhs:
+  - template: agent
+    slots: {}
+rhs:
+  - action: deny
+    reason: unrecognized_agent

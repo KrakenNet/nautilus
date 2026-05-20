@@ -1,0 +1,10 @@
+# pair_06: a_shadows_b
+# Same LHS, lower salience — B can never fire
+name: low_priority_deny
+salience: 10
+lhs:
+  - template: agent
+    slots:
+      status: blocked
+rhs:
+  - action: deny

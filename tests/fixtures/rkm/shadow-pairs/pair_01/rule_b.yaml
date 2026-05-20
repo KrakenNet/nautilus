@@ -1,0 +1,11 @@
+# pair_01: a_subsumes_b
+# B is more specific (id=alpha) — A subsumes B
+name: specific_agent_rule
+salience: 0
+lhs:
+  - template: agent
+    slots:
+      id: alpha
+rhs:
+  - action: log
+    message: "agent alpha matched"
