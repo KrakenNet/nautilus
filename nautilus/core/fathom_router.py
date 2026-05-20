@@ -38,6 +38,7 @@ from nautilus.core.models import (
     RoutingDecision,
     ScopeConstraint,
 )
+from nautilus.rkm.curator.isolation import assert_module_isolation
 from nautilus.rules.functions import (
     register_contains_all,
     register_not_in_list,
@@ -113,6 +114,13 @@ class FathomRouter:
             register_contains_all(self._engine)
             self._engine.load_functions(str(self._built_in_rules_dir / "functions"))
             self._engine.load_rules(str(self._built_in_rules_dir / "rules"))
+            # Curator module — pattern-tracker meta-rules (AC-35.3.a).
+            # assert_module_isolation runs parse-time YAML static analysis
+            # before loading so routing-template violations are caught early.
+            _meta_dir = self._built_in_rules_dir / "meta"
+            _pattern_tracker = _meta_dir / "pattern-tracker.yaml"
+            assert_module_isolation(_pattern_tracker)
+            self._engine.load_rules(str(_meta_dir))
             for user_dir in self._user_rules_dirs:
                 self._engine.load_rules(str(user_dir))
             # Escalation packs are YAML → EscalationRule models loaded once;

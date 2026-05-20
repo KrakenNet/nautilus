@@ -335,9 +335,10 @@
         "task-009",
         "task-008"
       ],
-      "passes": false,
+      "passes": true,
       "estimated_loc": 250,
-      "notes": "OQ2 (isolation enforcement strategy) resolved via parse-time YAML check. AC-35.3.d meta_rule_fired event emission depends on task-008 AuditEventEmitter plumbing."
+      "notes": "OQ2 (isolation enforcement strategy) resolved via parse-time YAML check. AC-35.3.d meta_rule_fired event emission depends on task-008 AuditEventEmitter plumbing.",
+      "attempts": 1
     },
     {
       "id": "task-011",

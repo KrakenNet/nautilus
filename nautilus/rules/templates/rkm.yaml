@@ -30,3 +30,13 @@ templates:
       - { name: data_type,   type: string, required: true }
       - { name: affinity,    type: float,  default: 1.0 }   # [0.0, 1.0]
       - { name: notes,       type: string, default: "" }
+
+  - name: relationship_candidate
+    description: "Curator-module candidate relationship observed between two sources (AC-35.3.b-c)."
+    slots:
+      - { name: source_a,          type: string,  required: true }
+      - { name: source_b,          type: string,  required: true }
+      - { name: relationship_type, type: symbol,  required: true }  # sequential | co-located | ...
+      - { name: observation_count, type: integer, default: 1 }
+      - { name: first_observed,    type: string,  default: "" }     # ISO-8601
+      - { name: last_observed,     type: string,  default: "" }     # ISO-8601

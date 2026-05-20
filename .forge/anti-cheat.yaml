@@ -45,6 +45,11 @@ allowlist:
     paths:
       - "nautilus/core/broker.py"
   - pattern: EMPTY_BODY
+    reason: "if TYPE_CHECKING: pass is idiomatic empty guard block, not a stub"
+    expires_at: "2026-08-31"
+    paths:
+      - "nautilus/core/fathom_router.py"
+  - pattern: EMPTY_BODY
     reason: "ImportError pass on optional observability dep is idiomatic Python, not a stub"
     expires_at: "2026-08-31"
     paths:

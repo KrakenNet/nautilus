@@ -1,0 +1,87 @@
+# pattern-tracker meta-ruleset (#35.3) — loads into curator module.
+#
+# Rules:
+#   track-sequential-requests         — AC-35.3.b
+#     When two routing_decision facts exist for different sources in the
+#     same evaluation pass and no relationship_candidate already covers
+#     the pair, assert a new relationship_candidate(sequential).
+#
+#   strengthen-relationship-candidate — AC-35.3.c
+#     When a routing_decision pair matches an existing relationship_candidate,
+#     increment observation_count (modify the existing fact).
+#
+# Both rules assert/modify ONLY curator-owned templates (relationship_candidate).
+# Isolation is enforced at load time by
+# nautilus.rkm.curator.isolation.assert_module_isolation (AC-35.3.e, OQ2).
+#
+# Per-pattern threshold: observation_count >= 10 gates promotion to a
+# relationship_fact — that promotion is task-011's auto-promote path.
+# This ruleset ONLY observes + counts.
+
+module: curator
+ruleset: pattern-tracker
+version: "1.0"
+rules:
+  - name: track-sequential-requests
+    description: >
+      Assert a relationship_candidate(sequential) when two routing_decision
+      facts name different sources. Skips if a candidate already exists for
+      the (source_a, source_b) pair. (AC-35.3.b)
+    salience: 50
+    when:
+      - template: routing_decision
+        conditions:
+          - slot: source_id
+            bind: ?sid_a
+      - template: routing_decision
+        conditions:
+          - slot: source_id
+            bind: ?sid_b
+          - test: "(!= ?sid_a ?sid_b)"
+      - not:
+          template: relationship_candidate
+          conditions:
+            - slot: source_a
+              value: "?sid_a"
+            - slot: source_b
+              value: "?sid_b"
+    then:
+      action: assert
+      assert:
+        - template: relationship_candidate
+          slots:
+            source_a: "?sid_a"
+            source_b: "?sid_b"
+            relationship_type: sequential
+            observation_count: 1
+
+  - name: strengthen-relationship-candidate
+    description: >
+      Increment observation_count on an existing relationship_candidate when
+      the same source pair appears again. (AC-35.3.c)
+    salience: 60
+    when:
+      - template: routing_decision
+        conditions:
+          - slot: source_id
+            bind: ?sid_a
+      - template: routing_decision
+        conditions:
+          - slot: source_id
+            bind: ?sid_b
+          - test: "(!= ?sid_a ?sid_b)"
+      - template: relationship_candidate
+        bind: ?cand
+        conditions:
+          - slot: source_a
+            value: "?sid_a"
+          - slot: source_b
+            value: "?sid_b"
+          - slot: observation_count
+            bind: ?count
+    then:
+      action: modify
+      modify:
+        fact: "?cand"
+        slots:
+          observation_count: "(+ ?count 1)"
