@@ -627,7 +627,7 @@
       ],
       "contracts": [],
       "depends_on": [],
-      "passes": false,
+      "passes": true,
       "estimated_loc": 100,
       "notes": "Foundational CLI work; no new features. All subcommand modules (task-021–026) import from _common.py. OQ4 resolution: split into package structure per Harbor template."
     },
