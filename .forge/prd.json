@@ -577,7 +577,7 @@
       "depends_on": [
         "task-017"
       ],
-      "passes": false,
+      "passes": true,
       "estimated_loc": 200,
       "notes": "Thin HTTP wrappers over review.py. X-Nautilus-Reviewer header per design.md reviewer-identity-flow. All destructive ops require --yes flag enforcement at fastapi level."
     },
