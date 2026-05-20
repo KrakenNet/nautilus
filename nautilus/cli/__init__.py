@@ -121,6 +121,10 @@ def _build_parser() -> argparse.ArgumentParser:
     from nautilus.cli import rkm as _rkm_mod
     _rkm_mod.add_subparser(sub)
 
+    # rule ----------------------------------------------------------------
+    from nautilus.cli import rule as _rule_mod
+    _rule_mod.add_subparser(sub)
+
     return parser
 
 
@@ -225,6 +229,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "rkm":
         from nautilus.cli import rkm as _rkm_mod
         return _rkm_mod.dispatch(args)
+    if args.command == "rule":
+        from nautilus.cli import rule as _rule_mod
+        return _rule_mod.dispatch(args)
     # argparse enforces required=True; this is defensive.
     parser.print_help(sys.stderr)
     return 2
