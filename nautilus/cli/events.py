@@ -12,6 +12,8 @@ Source of truth for the runtime-side enumeration of all known
 from __future__ import annotations
 
 import argparse
+import json
+import sys
 
 
 def list_event_types() -> list[str]:
@@ -47,16 +49,32 @@ def list_event_types() -> list[str]:
 
 def add_subparser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
     """Add ``events`` group to the top-level argparse subparsers."""
-    raise NotImplementedError(
-        "DQ5: nautilus.cli.events.add_subparser not implemented"
-    )
+    p_events = sub.add_parser("events", help="Event type enumeration (DQ5).")
+    events_sub = p_events.add_subparsers(dest="events_subcommand", metavar="subcommand")
+
+    # list
+    p_list = events_sub.add_parser("list", help="List all known event_type values.")
+    p_list.add_argument("--json", action="store_true", help="Emit JSON array to stdout.")
 
 
 def dispatch(args: argparse.Namespace) -> int:
     """Dispatch a parsed ``events`` invocation. Returns process exit code."""
-    raise NotImplementedError(
-        "DQ5: nautilus.cli.events.dispatch not implemented"
-    )
+    sub = getattr(args, "events_subcommand", None)
+    if sub == "list":
+        return _cmd_list(args)
+    print("ERROR: events: subcommand required (list).", file=sys.stderr)
+    return 1
+
+
+def _cmd_list(args: argparse.Namespace) -> int:
+    """Print all known event_type values."""
+    types = list_event_types()
+    if getattr(args, "json", False):
+        print(json.dumps(types))
+    else:
+        for t in types:
+            print(t)
+    return 0
 
 
 __all__ = ["add_subparser", "dispatch", "list_event_types"]
