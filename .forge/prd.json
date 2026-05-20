@@ -397,7 +397,7 @@
       "depends_on": [
         "task-009"
       ],
-      "passes": false,
+      "passes": true,
       "estimated_loc": 180,
       "notes": "Wraps existing Fathom.validate(); no new CLIPS tooling. Performance baseline: compile + validate <500ms on laptop. Errors formatted per design.md Validation Pipeline Rejection block."
     },
