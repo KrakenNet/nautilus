@@ -137,6 +137,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
     _key_mod.add_subparser(sub)
 
+    # rules ---------------------------------------------------------------
+    from nautilus.cli import rules as _rules_mod
+
+    _rules_mod.add_subparser(sub)
+
     return parser
 
 
@@ -254,6 +259,10 @@ def main(argv: list[str] | None = None) -> int:
         from nautilus.cli import key as _key_mod
 
         return _key_mod.dispatch(args)
+    if args.command == "rules":
+        from nautilus.cli import rules as _rules_mod
+
+        return _rules_mod.dispatch(args)
     # argparse enforces required=True; this is defensive.
     parser.print_help(sys.stderr)
     return 2
