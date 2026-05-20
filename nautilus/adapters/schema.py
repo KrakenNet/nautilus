@@ -286,23 +286,33 @@ def classify_drift(
 class SchemaFingerprintStore:
     """Persists ``(adapter_id, fingerprint, recorded_at)``.
 
-    On-disk at ``.nautilus/adapters/fingerprints/<adapter>.json``.
-    Tuple ``(adapter_id, fingerprint)`` is immutable once written
-    (Data invariants #3). Operator ack writes a NEW tuple via
-    :meth:`record_ack`.
+    Primary state is in-memory (per Broker instance). Optional disk
+    persistence writes to ``.nautilus/adapters/fingerprints/<adapter>.json``
+    when ``root`` is provided.
+
+    Operator ack writes a NEW tuple via :meth:`record_ack`. AC-21.c/g.
     """
+
+    def __init__(self, root: str | None = None) -> None:
+        self._store: dict[str, str] = {}
+        self._root = root
 
     def get(self, adapter_id: str) -> str | None:
         """Return the last-recorded fingerprint for ``adapter_id``. AC-21.c."""
-        raise NotImplementedError(
-            "AC-21.c: nautilus.adapters.schema.SchemaFingerprintStore.get not implemented"
-        )
+        return self._store.get(adapter_id)
 
     def record(self, adapter_id: str, fingerprint: str) -> None:
         """Persist a fingerprint at adapter-registration time. AC-21.c."""
-        raise NotImplementedError(
-            "AC-21.c: nautilus.adapters.schema.SchemaFingerprintStore.record not implemented"
-        )
+        import json
+        import os
+
+        self._store[adapter_id] = fingerprint
+        if self._root is not None:
+            fp_dir = os.path.join(self._root, ".nautilus", "adapters", "fingerprints")
+            os.makedirs(fp_dir, exist_ok=True)
+            fp_path = os.path.join(fp_dir, f"{adapter_id}.json")
+            with open(fp_path, "w") as fh:
+                json.dump({"adapter_id": adapter_id, "fingerprint": fingerprint}, fh)
 
     def record_ack(
         self,
@@ -313,9 +323,26 @@ class SchemaFingerprintStore:
         reason: str,
     ) -> None:
         """Operator-ack a drift event; updates the recorded fingerprint. AC-21.g."""
-        raise NotImplementedError(
-            "AC-21.g: nautilus.adapters.schema.SchemaFingerprintStore.record_ack not implemented"
-        )
+        import json
+        import os
+        from datetime import UTC, datetime
+
+        self._store[adapter_id] = fingerprint
+        if self._root is not None:
+            fp_dir = os.path.join(self._root, ".nautilus", "adapters", "fingerprints")
+            os.makedirs(fp_dir, exist_ok=True)
+            fp_path = os.path.join(fp_dir, f"{adapter_id}.json")
+            with open(fp_path, "w") as fh:
+                json.dump(
+                    {
+                        "adapter_id": adapter_id,
+                        "fingerprint": fingerprint,
+                        "reviewer": reviewer,
+                        "reason": reason,
+                        "acked_at": datetime.now(UTC).isoformat(),
+                    },
+                    fh,
+                )
 
 
 __all__ = [

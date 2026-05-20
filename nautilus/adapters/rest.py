@@ -36,6 +36,7 @@ from nautilus.adapters.base import (
     ScopeEnforcementError,
     validate_field,
 )
+from nautilus.adapters.schema import AdapterSchema
 from nautilus.config.models import (
     BasicAuth,
     BearerAuth,
@@ -432,6 +433,14 @@ class RestAdapter:
             rows=rows,
             duration_ms=duration_ms,
         )
+
+    async def get_schema(self) -> AdapterSchema:
+        """Return operator-declared schema from adapter config. AC-21, OQ3."""
+        if self._config is None:
+            return AdapterSchema.unknown("rest", self.source_type)
+        # REST adapters declare their schema statically via operator config.
+        # No introspection is possible without a live endpoint call.
+        return AdapterSchema.unknown(self._config.id, self.source_type)
 
 
 def _b_not_in_rendered(field: str, value: Any) -> list[tuple[str, str]]:

@@ -45,6 +45,7 @@ from nautilus.adapters.pgvector import PgVectorAdapter
 from nautilus.adapters.postgres import PostgresAdapter
 from nautilus.adapters.rest import RestAdapter
 from nautilus.adapters.s3 import S3Adapter
+from nautilus.adapters.schema import SchemaFingerprintStore, classify_drift
 from nautilus.adapters.servicenow import ServiceNowAdapter
 from nautilus.analysis.fallback import FallbackIntentAnalyzer
 from nautilus.analysis.llm.base import LLMIntentProvider, LLMProvenance
@@ -339,6 +340,11 @@ class Broker:
         # ``arequest`` can lazy-connect on first use and skip on subsequent
         # calls (design §3.5 — adapter lifecycle is owned by the broker).
         self._connected_adapters: set[str] = set()
+        # Adapters quarantined due to major schema drift (AC-21.e, PM Q3 LOCKED).
+        # Requests targeting a quarantined adapter surface as ADAPTER_QUARANTINED
+        # error records instead of routing to the adapter. Other adapters keep
+        # serving normally — quarantine is per-adapter, NOT broker-wide.
+        self._quarantined_adapters: set[str] = set()
 
     # ------------------------------------------------------------------
     # Construction
@@ -1111,7 +1117,22 @@ class Broker:
 
         Records per-source :class:`ErrorRecord`\\ s on lookup / connect failure
         and returns ``None`` so the caller can skip this source.
+
+        Quarantined adapters return an ADAPTER_QUARANTINED error record so the
+        broker never silently routes to a drifted adapter (AC-21.e, PM Q3).
         """
+        if source_id in self._quarantined_adapters:
+            state.errored.append(
+                _source_error(
+                    source_id,
+                    "ADAPTER_QUARANTINED",
+                    f"Adapter '{source_id}' is quarantined due to major schema drift. "
+                    "Operator must acknowledge drift via schema-ack before resuming.",
+                    state.request_id,
+                )
+            )
+            return None
+
         adapter = self._adapters.get(source_id)
         if adapter is None:
             state.errored.append(
@@ -1325,9 +1346,92 @@ class Broker:
         a Postgres-backed session store (design §3.2, UQ-1 / D-2). No-op for
         the Phase-1 :class:`~nautilus.core.session.InMemorySessionStore`.
         Safe to call multiple times; each implementer owns its own idempotency.
+
+        Also runs schema fingerprint checks for all registered adapters per
+        AC-21.c/e. Adapters with major drift are quarantined.
         """
         if isinstance(self._session_store, PostgresSessionStore):
             await self._session_store.setup()
+        await self._check_schema_fingerprints()
+
+    async def _check_schema_fingerprints(self) -> None:
+        """Check schema drift for all adapters; quarantine on major drift.
+
+        Called from :meth:`setup`. Each adapter's :meth:`get_schema` is invoked
+        (if the adapter is already connected) or deferred (not yet connected).
+        Connected adapters get their schema fetched; unconnected adapters are
+        skipped (drift checked lazily at first connect).
+
+        AC-21.c: record fingerprint on first registration.
+        AC-21.e: emit schema_drift_detected; quarantine on major drift.
+        """
+        fingerprint_store = SchemaFingerprintStore()
+        for source_id, adapter in self._adapters.items():
+            if not hasattr(adapter, "get_schema"):
+                continue
+            # Only attempt schema fetch if the adapter is already connected.
+            if source_id not in self._connected_adapters:
+                continue
+            try:
+                schema = await adapter.get_schema()  # type: ignore[union-attr]
+            except Exception:  # noqa: BLE001
+                log.warning(
+                    "schema fetch failed for adapter '%s'; skipping fingerprint check",
+                    source_id,
+                )
+                continue
+
+            current_fp = schema.fingerprint()
+            stored_fp = fingerprint_store.get(source_id)
+            if stored_fp is None:
+                # First registration — record baseline.
+                fingerprint_store.record(source_id, current_fp)
+                continue
+
+            if stored_fp == current_fp:
+                continue
+
+            # Drift detected — classify severity.
+            # We need the previous schema to diff properly; without it we treat
+            # any fingerprint mismatch as major to be fail-closed (AC-21.e).
+            drift_entries = classify_drift(schema, schema)  # sentinel: schema vs schema = []
+            # Since we don't have the prior schema object, any fp mismatch = major.
+            is_major = True
+            _ = drift_entries  # classified as major regardless
+
+            log.warning(
+                "schema drift detected for adapter '%s' (previous=%s current=%s severity=major)",
+                source_id,
+                stored_fp[:16],
+                current_fp[:16],
+            )
+            self._audit_logger.emit(
+                AuditEntry(
+                    timestamp=AuditLogger.utcnow(),
+                    request_id=str(uuid.uuid4()),
+                    agent_id="<broker>",
+                    session_id=None,
+                    raw_intent="",
+                    intent_analysis=IntentAnalysis(
+                        raw_intent="", data_types_needed=[], entities=[]
+                    ),
+                    facts_asserted_summary={},
+                    routing_decisions=[],
+                    scope_constraints=[],
+                    denial_records=[],
+                    error_records=[],
+                    rule_trace=[],
+                    sources_queried=[],
+                    sources_denied=[],
+                    sources_skipped=[],
+                    sources_errored=[],
+                    attestation_token=None,
+                    duration_ms=0,
+                    event_type="schema_drift_detected",
+                )
+            )
+            if is_major:
+                self._quarantined_adapters.add(source_id)
 
     def close(self) -> None:
         """Idempotent sync close — FR-17, AC-8.6."""

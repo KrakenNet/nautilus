@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import time
+from datetime import UTC, datetime
 from typing import Any, ClassVar
 
 from nautilus.adapters.base import (
@@ -17,6 +18,7 @@ from nautilus.adapters.base import (
     validate_field,
     validate_operator,
 )
+from nautilus.adapters.schema import AdapterField, AdapterSchema, AdapterTable
 from nautilus.config.models import SourceConfig
 from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
@@ -248,6 +250,54 @@ class InfluxDBAdapter:
         self._query_api = None
         if client is not None:
             client.close()
+
+    async def get_schema(self) -> AdapterSchema:
+        """Return schema via SHOW MEASUREMENTS + SHOW FIELD KEYS. AC-21, OQ3."""
+        if self._query_api is None or self._config is None:
+            return AdapterSchema.unknown(
+                self._config.id if self._config else "influxdb",
+                self.source_type,
+            )
+        bucket = self._config.table or self._config.id
+        try:
+            meas_flux = (
+                'import "influxdata/influxdb/schema"\n'
+                f'schema.measurements(bucket: "{bucket}")'
+            )
+            meas_tables: Any = self._query_api.query(meas_flux)
+            measurements: list[str] = []
+            for table in meas_tables:
+                for record in table.records:
+                    val = record.get_value()
+                    if val is not None:
+                        measurements.append(str(val))
+
+            adapter_tables: list[AdapterTable] = []
+            for meas in measurements:
+                fields_flux = (
+                    f'import "influxdata/influxdb/schema"\n'
+                    f'schema.measurementFieldKeys(bucket: "{bucket}", measurement: "{meas}")'
+                )
+                field_tables: Any = self._query_api.query(fields_flux)
+                field_list: list[AdapterField] = []
+                for ft in field_tables:
+                    for record in ft.records:
+                        fname = record.get_value()
+                        if fname is not None:
+                            field_list.append(
+                                AdapterField(name=str(fname), type="field", nullable=True)
+                            )
+                adapter_tables.append(AdapterTable(name=meas, fields=tuple(field_list)))
+
+            return AdapterSchema(
+                adapter_id=self._config.id,
+                source_type=self.source_type,
+                tables=tuple(adapter_tables),
+                capability_flags={"deterministic": False},
+                fetched_at=datetime.now(UTC),
+            )
+        except Exception:  # noqa: BLE001
+            return AdapterSchema.unknown(self._config.id, self.source_type)
 
 
 __all__ = ["InfluxDBAdapter"]

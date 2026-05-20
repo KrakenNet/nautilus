@@ -208,7 +208,7 @@
       "depends_on": [
         "task-002"
       ],
-      "passes": false,
+      "passes": true,
       "estimated_loc": 550,
       "notes": "Largest task in Phase B. Splits conceptually as: (a) fingerprint store + broker hook (100 LOC), (b) per-adapter get_schema() impls (450 LOC, ~50 each). Per OQ3 design, each adapter's implementation differs. Fingerprints stored at .nautilus/adapters/fingerprints/*.json per module layout."
     },

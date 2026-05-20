@@ -337,6 +337,52 @@ def create_app(
         }
 
     # ------------------------------------------------------------------
+    # Adapter schema endpoint (AC-21.a)
+    # ------------------------------------------------------------------
+
+    @app.get("/v1/adapters/{name}/schema", tags=["adapters"])
+    async def get_adapter_schema(  # pyright: ignore[reportUnusedFunction]
+        name: str,
+        request: Request,
+    ) -> dict[str, Any]:
+        """Return the current AdapterSchema for the named adapter. AC-21.a."""
+        import dataclasses
+
+        broker: Broker | None = getattr(request.app.state, "broker", None)
+        if broker is None:
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Broker not ready",
+            )
+        adapter = getattr(broker, "_adapters", {}).get(name)
+        if adapter is None:
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Adapter '{name}' not found",
+            )
+        if not hasattr(adapter, "get_schema"):
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                detail=f"Adapter '{name}' does not support schema introspection",
+            )
+        try:
+            schema = await adapter.get_schema()
+        except Exception as exc:  # noqa: BLE001
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Schema fetch failed: {exc}",
+            ) from exc
+        return dataclasses.asdict(schema)
+
+    # ------------------------------------------------------------------
     # Root redirect — / → /admin
     # ------------------------------------------------------------------
 

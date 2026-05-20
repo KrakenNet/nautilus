@@ -16,6 +16,7 @@ from __future__ import annotations
 import re
 import time
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Any, ClassVar, cast
 
 from elasticsearch import AsyncElasticsearch
@@ -27,6 +28,7 @@ from nautilus.adapters.base import (
     ScopeEnforcementError,
     validate_field,
 )
+from nautilus.adapters.schema import AdapterField, AdapterSchema, AdapterTable
 from nautilus.config.models import BasicAuth, BearerAuth, MtlsAuth, SourceConfig
 from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
@@ -314,6 +316,39 @@ class ElasticsearchAdapter:
             rows=rows,
             duration_ms=duration_ms,
         )
+
+    async def get_schema(self) -> AdapterSchema:
+        """Return schema via GET _mapping API. AC-21, OQ3."""
+        if self._client is None or self._config is None or self._index is None:
+            return AdapterSchema.unknown(
+                self._config.id if self._config else "elasticsearch",
+                self.source_type,
+            )
+        try:
+            mapping: Any = await self._client.indices.get_mapping(index=self._index)  # pyright: ignore[reportUnknownMemberType]
+            # mapping shape: {<index>: {"mappings": {"properties": {...}}}}
+            index_mapping: Any = mapping.get(self._index, {})
+            props: dict[str, Any] = (
+                index_mapping.get("mappings", {}).get("properties", {})
+            )
+            fields = tuple(
+                AdapterField(
+                    name=fname,
+                    type=str(fdef.get("type", "object")),
+                    nullable=True,
+                )
+                for fname, fdef in sorted(props.items())
+            )
+            table = AdapterTable(name=self._index, fields=fields)
+            return AdapterSchema(
+                adapter_id=self._config.id,
+                source_type=self.source_type,
+                tables=(table,),
+                capability_flags={"deterministic": False},
+                fetched_at=datetime.now(UTC),
+            )
+        except Exception:  # noqa: BLE001
+            return AdapterSchema.unknown(self._config.id, self.source_type)
 
 
 __all__ = ["ElasticsearchAdapter"]

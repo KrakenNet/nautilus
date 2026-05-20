@@ -24,6 +24,7 @@ from pgvector.asyncpg import (  # pyright: ignore[reportMissingTypeStubs]
 from nautilus.adapters.base import AdapterError, quote_identifier
 from nautilus.adapters.embedder import Embedder, EmbeddingUnavailableError, NoopEmbedder
 from nautilus.adapters.postgres import PostgresAdapter
+from nautilus.adapters.schema import AdapterSchema
 from nautilus.config.models import SourceConfig
 from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
@@ -253,6 +254,18 @@ class PgVectorAdapter(PostgresAdapter):
             source_id=config.id,
             rows=rows,
             duration_ms=duration_ms,
+        )
+
+    async def get_schema(self) -> AdapterSchema:  # type: ignore[override]
+        """Delegate to Postgres information_schema with pgvector capability flag. AC-21, OQ3."""
+        schema = await super().get_schema()
+        # Re-stamp capability to indicate vector similarity support.
+        return AdapterSchema(
+            adapter_id=schema.adapter_id,
+            source_type=self.source_type,
+            tables=schema.tables,
+            capability_flags={**dict(schema.capability_flags), "vector_similarity": True},
+            fetched_at=schema.fetched_at,
         )
 
 
