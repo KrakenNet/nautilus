@@ -49,6 +49,11 @@ allowlist:
     expires_at: "2026-08-31"
     paths:
       - "nautilus/transport/fastapi_app.py"
+  - pattern: EMPTY_BODY
+    reason: "except OSError: pass is idiomatic fsync fallback, not a stub"
+    expires_at: "2026-08-31"
+    paths:
+      - "nautilus/audit/logger.py"
   - pattern: NOT_IMPLEMENTED
     reason: "Phase C placeholder — test is intentionally deferred until Phase C"
     expires_at: "2026-08-31"

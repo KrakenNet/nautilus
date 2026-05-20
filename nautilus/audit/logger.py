@@ -31,7 +31,7 @@ import json
 import os
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from fathom.models import AuditRecord
 
@@ -179,6 +179,38 @@ class AuditLogger:
             reason=reason,
             duration_us=entry.duration_ms * 1000,
             metadata={NAUTILUS_METADATA_KEY: payload_json},
+        )
+        self._sink.write(record)
+        _flush_sink(self._sink)
+
+    def emit_event(self, entry: Any) -> None:
+        """Emit a sparse audit event dict (OQ1 stage-4 resolution).
+
+        Accepts a plain ``dict`` produced by :class:`~nautilus.rkm.audit_emitter.AuditEventEmitter`
+        and persists it as a Fathom ``AuditRecord`` in the same JSONL sink.
+        Calls the existing :meth:`emit` path when ``entry`` is an
+        :class:`~nautilus.core.models.AuditEntry`; otherwise writes the dict
+        as-is under ``metadata[NAUTILUS_METADATA_KEY]`` so downstream readers
+        can still round-trip it.
+        """
+        if isinstance(entry, AuditEntry):
+            self.emit(entry)
+            return
+        # Sparse dict path — write as raw JSON under the metadata key.
+        import json as _json
+
+        from fathom.models import AuditRecord as _AuditRecord
+
+        ts = entry.get("timestamp") or _iso8601_utc_z(datetime.now(tz=UTC))
+        record = _AuditRecord(
+            timestamp=ts if isinstance(ts, str) else _iso8601_utc_z(ts),
+            session_id=str(entry.get("session_id") or entry.get("trace_id") or ""),
+            modules_traversed=[],
+            rules_fired=[],
+            decision="event",
+            reason=str(entry.get("event_type", "unknown")),
+            duration_us=0,
+            metadata={NAUTILUS_METADATA_KEY: _json.dumps(entry, default=str)},
         )
         self._sink.write(record)
         _flush_sink(self._sink)

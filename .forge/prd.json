@@ -263,7 +263,7 @@
       ],
       "contracts": [],
       "depends_on": [],
-      "passes": false,
+      "passes": true,
       "estimated_loc": 100,
       "notes": "OQ1 is load-bearing; must resolve before #35.3/#35.4 land. Implementation choice: new emit_event(sparse_entry) method on AuditLogger enables downstream code to emit events without full Broker context. Tests verify meta_rule_fired events propagate correctly."
     },
