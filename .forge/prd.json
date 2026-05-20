@@ -235,9 +235,10 @@
       ],
       "contracts": [],
       "depends_on": [],
-      "passes": false,
+      "passes": true,
       "estimated_loc": 200,
-      "notes": "Mirrors FileAttestationSink pattern. Stdlib fcntl.lockf only per constraints. No external filelock dep. Types.py defines Proposal, ValidationError, ConfidenceBreakdown dataclasses."
+      "notes": "Mirrors FileAttestationSink pattern. Stdlib fcntl.lockf only per constraints. No external filelock dep. Types.py defines Proposal, ValidationError, ConfidenceBreakdown dataclasses.",
+      "attempts": 1
     },
     {
       "id": "task-008",
