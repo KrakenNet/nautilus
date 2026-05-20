@@ -1,0 +1,32 @@
+# RKM templates (#35.2.a) — source_relationship + data_type_affinity.
+#
+# relationship_type valid values:
+#   sequential    — source B is typically queried after source A
+#   co-located    — sources share physical or logical infrastructure
+#   complementary — sources provide complementary data for the same intent
+#   alternative   — source B can substitute for source A
+#   overlaps      — sources share some overlapping data coverage
+#
+# strength and confidence are float slots in [0.0, 1.0].
+# observation_count is an integer count of observed co-occurrences.
+# first_observed and last_observed are ISO-8601 timestamps (string).
+templates:
+  - name: source_relationship
+    description: "Observed or declared relationship between two registered data sources."
+    slots:
+      - { name: source_a,          type: string,  required: true }
+      - { name: source_b,          type: string,  required: true }
+      - { name: relationship_type, type: symbol,  required: true }  # enum above
+      - { name: strength,          type: float,   default: 1.0 }    # [0.0, 1.0]
+      - { name: confidence,        type: float,   default: 1.0 }    # [0.0, 1.0]
+      - { name: observation_count, type: integer, default: 0 }
+      - { name: first_observed,    type: string,  default: "" }     # ISO-8601
+      - { name: last_observed,     type: string,  default: "" }     # ISO-8601
+
+  - name: data_type_affinity
+    description: "Declared affinity between a source and a data type token."
+    slots:
+      - { name: source_id,   type: string, required: true }
+      - { name: data_type,   type: string, required: true }
+      - { name: affinity,    type: float,  default: 1.0 }   # [0.0, 1.0]
+      - { name: notes,       type: string, default: "" }

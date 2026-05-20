@@ -103,6 +103,7 @@ from nautilus.observability.spans import (
     build_request_attributes,
 )
 from nautilus.rules import BUILT_IN_RULES_DIR
+from nautilus.rules.facts import load_manual_relationships
 from nautilus.synthesis.basic import BasicSynthesizer
 
 _metrics = NautilusMetrics()
@@ -390,6 +391,13 @@ class Broker:
             user_rules_dirs=user_rules_dirs,
             attestation=attestation,
         )
+
+        # AC-35.2.b/d — load manual relationship facts into the engine at
+        # startup; re-reading on every broker construction gives restart
+        # persistence. The directory is optional: missing = no-op.
+        _facts_dir = Path(path).parent / "facts" / "relationships"
+        if _facts_dir.is_dir():
+            load_manual_relationships(router.engine, _facts_dir)
 
         # Broker-default embedder: strict NoopEmbedder (design §3.10 — fail
         # loudly on missing embedder rather than silent zero vectors).

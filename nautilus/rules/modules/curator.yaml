@@ -1,0 +1,15 @@
+# Curator module (#35.3.a) — isolated from nautilus-routing.
+#
+# TODO(forge): AC-35.3.a — meta-rules in this module MUST NOT assert facts
+# in routing-module templates (AC-35.3.e, OQ2 resolution = parse-time
+# YAML check in nautilus/rkm/curator/isolation.py).
+# Scaffold note: module is declared empty so Fathom engine init succeeds.
+# Rules under nautilus/rules/meta/ register into this module via
+# `module: curator` on each ruleset; loader wiring lands with AC-35.3.
+
+modules:
+  - name: curator
+    description: "RKM meta-rule module — observation and pattern tracking, isolated from routing"
+
+focus_order:
+  - curator

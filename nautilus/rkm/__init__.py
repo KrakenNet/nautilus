@@ -13,3 +13,5 @@ Module-layout source of truth: ``.forge/shared.md`` "Module layout".
 """
 
 from __future__ import annotations
+
+from nautilus.rules.facts import load_relationship_facts as load_relationship_facts  # noqa: F401

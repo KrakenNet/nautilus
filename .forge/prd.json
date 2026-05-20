@@ -296,7 +296,7 @@
       ],
       "contracts": [],
       "depends_on": [],
-      "passes": false,
+      "passes": true,
       "estimated_loc": 180,
       "notes": "AC-35.2.c/d (pattern-matching + restart persistence) tested in integration suite. Curator module is container for meta-rules; no rule isolation logic here (that lands in task-010 via isolation.py)."
     },
