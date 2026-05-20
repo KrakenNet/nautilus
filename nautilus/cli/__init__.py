@@ -132,6 +132,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
     _adapters_mod.add_subparser(sub)
 
+    # key -----------------------------------------------------------------
+    from nautilus.cli import key as _key_mod
+
+    _key_mod.add_subparser(sub)
+
     return parser
 
 
@@ -245,6 +250,10 @@ def main(argv: list[str] | None = None) -> int:
         from nautilus.cli import adapters as _adapters_mod
 
         return _adapters_mod.dispatch(args)
+    if args.command == "key":
+        from nautilus.cli import key as _key_mod
+
+        return _key_mod.dispatch(args)
     # argparse enforces required=True; this is defensive.
     parser.print_help(sys.stderr)
     return 2
