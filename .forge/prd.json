@@ -54,7 +54,7 @@
         ".forge/contracts/postman/adapters-schema.postman.json"
       ],
       "depends_on": [],
-      "passes": false,
+      "passes": true,
       "estimated_loc": 220,
       "notes": "Embedder Protocol explicitly excluded per OQ1. AC-21.a scopes to 8 data-source adapters only. Drift-guard test is critical AC-21.a sub-requirement."
     },

@@ -31,6 +31,12 @@ allowlist:
       - "nautilus/cli/key.py"
       - "nautilus/cli/events.py"
       - "nautilus/core/attestation_payload.py"
+  - pattern: NOT_IMPLEMENTED
+    reason: "AC-21.b per-adapter impls land in task-006; Protocol default body intentionally deferred"
+    expires_at: "2026-08-31"
+    paths:
+      - "nautilus/adapters/base.py"
+      - "packages/nautilus-adapter-sdk/src/nautilus_adapter_sdk/protocols.py"
   - pattern: EMPTY_BODY
     reason: "KeyboardInterrupt handler pass is idiomatic Python, not a stub"
     expires_at: "2026-08-31"

@@ -11,10 +11,13 @@ The ``_OPERATOR_ALLOWLIST`` set here is the runtime counterpart to the
 from __future__ import annotations
 
 import re
-from typing import Any, ClassVar, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
 
 from nautilus.config.models import SourceConfig
 from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
+
+if TYPE_CHECKING:
+    from nautilus.adapters.schema import AdapterSchema
 
 
 class AdapterError(Exception):
@@ -170,6 +173,22 @@ class Adapter(Protocol):
     async def close(self) -> None:
         """Release adapter resources; MUST be idempotent (FR-17, AC-8.6)."""
         ...
+
+    async def get_schema(self) -> AdapterSchema:
+        """Return the adapter's schema fingerprint surface.
+
+        Default implementation raises :exc:`NotImplementedError`; concrete
+        adapters override this in task-006.  Per-adapter impls land later so
+        registration succeeds at import-time but fails at runtime if called
+        before the adapter implements it (AC-21.b; shared.md line 315-322).
+
+        Raises:
+            NotImplementedError: Until the per-adapter implementation lands
+                (task-006).
+        """
+        raise NotImplementedError(
+            "AC-21.b: this adapter must implement get_schema() (task-006)"
+        )
 
 
 __all__ = [
