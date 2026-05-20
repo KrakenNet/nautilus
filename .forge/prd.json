@@ -483,7 +483,7 @@
       "depends_on": [
         "task-014"
       ],
-      "passes": false,
+      "passes": true,
       "estimated_loc": 120,
       "notes": "Simplest validator module; pure function with no dependencies beyond dataclass types. ConfidenceBreakdown includes all penalty terms for CLI display."
     },
