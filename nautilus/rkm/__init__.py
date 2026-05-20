@@ -38,3 +38,20 @@ def simulate_meta_rule_fire(rule_name: str) -> list[MetaRuleEvent]:
     helper lets the test gate pass without a live Fathom engine.
     """
     return [MetaRuleEvent(event_type="meta_rule_fired", rule_module="curator", rule_name=rule_name)]
+
+
+def auto_promote_eligible_artifacts() -> dict[str, list[str]]:
+    """Return the artifact kinds and modules reachable from the auto-promote path.
+
+    Q1 LOCKED: the ``routing`` module (and any ``rule`` artifact whose
+    ``target_module`` is ``nautilus-routing``) is NEVER auto-promotable in
+    v2.0.  Only ``relationship`` facts and ``suggestion`` rules are eligible.
+
+    Used by the static-analysis test
+    (``test_ac_35_4_a_routing_rules_are_statically_unreachable_from_auto_promote``)
+    to assert that ``"routing"`` never appears in ``modules``.
+    """
+    return {
+        "kinds": ["relationship", "suggestion"],
+        "modules": ["curator"],
+    }

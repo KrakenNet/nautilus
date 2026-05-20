@@ -368,7 +368,7 @@
       "depends_on": [
         "task-010"
       ],
-      "passes": false,
+      "passes": true,
       "estimated_loc": 180,
       "notes": "Flag default OFF permanent safety gate in v2.0. Static test asserts no routing-module artifact reachable from auto-promote paths. Lineage metadata (originating rule, observation IDs) persisted to proposal record per AC-35.4.c."
     },

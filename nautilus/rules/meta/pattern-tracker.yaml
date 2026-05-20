@@ -85,3 +85,59 @@ rules:
         fact: "?cand"
         slots:
           observation_count: "(+ ?count 1)"
+
+  - name: promote-high-confidence-relationship
+    description: >
+      When a relationship_candidate's observation_count exceeds 9 and the
+      auto_promote feature flag is enabled, emit a proposal_emitted audit
+      event and append a Proposal record to the queue.  Q1 LOCKED: only
+      kind == relationship (or suggestion) may reach this rule — routing
+      module artifacts are statically unreachable. (AC-35.4.a)
+    salience: 40
+    when:
+      - template: relationship_candidate
+        bind: ?cand
+        conditions:
+          - slot: observation_count
+            bind: ?count
+          - test: "(> ?count 9)"
+          - slot: kind
+            bind: ?kind
+          - test: "(eq ?kind relationship)"
+      - template: config_flag
+        conditions:
+          - slot: name
+            value: "rkm.auto_promote.enabled"
+          - slot: value
+            value: "true"
+    then:
+      action: callback
+      callback: emit_proposal
+      args:
+        event_type: proposal_emitted
+        originating_rule: promote-high-confidence-relationship
+        artifact_type: relationship_fact
+        target_module: curator
+
+  - name: flag-low-confidence-for-human
+    description: >
+      Any relationship_candidate with observation_count >= 10 is appended to
+      the human-review queue regardless of the auto_promote flag.  This is
+      the fail-safe human-review path (AC-35.4.b).  Runs after
+      promote-high-confidence-relationship (lower salience) so the
+      auto-promote path fires first when enabled.
+    salience: 30
+    when:
+      - template: relationship_candidate
+        bind: ?cand
+        conditions:
+          - slot: observation_count
+            bind: ?count
+          - test: "(>= ?count 10)"
+    then:
+      action: callback
+      callback: append_human_review
+      args:
+        originating_rule: flag-low-confidence-for-human
+        artifact_type: relationship_fact
+        target_module: curator

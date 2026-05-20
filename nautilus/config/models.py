@@ -313,10 +313,27 @@ class SessionStoreConfig(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class AutoPromoteConfig(BaseModel):
+    """``rkm.auto_promote`` sub-section (AC-35.4.d).
+
+    Default OFF is a permanent safety gate in v2.0.  When ``enabled`` is
+    ``False`` every promotion candidate routes to the human-review queue
+    regardless of observation count or artifact kind.
+    """
+
+    enabled: bool = False
+
+
+class RkmConfig(BaseModel):
+    """``rkm`` subsection of ``nautilus.yaml`` (AC-35.4)."""
+
+    auto_promote: AutoPromoteConfig = Field(default_factory=AutoPromoteConfig)
+
+
 class NautilusConfig(BaseModel):
     """Root ``nautilus.yaml`` document (design §4.1, §4.10, extended §3.11)."""
 
-    sources: list[SourceConfig]
+    sources: list[SourceConfig] = Field(default_factory=list)
     agents: dict[str, AgentRecord] = Field(default_factory=dict)
     attestation: AttestationConfig = Field(default_factory=AttestationConfig)
     rules: RulesConfig = Field(default_factory=RulesConfig)
@@ -325,3 +342,4 @@ class NautilusConfig(BaseModel):
     api: ApiConfig = Field(default_factory=ApiConfig)
     mcp: MCPConfig = Field(default_factory=MCPConfig)
     session_store: SessionStoreConfig = Field(default_factory=SessionStoreConfig)
+    rkm: RkmConfig = Field(default_factory=RkmConfig)
