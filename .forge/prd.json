@@ -456,7 +456,7 @@
       "depends_on": [
         "task-007"
       ],
-      "passes": false,
+      "passes": true,
       "estimated_loc": 300,
       "notes": "Test infrastructure budget: replay harness doesn't exist today. Closest precedent is tests/integration/test_fathom_smoke.py. Performance target: <60s is achievable with naive per-request CLIPS environment fresh-load; optimize after green."
     },

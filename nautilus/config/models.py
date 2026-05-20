@@ -324,10 +324,23 @@ class AutoPromoteConfig(BaseModel):
     enabled: bool = False
 
 
+class SandboxConfig(BaseModel):
+    """``rkm.sandbox`` sub-section (AC-35.7.f).
+
+    ``min_entries`` is the minimum number of audit-log entries required
+    before the sandbox reports a meaningful result.  Below this threshold
+    :func:`~nautilus.rkm.validator.sandbox.sandbox_replay` sets
+    ``SandboxResult.insufficient_history = True``.
+    """
+
+    min_entries: int = 100
+
+
 class RkmConfig(BaseModel):
     """``rkm`` subsection of ``nautilus.yaml`` (AC-35.4)."""
 
     auto_promote: AutoPromoteConfig = Field(default_factory=AutoPromoteConfig)
+    sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
 
 
 class NautilusConfig(BaseModel):
