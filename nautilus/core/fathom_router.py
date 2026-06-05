@@ -361,6 +361,7 @@ class FathomRouter:
             ) from exc
         finally:
             import os as _os
+
             with contextlib.suppress(OSError):
                 _os.unlink(tmp_path)  # type: ignore[possibly-undefined]
 

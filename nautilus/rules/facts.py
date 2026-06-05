@@ -77,9 +77,7 @@ def _validate_relationship_entry(entry: Any, path: Path, idx: int) -> None:
                 f"{path}:{approx_line}: {float_slot} must be a float, got {value!r}"
             ) from exc
         if not (0.0 <= fval <= 1.0):
-            raise ValueError(
-                f"{path}:{approx_line}: {float_slot}={fval} out of range [0.0, 1.0]"
-            )
+            raise ValueError(f"{path}:{approx_line}: {float_slot}={fval} out of range [0.0, 1.0]")
 
 
 def load_manual_relationships(broker_env: Any, facts_dir: Path) -> int:

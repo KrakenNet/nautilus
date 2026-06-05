@@ -48,23 +48,17 @@ def _check_pair(rule_a: dict, rule_b: dict, expected: str, pair_name: str) -> No
     flags_ba = shadow_check(rule_a, [rule_b])  # is A subsumed/shadowed by B?
 
     if expected == "none":
-        assert flags_ab == (), (
-            f"{pair_name}: expected no flags (A vs B), got {flags_ab}"
-        )
-        assert flags_ba == (), (
-            f"{pair_name}: expected no flags (B vs A), got {flags_ba}"
-        )
+        assert flags_ab == (), f"{pair_name}: expected no flags (A vs B), got {flags_ab}"
+        assert flags_ba == (), f"{pair_name}: expected no flags (B vs A), got {flags_ba}"
     elif expected == "a_subsumes_b":
         # A subsumes B => B is subsumed_by A
         assert _has_relation(flags_ab, "subsumed_by"), (
-            f"{pair_name}: false-negative — expected subsumed_by, "
-            f"got {flags_ab}"
+            f"{pair_name}: false-negative — expected subsumed_by, got {flags_ab}"
         )
     elif expected == "b_subsumes_a":
         # B subsumes A => A is subsumed_by B
         assert _has_relation(flags_ba, "subsumed_by"), (
-            f"{pair_name}: false-negative — expected subsumed_by, "
-            f"got {flags_ba}"
+            f"{pair_name}: false-negative — expected subsumed_by, got {flags_ba}"
         )
     elif expected == "a_shadows_b":
         # A shadows B => shadow_check(B, [A]) returns shadows

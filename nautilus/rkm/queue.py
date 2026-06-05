@@ -97,9 +97,7 @@ class ProposalQueue:
             except (BlockingIOError, OSError) as exc:
                 if time.monotonic() >= deadline:
                     fh.close()
-                    raise ProposalQueueLocked(
-                        "lock contention timeout on proposal queue"
-                    ) from exc
+                    raise ProposalQueueLocked("lock contention timeout on proposal queue") from exc
                 time.sleep(_LOCK_POLL_S)
 
     def _release_lock(self, fh: Any) -> None:
@@ -235,9 +233,7 @@ class ProposalQueue:
         if not pending:
             return 0.0
         now = datetime.now(UTC)
-        oldest = min(
-            (now - p.proposed_at).total_seconds() for p in pending
-        )
+        oldest = min((now - p.proposed_at).total_seconds() for p in pending)
         return max(0.0, oldest)
 
 

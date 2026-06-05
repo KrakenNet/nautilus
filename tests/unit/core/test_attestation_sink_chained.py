@@ -98,9 +98,7 @@ class TestBrokerSinkWiring:
     def test_chained_spec_builds_chained_sink(self, tmp_path: Path) -> None:
         from nautilus.config.models import NautilusConfig
 
-        config = NautilusConfig.model_construct(
-            attestation=self._config(tmp_path, chained=True)
-        )
+        config = NautilusConfig.model_construct(attestation=self._config(tmp_path, chained=True))
         service = AttestationService.generate_keypair()
         sink = Broker._build_attestation_sink(config, service)
         assert isinstance(sink, ChainedFileAttestationSink)
@@ -108,9 +106,7 @@ class TestBrokerSinkWiring:
     def test_chained_spec_without_attestation_raises(self, tmp_path: Path) -> None:
         from nautilus.config.models import NautilusConfig
 
-        config = NautilusConfig.model_construct(
-            attestation=self._config(tmp_path, chained=True)
-        )
+        config = NautilusConfig.model_construct(attestation=self._config(tmp_path, chained=True))
         with pytest.raises(ValueError, match="requires attestation.enabled"):
             Broker._build_attestation_sink(config, None)
 
@@ -118,8 +114,6 @@ class TestBrokerSinkWiring:
         from nautilus.config.models import NautilusConfig
         from nautilus.core.attestation_sink import FileAttestationSink
 
-        config = NautilusConfig.model_construct(
-            attestation=self._config(tmp_path, chained=False)
-        )
+        config = NautilusConfig.model_construct(attestation=self._config(tmp_path, chained=False))
         sink = Broker._build_attestation_sink(config, None)
         assert isinstance(sink, FileAttestationSink)

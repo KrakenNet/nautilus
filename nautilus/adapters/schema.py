@@ -104,9 +104,7 @@ class SchemaDiffEntry:
     severity: Literal["minor", "major"]
 
 
-def classify_drift(
-    previous: AdapterSchema, current: AdapterSchema
-) -> list[SchemaDiffEntry]:
+def classify_drift(previous: AdapterSchema, current: AdapterSchema) -> list[SchemaDiffEntry]:
     """Return drift entries between ``previous`` and ``current``.
 
     Severity rules (PM Q3 LOCKED, shared.md line 336-341):

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from nautilus.rkm.queue import ProposalQueue
+from nautilus.rkm.queue import InvalidTransition, ProposalQueue
 from nautilus.rkm.types import Proposal
 
 pytestmark = pytest.mark.unit
@@ -66,7 +66,7 @@ def test_ac_35_9_d_approve_only_valid_from_pending(tmp_path: Path) -> None:
     )
     # Re-approving an already-approved proposal must surface as a
     # well-defined error (CLI exit 2 / REST 409 per shared.md exit-code table).
-    with pytest.raises(Exception):
+    with pytest.raises(InvalidTransition):
         queue.transition(
             "prop_test_abc",
             to="approved",

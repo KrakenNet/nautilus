@@ -18,9 +18,7 @@ from nautilus.rkm.validator.shadow import shadow_check
 from nautilus.rkm.validator.static import validate_static
 
 
-def run_pipeline(
-    rule_yaml: Path, *, queue: ProposalQueue, audit_log: Path
-) -> Proposal:
+def run_pipeline(rule_yaml: Path, *, queue: ProposalQueue, audit_log: Path) -> Proposal:
     """Run static → shadow → sandbox → score, append a Proposal to the queue."""
     static_result = validate_static(rule_yaml)
     shadow_flags = shadow_check({}, [])

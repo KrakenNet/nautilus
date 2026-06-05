@@ -21,7 +21,11 @@ def test_ac_18_e_add_subparser_registers_key_group() -> None:
 
 def test_ac_18_e_rotate_returns_int_exit_code() -> None:
     args = argparse.Namespace(
-        cmd="key", key_subcommand="rotate", remove_old=False, yes=False, json=False,
+        cmd="key",
+        key_subcommand="rotate",
+        remove_old=False,
+        yes=False,
+        json=False,
     )
     rc = cli_key.dispatch(args)
     assert isinstance(rc, int)

@@ -14,11 +14,7 @@ pytestmark = pytest.mark.unit
 def test_ac_35_5_a_valid_rule_returns_ok_true(tmp_path: Path) -> None:
     yaml_path = tmp_path / "ok.yaml"
     yaml_path.write_text(
-        "rules:\n"
-        "  - name: noop\n"
-        "    module: suggestions\n"
-        "    lhs: []\n"
-        "    rhs: []\n"
+        "rules:\n  - name: noop\n    module: suggestions\n    lhs: []\n    rhs: []\n"
     )
     result = validate_static(yaml_path)
     assert result.ok is True

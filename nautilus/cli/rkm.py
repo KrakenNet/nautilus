@@ -221,12 +221,16 @@ def _cmd_queue_approve(args: argparse.Namespace) -> int:
         return 1
 
     if getattr(args, "json", False):
-        print(json.dumps({
-            "proposal_id": result.proposal_id,
-            "reviewer": result.reviewer,
-            "approved_at": result.approved_at.isoformat(),
-            "promoted": result.promoted,
-        }))
+        print(
+            json.dumps(
+                {
+                    "proposal_id": result.proposal_id,
+                    "reviewer": result.reviewer,
+                    "approved_at": result.approved_at.isoformat(),
+                    "promoted": result.promoted,
+                }
+            )
+        )
     else:
         ok(f"proposal {result.proposal_id} approved by {result.reviewer}")
     return 0
@@ -258,12 +262,16 @@ def _cmd_queue_reject(args: argparse.Namespace) -> int:
         return 1
 
     if getattr(args, "json", False):
-        print(json.dumps({
-            "proposal_id": result.proposal_id,
-            "reviewer": result.reviewer,
-            "rejected_at": result.rejected_at.isoformat(),
-            "reason": result.reason,
-        }))
+        print(
+            json.dumps(
+                {
+                    "proposal_id": result.proposal_id,
+                    "reviewer": result.reviewer,
+                    "rejected_at": result.rejected_at.isoformat(),
+                    "reason": result.reason,
+                }
+            )
+        )
     else:
         ok(f"proposal {result.proposal_id} rejected by {result.reviewer}: {result.reason}")
     return 0
@@ -353,9 +361,7 @@ def _cmd_lineage(args: argparse.Namespace) -> int:
         retired = " [retired]" if r.retired_at else ""
         promoted_iso = r.promoted_at.isoformat()
         print(
-            f"  {r.rule_name} v{r.version}"
-            f"  approver={r.approver}"
-            f"  promoted={promoted_iso}{retired}"
+            f"  {r.rule_name} v{r.version}  approver={r.approver}  promoted={promoted_iso}{retired}"
         )
         if r.derived_from:
             print(f"    derived_from: {', '.join(r.derived_from)}")

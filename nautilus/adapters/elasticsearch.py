@@ -328,9 +328,7 @@ class ElasticsearchAdapter:
             mapping: Any = await self._client.indices.get_mapping(index=self._index)  # pyright: ignore[reportUnknownMemberType]
             # mapping shape: {<index>: {"mappings": {"properties": {...}}}}
             index_mapping: Any = mapping.get(self._index, {})
-            props: dict[str, Any] = (
-                index_mapping.get("mappings", {}).get("properties", {})
-            )
+            props: dict[str, Any] = index_mapping.get("mappings", {}).get("properties", {})
             fields = tuple(
                 AdapterField(
                     name=fname,

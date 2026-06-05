@@ -31,9 +31,7 @@ class AlreadyDecidedError(Exception):  # noqa: N818
     """
 
     def __init__(self, proposal_id: str, current_status: str) -> None:
-        super().__init__(
-            f"proposal {proposal_id!r} already decided: status={current_status!r}"
-        )
+        super().__init__(f"proposal {proposal_id!r} already decided: status={current_status!r}")
         self.proposal_id = proposal_id
         self.current_status = current_status
 
@@ -140,17 +138,25 @@ def approve_proposal(
 
     # Emit audit events out-of-band.
     if audit_logger is not None:
-        _emit(audit_logger, "proposal_approved", {
-            "proposal_id": proposal_id,
-            "reviewer": reviewer_identity,
-            "timestamp": now.isoformat(),
-        })
-        if promoted:
-            _emit(audit_logger, "rule_promoted", {
+        _emit(
+            audit_logger,
+            "proposal_approved",
+            {
                 "proposal_id": proposal_id,
                 "reviewer": reviewer_identity,
                 "timestamp": now.isoformat(),
-            })
+            },
+        )
+        if promoted:
+            _emit(
+                audit_logger,
+                "rule_promoted",
+                {
+                    "proposal_id": proposal_id,
+                    "reviewer": reviewer_identity,
+                    "timestamp": now.isoformat(),
+                },
+            )
 
     return ApprovalResult(
         proposal_id=proposal_id,
@@ -191,12 +197,16 @@ def reject_proposal(
     )
 
     if audit_logger is not None:
-        _emit(audit_logger, "proposal_rejected", {
-            "proposal_id": proposal_id,
-            "reviewer": reviewer_identity,
-            "reason": reason,
-            "timestamp": now.isoformat(),
-        })
+        _emit(
+            audit_logger,
+            "proposal_rejected",
+            {
+                "proposal_id": proposal_id,
+                "reviewer": reviewer_identity,
+                "reason": reason,
+                "timestamp": now.isoformat(),
+            },
+        )
 
     return RejectionResult(
         proposal_id=proposal_id,
@@ -209,6 +219,7 @@ def reject_proposal(
 # ---------------------------------------------------------------------------
 # Cascade retraction stub — AC-35.10.d (real CLI wiring in task-026 cli)
 # ---------------------------------------------------------------------------
+
 
 def retract_rule(
     rule_name: str,
@@ -233,20 +244,25 @@ def retract_rule(
         cascade=cascade,  # type: ignore[arg-type]
     )
     if audit_logger is not None:
-        _emit(audit_logger, "rule_retracted", {
-            "rule_name": rule_name,
-            "version": version,
-            "reason": reason,
-            "reviewer": reviewer,
-            "affected_descendants": affected,
-            "timestamp": datetime.now(UTC).isoformat(),
-        })
+        _emit(
+            audit_logger,
+            "rule_retracted",
+            {
+                "rule_name": rule_name,
+                "version": version,
+                "reason": reason,
+                "reviewer": reviewer,
+                "affected_descendants": affected,
+                "timestamp": datetime.now(UTC).isoformat(),
+            },
+        )
     return affected
 
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _extract_rule_yaml(proposal: Proposal) -> str:
     """Extract YAML text from proposal artifact.
@@ -259,6 +275,7 @@ def _extract_rule_yaml(proposal: Proposal) -> str:
     if isinstance(artifact.get("yaml"), str):
         return artifact["yaml"]
     import json
+
     return json.dumps(artifact, separators=(",", ":"))
 
 
@@ -268,9 +285,7 @@ def _build_lineage_record(
     promoted_at: datetime,
 ) -> LineageRecord:
     """Build a :class:`LineageRecord` from an approved proposal."""
-    derived_from: tuple[str, ...] = tuple(
-        proposal.lineage.get("derived_from", [])
-    )
+    derived_from: tuple[str, ...] = tuple(proposal.lineage.get("derived_from", []))
     observation_ids: dict[str, Any] = dict(proposal.lineage.get("observation_ids", {}))
     sandbox_results: dict[str, Any] = dict(proposal.lineage.get("sandbox_results", {}))
     rule_name: str = proposal.artifact.get("name", proposal.proposal_id)
@@ -293,6 +308,7 @@ def _emit(audit_logger: Any, event_type: str, fields: dict[str, Any]) -> None:
 
     try:
         from nautilus.rkm.audit_emitter import emit_event_oob
+
         entry = {
             "event_type": event_type,
             "schema_version": 2,

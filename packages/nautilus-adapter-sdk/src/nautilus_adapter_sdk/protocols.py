@@ -33,9 +33,7 @@ class Adapter(Protocol):
         Default raises NotImplementedError until per-adapter impl lands
         (task-006).  Shared.md line 315-322.
         """
-        raise NotImplementedError(
-            "AC-21.b: this adapter must implement get_schema() (task-006)"
-        )
+        raise NotImplementedError("AC-21.b: this adapter must implement get_schema() (task-006)")
 
 
 @runtime_checkable

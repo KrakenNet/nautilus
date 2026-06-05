@@ -261,8 +261,7 @@ class InfluxDBAdapter:
         bucket = self._config.table or self._config.id
         try:
             meas_flux = (
-                'import "influxdata/influxdb/schema"\n'
-                f'schema.measurements(bucket: "{bucket}")'
+                f'import "influxdata/influxdb/schema"\nschema.measurements(bucket: "{bucket}")'
             )
             meas_tables: Any = self._query_api.query(meas_flux)
             measurements: list[str] = []

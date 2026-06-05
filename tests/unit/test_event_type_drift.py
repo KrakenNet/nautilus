@@ -39,6 +39,5 @@ def test_event_type_literal_and_cli_enumeration_agree() -> None:
     cli_set = set(list_event_types())
     literal_set = _literal_event_types()
     assert cli_set == literal_set, (
-        f"event_type drift: CLI={cli_set - literal_set} "
-        f"Literal={literal_set - cli_set}"
+        f"event_type drift: CLI={cli_set - literal_set} Literal={literal_set - cli_set}"
     )

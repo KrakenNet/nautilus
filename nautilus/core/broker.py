@@ -552,10 +552,7 @@ class Broker:
         if isinstance(sink_spec, FileSinkSpec):
             if sink_spec.chained:
                 if attestation is None:
-                    msg = (
-                        "attestation.sink.chained requires attestation.enabled "
-                        "with a signing key"
-                    )
+                    msg = "attestation.sink.chained requires attestation.enabled with a signing key"
                     raise ValueError(msg)
                 return ChainedFileAttestationSink(
                     Path(sink_spec.path),

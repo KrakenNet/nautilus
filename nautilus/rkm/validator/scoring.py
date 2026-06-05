@@ -23,9 +23,7 @@ from nautilus.rkm.validator.sandbox import SandboxResult
 from nautilus.rkm.validator.shadow import ShadowFlag
 
 
-def score(
-    sandbox: SandboxResult, shadow_flags: tuple[ShadowFlag, ...]
-) -> ConfidenceBreakdown:
+def score(sandbox: SandboxResult, shadow_flags: tuple[ShadowFlag, ...]) -> ConfidenceBreakdown:
     """Pure-function confidence score. AC-35.8.a."""
     base = 1.0
 

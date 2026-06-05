@@ -25,8 +25,13 @@ def test_ac_35_10_a_retract_without_yes_exits_one(
     """``rule retract`` without ``--yes`` MUST exit 1 (destructive guard)."""
     monkeypatch.setenv("NAUTILUS_REVIEWER", "alice@example.com")
     args = argparse.Namespace(
-        cmd="rule", rule_subcommand="retract", name="some_rule",
-        reason="cleanup", cascade=False, orphan_children=False, yes=False,
+        cmd="rule",
+        rule_subcommand="retract",
+        name="some_rule",
+        reason="cleanup",
+        cascade=False,
+        orphan_children=False,
+        yes=False,
     )
     rc = cli_rule.dispatch(args)
     assert rc == 1

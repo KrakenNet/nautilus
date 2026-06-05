@@ -25,8 +25,12 @@ def test_ac_35_9_b_add_subparser_registers_queue_group() -> None:
 
 def test_ac_35_9_b_dispatch_returns_int_exit_code() -> None:
     args = argparse.Namespace(
-        cmd="rkm", rkm_subcommand="queue", queue_subcommand="list",
-        status=None, min_confidence=0.0, json=False,
+        cmd="rkm",
+        rkm_subcommand="queue",
+        queue_subcommand="list",
+        status=None,
+        min_confidence=0.0,
+        json=False,
     )
     rc = cli_rkm.dispatch(args)
     assert isinstance(rc, int)
@@ -38,8 +42,12 @@ def test_ac_35_9_b_dispatch_approve_requires_reviewer_env(
     """Without ``NAUTILUS_REVIEWER`` set, ``approve`` exits 1 (DQ4)."""
     monkeypatch.delenv("NAUTILUS_REVIEWER", raising=False)
     args = argparse.Namespace(
-        cmd="rkm", rkm_subcommand="queue", queue_subcommand="approve",
-        proposal_id="prop_x", note=None, json=False,
+        cmd="rkm",
+        rkm_subcommand="queue",
+        queue_subcommand="approve",
+        proposal_id="prop_x",
+        note=None,
+        json=False,
     )
     rc = cli_rkm.dispatch(args)
     assert rc == 1

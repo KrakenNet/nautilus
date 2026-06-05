@@ -25,9 +25,7 @@ from nautilus.cli._common import err, ok
 
 def add_subparser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
     """Add ``attestation`` group to the top-level argparse subparsers."""
-    p_att = sub.add_parser(
-        "attestation", help="Chained attestation log tools (offline verify)."
-    )
+    p_att = sub.add_parser("attestation", help="Chained attestation log tools (offline verify).")
     att_sub = p_att.add_subparsers(dest="attestation_subcommand", metavar="subcommand")
 
     p_verify = att_sub.add_parser(
@@ -71,9 +69,7 @@ def _cmd_verify(args: argparse.Namespace) -> int:
     log_path = Path(args.log)
     # Matches fathom's ChainedAttestationLog.public_key_path derivation.
     pubkey_path = (
-        Path(args.pubkey)
-        if args.pubkey
-        else log_path.with_name(log_path.name + ".pub.pem")
+        Path(args.pubkey) if args.pubkey else log_path.with_name(log_path.name + ".pub.pem")
     )
 
     if not log_path.exists():

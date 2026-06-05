@@ -24,9 +24,7 @@ def request_lines(audit_path: Path) -> list[str]:
         if not raw.strip():
             continue
         record = cast("dict[str, Any]", json.loads(raw))
-        entry = cast(
-            "dict[str, Any]", json.loads(record["metadata"][NAUTILUS_METADATA_KEY])
-        )
+        entry = cast("dict[str, Any]", json.loads(record["metadata"][NAUTILUS_METADATA_KEY]))
         if entry.get("event_type", "request") == "request":
             lines.append(raw)
     return lines

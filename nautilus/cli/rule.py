@@ -42,9 +42,7 @@ def add_subparser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type
     p_retract = rule_sub.add_parser("retract", help="Retract (retire) a rule. Destructive.")
     p_retract.add_argument("name", help="Rule name.")
     p_retract.add_argument("--reason", required=True, help="Retraction reason (required).")
-    p_retract.add_argument(
-        "--yes", action="store_true", help="Confirm destructive operation."
-    )
+    p_retract.add_argument("--yes", action="store_true", help="Confirm destructive operation.")
     p_retract.add_argument(
         "--cascade",
         action="store_true",
@@ -87,9 +85,7 @@ def add_subparser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type
         help="Target version number to restore.",
     )
     p_rollback.add_argument("--reason", required=True, help="Rollback reason (required).")
-    p_rollback.add_argument(
-        "--yes", action="store_true", help="Confirm destructive operation."
-    )
+    p_rollback.add_argument("--yes", action="store_true", help="Confirm destructive operation.")
 
 
 def dispatch(args: argparse.Namespace) -> int:
@@ -127,8 +123,10 @@ def _cmd_list(args: argparse.Namespace) -> int:
     elif status_filter == "retired":
         records = [r for r in records if r.retired_at is not None]
     if getattr(args, "json", False):
-        out = [{"name": r.rule_name, "version": r.version,
-                "retired": r.retired_at is not None} for r in records]
+        out = [
+            {"name": r.rule_name, "version": r.version, "retired": r.retired_at is not None}
+            for r in records
+        ]
         print(json.dumps(out))
     else:
         for r in records:

@@ -51,9 +51,7 @@ def test_ac_18_a_issued_token_carries_required_claims() -> None:
 
 
 def test_ac_18_d_verify_rejects_bad_signature_with_reason_code() -> None:
-    service = SessionTokenService(
-        key_ring=KeyRing(), broker_instance_id="broker-1"
-    )
+    service = SessionTokenService(key_ring=KeyRing(), broker_instance_id="broker-1")
     with pytest.raises(SessionTokenError) as excinfo:
         service.verify("not.a.valid.jws")
     assert excinfo.value.reason_code in {
@@ -71,21 +69,15 @@ def test_ac_18_d_verify_rejects_bad_signature_with_reason_code() -> None:
 
 def test_ac_18_e_rotation_old_tokens_still_validate_during_overlap() -> None:
     key_ring = KeyRing()
-    service = SessionTokenService(
-        key_ring=key_ring, broker_instance_id="broker-1"
-    )
-    old_token = service.issue(
-        session_id="s", agent_id="a", purpose="p", clearance="c"
-    )
+    service = SessionTokenService(key_ring=key_ring, broker_instance_id="broker-1")
+    old_token = service.issue(session_id="s", agent_id="a", purpose="p", clearance="c")
     old_claims = service.verify(old_token)
     key_ring.rotate()
     # Old token must still verify after rotate (rotating-out window).
     verified_old = service.verify(old_token)
     assert verified_old.kid == old_claims.kid
     # New token must carry the new kid.
-    new_token = service.issue(
-        session_id="s2", agent_id="a", purpose="p", clearance="c"
-    )
+    new_token = service.issue(session_id="s2", agent_id="a", purpose="p", clearance="c")
     new_claims = service.verify(new_token)
     assert new_claims.kid != old_claims.kid
 
@@ -97,9 +89,7 @@ def test_ac_18_e_rotation_old_tokens_still_validate_during_overlap() -> None:
 
 
 def test_ac_18_g_token_carries_no_unexpected_pii() -> None:
-    service = SessionTokenService(
-        key_ring=KeyRing(), broker_instance_id="broker-1"
-    )
+    service = SessionTokenService(key_ring=KeyRing(), broker_instance_id="broker-1")
     token = service.issue(
         session_id="s",
         agent_id="agent-pii",

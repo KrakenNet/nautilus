@@ -62,9 +62,7 @@ def _condition_key(cond: dict[str, Any]) -> tuple[str, frozenset[tuple[str, str]
     return (template, slots)
 
 
-def _condition_is_more_general(
-    general_cond: dict[str, Any], specific_cond: dict[str, Any]
-) -> bool:
+def _condition_is_more_general(general_cond: dict[str, Any], specific_cond: dict[str, Any]) -> bool:
     """True if ``general_cond`` matches a superset of facts vs ``specific_cond``.
 
     Same template + general_cond.slots is a subset of specific_cond.slots
@@ -79,9 +77,7 @@ def _condition_is_more_general(
     return gen_slots <= spec_slots
 
 
-def _lhs_subsumes(
-    general_lhs: list[dict[str, Any]], specific_lhs: list[dict[str, Any]]
-) -> bool:
+def _lhs_subsumes(general_lhs: list[dict[str, Any]], specific_lhs: list[dict[str, Any]]) -> bool:
     """True if every condition in ``general_lhs`` is covered by ``specific_lhs``.
 
     Conservative: requires an injective matching from general conditions to
@@ -107,9 +103,7 @@ def _lhs_subsumes(
     return True
 
 
-def _lhs_equal(
-    lhs_a: list[dict[str, Any]], lhs_b: list[dict[str, Any]]
-) -> bool:
+def _lhs_equal(lhs_a: list[dict[str, Any]], lhs_b: list[dict[str, Any]]) -> bool:
     """True if both LHS condition sets are semantically equal."""
     if len(lhs_a) != len(lhs_b):
         return False
@@ -123,9 +117,7 @@ def _lhs_equal(
 # ---------------------------------------------------------------------------
 
 
-def shadow_check(
-    proposed: dict[str, Any], ruleset: list[dict[str, Any]]
-) -> tuple[ShadowFlag, ...]:
+def shadow_check(proposed: dict[str, Any], ruleset: list[dict[str, Any]]) -> tuple[ShadowFlag, ...]:
     """Return shadow / subsumption flags for ``proposed`` against ``ruleset``.
 
     AC-35.6.a-c. Conservative heuristic -- false positives acceptable;
@@ -167,9 +159,7 @@ def shadow_check(
                 flags.append(ShadowFlag(existing_rule=ex_name, relation="subsumed_by"))
             else:
                 # 3. existing is broader but lower salience -> inversion
-                flags.append(
-                    ShadowFlag(existing_rule=ex_name, relation="salience_inverts")
-                )
+                flags.append(ShadowFlag(existing_rule=ex_name, relation="salience_inverts"))
         elif prop_subsumes_ex and not ex_subsumes_prop and prop_sal >= ex_sal:
             # proposed is strictly more general and higher/equal salience
             # 4. proposed dominates existing (proposed shadows existing)

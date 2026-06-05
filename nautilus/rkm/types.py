@@ -11,9 +11,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
 
-ProposalStatus = Literal[
-    "pending", "approved", "rejected", "expired", "promoted", "superseded"
-]
+ProposalStatus = Literal["pending", "approved", "rejected", "expired", "promoted", "superseded"]
 
 
 @dataclass(frozen=True)

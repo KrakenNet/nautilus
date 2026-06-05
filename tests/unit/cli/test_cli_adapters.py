@@ -24,8 +24,11 @@ def test_ac_21_g_schema_ack_without_yes_exits_one(
 ) -> None:
     monkeypatch.setenv("NAUTILUS_REVIEWER", "alice@example.com")
     args = argparse.Namespace(
-        cmd="adapters", adapters_subcommand="schema-ack",
-        name="postgres-1", reason="acked", yes=False,
+        cmd="adapters",
+        adapters_subcommand="schema-ack",
+        name="postgres-1",
+        reason="acked",
+        yes=False,
     )
     rc = cli_adapters.dispatch(args)
     assert rc == 1

@@ -27,7 +27,4 @@ def test_ac_35_3_d_meta_rule_firings_emit_meta_rule_fired_event() -> None:
     from nautilus.rkm import simulate_meta_rule_fire  # type: ignore[attr-defined]
 
     entries = simulate_meta_rule_fire("track-sequential-requests")
-    assert any(
-        e.event_type == "meta_rule_fired" and e.rule_module == "curator"
-        for e in entries
-    )
+    assert any(e.event_type == "meta_rule_fired" and e.rule_module == "curator" for e in entries)

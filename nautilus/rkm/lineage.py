@@ -185,9 +185,7 @@ class LineageStore:
             records = []
             for path in self._store_dir.glob(f"{rule_name}.v*.json"):
                 with contextlib.suppress(Exception):
-                    records.append(
-                        _record_from_dict(json.loads(path.read_text(encoding="utf-8")))
-                    )
+                    records.append(_record_from_dict(json.loads(path.read_text(encoding="utf-8"))))
         return sorted(records, key=lambda r: r.version)
 
     def descendants(self, rule_name: str) -> list[str]:
@@ -227,12 +225,14 @@ class LineageStore:
             for desc_name in affected:
                 desc = self.get(desc_name)
                 if desc is not None:
-                    self._store_record(replace(
-                        desc,
-                        retired_at=now,
-                        retire_reason=f"cascade from {rule_name}",
-                        retire_reviewer=reviewer,
-                    ))
+                    self._store_record(
+                        replace(
+                            desc,
+                            retired_at=now,
+                            retire_reason=f"cascade from {rule_name}",
+                            retire_reviewer=reviewer,
+                        )
+                    )
         elif cascade == "orphan-children":
             # Flag direct descendants but do not retire them.
             affected = self.descendants(rule_name)

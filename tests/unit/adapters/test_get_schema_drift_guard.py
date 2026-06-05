@@ -34,11 +34,10 @@ def test_ac_21_a_sdk_protocol_has_get_schema() -> None:
 
 
 def test_ac_21_a_get_schema_signatures_match() -> None:
-    from nautilus.adapters.base import Adapter as InRepoAdapter
     from nautilus_adapter_sdk.protocols import Adapter as SdkAdapter
+
+    from nautilus.adapters.base import Adapter as InRepoAdapter
 
     in_repo = inspect.signature(InRepoAdapter.get_schema)
     sdk = inspect.signature(SdkAdapter.get_schema)
-    assert str(in_repo) == str(sdk), (
-        f"AC-21.a Protocol drift: in-repo {in_repo} vs SDK {sdk}"
-    )
+    assert str(in_repo) == str(sdk), f"AC-21.a Protocol drift: in-repo {in_repo} vs SDK {sdk}"

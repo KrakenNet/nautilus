@@ -12,7 +12,9 @@ from nautilus.rkm.lineage import LineageCycleError, LineageRecord, LineageStore
 pytestmark = pytest.mark.unit
 
 
-def _make_record(name: str, *, version: int = 1, derived_from: tuple[str, ...] = ()) -> LineageRecord:
+def _make_record(
+    name: str, *, version: int = 1, derived_from: tuple[str, ...] = ()
+) -> LineageRecord:
     return LineageRecord(
         rule_name=name,
         version=version,

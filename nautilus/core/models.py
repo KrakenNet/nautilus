@@ -215,29 +215,32 @@ class AuditEntry(BaseModel):
     scope_hash_version: Literal["v1", "v2"] | None = None
     session_id_source: Literal["context", "transport", "stdio_request_id"] | None = None
     session_store_mode: Literal["primary", "degraded_memory"] | None = None
-    event_type: Literal[
-        "request",
-        "handoff_declared",
-        "attestation_emitted",
-        "session_token_issued",
-        "session_token_verification_failed",
-        "signing_key_rotated",
-        "signing_key_revoked",
-        "proposal_emitted",
-        "proposal_validated",
-        "proposal_approved",
-        "proposal_rejected",
-        "proposal_promoted",
-        "meta_rule_fired",
-        "relationship_observed",
-        "rule_promoted",
-        "rule_retracted",
-        "rule_rolled_back",
-        "adapter_quarantined",
-        "adapter_unquarantined",
-        "schema_drift_detected",
-        "schema_drift_severity_overridden",
-    ] | None = None
+    event_type: (
+        Literal[
+            "request",
+            "handoff_declared",
+            "attestation_emitted",
+            "session_token_issued",
+            "session_token_verification_failed",
+            "signing_key_rotated",
+            "signing_key_revoked",
+            "proposal_emitted",
+            "proposal_validated",
+            "proposal_approved",
+            "proposal_rejected",
+            "proposal_promoted",
+            "meta_rule_fired",
+            "relationship_observed",
+            "rule_promoted",
+            "rule_retracted",
+            "rule_rolled_back",
+            "adapter_quarantined",
+            "adapter_unquarantined",
+            "schema_drift_detected",
+            "schema_drift_severity_overridden",
+        ]
+        | None
+    ) = None
     handoff_id: str | None = None
     handoff_decision: HandoffDecision | None = None
     trace_id: str | None = None

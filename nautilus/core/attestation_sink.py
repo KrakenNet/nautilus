@@ -167,9 +167,7 @@ class ChainedFileAttestationSink:
         *,
         checkpoint_interval: int = 0,
     ) -> None:
-        self._log = ChainedAttestationLog(
-            path, service, checkpoint_interval=checkpoint_interval
-        )
+        self._log = ChainedAttestationLog(path, service, checkpoint_interval=checkpoint_interval)
         self._closed = False
 
     @property

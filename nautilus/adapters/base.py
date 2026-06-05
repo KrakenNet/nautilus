@@ -186,9 +186,7 @@ class Adapter(Protocol):
             NotImplementedError: Until the per-adapter implementation lands
                 (task-006).
         """
-        raise NotImplementedError(
-            "AC-21.b: this adapter must implement get_schema() (task-006)"
-        )
+        raise NotImplementedError("AC-21.b: this adapter must implement get_schema() (task-006)")
 
 
 __all__ = [

@@ -40,11 +40,7 @@ from typing import Any
 from fathom import Engine
 
 _TEMPLATES_PATH = (
-    Path(__file__).parent.parent.parent
-    / "nautilus"
-    / "rules"
-    / "templates"
-    / "nautilus.yaml"
+    Path(__file__).parent.parent.parent / "nautilus" / "rules" / "templates" / "nautilus.yaml"
 )
 
 # Templates used for synthetic event generation — the four core Fathom

@@ -173,17 +173,13 @@ def validate_static(rule_yaml_path: Path) -> StaticResult:
                     continue
                 tmpl = pattern.get("template")
                 if tmpl is not None and tmpl not in _KNOWN_TEMPLATES:
-                    tmpl_line = _node_lookup.lhs_template_line(
-                        rule_idx, pattern_idx
-                    )
+                    tmpl_line = _node_lookup.lhs_template_line(rule_idx, pattern_idx)
                     errors.append(
                         ValidationError(
                             file=file_str,
                             line=tmpl_line,
                             col=1,
-                            message=(
-                                f"Unknown template '{tmpl}' in rule '{rule_name}'."
-                            ),
+                            message=(f"Unknown template '{tmpl}' in rule '{rule_name}'."),
                             hint=(
                                 f"Known templates: "
                                 f"{', '.join(sorted(_KNOWN_TEMPLATES))}. "

@@ -21,8 +21,12 @@ def test_ac_35_5_a_add_subparser_registers_rules_group() -> None:
 
 def test_ac_35_5_a_validate_missing_file_exits_one() -> None:
     args = argparse.Namespace(
-        cmd="rules", rules_subcommand="validate",
-        file="/definitely/not/here.yaml", sandbox=False, replay_n=1000, json=False,
+        cmd="rules",
+        rules_subcommand="validate",
+        file="/definitely/not/here.yaml",
+        sandbox=False,
+        replay_n=1000,
+        json=False,
     )
     rc = cli_rules.dispatch(args)
     assert rc == 1

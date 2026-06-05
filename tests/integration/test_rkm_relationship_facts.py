@@ -55,5 +55,5 @@ def test_ac_35_2_e_invalid_relationship_type_raises(tmp_path: Path) -> None:
     )
     from nautilus.rkm import load_relationship_facts  # type: ignore[attr-defined]
 
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError, match="relationship_type"):
         load_relationship_facts(facts_dir)
