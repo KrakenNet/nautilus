@@ -28,7 +28,7 @@ rules:
             bind: ?sid
           - slot: data_types
             bind: ?have
-          - test: "(overlaps ?needed ?have)"
+          - test: "(python-function overlaps ?needed ?have)"
     then:
       action: route
       reason: "data_types overlap"

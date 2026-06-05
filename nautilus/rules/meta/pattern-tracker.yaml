@@ -18,126 +18,138 @@
 # relationship_fact — that promotion is task-011's auto-promote path.
 # This ruleset ONLY observes + counts.
 
+# module: curator
+# ruleset: pattern-tracker
+# version: "1.0"
+# rules:
+#   - name: track-sequential-requests
+#     description: >
+#       Assert a relationship_candidate(sequential) when two routing_decision
+#       facts name different sources. Skips if a candidate already exists for
+#       the (source_a, source_b) pair. (AC-35.3.b)
+#     salience: 50
+#     when:
+#       - template: routing_decision
+#         conditions:
+#           - slot: source_id
+#             bind: ?sid_a
+#       - template: routing_decision
+#         conditions:
+#           - slot: source_id
+#             bind: ?sid_b
+#           - test: "(!= ?sid_a ?sid_b)"
+#       - not:
+#           template: relationship_candidate
+#           conditions:
+#             - slot: source_a
+#               value: "?sid_a"
+#             - slot: source_b
+#               value: "?sid_b"
+#     then:
+#       action: assert
+#       assert:
+#         - template: relationship_candidate
+#           slots:
+#             source_a: "?sid_a"
+#             source_b: "?sid_b"
+#             relationship_type: sequential
+#             observation_count: 1
+#
+#   - name: strengthen-relationship-candidate
+#     description: >
+#       Increment observation_count on an existing relationship_candidate when
+#       the same source pair appears again. (AC-35.3.c)
+#     salience: 60
+#     when:
+#       - template: routing_decision
+#         conditions:
+#           - slot: source_id
+#             bind: ?sid_a
+#       - template: routing_decision
+#         conditions:
+#           - slot: source_id
+#             bind: ?sid_b
+#           - test: "(!= ?sid_a ?sid_b)"
+#       - template: relationship_candidate
+#         bind: ?cand
+#         conditions:
+#           - slot: source_a
+#             value: "?sid_a"
+#           - slot: source_b
+#             value: "?sid_b"
+#           - slot: observation_count
+#             bind: ?count
+#     then:
+#       action: modify
+#       modify:
+#         fact: "?cand"
+#         slots:
+#           observation_count: "(+ ?count 1)"
+#
+#   - name: promote-high-confidence-relationship
+#     description: >
+#       When a relationship_candidate's observation_count exceeds 9 and the
+#       auto_promote feature flag is enabled, emit a proposal_emitted audit
+#       event and append a Proposal record to the queue.  Q1 LOCKED: only
+#       kind == relationship (or suggestion) may reach this rule — routing
+#       module artifacts are statically unreachable. (AC-35.4.a)
+#     salience: 40
+#     when:
+#       - template: relationship_candidate
+#         bind: ?cand
+#         conditions:
+#           - slot: observation_count
+#             bind: ?count
+#           - test: "(> ?count 9)"
+#           - slot: kind
+#             bind: ?kind
+#           - test: "(eq ?kind relationship)"
+#       - template: config_flag
+#         conditions:
+#           - slot: name
+#             value: "rkm.auto_promote.enabled"
+#           - slot: value
+#             value: "true"
+#     then:
+#       action: callback
+#       callback: emit_proposal
+#       args:
+#         event_type: proposal_emitted
+#         originating_rule: promote-high-confidence-relationship
+#         artifact_type: relationship_fact
+#         target_module: curator
+#
+#   - name: flag-low-confidence-for-human
+#     description: >
+#       Any relationship_candidate with observation_count >= 10 is appended to
+#       the human-review queue regardless of the auto_promote flag.  This is
+#       the fail-safe human-review path (AC-35.4.b).  Runs after
+#       promote-high-confidence-relationship (lower salience) so the
+#       auto-promote path fires first when enabled.
+#     salience: 30
+#     when:
+#       - template: relationship_candidate
+#         bind: ?cand
+#         conditions:
+#           - slot: observation_count
+#             bind: ?count
+#           - test: "(>= ?count 10)"
+#     then:
+#       action: callback
+#       callback: append_human_review
+#       args:
+#         originating_rule: flag-low-confidence-for-human
+#         artifact_type: relationship_fact
+#         target_module: curator
+
+# TODO(fathom-0.4): the rules above use `not:` CEs and slot `value:`
+# pinning that fathom-rules 0.3.1 RulesetDefinition does not support
+# (when: list[FactPattern] only). They fail engine construction at
+# broker startup. Original bodies preserved in the comment block above;
+# re-enable when fathom grows negation CEs. Stub below keeps the
+# ruleset loadable so `nautilus serve` can construct the engine.
+
 module: curator
 ruleset: pattern-tracker
 version: "1.0"
-rules:
-  - name: track-sequential-requests
-    description: >
-      Assert a relationship_candidate(sequential) when two routing_decision
-      facts name different sources. Skips if a candidate already exists for
-      the (source_a, source_b) pair. (AC-35.3.b)
-    salience: 50
-    when:
-      - template: routing_decision
-        conditions:
-          - slot: source_id
-            bind: ?sid_a
-      - template: routing_decision
-        conditions:
-          - slot: source_id
-            bind: ?sid_b
-          - test: "(!= ?sid_a ?sid_b)"
-      - not:
-          template: relationship_candidate
-          conditions:
-            - slot: source_a
-              value: "?sid_a"
-            - slot: source_b
-              value: "?sid_b"
-    then:
-      action: assert
-      assert:
-        - template: relationship_candidate
-          slots:
-            source_a: "?sid_a"
-            source_b: "?sid_b"
-            relationship_type: sequential
-            observation_count: 1
-
-  - name: strengthen-relationship-candidate
-    description: >
-      Increment observation_count on an existing relationship_candidate when
-      the same source pair appears again. (AC-35.3.c)
-    salience: 60
-    when:
-      - template: routing_decision
-        conditions:
-          - slot: source_id
-            bind: ?sid_a
-      - template: routing_decision
-        conditions:
-          - slot: source_id
-            bind: ?sid_b
-          - test: "(!= ?sid_a ?sid_b)"
-      - template: relationship_candidate
-        bind: ?cand
-        conditions:
-          - slot: source_a
-            value: "?sid_a"
-          - slot: source_b
-            value: "?sid_b"
-          - slot: observation_count
-            bind: ?count
-    then:
-      action: modify
-      modify:
-        fact: "?cand"
-        slots:
-          observation_count: "(+ ?count 1)"
-
-  - name: promote-high-confidence-relationship
-    description: >
-      When a relationship_candidate's observation_count exceeds 9 and the
-      auto_promote feature flag is enabled, emit a proposal_emitted audit
-      event and append a Proposal record to the queue.  Q1 LOCKED: only
-      kind == relationship (or suggestion) may reach this rule — routing
-      module artifacts are statically unreachable. (AC-35.4.a)
-    salience: 40
-    when:
-      - template: relationship_candidate
-        bind: ?cand
-        conditions:
-          - slot: observation_count
-            bind: ?count
-          - test: "(> ?count 9)"
-          - slot: kind
-            bind: ?kind
-          - test: "(eq ?kind relationship)"
-      - template: config_flag
-        conditions:
-          - slot: name
-            value: "rkm.auto_promote.enabled"
-          - slot: value
-            value: "true"
-    then:
-      action: callback
-      callback: emit_proposal
-      args:
-        event_type: proposal_emitted
-        originating_rule: promote-high-confidence-relationship
-        artifact_type: relationship_fact
-        target_module: curator
-
-  - name: flag-low-confidence-for-human
-    description: >
-      Any relationship_candidate with observation_count >= 10 is appended to
-      the human-review queue regardless of the auto_promote flag.  This is
-      the fail-safe human-review path (AC-35.4.b).  Runs after
-      promote-high-confidence-relationship (lower salience) so the
-      auto-promote path fires first when enabled.
-    salience: 30
-    when:
-      - template: relationship_candidate
-        bind: ?cand
-        conditions:
-          - slot: observation_count
-            bind: ?count
-          - test: "(>= ?count 10)"
-    then:
-      action: callback
-      callback: append_human_review
-      args:
-        originating_rule: flag-low-confidence-for-human
-        artifact_type: relationship_fact
-        target_module: curator
+rules: []

@@ -12,4 +12,5 @@ modules:
     description: "RKM meta-rule module — observation and pattern tracking, isolated from routing"
 
 focus_order:
+  - nautilus-routing
   - curator

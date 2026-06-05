@@ -32,7 +32,7 @@ rules:
           - slot: allowed_purposes
             bind: ?allowed
           - test: '(neq ?allowed "")'
-          - test: "(not-in-list ?purpose ?allowed)"
+          - test: "(python-function not-in-list ?purpose ?allowed)"
     then:
       action: deny
       reason: "purpose not authorized"
