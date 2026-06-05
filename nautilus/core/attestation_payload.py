@@ -172,6 +172,8 @@ def build_payload(
     sources_queried: list[str],
     scope_constraints: Any,
     rule_trace: Any,
+    response_hash: str | None = None,
+    hash_skipped: bool = False,
 ) -> tuple[dict[str, Any], Literal["v1", "v2"]]:
     """Build the Nautilus attestation payload + its scope-hash version.
 
@@ -198,7 +200,7 @@ def build_payload(
     else:
         scope_hash = _sha256(_v1_payload(scope_constraints))
         version = "v1"
-    payload = {
+    payload: dict[str, Any] = {
         "iss": "nautilus",
         "request_id": request_id,
         "agent_id": agent_id,
@@ -206,7 +208,20 @@ def build_payload(
         "scope_hash": scope_hash,
         "rule_trace_hash": _sha256(rule_trace),
     }
+    if response_hash is not None:
+        payload["response_hash"] = response_hash
+    if hash_skipped:
+        payload["hash_skipped"] = True
     return payload, version
 
 
-__all__ = ["build_payload"]
+def compute_response_hash(adapter_result: Any) -> str:
+    """Return ``sha256:<hex>`` of the canonical JSON of ``adapter_result``.
+
+    Wraps :func:`_stable_json` + :func:`_sha256` (the existing scheme at
+    lines 58 + 69). AC-19.a.
+    """
+    return _sha256(adapter_result)
+
+
+__all__ = ["build_payload", "compute_response_hash"]

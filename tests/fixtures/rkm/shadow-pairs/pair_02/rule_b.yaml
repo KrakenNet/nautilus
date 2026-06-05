@@ -1,0 +1,9 @@
+# pair_02: b_subsumes_a
+# B has no slot constraints — subsumes A
+name: any_session_rule
+salience: 0
+lhs:
+  - template: session
+    slots: {}
+rhs:
+  - action: allow

@@ -1,3 +1,7 @@
+# starlette >= 1.2 TestClient annotations reference httpx private modules,
+# which pyright strict surfaces as Unknown at every call site. Relax only
+# the Unknown-type rules here; all other strict checks remain active.
+# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
 """Integration tests for admin UI full flow (Task 3.9).
 
 Verifies end-to-end rendering of admin pages with real router, mock
@@ -112,6 +116,10 @@ def _build_app(
 
     broker = MagicMock()
     broker.sources = sources or []
+    # POC default: no signing key configured. Without this, MagicMock's
+    # auto-attribute would make ``broker._attestation`` truthy and the
+    # attestation page would render the configured state.
+    broker._attestation = None
     if audit_path:
         broker._config.audit.path = audit_path
 

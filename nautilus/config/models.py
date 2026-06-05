@@ -142,10 +142,21 @@ class NullSinkSpec(BaseModel):
 
 
 class FileSinkSpec(BaseModel):
-    """Append-only JSONL attestation sink with per-emit flush + fsync (AC-14.2)."""
+    """Append-only JSONL attestation sink with per-emit flush + fsync (AC-14.2).
+
+    ``chained: true`` upgrades the sink to a hash-chained, JWS-signed log
+    (:class:`fathom.chained_log.ChainedAttestationLog`): each line carries
+    ``prev_sha256`` linkage plus an EdDSA signature, so deletion, reordering,
+    or edits are detectable offline via ``nautilus attestation verify``.
+    Requires ``attestation.enabled`` with a signing key. ``checkpoint_interval``
+    (>0) appends a signed checkpoint record every N emissions for
+    tail-truncation anchoring.
+    """
 
     type: Literal["file"] = "file"
     path: str
+    chained: bool = False
+    checkpoint_interval: int = 0
 
 
 class RetryPolicySpec(BaseModel):
@@ -313,10 +324,40 @@ class SessionStoreConfig(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class AutoPromoteConfig(BaseModel):
+    """``rkm.auto_promote`` sub-section (AC-35.4.d).
+
+    Default OFF is a permanent safety gate in v2.0.  When ``enabled`` is
+    ``False`` every promotion candidate routes to the human-review queue
+    regardless of observation count or artifact kind.
+    """
+
+    enabled: bool = False
+
+
+class SandboxConfig(BaseModel):
+    """``rkm.sandbox`` sub-section (AC-35.7.f).
+
+    ``min_entries`` is the minimum number of audit-log entries required
+    before the sandbox reports a meaningful result.  Below this threshold
+    :func:`~nautilus.rkm.validator.sandbox.sandbox_replay` sets
+    ``SandboxResult.insufficient_history = True``.
+    """
+
+    min_entries: int = 100
+
+
+class RkmConfig(BaseModel):
+    """``rkm`` subsection of ``nautilus.yaml`` (AC-35.4)."""
+
+    auto_promote: AutoPromoteConfig = Field(default_factory=AutoPromoteConfig)
+    sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
+
+
 class NautilusConfig(BaseModel):
     """Root ``nautilus.yaml`` document (design §4.1, §4.10, extended §3.11)."""
 
-    sources: list[SourceConfig]
+    sources: list[SourceConfig] = Field(default_factory=list[SourceConfig])
     agents: dict[str, AgentRecord] = Field(default_factory=dict)
     attestation: AttestationConfig = Field(default_factory=AttestationConfig)
     rules: RulesConfig = Field(default_factory=RulesConfig)
@@ -325,3 +366,4 @@ class NautilusConfig(BaseModel):
     api: ApiConfig = Field(default_factory=ApiConfig)
     mcp: MCPConfig = Field(default_factory=MCPConfig)
     session_store: SessionStoreConfig = Field(default_factory=SessionStoreConfig)
+    rkm: RkmConfig = Field(default_factory=RkmConfig)

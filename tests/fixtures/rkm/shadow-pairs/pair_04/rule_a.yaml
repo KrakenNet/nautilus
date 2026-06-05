@@ -1,0 +1,11 @@
+# pair_04: b_subsumes_a
+# A has two slot constraints; B has only one (subset)
+name: double_constrained_rule
+salience: 10
+lhs:
+  - template: request
+    slots:
+      method: POST
+      path: /api/v2
+rhs:
+  - action: rate_limit

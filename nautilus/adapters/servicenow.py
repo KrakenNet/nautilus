@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import re
 import time
+from datetime import UTC, datetime
 from typing import Any, ClassVar, cast
 
 import httpx
@@ -23,6 +24,7 @@ from nautilus.adapters.base import (
     AdapterError,
     ScopeEnforcementError,
 )
+from nautilus.adapters.schema import AdapterField, AdapterSchema, AdapterTable
 from nautilus.config.models import (
     BasicAuth,
     BearerAuth,
@@ -267,6 +269,48 @@ class ServiceNowAdapter:
             rows=rows,
             duration_ms=duration_ms,
         )
+
+    async def get_schema(self) -> AdapterSchema:
+        """Return schema via sys_dictionary table query. AC-21, OQ3."""
+        if self._client is None or self._config is None or self._table is None:
+            return AdapterSchema.unknown(
+                self._config.id if self._config else "servicenow",
+                self.source_type,
+            )
+        try:
+            path = "/api/now/table/sys_dictionary"
+            params_tuple: tuple[tuple[str, str], ...] = (
+                # _table is regex-validated at connect() (^[a-z][a-z0-9_]*$),
+                # so interpolation cannot carry sysparm_query metacharacters.
+                ("sysparm_query", f"name={self._table}"),  # noqa: SQLGREP
+                ("sysparm_fields", "element,internal_type,mandatory"),
+                ("sysparm_limit", "1000"),
+            )
+            query = httpx.QueryParams(params_tuple)
+            response: httpx.Response = await self._client.request("GET", path, params=query)
+            response.raise_for_status()
+            body: Any = response.json()
+            rows: list[dict[str, Any]] = _coerce_rows(body, limit=1000)
+
+            fields = tuple(
+                AdapterField(
+                    name=str(row.get("element", "")),
+                    type=str(row.get("internal_type", "string")),
+                    nullable=(str(row.get("mandatory", "false")).lower() != "true"),
+                )
+                for row in rows
+                if row.get("element")
+            )
+            table = AdapterTable(name=self._table, fields=fields)
+            return AdapterSchema(
+                adapter_id=self._config.id,
+                source_type=self.source_type,
+                tables=(table,),
+                capability_flags={"deterministic": True},
+                fetched_at=datetime.now(UTC),
+            )
+        except Exception:  # noqa: BLE001
+            return AdapterSchema.unknown(self._config.id, self.source_type)
 
 
 def _coerce_rows(body: Any, limit: int) -> list[dict[str, Any]]:

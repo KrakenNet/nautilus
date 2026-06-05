@@ -1,0 +1,14 @@
+# pair_08: a_shadows_b
+# Same multi-condition LHS, A salience > B salience
+name: priority_audit_rule
+salience: 200
+lhs:
+  - template: user
+    slots:
+      role: admin
+  - template: action
+    slots:
+      type: delete
+rhs:
+  - action: audit
+  - action: alert

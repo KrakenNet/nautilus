@@ -20,6 +20,13 @@ Endpoints (all under ``/v1`` except health probes):
   (AC-12.4).
 - ``GET /readyz`` — 200 iff startup finished AND the session store's
   ``aget('_ready_probe_')`` succeeds; else 503 (AC-12.5).
+- ``GET /v1/rkm/queue`` — list proposals (AC-35.9.b).
+- ``GET /v1/rkm/queue/{proposal_id}`` — show single proposal (AC-35.9.c).
+- ``POST /v1/rkm/queue/{proposal_id}/approve`` — approve (AC-35.9.d).
+- ``POST /v1/rkm/queue/{proposal_id}/reject`` — reject (AC-35.9.d).
+- ``GET /v1/rules/{rule_name}/lineage`` — lineage DAG (AC-35.10.b).
+- ``POST /v1/rules/{rule_name}/retract`` — retract rule (AC-35.10.a/d).
+- ``POST /v1/rules/{rule_name}/rollback`` — rollback to version (AC-35.10.d).
 
 Write endpoints (``POST /v1/request``, ``POST /v1/query``) are gated on
 :func:`nautilus.transport.auth.require_api_key` when
@@ -35,10 +42,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from fastapi import Depends, FastAPI, Request, Response, status
+from fastapi import Depends, FastAPI, Query, Request, Response, status
 from fastapi.staticfiles import StaticFiles
 
+from nautilus.attestation.jwks import export_jwks
+from nautilus.attestation.key_ring import KeyRing
+from nautilus.attestation.session_token import SessionTokenService
 from nautilus.core.broker import Broker
+from nautilus.core.metrics import register_rkm_queue
 from nautilus.core.models import BrokerRequest, BrokerResponse
 from nautilus.transport.auth import api_key_header, proxy_trust_dependency, verify_api_key
 from nautilus.ui import create_admin_router
@@ -123,7 +134,13 @@ def create_app(
         mode, keys = _resolve_auth_config(broker)
         app.state.auth_mode = mode
         app.state.api_keys = keys
+        # Key ring for session-token endpoints (AC-18.a–g). One shared
+        # instance per process; rotated in-place via KeyRing.rotate().
+        app.state.key_ring = KeyRing()
+        app.state.broker_instance_id = getattr(broker, "_instance_id", "default")
         app.state.ready = True
+        # Wire Prometheus RKM queue collector (AC-35.9.f).
+        register_rkm_queue(lambda: getattr(app.state, "proposal_queue", None))
         try:
             from nautilus.observability import setup_otel
 
@@ -279,6 +296,447 @@ def create_app(
             response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
             return {"status": "not_ready", "reason": type(exc).__name__}
         return {"status": "ok"}
+
+    # ------------------------------------------------------------------
+    # Session-token endpoints (AC-18.a–g)
+    # ------------------------------------------------------------------
+
+    @app.get("/v1/keys/jwks.json", tags=["attestation"])
+    async def get_jwks(  # pyright: ignore[reportUnusedFunction]
+        request: Request,
+    ) -> dict[str, Any]:
+        """JWKS endpoint per RFC 7517 (AC-18.c)."""
+        key_ring: KeyRing | None = getattr(request.app.state, "key_ring", None)
+        if key_ring is None:
+            return {"keys": []}
+        return export_jwks(key_ring)
+
+    @app.post("/v1/sessions", tags=["attestation"])
+    async def post_sessions(  # pyright: ignore[reportUnusedFunction]
+        body: dict[str, Any],
+        request: Request,
+    ) -> dict[str, Any]:
+        """Issue a session token (AC-18.a). Body: session_id, agent_id, purpose, clearance."""
+        key_ring: KeyRing | None = getattr(request.app.state, "key_ring", None)
+        if key_ring is None:
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Key ring not ready",
+            )
+        broker_instance_id: str = getattr(request.app.state, "broker_instance_id", "default")
+        service = SessionTokenService(key_ring=key_ring, broker_instance_id=broker_instance_id)
+        token = service.issue(
+            session_id=body.get("session_id", ""),
+            agent_id=body.get("agent_id", ""),
+            purpose=body.get("purpose", ""),
+            clearance=body.get("clearance", ""),
+        )
+        claims = service.verify(token)
+        return {
+            "token": token,
+            "session_id": claims.session_id,
+            "agent_id": claims.agent_id,
+            "purpose": claims.purpose,
+            "clearance": claims.clearance,
+            "issued_at": claims.issued_at,
+            "expires_at": claims.expires_at,
+            "broker_instance_id": claims.broker_instance_id,
+            "kid": claims.kid,
+        }
+
+    # ------------------------------------------------------------------
+    # Adapter schema endpoint (AC-21.a)
+    # ------------------------------------------------------------------
+
+    @app.get("/v1/adapters/{name}/schema", tags=["adapters"])
+    async def get_adapter_schema(  # pyright: ignore[reportUnusedFunction]
+        name: str,
+        request: Request,
+    ) -> dict[str, Any]:
+        """Return the current AdapterSchema for the named adapter. AC-21.a."""
+        import dataclasses
+
+        broker: Broker | None = getattr(request.app.state, "broker", None)
+        if broker is None:
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Broker not ready",
+            )
+        adapter = getattr(broker, "_adapters", {}).get(name)
+        if adapter is None:
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Adapter '{name}' not found",
+            )
+        if not hasattr(adapter, "get_schema"):
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                detail=f"Adapter '{name}' does not support schema introspection",
+            )
+        try:
+            schema = await adapter.get_schema()
+        except Exception as exc:  # noqa: BLE001
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Schema fetch failed: {exc}",
+            ) from exc
+        return dataclasses.asdict(schema)
+
+    # ------------------------------------------------------------------
+    # Prometheus metrics endpoint — AC-35.9.f
+    # ------------------------------------------------------------------
+
+    @app.get("/metrics", tags=["observability"], include_in_schema=False)
+    async def get_metrics() -> Response:  # pyright: ignore[reportUnusedFunction]
+        """Prometheus metrics scrape endpoint (AC-35.9.f)."""
+        from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
+        data = generate_latest()
+        return Response(content=data, media_type=CONTENT_TYPE_LATEST)
+
+    # ------------------------------------------------------------------
+    # RKM queue endpoints — AC-35.9.b/c/d (thin wrappers over review.py)
+    # ------------------------------------------------------------------
+
+    def _get_queue(request: Request) -> Any:
+        """Return app.state.proposal_queue or a default in-memory instance."""
+        from nautilus.rkm.queue import ProposalQueue
+
+        q = getattr(request.app.state, "proposal_queue", None)
+        if q is None:
+            from pathlib import Path as _Path
+
+            default_dir = _Path.cwd() / ".nautilus" / "rkm" / "queue"
+            q = ProposalQueue(default_dir)
+            request.app.state.proposal_queue = q
+        return q
+
+    def _get_lineage(request: Request) -> Any:
+        """Return app.state.lineage_store or a default in-memory instance."""
+        from nautilus.rkm.lineage import LineageStore
+
+        ls = getattr(request.app.state, "lineage_store", None)
+        if ls is None:
+            from pathlib import Path as _Path
+
+            default_dir = _Path.cwd() / ".nautilus" / "rkm" / "lineage"
+            ls = LineageStore(default_dir)
+            request.app.state.lineage_store = ls
+        return ls
+
+    def _require_reviewer(request: Request) -> str:
+        """Extract X-Nautilus-Reviewer header or raise 400 (AC-35.9.d / DQ4)."""
+        from fastapi import HTTPException
+
+        reviewer = request.headers.get("X-Nautilus-Reviewer") or request.headers.get("X-Reviewer")
+        if not reviewer:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="X-Nautilus-Reviewer header required",
+            )
+        return reviewer
+
+    @app.get("/v1/rkm/queue", tags=["rkm"])
+    async def get_rkm_queue(  # pyright: ignore[reportUnusedFunction]
+        request: Request,
+        status_filter: str | None = Query(default=None, alias="status"),
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        """List proposals with optional status filter (AC-35.9.b)."""
+        import dataclasses
+
+        queue = _get_queue(request)
+        proposals = queue.list(status=status_filter)  # type: ignore[arg-type]
+        if limit > 0:
+            proposals = proposals[:limit]
+        return {
+            "proposals": [
+                {**dataclasses.asdict(p), "proposed_at": p.proposed_at.isoformat()}
+                for p in proposals
+            ]
+        }
+
+    @app.get("/v1/rkm/queue/{proposal_id}", tags=["rkm"])
+    async def get_rkm_proposal(  # pyright: ignore[reportUnusedFunction]
+        proposal_id: str,
+        request: Request,
+    ) -> dict[str, Any]:
+        """Show single proposal with full breakdown (AC-35.9.c)."""
+        import dataclasses
+
+        from fastapi import HTTPException
+
+        queue = _get_queue(request)
+        proposal = queue.get(proposal_id)
+        if proposal is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"proposal not found: {proposal_id!r}",
+            )
+        d = dataclasses.asdict(proposal)
+        d["proposed_at"] = proposal.proposed_at.isoformat()
+        # Enrich with breakdown fields for AC-35.9.c (best-effort from artifact/validation)
+        return {
+            **d,
+            "proposed_rule": proposal.artifact,
+            "sandbox": proposal.validation.get("sandbox", {}),
+            "confidence": proposal.validation.get("confidence", 0.0),
+            "confidence_breakdown": proposal.validation.get("confidence_breakdown", {}),
+            "shadow_flags": list(proposal.shadow_flags),
+            "top_replayed": proposal.validation.get("top_replayed", []),
+        }
+
+    @app.post("/v1/rkm/queue/{proposal_id}/approve", tags=["rkm"])
+    async def post_rkm_approve(  # pyright: ignore[reportUnusedFunction]
+        proposal_id: str,
+        request: Request,
+        body: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Approve a pending proposal (AC-35.9.d). Requires X-Nautilus-Reviewer."""
+        import dataclasses
+
+        from fastapi import HTTPException
+
+        from nautilus.rkm.review import AlreadyDecidedError, approve_proposal
+
+        reviewer = _require_reviewer(request)
+        queue = _get_queue(request)
+        lineage = _get_lineage(request)
+        try:
+            result = approve_proposal(
+                proposal_id,
+                reviewer,
+                queue=queue,
+                lineage=lineage,
+                router=None,
+                audit_logger=None,
+            )
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(exc),
+            ) from exc
+        except AlreadyDecidedError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"error": "already_decided", "current_status": exc.current_status},
+            ) from exc
+        return dataclasses.asdict(result)
+
+    @app.post("/v1/rkm/queue/{proposal_id}/reject", tags=["rkm"])
+    async def post_rkm_reject(  # pyright: ignore[reportUnusedFunction]
+        proposal_id: str,
+        request: Request,
+        body: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Reject a pending proposal (AC-35.9.d). Requires X-Nautilus-Reviewer + reason."""
+        import dataclasses
+
+        from fastapi import HTTPException
+
+        from nautilus.rkm.review import AlreadyDecidedError, reject_proposal
+
+        reviewer = _require_reviewer(request)
+        parsed_body: dict[str, Any] = body or {}
+        reason: str | None = parsed_body.get("reason")
+        if not reason:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="reason is required for rejection",
+            )
+        queue = _get_queue(request)
+        try:
+            result = reject_proposal(
+                proposal_id,
+                reviewer,
+                reason,
+                queue=queue,
+                audit_logger=None,
+            )
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(exc),
+            ) from exc
+        except AlreadyDecidedError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"error": "already_decided", "current_status": exc.current_status},
+            ) from exc
+        return dataclasses.asdict(result)
+
+    # ------------------------------------------------------------------
+    # Rules endpoints — AC-35.10.a/b/c/d (lineage DAG + retract + rollback)
+    # ------------------------------------------------------------------
+
+    @app.get("/v1/rules/{rule_name}/lineage", tags=["rules"])
+    async def get_rule_lineage(  # pyright: ignore[reportUnusedFunction]
+        rule_name: str,
+        request: Request,
+    ) -> dict[str, Any]:
+        """Show lineage DAG for a rule (AC-35.10.b)."""
+        import dataclasses
+
+        from fastapi import HTTPException
+
+        lineage = _get_lineage(request)
+        versions = lineage.history(rule_name)
+        if not versions:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"rule not found: {rule_name!r}",
+            )
+        latest = versions[-1]
+        serialized_versions: list[dict[str, Any]] = []
+        for r in versions:
+            d = dataclasses.asdict(r)
+            d["promoted_at"] = r.promoted_at.isoformat()
+            if r.retired_at is not None:
+                d["retired_at"] = r.retired_at.isoformat()
+            serialized_versions.append(d)
+        return {
+            "rule_name": rule_name,
+            "proposer": latest.proposer,
+            "approver": latest.approver,
+            "observation_ids": latest.observation_ids,
+            "derived_from": list(latest.derived_from),
+            "versions": serialized_versions,
+        }
+
+    @app.post("/v1/rules/{rule_name}/retract", tags=["rules"])
+    async def post_rule_retract(  # pyright: ignore[reportUnusedFunction]
+        rule_name: str,
+        request: Request,
+        body: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Retract a rule (AC-35.10.a/d). Requires X-Nautilus-Reviewer + yes=true."""
+        from fastapi import HTTPException
+
+        from nautilus.rkm.review import retract_rule
+
+        reviewer = _require_reviewer(request)
+        parsed_body: dict[str, Any] = body or {}
+        if not parsed_body.get("yes", False) and not parsed_body.get("confirm", False):
+            raise HTTPException(
+                status_code=status.HTTP_412_PRECONDITION_FAILED,
+                detail="yes=true required for destructive operation",
+            )
+        reason: str = parsed_body.get("reason", "")
+        if not reason:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="reason is required for retraction",
+            )
+        cascade: str = parsed_body.get("cascade", "none")
+        # Normalize cascade mode aliases from postman contracts
+        if cascade in ("orphan_children", "orphan-children"):
+            cascade = "orphan-children"
+        elif cascade == "cascade":
+            cascade = "cascade"
+        else:
+            cascade = "none"
+
+        # Determine version to retract (latest by default)
+        lineage = _get_lineage(request)
+        version_param = parsed_body.get("version")
+        if version_param is not None:
+            version = int(version_param)
+        else:
+            latest = lineage.get(rule_name)
+            if latest is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"rule not found: {rule_name!r}",
+                )
+            version = latest.version
+
+        try:
+            affected = retract_rule(
+                rule_name,
+                version=version,
+                reason=reason,
+                reviewer=reviewer,
+                cascade=cascade,  # type: ignore[arg-type]
+                lineage=lineage,
+                audit_logger=None,
+            )
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(exc),
+            ) from exc
+        return {"rule_name": rule_name, "version": version, "affected_descendants": affected}
+
+    @app.post("/v1/rules/{rule_name}/rollback", tags=["rules"])
+    async def post_rule_rollback(  # pyright: ignore[reportUnusedFunction]
+        rule_name: str,
+        request: Request,
+        body: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Roll back a rule to a prior version (AC-35.10.d). Requires yes=true."""
+        import dataclasses
+
+        from fastapi import HTTPException
+
+        reviewer = _require_reviewer(request)
+        parsed_body: dict[str, Any] = body or {}
+        if not parsed_body.get("yes", False) and not parsed_body.get("confirm", False):
+            raise HTTPException(
+                status_code=status.HTTP_412_PRECONDITION_FAILED,
+                detail="yes=true required for destructive operation",
+            )
+        to_version_raw = parsed_body.get("to_version")
+        if to_version_raw is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="to_version is required for rollback",
+            )
+        to_version = int(to_version_raw)
+        lineage = _get_lineage(request)
+        target = lineage.get(rule_name, version=to_version)
+        if target is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"rule {rule_name!r} version {to_version} not found",
+            )
+        # Re-activate by inserting a new version record copied from the target.
+        # Version = current_latest + 1 to preserve append-only semantics.
+        latest = lineage.get(rule_name)
+        new_version = (latest.version + 1) if latest is not None else to_version
+        from datetime import UTC
+        from datetime import datetime as _datetime
+
+        from nautilus.rkm.lineage import LineageRecord
+
+        rolled_back = LineageRecord(
+            rule_name=rule_name,
+            version=new_version,
+            proposer=target.proposer,
+            observation_ids=target.observation_ids,
+            sandbox_results=target.sandbox_results,
+            approver=reviewer,
+            derived_from=target.derived_from,
+            promoted_at=_datetime.now(UTC),
+        )
+        lineage.insert(rolled_back)
+        d = dataclasses.asdict(rolled_back)
+        d["promoted_at"] = rolled_back.promoted_at.isoformat()
+        return {
+            "rule_name": rule_name,
+            "rolled_back_from_version": to_version,
+            "new_version": new_version,
+            "record": d,
+        }
 
     # ------------------------------------------------------------------
     # Root redirect — / → /admin

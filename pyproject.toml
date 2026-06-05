@@ -22,7 +22,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "fathom-rules>=0.3.0",
+    "fathom-rules>=0.3.4",
     "asyncpg>=0.30.0",
     "pgvector>=0.3.0",
     "pyyaml>=6.0",
@@ -53,6 +53,7 @@ nautilus = "nautilus.cli:main"
 
 [project.optional-dependencies]
 dev = [
+    "nautilus-adapter-sdk",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
     "pytest-cov>=5.0",
@@ -96,8 +97,11 @@ s3 = "nautilus.adapters.s3"
 requires = ["setuptools>=77.0", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools_scm]
-fallback_version = "0.0.0+unknown"
+[tool.uv.workspace]
+members = ["packages/nautilus-adapter-sdk"]
+
+[tool.uv.sources]
+nautilus-adapter-sdk = { workspace = true }
 
 [tool.setuptools.packages.find]
 include = ["nautilus*"]

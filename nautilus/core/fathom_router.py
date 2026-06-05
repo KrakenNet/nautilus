@@ -21,6 +21,8 @@ RouteResult`` imports keep working.
 
 from __future__ import annotations
 
+import contextlib
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -38,6 +40,8 @@ from nautilus.core.models import (
     RoutingDecision,
     ScopeConstraint,
 )
+from nautilus.rkm.curator.isolation import assert_module_isolation
+from nautilus.rules import load_built_in_modules
 from nautilus.rules.functions import (
     register_contains_all,
     register_not_in_list,
@@ -107,12 +111,19 @@ class FathomRouter:
         try:
             self._engine: Engine = Engine()
             self._engine.load_templates(str(self._built_in_rules_dir / "templates"))
-            self._engine.load_modules(str(self._built_in_rules_dir / "modules"))
+            load_built_in_modules(self._engine)
             register_overlaps(self._engine)
             register_not_in_list(self._engine)
             register_contains_all(self._engine)
             self._engine.load_functions(str(self._built_in_rules_dir / "functions"))
             self._engine.load_rules(str(self._built_in_rules_dir / "rules"))
+            # Curator module — pattern-tracker meta-rules (AC-35.3.a).
+            # assert_module_isolation runs parse-time YAML static analysis
+            # before loading so routing-template violations are caught early.
+            _meta_dir = self._built_in_rules_dir / "meta"
+            _pattern_tracker = _meta_dir / "pattern-tracker.yaml"
+            assert_module_isolation(_pattern_tracker)
+            self._engine.load_rules(str(_meta_dir))
             for user_dir in self._user_rules_dirs:
                 self._engine.load_rules(str(user_dir))
             # Escalation packs are YAML → EscalationRule models loaded once;
@@ -325,6 +336,35 @@ class FathomRouter:
                     "action": rule.action,
                 },
             )
+
+    def reload_rule(self, rule_name: str, rule_yaml: str) -> None:
+        """Load/reload a single rule into the active CLIPS environment.
+
+        Writes ``rule_yaml`` to a temp file then calls ``engine.load_rules``.
+        Raises :class:`~nautilus.core.PolicyEngineError` if the engine rejects
+        the rule (caller should mark proposal ``promotion_failed`` and re-raise).
+        """
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                suffix=".yaml",
+                delete=False,
+                encoding="utf-8",
+            ) as tmp:
+                tmp.write(rule_yaml)
+                tmp_path = tmp.name
+            self._engine.load_rules(tmp_path)
+        except PolicyEngineError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise PolicyEngineError(
+                f"FathomRouter.reload_rule() failed for rule_name={rule_name!r}: {exc}"
+            ) from exc
+        finally:
+            import os as _os
+
+            with contextlib.suppress(OSError):
+                _os.unlink(tmp_path)  # type: ignore[possibly-undefined]
 
     def close(self) -> None:
         """No-op for the Phase 1 in-process Engine (kept for Protocol parity)."""

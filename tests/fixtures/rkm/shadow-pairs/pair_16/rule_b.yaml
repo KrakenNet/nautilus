@@ -1,0 +1,10 @@
+# pair_16: none
+# Different slot key (path vs method) — disjoint, neither subsumes the other
+name: rule_path_api
+salience: 10
+lhs:
+  - template: request
+    slots:
+      path: /api
+rhs:
+  - action: authenticate

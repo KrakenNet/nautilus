@@ -111,10 +111,8 @@ ipython_config.py
 # Pipfile.lock
 
 # UV
-#   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-uv.lock
+#   uv.lock is committed so CI installs are reproducible (fresh resolution
+#   previously broke CI on upstream releases, e.g. starlette 1.2 typing).
 
 # poetry
 #   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
@@ -249,3 +247,7 @@ specs/operator-platform/.progress-task-2-1.md
 **/.git-commit.lock
 .playwright-mcp
 graphify-out/.graphify_python
+.forge/
+
+# Experiment outputs
+results/

@@ -10,6 +10,7 @@ from the table at design §6.1.
 from __future__ import annotations
 
 import time
+from datetime import UTC, datetime
 from typing import Any, ClassVar, cast
 
 import asyncpg  # pyright: ignore[reportMissingTypeStubs]
@@ -21,6 +22,7 @@ from nautilus.adapters.base import (
     render_field,
     validate_operator,
 )
+from nautilus.adapters.schema import AdapterField, AdapterSchema, AdapterTable
 from nautilus.config.models import SourceConfig
 from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
@@ -195,6 +197,85 @@ class PostgresAdapter:
             rows=rows,
             duration_ms=duration_ms,
         )
+
+    async def get_schema(self) -> AdapterSchema:
+        """Return schema via ``information_schema`` queries. AC-21, OQ3."""
+        if self._pool is None or self._config is None:
+            return AdapterSchema.unknown(
+                self._config.id if self._config else "postgres",
+                self.source_type,
+            )
+        try:
+            async with self._pool.acquire() as conn:
+                col_rows = await conn.fetch(
+                    """
+                    SELECT table_name, column_name, data_type, is_nullable
+                    FROM information_schema.columns
+                    WHERE table_schema = 'public'
+                    ORDER BY table_name, ordinal_position
+                    """
+                )
+                idx_rows = await conn.fetch(
+                    """
+                    SELECT tablename, indexname
+                    FROM pg_indexes
+                    WHERE schemaname = 'public'
+                    ORDER BY tablename, indexname
+                    """
+                )
+                pk_rows = await conn.fetch(
+                    """
+                    SELECT tc.table_name, kcu.column_name
+                    FROM information_schema.table_constraints tc
+                    JOIN information_schema.key_column_usage kcu
+                      ON tc.constraint_name = kcu.constraint_name
+                     AND tc.table_schema = kcu.table_schema
+                    WHERE tc.constraint_type = 'PRIMARY KEY'
+                      AND tc.table_schema = 'public'
+                    ORDER BY tc.table_name, kcu.ordinal_position
+                    """
+                )
+
+            # Group columns by table.
+            tables_cols: dict[str, list[AdapterField]] = {}
+            for row in col_rows:
+                tname = row["table_name"]
+                tables_cols.setdefault(tname, []).append(
+                    AdapterField(
+                        name=row["column_name"],
+                        type=row["data_type"],
+                        nullable=(row["is_nullable"] == "YES"),
+                    )
+                )
+
+            # Group indexes by table.
+            tables_idx: dict[str, list[str]] = {}
+            for row in idx_rows:
+                tables_idx.setdefault(row["tablename"], []).append(row["indexname"])
+
+            # Group PKs by table.
+            tables_pk: dict[str, list[str]] = {}
+            for row in pk_rows:
+                tables_pk.setdefault(row["table_name"], []).append(row["column_name"])
+
+            adapter_tables = tuple(
+                AdapterTable(
+                    name=tname,
+                    fields=tuple(fields),
+                    indexes=tuple(tables_idx.get(tname, [])),
+                    primary_key=tuple(tables_pk.get(tname, [])),
+                )
+                for tname, fields in sorted(tables_cols.items())
+            )
+            return AdapterSchema(
+                adapter_id=self._config.id,
+                source_type=self.source_type,
+                tables=adapter_tables,
+                capability_flags={"deterministic": True},
+                fetched_at=datetime.now(UTC),
+            )
+        except Exception:  # noqa: BLE001
+            return AdapterSchema.unknown(self._config.id, self.source_type)
 
 
 __all__ = ["PostgresAdapter"]

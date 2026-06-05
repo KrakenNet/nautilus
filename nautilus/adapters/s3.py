@@ -20,6 +20,7 @@ import time
 from typing import Any, ClassVar
 
 from nautilus.adapters.base import AdapterError, ScopeEnforcementError
+from nautilus.adapters.schema import AdapterSchema
 from nautilus.config.models import SourceConfig
 from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
@@ -214,6 +215,11 @@ class S3Adapter:
             rows=rows,
             duration_ms=duration_ms,
         )
+
+    async def get_schema(self) -> AdapterSchema:
+        """S3 has no introspectable schema — return capability_only. AC-21, OQ3."""
+        adapter_id = self._config.id if self._config else "s3"
+        return AdapterSchema.unknown(adapter_id, self.source_type)
 
     async def _get_object(self, key: str) -> list[dict[str, Any]]:
         """Fetch a single object by exact key and return metadata + body."""

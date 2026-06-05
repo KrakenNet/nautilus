@@ -1,3 +1,7 @@
+# starlette >= 1.2 TestClient annotations reference httpx private modules,
+# which pyright strict surfaces as Unknown at every call site. Relax only
+# the Unknown-type rules here; all other strict checks remain active.
+# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
 """Unit tests for admin UI source and decision routes (Task 3.2).
 
 Covers:
@@ -247,6 +251,27 @@ class TestDecisionDetail:
 # ---------------------------------------------------------------------------
 
 
+def _get_admin_page(
+    path: str,
+    entries: list[AuditEntry],
+    params: dict[str, str] | None = None,
+    htmx: bool = False,
+) -> Any:
+    """GET an admin page backed by a mocked ``AuditReader`` returning *entries*."""
+    page = AuditPage(entries=entries, total_estimate=len(entries))
+    with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False) as f:
+        audit_path = f.name
+    app = _build_app(audit_path=audit_path)
+    headers = {**AUTH_HEADERS}
+    if htmx:
+        headers["HX-Request"] = "true"
+    with patch("nautilus.ui.router.AuditReader") as mock_reader_cls:
+        instance = mock_reader_cls.return_value
+        instance.read_page.return_value = page
+        client = TestClient(app)
+        return client.get(path, headers=headers, params=params or {})
+
+
 class TestDecisionsFilter:
     """GET /admin/decisions with filter query params."""
 
@@ -256,18 +281,7 @@ class TestDecisionsFilter:
         params: dict[str, str] | None = None,
         htmx: bool = False,
     ) -> Any:
-        page = AuditPage(entries=entries, total_estimate=len(entries))
-        with tempfile.NamedTemporaryFile(suffix=".jsonl", delete=False) as f:
-            audit_path = f.name
-        app = _build_app(audit_path=audit_path)
-        headers = {**AUTH_HEADERS}
-        if htmx:
-            headers["HX-Request"] = "true"
-        with patch("nautilus.ui.router.AuditReader") as mock_reader_cls:
-            instance = mock_reader_cls.return_value
-            instance.read_page.return_value = page
-            client = TestClient(app)
-            return client.get("/admin/decisions", headers=headers, params=params or {})
+        return _get_admin_page("/admin/decisions", entries, params, htmx)
 
     def test_outcome_denied_filter(self, audit_entries: list[AuditEntry]) -> None:
         """outcome=denied should only show entries with denial_records."""
@@ -321,3 +335,40 @@ class TestDecisionsFilter:
         resp = self._get_decisions([], htmx=True)
         assert resp.status_code == 200
         assert "No decisions found" in resp.text
+
+
+# ---------------------------------------------------------------------------
+# Audit log rows
+# ---------------------------------------------------------------------------
+
+
+class TestAuditRows:
+    """GET /admin/audit — audit log table rows."""
+
+    def _get_audit(
+        self,
+        entries: list[AuditEntry],
+        params: dict[str, str] | None = None,
+        htmx: bool = False,
+    ) -> Any:
+        return _get_admin_page("/admin/audit", entries, params, htmx)
+
+    def test_htmx_rows_render_entry_data(self, audit_entries: list[AuditEntry]) -> None:
+        """HTMX row refresh must render every entry, not an empty fragment."""
+        resp = self._get_audit(audit_entries, htmx=True)
+        assert resp.status_code == 200
+        body = resp.text
+        for agent in ("agent-alpha", "agent-beta"):
+            assert agent in body, f"{agent} missing from HTMX rows fragment"
+        for rid in ("req-001", "req-002", "req-003"):
+            assert rid in body, f"{rid} missing from HTMX rows fragment"
+        # Fragment only — no full-page layout markers.
+        assert "<!DOCTYPE" not in body and "<!doctype" not in body
+        assert "<aside" not in body
+
+    def test_full_page_renders_entry_data(self, audit_entries: list[AuditEntry]) -> None:
+        """Full page render path includes the same entry rows."""
+        resp = self._get_audit(audit_entries)
+        assert resp.status_code == 200
+        assert "agent-alpha" in resp.text
+        assert "req-002" in resp.text

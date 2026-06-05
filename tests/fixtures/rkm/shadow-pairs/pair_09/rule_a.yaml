@@ -1,0 +1,9 @@
+# pair_09: b_shadows_a
+# Same LHS (no slots), B higher salience
+name: catch_session_low
+salience: 0
+lhs:
+  - template: session
+    slots: {}
+rhs:
+  - action: log

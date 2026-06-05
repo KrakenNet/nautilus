@@ -1,0 +1,10 @@
+# pair_14: none
+# Different templates entirely — no relation
+name: agent_rule
+salience: 0
+lhs:
+  - template: agent
+    slots:
+      status: active
+rhs:
+  - action: log

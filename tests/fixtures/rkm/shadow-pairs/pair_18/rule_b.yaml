@@ -1,0 +1,10 @@
+# pair_18: none
+# Same LHS, same salience as rule_a — equal priority, no shadow/subsumption
+name: equal_salience_rule_b
+salience: 50
+lhs:
+  - template: agent
+    slots:
+      role: operator
+rhs:
+  - action: log

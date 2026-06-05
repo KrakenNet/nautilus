@@ -1,0 +1,11 @@
+# pair_15: none
+# Same template but different slot value (viewer vs admin) — disjoint
+name: rule_for_user_type_viewer
+salience: 0
+lhs:
+  - template: user
+    slots:
+      role: viewer
+rhs:
+  - action: grant
+    scope: read_only

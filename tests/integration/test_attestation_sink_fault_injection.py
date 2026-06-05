@@ -35,6 +35,7 @@ from nautilus.audit.logger import NAUTILUS_METADATA_KEY
 from nautilus.core.attestation_sink import HttpAttestationSink, RetryPolicy
 from nautilus.core.broker import Broker
 from nautilus.core.models import AuditEntry, BrokerResponse
+from tests.integration.audit_helpers import request_lines
 
 _TOTAL_REQUESTS: int = 1_000
 _VERIFIER_URL: str = "https://verifier.test.local/attest"
@@ -138,9 +139,11 @@ async def test_attestation_sink_fault_injection_1000_requests(
     # ------------------------------------------------------------------
     audit_path = tmp_path / "audit.jsonl"
     assert audit_path.exists(), f"audit file missing at {audit_path}"
-    audit_lines = [ln for ln in audit_path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    # The AC-19.b attestation_emitted companion lines are filtered out;
+    # the NFR-8 one-line-per-request invariant applies to request entries.
+    audit_lines = request_lines(audit_path)
     assert len(audit_lines) == _TOTAL_REQUESTS, (
-        f"expected {_TOTAL_REQUESTS} audit lines, got {len(audit_lines)}"
+        f"expected {_TOTAL_REQUESTS} request audit lines, got {len(audit_lines)}"
     )
     # Spot-check a handful of lines round-trip through AuditEntry — the
     # full-parse-every-line path is pinned by MVP e2e; here we sample so

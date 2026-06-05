@@ -45,6 +45,7 @@ from nautilus.adapters.pgvector import PgVectorAdapter
 from nautilus.adapters.postgres import PostgresAdapter
 from nautilus.adapters.rest import RestAdapter
 from nautilus.adapters.s3 import S3Adapter
+from nautilus.adapters.schema import SchemaFingerprintStore, classify_drift
 from nautilus.adapters.servicenow import ServiceNowAdapter
 from nautilus.analysis.fallback import FallbackIntentAnalyzer
 from nautilus.analysis.llm.base import LLMIntentProvider, LLMProvenance
@@ -65,10 +66,11 @@ from nautilus.config.models import (
 )
 from nautilus.config.registry import SourceRegistry
 from nautilus.core import PolicyEngineError
-from nautilus.core.attestation_payload import build_payload
+from nautilus.core.attestation_payload import build_payload, compute_response_hash
 from nautilus.core.attestation_sink import (
     AttestationPayload,
     AttestationSink,
+    ChainedFileAttestationSink,
     FileAttestationSink,
     HttpAttestationSink,
     NullAttestationSink,
@@ -102,6 +104,7 @@ from nautilus.observability.spans import (
     build_request_attributes,
 )
 from nautilus.rules import BUILT_IN_RULES_DIR
+from nautilus.rules.facts import load_manual_relationships
 from nautilus.synthesis.basic import BasicSynthesizer
 
 _metrics = NautilusMetrics()
@@ -339,6 +342,11 @@ class Broker:
         # ``arequest`` can lazy-connect on first use and skip on subsequent
         # calls (design §3.5 — adapter lifecycle is owned by the broker).
         self._connected_adapters: set[str] = set()
+        # Adapters quarantined due to major schema drift (AC-21.e, PM Q3 LOCKED).
+        # Requests targeting a quarantined adapter surface as ADAPTER_QUARANTINED
+        # error records instead of routing to the adapter. Other adapters keep
+        # serving normally — quarantine is per-adapter, NOT broker-wide.
+        self._quarantined_adapters: set[str] = set()
 
     # ------------------------------------------------------------------
     # Construction
@@ -376,7 +384,7 @@ class Broker:
         intent_analyzer = cls._build_intent_analyzer(config, pattern_analyzer)
 
         attestation = cls._build_attestation(config)
-        attestation_sink = cls._build_attestation_sink(config)
+        attestation_sink = cls._build_attestation_sink(config, attestation)
 
         user_rules_dirs = [Path(d) for d in config.rules.user_rules_dirs]
         router = FathomRouter(
@@ -384,6 +392,13 @@ class Broker:
             user_rules_dirs=user_rules_dirs,
             attestation=attestation,
         )
+
+        # AC-35.2.b/d — load manual relationship facts into the engine at
+        # startup; re-reading on every broker construction gives restart
+        # persistence. The directory is optional: missing = no-op.
+        _facts_dir = Path(path).parent / "facts" / "relationships"
+        if _facts_dir.is_dir():
+            load_manual_relationships(router.engine, _facts_dir)
 
         # Broker-default embedder: strict NoopEmbedder (design §3.10 — fail
         # loudly on missing embedder rather than silent zero vectors).
@@ -516,7 +531,9 @@ class Broker:
         return InMemorySessionStore()
 
     @staticmethod
-    def _build_attestation_sink(config: NautilusConfig) -> AttestationSink:
+    def _build_attestation_sink(
+        config: NautilusConfig, attestation: AttestationService | None
+    ) -> AttestationSink:
         """Construct the attestation sink per design §3.14 / FR-28.
 
         Selects the concrete :class:`AttestationSink` implementation based on
@@ -525,12 +542,23 @@ class Broker:
         - ``"null"`` (default) → :class:`NullAttestationSink` — no-op; preserves
           NFR-5 for Phase-1 YAML fixtures with no ``attestation.sink`` entry.
         - ``"file"`` → :class:`FileAttestationSink` — append-only JSONL with
-          per-emit ``flush`` + ``os.fsync`` (AC-14.2).
+          per-emit ``flush`` + ``os.fsync`` (AC-14.2); with ``chained: true``,
+          :class:`ChainedFileAttestationSink` — hash-chained + JWS-signed
+          lines verifiable offline via ``nautilus attestation verify``.
         - ``"http"`` → :class:`HttpAttestationSink` — POST to verifier URL with
           retry + dead-letter spill (AC-14.3).
         """
         sink_spec = config.attestation.sink
         if isinstance(sink_spec, FileSinkSpec):
+            if sink_spec.chained:
+                if attestation is None:
+                    msg = "attestation.sink.chained requires attestation.enabled with a signing key"
+                    raise ValueError(msg)
+                return ChainedFileAttestationSink(
+                    Path(sink_spec.path),
+                    attestation,
+                    checkpoint_interval=sink_spec.checkpoint_interval,
+                )
             return FileAttestationSink(Path(sink_spec.path))
         if isinstance(sink_spec, HttpSinkSpec):
             rp_spec = sink_spec.retry_policy
@@ -916,16 +944,18 @@ class Broker:
                     scope_by_source=state.scope_by_source,
                     rule_trace=state.rule_trace,
                     session_id=state.session_id,
+                    response=state.data or None,
                 )
             state.attestation_token = token
             state.scope_hash_version = scope_hash_version
-            await self._emit_attestation(token, nautilus_payload)
+            await self._emit_attestation(token, nautilus_payload, state.request_id)
         await self._update_session(state)
 
     async def _emit_attestation(
         self,
         token: str,
         nautilus_payload: dict[str, Any],
+        request_id: str,
     ) -> None:
         """Store-and-forward the attestation payload; NEVER fails the hot path.
 
@@ -934,6 +964,10 @@ class Broker:
         emitted regardless — the audit-first invariant means a sink outage
         cannot gate the request response. Per design §3.14 the token is
         still returned on :class:`BrokerResponse` (AC-14.4).
+
+        Emits an ``attestation_emitted`` audit event (AC-19.b) after a
+        successful sink write attempt. The event is schema_version=2 per
+        design §4.9 / shared.md line 799.
         """
         payload = AttestationPayload(
             token=token,
@@ -944,6 +978,29 @@ class Broker:
             await self._attestation_sink.emit(payload)
         except Exception as exc:  # noqa: BLE001 — audit-first invariant (AC-14.5)
             log.warning("attestation_sink.emit failed: %s", exc)
+        # AC-19.b — emit attestation_emitted audit event regardless of sink outcome.
+        response_hash: str | None = nautilus_payload.get("response_hash")
+        hash_skipped: bool = bool(nautilus_payload.get("hash_skipped", False))
+        legacy: bool = response_hash is None and not hash_skipped
+        self._audit_logger.emit(
+            AuditEntry(
+                timestamp=AuditLogger.utcnow(),
+                request_id=request_id,
+                agent_id="",
+                facts_asserted_summary={},
+                denial_records=[],
+                error_records=[],
+                rule_trace=[],
+                sources_queried=[],
+                sources_denied=[],
+                sources_errored=[],
+                duration_ms=0,
+                event_type="attestation_emitted",
+                schema_version=2,
+                trace_id=request_id,
+                raw_response_hash=response_hash if not legacy else None,
+            )
+        )
 
     @staticmethod
     def _merge_context_scope_constraints(
@@ -1082,7 +1139,22 @@ class Broker:
 
         Records per-source :class:`ErrorRecord`\\ s on lookup / connect failure
         and returns ``None`` so the caller can skip this source.
+
+        Quarantined adapters return an ADAPTER_QUARANTINED error record so the
+        broker never silently routes to a drifted adapter (AC-21.e, PM Q3).
         """
+        if source_id in self._quarantined_adapters:
+            state.errored.append(
+                _source_error(
+                    source_id,
+                    "ADAPTER_QUARANTINED",
+                    f"Adapter '{source_id}' is quarantined due to major schema drift. "
+                    "Operator must acknowledge drift via schema-ack before resuming.",
+                    state.request_id,
+                )
+            )
+            return None
+
         adapter = self._adapters.get(source_id)
         if adapter is None:
             state.errored.append(
@@ -1213,6 +1285,7 @@ class Broker:
         scope_by_source: dict[str, list[ScopeConstraint]],
         rule_trace: list[str],
         session_id: str,
+        response: dict[str, Any] | None = None,
     ) -> tuple[str, Literal["v1", "v2"], dict[str, Any]]:
         """Compose the Nautilus attestation payload and sign it (design §9.3).
 
@@ -1239,12 +1312,28 @@ class Broker:
             # pragma: no cover — caller guards on self._attestation
             raise RuntimeError("attestation is disabled")
 
+        # AC-19.g — if any queried adapter declares non-deterministic capability,
+        # skip hashing and sign a hash_skipped=True claim instead (DQ2 LOCKED).
+        # Adapters without a ``capabilities`` attribute default to deterministic.
+        hash_skipped = any(
+            "non_deterministic" in getattr(self._adapters.get(sid), "capabilities", set[str]())
+            for sid in sources_queried
+        )
+        # AC-19.a — compute response hash; omit for non-deterministic adapters
+        # and for legacy path (response=None, e.g. no data returned).
+        if hash_skipped or response is None:
+            response_hash: str | None = None
+        else:
+            response_hash = compute_response_hash(response)
+
         nautilus_payload, scope_hash_version = build_payload(
             request_id,
             agent_id,
             sources_queried,
             scope_by_source,
             list(rule_trace),
+            response_hash=response_hash,
+            hash_skipped=hash_skipped,
         )
 
         # Nautilus-specific decision marker; the Fathom JWT carries this as
@@ -1279,9 +1368,92 @@ class Broker:
         a Postgres-backed session store (design §3.2, UQ-1 / D-2). No-op for
         the Phase-1 :class:`~nautilus.core.session.InMemorySessionStore`.
         Safe to call multiple times; each implementer owns its own idempotency.
+
+        Also runs schema fingerprint checks for all registered adapters per
+        AC-21.c/e. Adapters with major drift are quarantined.
         """
         if isinstance(self._session_store, PostgresSessionStore):
             await self._session_store.setup()
+        await self._check_schema_fingerprints()
+
+    async def _check_schema_fingerprints(self) -> None:
+        """Check schema drift for all adapters; quarantine on major drift.
+
+        Called from :meth:`setup`. Each adapter's :meth:`get_schema` is invoked
+        (if the adapter is already connected) or deferred (not yet connected).
+        Connected adapters get their schema fetched; unconnected adapters are
+        skipped (drift checked lazily at first connect).
+
+        AC-21.c: record fingerprint on first registration.
+        AC-21.e: emit schema_drift_detected; quarantine on major drift.
+        """
+        fingerprint_store = SchemaFingerprintStore()
+        for source_id, adapter in self._adapters.items():
+            if not hasattr(adapter, "get_schema"):
+                continue
+            # Only attempt schema fetch if the adapter is already connected.
+            if source_id not in self._connected_adapters:
+                continue
+            try:
+                schema = await adapter.get_schema()  # type: ignore[union-attr]
+            except Exception:  # noqa: BLE001
+                log.warning(
+                    "schema fetch failed for adapter '%s'; skipping fingerprint check",
+                    source_id,
+                )
+                continue
+
+            current_fp = schema.fingerprint()
+            stored_fp = fingerprint_store.get(source_id)
+            if stored_fp is None:
+                # First registration — record baseline.
+                fingerprint_store.record(source_id, current_fp)
+                continue
+
+            if stored_fp == current_fp:
+                continue
+
+            # Drift detected — classify severity.
+            # We need the previous schema to diff properly; without it we treat
+            # any fingerprint mismatch as major to be fail-closed (AC-21.e).
+            drift_entries = classify_drift(schema, schema)  # sentinel: schema vs schema = []
+            # Since we don't have the prior schema object, any fp mismatch = major.
+            is_major = True
+            _ = drift_entries  # classified as major regardless
+
+            log.warning(
+                "schema drift detected for adapter '%s' (previous=%s current=%s severity=major)",
+                source_id,
+                stored_fp[:16],
+                current_fp[:16],
+            )
+            self._audit_logger.emit(
+                AuditEntry(
+                    timestamp=AuditLogger.utcnow(),
+                    request_id=str(uuid.uuid4()),
+                    agent_id="<broker>",
+                    session_id=None,
+                    raw_intent="",
+                    intent_analysis=IntentAnalysis(
+                        raw_intent="", data_types_needed=[], entities=[]
+                    ),
+                    facts_asserted_summary={},
+                    routing_decisions=[],
+                    scope_constraints=[],
+                    denial_records=[],
+                    error_records=[],
+                    rule_trace=[],
+                    sources_queried=[],
+                    sources_denied=[],
+                    sources_skipped=[],
+                    sources_errored=[],
+                    attestation_token=None,
+                    duration_ms=0,
+                    event_type="schema_drift_detected",
+                )
+            )
+            if is_major:
+                self._quarantined_adapters.add(source_id)
 
     def close(self) -> None:
         """Idempotent sync close — FR-17, AC-8.6."""

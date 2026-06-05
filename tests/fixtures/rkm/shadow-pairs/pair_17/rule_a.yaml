@@ -1,0 +1,13 @@
+# pair_17: none
+# Both have multiple conditions, different templates in each — orthogonal rules
+name: agent_plus_resource_rule
+salience: 20
+lhs:
+  - template: agent
+    slots:
+      status: active
+  - template: resource
+    slots:
+      type: document
+rhs:
+  - action: allow

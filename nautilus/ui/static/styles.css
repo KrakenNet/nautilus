@@ -187,6 +187,10 @@ tbody tr:hover { background: #f8fafc; }
 .badge-danger, .badge-error { background: #fee2e2; color: var(--color-danger); }
 .badge-info { background: #dbeafe; color: var(--color-primary); }
 
+/* Attestation chain-status banner (audit page) */
+.chain-banner { margin: 0 0 1rem; font-size: 0.875rem; color: var(--color-text-muted); }
+.chain-banner .chain-head { margin-left: 0.5rem; font-family: monospace; font-size: 0.75rem; }
+
 /* Classification-specific badge colors */
 .badge-classification-unclassified { background: #f1f5f9; color: var(--color-text-muted); }
 .badge-classification-cui-basic { background: #fef3c7; color: var(--color-warning); }

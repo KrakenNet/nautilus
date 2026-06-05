@@ -1,0 +1,10 @@
+# pair_02: b_subsumes_a
+# A is more specific (status=active), B is broad
+name: active_session_rule
+salience: 0
+lhs:
+  - template: session
+    slots:
+      status: active
+rhs:
+  - action: allow

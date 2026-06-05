@@ -1,0 +1,11 @@
+# pair_15: none
+# Same template but disjoint slot values — cannot subsume each other
+name: rule_for_user_type_admin
+salience: 0
+lhs:
+  - template: user
+    slots:
+      role: admin
+rhs:
+  - action: grant
+    scope: full

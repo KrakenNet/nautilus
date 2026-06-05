@@ -1,0 +1,13 @@
+# pair_13: salience_inversion
+# A fires on a specific agent type with a specific action, high salience
+# B is a general safety net for any agent, low salience
+name: specific_high_salience_rule
+salience: 60
+lhs:
+  - template: agent
+    slots:
+      type: bot
+      action: scrape
+rhs:
+  - action: throttle
+    rate: 10

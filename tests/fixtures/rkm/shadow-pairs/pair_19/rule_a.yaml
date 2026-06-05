@@ -1,0 +1,9 @@
+# pair_19: none
+# Both rules have empty LHS — equal (no strict subsumption), same salience
+# Two catch-all rules at equal salience don't shadow each other
+name: catch_all_a
+salience: 0
+lhs: []
+rhs:
+  - action: log
+    level: debug

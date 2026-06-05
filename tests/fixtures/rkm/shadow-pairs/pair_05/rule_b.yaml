@@ -1,0 +1,10 @@
+# pair_05: a_subsumes_b
+# B has specific conditions — A (empty LHS) subsumes B
+name: specific_user_rule
+salience: 0
+lhs:
+  - template: user
+    slots:
+      tier: premium
+rhs:
+  - action: grant_access

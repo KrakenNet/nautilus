@@ -100,6 +100,8 @@ def test_phase1_audit_line_round_trips_under_phase2_model() -> None:
     assert entry.event_type in (None, "request")
     assert entry.handoff_id is None
     assert entry.handoff_decision is None
+    # schema_version was added in Phase-2; Phase-1 lines must default to None.
+    assert entry.schema_version is None
 
 
 # ---------------------------------------------------------------------------

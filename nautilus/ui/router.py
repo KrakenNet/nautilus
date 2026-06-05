@@ -17,6 +17,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from starlette.concurrency import run_in_threadpool
 from starlette.responses import Response
 
 from nautilus.core.broker import Broker
@@ -70,17 +71,67 @@ async def _safe_audit_path(request: Request) -> str | None:
     return str(broker._config.audit.path)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
 
 
+# Cache of the last chain verification per log path, keyed on (size, mtime):
+# a full verify reads the whole log and checks every Ed25519 signature, so
+# repeated page loads between appends must not re-pay that cost.
+_chain_status_cache: dict[str, tuple[tuple[int, int], dict[str, object]]] = {}
+
+
+def _attestation_chain_status(broker: Broker | None) -> dict[str, object] | None:
+    """Verify the chained attestation sink, or *None* when not chained.
+
+    Full offline verification (hash linkage + every JWS) of the
+    ``ChainedFileAttestationSink`` log; powers the page-level chain badge
+    on /admin/audit. Results are cached until the log file changes.
+    """
+    if broker is None:
+        return None
+    from nautilus.core.attestation_sink import ChainedFileAttestationSink
+
+    sink = getattr(broker, "_attestation_sink", None)
+    att = getattr(broker, "_attestation", None)
+    if not isinstance(sink, ChainedFileAttestationSink) or att is None:
+        return None
+
+    cache_key = str(sink.path)
+    try:
+        stat = sink.path.stat()
+        file_state = (stat.st_size, stat.st_mtime_ns)
+    except OSError:
+        file_state = (-1, -1)
+    cached = _chain_status_cache.get(cache_key)
+    if cached is not None and cached[0] == file_state:
+        return cached[1]
+
+    from fathom.chained_log import verify_chain
+
+    result = verify_chain(sink.path, att.public_key)
+    head = result.head_sha256 or ""
+    status: dict[str, object] = {
+        "ok": result.ok,
+        "count": result.count,
+        "head_short": f"{head[:8]}…{head[-4:]}" if head else "—",
+        "error": result.error,
+    }
+    _chain_status_cache[cache_key] = (file_state, status)
+    return status
+
+
 async def _safe_auth_user(request: Request) -> str | Response:
     """Authenticate, returning a redirect to login on failure.
 
     Wraps :func:`get_auth_user` so that authentication failures redirect
-    the browser to ``/admin/login`` instead of showing raw JSON errors.
+    the *browser* to ``/admin/login`` instead of showing raw JSON errors.
+    Non-browser clients (no ``text/html`` in ``Accept``) get the plain
+    401 so API callers and tests see the real status code.
     """
     try:
         return await get_auth_user(request)
     except HTTPException as exc:
         if exc.status_code == 401:
-            return RedirectResponse(url="/admin/login", status_code=302)
+            if "text/html" in request.headers.get("accept", ""):
+                return RedirectResponse(url="/admin/login", status_code=302)
+            raise
         title = "Forbidden"
         return _error_page(title, str(exc.detail), status_code=exc.status_code)
 
@@ -371,6 +422,7 @@ async def decision_detail(
 async def audit(
     request: Request,
     audit_path: Annotated[str | None, Depends(_safe_audit_path)],
+    broker: Annotated[Broker | None, Depends(_safe_broker)],
     user: Annotated[str | Response, Depends(_safe_auth_user)],
     agent_id: str | None = None,
     source_id: str | None = None,
@@ -434,6 +486,20 @@ async def audit(
         "sort": sort,
     }
 
+    is_htmx = request.headers.get("HX-Request") == "true"
+    if is_htmx:
+        # The partial renders ONE entry (the full page includes it inside a
+        # ``{% for %}`` loop), so render it once per entry here too.
+        rows_template = templates.get_template("partials/audit_rows.html")
+        rows = "".join(rows_template.render(entry=e) for e in entries)
+        pagination = templates.get_template("partials/pagination.html").render(
+            next_cursor=page.next_cursor,
+            prev_cursor=page.prev_cursor,
+            total_estimate=page.total_estimate,
+            filters=filters,
+        )
+        return HTMLResponse(content=rows + pagination)
+
     context = {
         "request": request,
         "user": user,
@@ -442,18 +508,11 @@ async def audit(
         "next_cursor": page.next_cursor,
         "prev_cursor": page.prev_cursor,
         "total_estimate": page.total_estimate,
+        # Chain badge is page-level only — skipped on HTMX row refreshes so
+        # pagination doesn't re-verify the whole log. Threadpool keeps the
+        # full-log verify (uncached path) off the event loop.
+        "attestation_chain": await run_in_threadpool(_attestation_chain_status, broker),
     }
-
-    is_htmx = request.headers.get("HX-Request") == "true"
-    if is_htmx:
-        rows = templates.get_template("partials/audit_rows.html").render(entries=entries)
-        pagination = templates.get_template("partials/pagination.html").render(
-            next_cursor=page.next_cursor,
-            prev_cursor=page.prev_cursor,
-            total_estimate=page.total_estimate,
-            filters=filters,
-        )
-        return HTMLResponse(content=rows + pagination)
     return templates.TemplateResponse(request, "pages/audit.html", context)
 
 

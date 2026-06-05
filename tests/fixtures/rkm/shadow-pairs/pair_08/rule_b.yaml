@@ -1,0 +1,13 @@
+# pair_08: a_shadows_b
+# Same multi-condition LHS, lower salience — B never fires
+name: secondary_audit_rule
+salience: 1
+lhs:
+  - template: user
+    slots:
+      role: admin
+  - template: action
+    slots:
+      type: delete
+rhs:
+  - action: audit

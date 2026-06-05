@@ -1,0 +1,15 @@
+# pair_20: none
+# Different number of LHS conditions, different templates — incompatible rules
+name: multi_cond_rule
+salience: 30
+lhs:
+  - template: user
+    slots:
+      tier: enterprise
+  - template: feature_flag
+    slots:
+      name: beta_access
+      enabled: "true"
+rhs:
+  - action: allow
+    feature: beta

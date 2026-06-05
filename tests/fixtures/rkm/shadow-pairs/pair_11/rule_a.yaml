@@ -1,0 +1,16 @@
+# pair_11: salience_inversion
+# A is more specific (narrows to admin+delete), higher salience
+# B is more general (any user+delete), lower salience
+# A fires before B even though B is broader — inversion
+name: specific_admin_delete_high
+salience: 50
+lhs:
+  - template: user
+    slots:
+      role: admin
+  - template: action
+    slots:
+      type: delete
+      scope: global
+rhs:
+  - action: require_mfa

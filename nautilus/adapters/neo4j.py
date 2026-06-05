@@ -28,6 +28,7 @@ from __future__ import annotations
 import logging
 import re
 import time
+from datetime import UTC, datetime
 from typing import Any, ClassVar, cast
 
 from neo4j import AsyncGraphDatabase, RoutingControl
@@ -36,6 +37,7 @@ from nautilus.adapters.base import (
     AdapterError,
     ScopeEnforcementError,
 )
+from nautilus.adapters.schema import AdapterSchema, AdapterTable
 from nautilus.config.models import BasicAuth, BearerAuth, MtlsAuth, SourceConfig
 from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
@@ -345,6 +347,52 @@ class Neo4jAdapter:
             rows=rows,
             duration_ms=duration_ms,
         )
+
+    async def get_schema(self) -> AdapterSchema:
+        """Return schema via db.labels / db.relationshipTypes. AC-21, OQ3."""
+        if self._driver is None or self._config is None:
+            return AdapterSchema.unknown(
+                self._config.id if self._config else "neo4j",
+                self.source_type,
+            )
+        try:
+            labels_result: Any = await self._driver.execute_query(
+                cast(Any, "CALL db.labels()"),
+                routing_=RoutingControl.READ,
+            )
+            rel_result: Any = await self._driver.execute_query(
+                cast(Any, "CALL db.relationshipTypes()"),
+                routing_=RoutingControl.READ,
+            )
+
+            # Each label becomes a "table"; we can't enumerate properties without
+            # running MATCH queries, so we return label names only.
+            tables: list[AdapterTable] = []
+            for record in cast(list[Any], labels_result.records):
+                label_name: str = record[0]
+                tables.append(
+                    AdapterTable(
+                        name=label_name,
+                        fields=(),
+                    )
+                )
+
+            # Relationship types are exposed as capability flags.
+            rel_types: list[str] = []
+            for record in cast(list[Any], rel_result.records):
+                rel_types.append(str(record[0]))
+
+            return AdapterSchema(
+                adapter_id=self._config.id,
+                source_type=self.source_type,
+                tables=tuple(tables),
+                capability_flags={
+                    "relationship_types": rel_types,  # type: ignore[dict-item]
+                },
+                fetched_at=datetime.now(UTC),
+            )
+        except Exception:  # noqa: BLE001
+            return AdapterSchema.unknown(self._config.id, self.source_type)
 
 
 __all__ = ["Neo4jAdapter"]
