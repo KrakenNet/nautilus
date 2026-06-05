@@ -112,6 +112,10 @@ def _build_app(
 
     broker = MagicMock()
     broker.sources = sources or []
+    # POC default: no signing key configured. Without this, MagicMock's
+    # auto-attribute would make ``broker._attestation`` truthy and the
+    # attestation page would render the configured state.
+    broker._attestation = None
     if audit_path:
         broker._config.audit.path = audit_path
 

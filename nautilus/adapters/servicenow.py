@@ -280,7 +280,9 @@ class ServiceNowAdapter:
         try:
             path = "/api/now/table/sys_dictionary"
             params_tuple: tuple[tuple[str, str], ...] = (
-                ("sysparm_query", f"name={self._table}"),
+                # _table is regex-validated at connect() (^[a-z][a-z0-9_]*$),
+                # so interpolation cannot carry sysparm_query metacharacters.
+                ("sysparm_query", f"name={self._table}"),  # noqa: SQLGREP
                 ("sysparm_fields", "element,internal_type,mandatory"),
                 ("sysparm_limit", "1000"),
             )

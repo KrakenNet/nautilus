@@ -24,6 +24,7 @@ import pytest
 from nautilus.audit.logger import NAUTILUS_METADATA_KEY
 from nautilus.core.broker import Broker
 from nautilus.core.models import AuditEntry
+from tests.integration.audit_helpers import request_lines
 
 # UUID4 regex — the broker uses ``uuid.uuid4()`` for request ids.
 _UUID_RE: re.Pattern[str] = re.compile(
@@ -93,14 +94,14 @@ def test_mvp_e2e_broker_against_pg_and_pgvector(
     audit_file = tmp_path / "audit.jsonl"
     assert audit_file.exists(), f"audit file missing at {audit_file}"
 
-    lines = [ln for ln in audit_file.read_text(encoding="utf-8").splitlines() if ln.strip()]
-    assert len(lines) == 1, f"expected exactly 1 audit line, got {len(lines)}"
-
     # The FileSink writes an ``AuditRecord`` per design §3.7; the full
     # Nautilus :class:`AuditEntry` is stashed under ``metadata[NAUTILUS_METADATA_KEY]``.
+    # The AC-19.b attestation_emitted companion lines are filtered out;
+    # the NFR-8 one-line-per-request invariant applies to request entries.
+    lines = request_lines(audit_file)
+    assert len(lines) == 1, f"expected exactly 1 request audit line, got {len(lines)}"
     record: dict[str, Any] = json.loads(lines[0])
-    entry_json = record["metadata"][NAUTILUS_METADATA_KEY]
-    entry: AuditEntry = AuditEntry.model_validate_json(entry_json)
+    entry: AuditEntry = AuditEntry.model_validate_json(record["metadata"][NAUTILUS_METADATA_KEY])
 
     assert entry.rule_trace, "rule_trace must be non-empty (AC-7.3)"
     assert entry.facts_asserted_summary["source"] == 2, (

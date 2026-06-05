@@ -32,6 +32,7 @@ import pytest
 
 from nautilus import Broker, BrokerResponse
 from nautilus.adapters.base import Adapter, AdapterError
+from nautilus.adapters.schema import AdapterSchema
 from nautilus.config.models import SourceConfig
 from nautilus.core.broker import Broker as CoreBroker
 from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
@@ -102,6 +103,10 @@ class _FakeAdapter:
 
     async def close(self) -> None:
         self.closed = True
+
+    async def get_schema(self) -> AdapterSchema:
+        """Satisfy the Adapter Protocol's schema surface (AC-21)."""
+        return AdapterSchema.unknown(self._source_id, self.source_type)
 
 
 def _install_fakes(broker: Broker, fakes: dict[str, _FakeAdapter]) -> None:

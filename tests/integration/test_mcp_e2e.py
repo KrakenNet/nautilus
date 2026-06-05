@@ -40,6 +40,7 @@ import uvicorn
 
 from nautilus.core.broker import Broker
 from nautilus.transport.mcp_server import create_server, http_app
+from tests.integration.audit_helpers import request_lines
 
 pytestmark = pytest.mark.integration
 
@@ -170,11 +171,12 @@ async def test_mcp_stdio_single_tool_call_emits_one_audit_line(
         assert result.isError is False, f"nautilus_request returned error: {result.content!r}"
 
     # After the stdio session has closed, the subprocess has flushed its
-    # audit file. Count lines — NFR-15 requires exactly one per tool call.
+    # audit file. Count request lines — NFR-15 requires exactly one per
+    # tool call (the AC-19.b attestation_emitted companion is filtered).
     assert audit_path.exists(), f"audit file missing at {audit_path}"
-    lines = [ln for ln in audit_path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    lines = request_lines(audit_path)
     assert len(lines) == 1, (
-        f"expected exactly 1 audit line for 1 tool call (NFR-15); got {len(lines)}"
+        f"expected exactly 1 request audit line for 1 tool call (NFR-15); got {len(lines)}"
     )
     # Round-trip the one line so a shape-drift in AuditRecord surfaces here.
     record = cast(dict[str, Any], json.loads(lines[0]))
@@ -314,7 +316,7 @@ async def test_mcp_streamable_http_single_tool_call_emits_one_audit_line(
     await asyncio.sleep(0.2)
 
     assert audit_path.exists(), f"audit file missing at {audit_path}"
-    lines = [ln for ln in audit_path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    lines = request_lines(audit_path)
     assert len(lines) == 1, (
-        f"expected exactly 1 audit line for 1 tool call (NFR-15); got {len(lines)}"
+        f"expected exactly 1 request audit line for 1 tool call (NFR-15); got {len(lines)}"
     )
