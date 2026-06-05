@@ -29,7 +29,7 @@ from __future__ import annotations
 import pytest
 from fathom import Engine
 
-from nautilus.rules import BUILT_IN_RULES_DIR
+from nautilus.rules import BUILT_IN_RULES_DIR, load_built_in_modules
 from nautilus.rules.functions import register_not_in_list, register_overlaps
 
 
@@ -37,7 +37,7 @@ def _load_nautilus_engine() -> Engine:
     """Construct a fresh Engine with Nautilus templates/module/rules loaded."""
     engine = Engine()
     engine.load_templates(str(BUILT_IN_RULES_DIR / "templates"))
-    engine.load_modules(str(BUILT_IN_RULES_DIR / "modules"))
+    load_built_in_modules(engine)
     # Externals MUST be registered before load_rules — the YAML rule LHS
     # references (overlaps ...) and (not-in-list ...) at build time.
     register_overlaps(engine)

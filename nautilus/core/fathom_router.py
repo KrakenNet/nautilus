@@ -41,6 +41,7 @@ from nautilus.core.models import (
     ScopeConstraint,
 )
 from nautilus.rkm.curator.isolation import assert_module_isolation
+from nautilus.rules import load_built_in_modules
 from nautilus.rules.functions import (
     register_contains_all,
     register_not_in_list,
@@ -110,7 +111,7 @@ class FathomRouter:
         try:
             self._engine: Engine = Engine()
             self._engine.load_templates(str(self._built_in_rules_dir / "templates"))
-            self._engine.load_modules(str(self._built_in_rules_dir / "modules"))
+            load_built_in_modules(self._engine)
             register_overlaps(self._engine)
             register_not_in_list(self._engine)
             register_contains_all(self._engine)

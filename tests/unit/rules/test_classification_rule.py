@@ -24,7 +24,7 @@ from __future__ import annotations
 import pytest
 from fathom import Engine
 
-from nautilus.rules import BUILT_IN_RULES_DIR
+from nautilus.rules import BUILT_IN_RULES_DIR, load_built_in_modules
 from nautilus.rules.functions import (
     register_contains_all,
     register_not_in_list,
@@ -43,7 +43,7 @@ def _build_engine() -> Engine:
     """
     engine = Engine()
     engine.load_templates(str(BUILT_IN_RULES_DIR / "templates"))
-    engine.load_modules(str(BUILT_IN_RULES_DIR / "modules"))
+    load_built_in_modules(engine)
     register_overlaps(engine)
     register_not_in_list(engine)
     register_contains_all(engine)
