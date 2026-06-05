@@ -134,10 +134,16 @@ def create_app(
         mode, keys = _resolve_auth_config(broker)
         app.state.auth_mode = mode
         app.state.api_keys = keys
-        # Key ring for session-token endpoints (AC-18.a–g). One shared
-        # instance per process; rotated in-place via KeyRing.rotate().
-        app.state.key_ring = KeyRing()
-        app.state.broker_instance_id = getattr(broker, "_instance_id", "default")
+        # Key ring for session-token endpoints (AC-18.a–g). Reuse the
+        # broker's ring when session tokens are enabled — the ring is
+        # in-memory, so a separate transport-level instance could never
+        # verify broker-minted tokens. Falls back to a standalone ring
+        # (legacy behaviour) when the broker has none. The isinstance
+        # guards keep mock-broker tests (MagicMock attrs) on the fallback.
+        broker_ring = getattr(broker, "key_ring", None)
+        app.state.key_ring = broker_ring if isinstance(broker_ring, KeyRing) else KeyRing()
+        broker_iid = getattr(broker, "instance_id", None)
+        app.state.broker_instance_id = broker_iid if isinstance(broker_iid, str) else "default"
         app.state.ready = True
         # Wire Prometheus RKM queue collector (AC-35.9.f).
         register_rkm_queue(lambda: getattr(app.state, "proposal_queue", None))
@@ -311,12 +317,21 @@ def create_app(
             return {"keys": []}
         return export_jwks(key_ring)
 
-    @app.post("/v1/sessions", tags=["attestation"])
+    @app.post(
+        "/v1/sessions",
+        tags=["attestation"],
+        dependencies=[Depends(_write_guard)],
+    )
     async def post_sessions(  # pyright: ignore[reportUnusedFunction]
         body: dict[str, Any],
         request: Request,
     ) -> dict[str, Any]:
-        """Issue a session token (AC-18.a). Body: session_id, agent_id, purpose, clearance."""
+        """Issue a session token (AC-18.a). Body: session_id, agent_id, purpose, clearance.
+
+        Auth-gated (#18 security review): an unauthenticated caller must not
+        be able to mint broker-valid tokens bound to arbitrary agent/session
+        ids — that would bypass the session-pinning property entirely.
+        """
         key_ring: KeyRing | None = getattr(request.app.state, "key_ring", None)
         if key_ring is None:
             from fastapi import HTTPException
@@ -327,12 +342,27 @@ def create_app(
             )
         broker_instance_id: str = getattr(request.app.state, "broker_instance_id", "default")
         service = SessionTokenService(key_ring=key_ring, broker_instance_id=broker_instance_id)
-        token = service.issue(
-            session_id=body.get("session_id", ""),
-            agent_id=body.get("agent_id", ""),
-            purpose=body.get("purpose", ""),
-            clearance=body.get("clearance", ""),
-        )
+        # AC-18.f — issue through the broker when its token service is live so
+        # the ``session_token_issued`` audit event lands in the JSONL stream.
+        # The isinstance guard keeps mock-broker tests on the unaudited path.
+        broker: Broker | None = getattr(request.app.state, "broker", None)
+        broker_service = getattr(broker, "session_tokens", None) if broker is not None else None
+        if isinstance(broker_service, SessionTokenService):
+            service = broker_service
+            assert broker is not None  # noqa: S101 — broker_service implies broker
+            token = broker.issue_session_token(
+                session_id=body.get("session_id", ""),
+                agent_id=body.get("agent_id", ""),
+                purpose=body.get("purpose", ""),
+                clearance=body.get("clearance", ""),
+            )
+        else:
+            token = service.issue(
+                session_id=body.get("session_id", ""),
+                agent_id=body.get("agent_id", ""),
+                purpose=body.get("purpose", ""),
+                clearance=body.get("clearance", ""),
+            )
         claims = service.verify(token)
         return {
             "token": token,

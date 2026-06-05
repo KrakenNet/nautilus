@@ -50,10 +50,17 @@ from nautilus.adapters.servicenow import ServiceNowAdapter
 from nautilus.analysis.fallback import FallbackIntentAnalyzer
 from nautilus.analysis.llm.base import LLMIntentProvider, LLMProvenance
 from nautilus.analysis.pattern_matching import PatternMatchingIntentAnalyzer
+from nautilus.attestation.key_ring import KeyRing
+from nautilus.attestation.session_token import (
+    SessionTokenClaims,
+    SessionTokenError,
+    SessionTokenService,
+)
 from nautilus.audit.logger import AuditLogger
 from nautilus.config.agent_registry import AgentRegistry, UnknownAgentError
 from nautilus.config.loader import ConfigError, load_config
 from nautilus.config.models import (
+    AgentRecord,
     AnalysisProviderSpec,
     AnthropicProviderSpec,
     FileSinkSpec,
@@ -200,6 +207,9 @@ class _RequestState:
     data: dict[str, list[dict[str, Any]]] = field(default_factory=dict[str, list[dict[str, Any]]])
     attestation_token: str | None = None
     scope_hash_version: Literal["v1", "v2"] | None = None  # set by `_sign`
+    # Session-provenance JWS (#18) — echoed/minted by `_process_session_token`
+    # when session tokens are enabled; `None` otherwise (NFR-5).
+    session_token: str | None = None
     # LLM provenance — populated only when the wired analyzer is a
     # :class:`FallbackIntentAnalyzer`. Phase-1 pipelines leave this ``None``
     # so the resulting :class:`AuditEntry` round-trips byte-identically
@@ -316,6 +326,8 @@ class Broker:
         session_store: SessionStore | AsyncSessionStore,
         agent_registry: AgentRegistry | None = None,
         attestation_sink: AttestationSink | None = None,
+        key_ring: KeyRing | None = None,
+        session_token_ttl_s: int = 3600,
     ) -> None:
         self._config = config
         self._registry = registry
@@ -347,6 +359,24 @@ class Broker:
         # error records instead of routing to the adapter. Other adapters keep
         # serving normally — quarantine is per-adapter, NOT broker-wide.
         self._quarantined_adapters: set[str] = set()
+        # Session-provenance tokens (#18, AC-18.a–g). Active iff a KeyRing is
+        # injected — ``from_config`` passes one only when
+        # ``session_tokens.enabled: true``, so Phase-1 YAML keeps the token
+        # path (and its audit events) entirely off (NFR-5). ``_instance_id``
+        # scopes minted tokens to this broker (AC-18.d
+        # broker_instance_mismatch); the KeyRing is in-memory, so transports
+        # MUST share this ring (via :attr:`key_ring`) for verification to work.
+        self._instance_id: str = str(uuid.uuid4())
+        self._key_ring: KeyRing | None = key_ring
+        self._session_tokens: SessionTokenService | None = (
+            SessionTokenService(
+                key_ring=key_ring,
+                broker_instance_id=self._instance_id,
+                ttl_seconds=session_token_ttl_s,
+            )
+            if key_ring is not None
+            else None
+        )
 
     # ------------------------------------------------------------------
     # Construction
@@ -420,6 +450,10 @@ class Broker:
 
         synthesizer = BasicSynthesizer()
 
+        # Session-provenance tokens (#18) — KeyRing only when enabled, so
+        # Phase-1 YAML keeps the token path entirely off (NFR-5).
+        key_ring = KeyRing() if config.session_tokens.enabled else None
+
         return cls(
             config=config,
             registry=registry,
@@ -432,6 +466,8 @@ class Broker:
             session_store=session_store,
             agent_registry=agent_registry,
             attestation_sink=attestation_sink,
+            key_ring=key_ring,
+            session_token_ttl_s=config.session_tokens.ttl_seconds,
         )
 
     @classmethod
@@ -640,6 +676,98 @@ class Broker:
         """
         return self._session_store
 
+    @property
+    def instance_id(self) -> str:
+        """Per-process broker identity baked into session-token claims (#18).
+
+        Tokens minted by this broker carry ``broker_instance_id`` and fail
+        verification (``broker_instance_mismatch``) against any other
+        instance (AC-18.d).
+        """
+        return self._instance_id
+
+    @property
+    def key_ring(self) -> KeyRing | None:
+        """Signing/verification key ring for session tokens (#18, AC-18.e).
+
+        ``None`` when ``session_tokens.enabled`` is false. The ring is
+        in-memory — transports MUST reuse this instance (not construct a
+        fresh :class:`KeyRing`) or token verification cannot succeed.
+        """
+        return self._key_ring
+
+    @property
+    def session_tokens(self) -> SessionTokenService | None:
+        """Active :class:`SessionTokenService`, or ``None`` when disabled (#18)."""
+        return self._session_tokens
+
+    def issue_session_token(
+        self,
+        *,
+        session_id: str,
+        agent_id: str,
+        purpose: str,
+        clearance: str,
+    ) -> str:
+        """Mint a session token + emit ``session_token_issued`` audit (AC-18.f).
+
+        Public surface for transports (``POST /v1/sessions``) so token
+        issuance is always audited through the broker's single JSONL stream.
+
+        Raises:
+            RuntimeError: when session tokens are disabled.
+        """
+        if self._session_tokens is None:
+            raise RuntimeError("session tokens are disabled (session_tokens.enabled: false)")
+        token = self._session_tokens.issue(
+            session_id=session_id,
+            agent_id=agent_id,
+            purpose=purpose,
+            clearance=clearance,
+        )
+        self._emit_session_token_event(
+            "session_token_issued",
+            agent_id=agent_id,
+            session_id=session_id,
+            request_id=str(uuid.uuid4()),
+        )
+        return token
+
+    def verify_session_token(self, token: str) -> SessionTokenClaims:
+        """Verify a session token; audit failures (AC-18.d + AC-18.f).
+
+        Returns the decoded claims on success. On failure, emits a
+        ``session_token_verification_failed`` audit entry carrying the
+        ``reason_code`` as an :class:`ErrorRecord` and re-raises the
+        :class:`SessionTokenError` (fail-closed).
+
+        Raises:
+            RuntimeError: when session tokens are disabled.
+            SessionTokenError: tampered / expired / unknown-kid /
+                wrong-instance token.
+        """
+        if self._session_tokens is None:
+            raise RuntimeError("session tokens are disabled (session_tokens.enabled: false)")
+        try:
+            return self._session_tokens.verify(token)
+        except SessionTokenError as exc:
+            request_id = str(uuid.uuid4())
+            self._emit_session_token_event(
+                "session_token_verification_failed",
+                agent_id="",
+                session_id="",
+                request_id=request_id,
+                errors=[
+                    ErrorRecord(
+                        source_id="<broker>",
+                        error_type=exc.reason_code,
+                        message=str(exc),
+                        trace_id=request_id,
+                    )
+                ],
+            )
+            raise
+
     def request(
         self,
         agent_id: str,
@@ -689,6 +817,11 @@ class Broker:
         context = dict(context) if context else {}
         state = _new_request_state(context, intent)
         state.fact_set_hash = fact_set_hash
+        # Session-provenance gate (#18) — verify a presented token (fail-closed
+        # with its own audit entry) or mint one for a fresh session, BEFORE the
+        # pipeline runs so adapters see the token in ``context`` (AC-18.b).
+        if self._session_tokens is not None:
+            self._process_session_token(agent_id, context, state)
         _started = time.perf_counter()
         with broker_span(SPAN_BROKER_REQUEST, build_request_attributes(agent_id)):
             _metrics.requests_total.add(1)
@@ -719,6 +852,7 @@ class Broker:
         data_classifications: list[str],
         rule_trace_refs: list[str] | None = None,
         data_compartments: list[str] | None = None,
+        session_token: str | None = None,
     ) -> HandoffDecision:
         """Declare an agent-to-agent handoff and evaluate the handoff rule pack.
 
@@ -752,6 +886,35 @@ class Broker:
         started = time.perf_counter()
         handoff_id = str(uuid.uuid4())
 
+        # #18 — when session tokens are enabled, a handoff REQUIRES the
+        # originating agent's token; missing/invalid/mismatched tokens deny
+        # before any agent resolution or engine work. The verified-token
+        # trace marker lands in ``rule_trace`` so the handoff audit entry
+        # records the token reference (kid + session) alongside both agent
+        # ids (AC: "audit entry records both agent_ids and the token
+        # reference").
+        token_trace: list[str] = []
+        if self._session_tokens is not None:
+            token_denial = self._gate_handoff_token(
+                session_token, source_agent_id, session_id, token_trace
+            )
+            if token_denial is not None:
+                decision = HandoffDecision(
+                    handoff_id=handoff_id,
+                    action="deny",
+                    denial_records=[token_denial],
+                    rule_trace=list(token_trace),
+                )
+                self._emit_handoff_audit(
+                    source_agent_id=source_agent_id,
+                    receiving_agent_id=receiving_agent_id,
+                    session_id=session_id,
+                    data_classifications=data_classifications,
+                    decision=decision,
+                    started=started,
+                )
+                return decision
+
         # AC-4.2 — unknown-agent short-circuit: resolve BOTH agents before
         # touching the engine so a bogus id never asserts facts.
         try:
@@ -768,7 +931,7 @@ class Broker:
                         rule_name="unknown-agent",
                     )
                 ],
-                rule_trace=[],
+                rule_trace=list(token_trace),
             )
             self._emit_handoff_audit(
                 source_agent_id=source_agent_id,
@@ -814,7 +977,7 @@ class Broker:
             )
             for d in raw_denials
         ]
-        rule_trace = list(getattr(eval_result, "rule_trace", []) or [])
+        rule_trace = token_trace + list(getattr(eval_result, "rule_trace", []) or [])
         action: Literal["allow", "deny", "escalate"] = "deny" if denials else "allow"
 
         decision = HandoffDecision(
@@ -880,6 +1043,66 @@ class Broker:
         # on the surrounding AuditEntry; no dedicated column at this phase.
         del receiving_agent_id
         self._audit_logger.emit(entry)
+
+    def _gate_handoff_token(
+        self,
+        session_token: str | None,
+        source_agent_id: str,
+        session_id: str,
+        token_trace: list[str],
+    ) -> DenialRecord | None:
+        """Validate the originating agent's token for a handoff (#18).
+
+        Returns a :class:`DenialRecord` when the handoff must be denied
+        (missing / invalid / agent-mismatched token), or ``None`` when the
+        token verifies — in which case a ``session-token:verified`` marker
+        (kid + agent + session) is appended to ``token_trace`` so the
+        handoff audit entry carries the token reference.
+        """
+        assert self._session_tokens is not None  # noqa: S101 — caller gates
+        if not session_token:
+            return DenialRecord(
+                source_id=session_id,
+                reason="handoff requires the originating agent's session token",
+                rule_name="session-token-required",
+            )
+        try:
+            claims = self._session_tokens.verify(session_token)
+        except SessionTokenError as exc:
+            request_id = str(uuid.uuid4())
+            self._emit_session_token_event(
+                "session_token_verification_failed",
+                agent_id=source_agent_id,
+                session_id=session_id,
+                request_id=request_id,
+                errors=[
+                    ErrorRecord(
+                        source_id="<broker>",
+                        error_type=exc.reason_code,
+                        message=str(exc),
+                        trace_id=request_id,
+                    )
+                ],
+            )
+            return DenialRecord(
+                source_id=session_id,
+                reason=f"session token rejected: {exc.reason_code}",
+                rule_name="session-token-invalid",
+            )
+        if claims.agent_id != source_agent_id:
+            return DenialRecord(
+                source_id=session_id,
+                reason=(
+                    f"session token agent {claims.agent_id!r} does not match "
+                    f"declared source agent {source_agent_id!r}"
+                ),
+                rule_name="session-token-agent-mismatch",
+            )
+        token_trace.append(
+            f"session-token:verified kid={claims.kid} "
+            f"agent={claims.agent_id} session={claims.session_id}"
+        )
+        return None
 
     async def _analyze_intent(
         self,
@@ -1215,6 +1438,124 @@ class Broker:
             attestation_token=state.attestation_token,
             duration_ms=state.duration_ms(),
             fact_set_hash=state.fact_set_hash,
+            session_token=state.session_token,
+        )
+
+    def _process_session_token(
+        self,
+        agent_id: str,
+        context: dict[str, Any],
+        state: _RequestState,
+    ) -> None:
+        """Verify or mint the session-provenance token for this request (#18).
+
+        Presented token (``context["session_token"]``):
+        - invalid → emit ``session_token_verification_failed`` audit entry
+          (ErrorRecord.error_type = reason_code) and re-raise
+          :class:`SessionTokenError` — fail-closed, no pipeline run (AC-18.d).
+        - valid → the token's ``session_id`` claim OVERRIDES any
+          caller-declared session id. This is the core property: exposure
+          tracking cannot be reset by declaring a fresh ``session_id``
+          while presenting an old token (issue #18 "Why it matters").
+
+        No token → mint one bound to (session_id, agent_id, purpose,
+        clearance-from-registry), emit ``session_token_issued`` (AC-18.f),
+        and inject it into ``context`` so adapters can forward it
+        downstream (AC-18.b).
+        """
+        assert self._session_tokens is not None  # noqa: S101 — caller gates
+        presented = context.get("session_token")
+        if presented is not None:
+            # Only the ABSENT key means "no token". Any present value —
+            # including falsy ones like 0 / False / "" — goes through the
+            # verification path so a caller can never suppress verification
+            # (and force a session-resetting re-mint) by sending junk.
+            try:
+                if not isinstance(presented, str):
+                    raise SessionTokenError("missing", "session_token must be a string")
+                claims = self._session_tokens.verify(presented)
+            except SessionTokenError as exc:
+                state.errored.append(
+                    ErrorRecord(
+                        source_id="<broker>",
+                        error_type=exc.reason_code,
+                        message=str(exc),
+                        trace_id=state.request_id,
+                    )
+                )
+                self._emit_session_token_event(
+                    "session_token_verification_failed",
+                    agent_id=agent_id,
+                    session_id=state.session_id,
+                    request_id=state.request_id,
+                    errors=list(state.errored),
+                )
+                raise
+            state.session_id = claims.session_id
+            state.session_token = presented
+            return
+        # First request in the session — mint a token. A missing session_id
+        # gets a broker-generated one so the token always pins a session.
+        if not state.session_id:
+            state.session_id = str(uuid.uuid4())
+            context["session_id"] = state.session_id
+        record: AgentRecord | None
+        try:
+            record = self._agent_registry.get(agent_id)
+        except UnknownAgentError:
+            record = None
+        purpose = str(context.get("purpose") or "") or (
+            (record.default_purpose or "") if record is not None else ""
+        )
+        clearance = record.clearance if record is not None else ""
+        token = self._session_tokens.issue(
+            session_id=state.session_id,
+            agent_id=agent_id,
+            purpose=purpose,
+            clearance=clearance,
+        )
+        state.session_token = token
+        context["session_token"] = token
+        self._emit_session_token_event(
+            "session_token_issued",
+            agent_id=agent_id,
+            session_id=state.session_id,
+            request_id=state.request_id,
+        )
+
+    def _emit_session_token_event(
+        self,
+        event_type: Literal["session_token_issued", "session_token_verification_failed"],
+        *,
+        agent_id: str,
+        session_id: str,
+        request_id: str,
+        errors: list[ErrorRecord] | None = None,
+    ) -> None:
+        """Minimal audit entry for token lifecycle events (AC-18.f).
+
+        Mirrors the ``attestation_emitted`` pattern in
+        :meth:`_emit_attestation` — non-request fields collapse to zero
+        values; ``trace_id`` correlates back to the triggering request.
+        """
+        self._audit_logger.emit(
+            AuditEntry(
+                timestamp=AuditLogger.utcnow(),
+                request_id=request_id,
+                agent_id=agent_id,
+                session_id=session_id or None,
+                facts_asserted_summary={},
+                denial_records=[],
+                error_records=list(errors) if errors else [],
+                rule_trace=[],
+                sources_queried=[],
+                sources_denied=[],
+                sources_errored=[],
+                duration_ms=0,
+                event_type=event_type,
+                schema_version=2,
+                trace_id=request_id,
+            )
         )
 
     def _emit_audit(
