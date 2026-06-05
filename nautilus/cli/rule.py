@@ -17,8 +17,12 @@ import argparse
 import dataclasses
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from nautilus.cli._common import err, ok, require_reviewer, warn
+
+if TYPE_CHECKING:
+    from nautilus.rkm.lineage import LineageStore
 
 _DEFAULT_LINEAGE_DIR = Path(".nautilus/rkm/lineage")
 
@@ -28,7 +32,7 @@ _DEFAULT_LINEAGE_DIR = Path(".nautilus/rkm/lineage")
 # ---------------------------------------------------------------------------
 
 
-def add_subparser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
+def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:  # pyright: ignore[reportPrivateUsage]
     """Add ``rule`` group to the top-level argparse subparsers."""
     p_rule = sub.add_parser("rule", help="Rule lifecycle management.")
     rule_sub = p_rule.add_subparsers(dest="rule_subcommand", metavar="subcommand")
@@ -116,7 +120,7 @@ def dispatch(args: argparse.Namespace) -> int:
 
 def _cmd_list(args: argparse.Namespace) -> int:
     lineage = _open_lineage()
-    records = lineage._all_records()  # type: ignore[attr-defined]
+    records = lineage._all_records()  # pyright: ignore[reportPrivateUsage]
     status_filter = getattr(args, "status", None)
     if status_filter == "active":
         records = [r for r in records if r.retired_at is None]
@@ -158,7 +162,7 @@ def _cmd_retract(args: argparse.Namespace) -> int:
     from nautilus.rkm.review import retract_rule
 
     lineage = _open_lineage()
-    latest = lineage.get(args.name)  # type: ignore[attr-defined]
+    latest = lineage.get(args.name)
     if latest is None:
         err(f"rule {args.name!r} not found in lineage")
         return 1
@@ -169,7 +173,7 @@ def _cmd_retract(args: argparse.Namespace) -> int:
         reason=args.reason,
         reviewer=reviewer,
         cascade=cascade_mode,
-        lineage=lineage,  # type: ignore[arg-type]
+        lineage=lineage,
         audit_logger=None,
     )
     ok(f"rule {args.name!r} v{latest.version} retracted by {reviewer}")
@@ -180,7 +184,7 @@ def _cmd_retract(args: argparse.Namespace) -> int:
 
 def _cmd_lineage(args: argparse.Namespace) -> int:
     lineage = _open_lineage()
-    records = lineage.history(args.name)  # type: ignore[attr-defined]
+    records = lineage.history(args.name)
 
     if not records:
         warn(f"no lineage records for {args.name!r}")
@@ -192,7 +196,7 @@ def _cmd_lineage(args: argparse.Namespace) -> int:
     records = records[-depth:]
 
     if getattr(args, "json", False):
-        versions = []
+        versions: list[dict[str, Any]] = []
         for r in records:
             d = dataclasses.asdict(r)
             d["promoted_at"] = r.promoted_at.isoformat()
@@ -219,7 +223,7 @@ def _cmd_lineage(args: argparse.Namespace) -> int:
 
 def _cmd_history(args: argparse.Namespace) -> int:
     lineage = _open_lineage()
-    records = lineage.history(args.name)  # type: ignore[attr-defined]
+    records = lineage.history(args.name)
 
     if not records:
         warn(f"no history for {args.name!r}")
@@ -228,7 +232,7 @@ def _cmd_history(args: argparse.Namespace) -> int:
         return 0
 
     if getattr(args, "json", False):
-        out = []
+        out: list[dict[str, Any]] = []
         for r in records:
             d = dataclasses.asdict(r)
             d["promoted_at"] = r.promoted_at.isoformat()
@@ -253,14 +257,14 @@ def _cmd_rollback(args: argparse.Namespace) -> int:
     reviewer = require_reviewer()
 
     lineage = _open_lineage()
-    target = lineage.get(args.name, args.to_version)  # type: ignore[attr-defined]
+    target = lineage.get(args.name, args.to_version)
     if target is None:
         err(f"rule {args.name!r} v{args.to_version} not found in lineage")
         return 1
 
     # Determine next version number (latest + 1).
-    latest = lineage.get(args.name)  # type: ignore[attr-defined]
-    next_version = (latest.version + 1) if latest is not None else args.to_version + 1
+    latest = lineage.get(args.name)
+    next_version: int = (latest.version + 1) if latest is not None else args.to_version + 1
 
     from datetime import UTC, datetime
 
@@ -273,7 +277,7 @@ def _cmd_rollback(args: argparse.Namespace) -> int:
         retire_reason=None,
         retire_reviewer=None,
     )
-    lineage.insert(restored)  # type: ignore[attr-defined]
+    lineage.insert(restored)
     ok(
         f"rule {args.name!r} rolled back to v{args.to_version}"
         f" as v{next_version} by {reviewer}: {args.reason}"
@@ -281,7 +285,7 @@ def _cmd_rollback(args: argparse.Namespace) -> int:
     return 0
 
 
-def _open_lineage() -> object:
+def _open_lineage() -> LineageStore:
     from nautilus.rkm.lineage import LineageStore
 
     return LineageStore(_DEFAULT_LINEAGE_DIR)

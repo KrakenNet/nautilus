@@ -50,15 +50,15 @@ def _salience(rule: dict[str, Any]) -> int:
 
 def _lhs_conditions(rule: dict[str, Any]) -> list[dict[str, Any]]:
     """Return normalised LHS condition list."""
-    return rule.get("lhs") or []
+    lhs: list[dict[str, Any]] = rule.get("lhs") or []
+    return lhs
 
 
 def _condition_key(cond: dict[str, Any]) -> tuple[str, frozenset[tuple[str, str]]]:
     """Canonical hashable key for a LHS condition."""
     template = str(cond.get("template", ""))
-    slots: frozenset[tuple[str, str]] = frozenset(
-        (str(k), str(v)) for k, v in (cond.get("slots") or {}).items()
-    )
+    raw_slots: dict[str, Any] = cond.get("slots") or {}
+    slots: frozenset[tuple[str, str]] = frozenset((str(k), str(v)) for k, v in raw_slots.items())
     return (template, slots)
 
 
@@ -71,8 +71,10 @@ def _condition_is_more_general(general_cond: dict[str, Any], specific_cond: dict
     """
     if general_cond.get("template") != specific_cond.get("template"):
         return False
-    gen_slots = {(k, v) for k, v in (general_cond.get("slots") or {}).items()}
-    spec_slots = {(k, v) for k, v in (specific_cond.get("slots") or {}).items()}
+    gen_raw: dict[str, Any] = general_cond.get("slots") or {}
+    spec_raw: dict[str, Any] = specific_cond.get("slots") or {}
+    gen_slots = {(k, v) for k, v in gen_raw.items()}
+    spec_slots = {(k, v) for k, v in spec_raw.items()}
     # general is less or equally constrained: gen_slots is a subset of spec_slots
     return gen_slots <= spec_slots
 

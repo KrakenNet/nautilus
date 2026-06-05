@@ -182,7 +182,7 @@ class LineageStore:
         if self._store_dir is None:
             records = [r for r in self._mem.values() if r.rule_name == rule_name]
         else:
-            records = []
+            records: list[LineageRecord] = []
             for path in self._store_dir.glob(f"{rule_name}.v*.json"):
                 with contextlib.suppress(Exception):
                     records.append(_record_from_dict(json.loads(path.read_text(encoding="utf-8"))))

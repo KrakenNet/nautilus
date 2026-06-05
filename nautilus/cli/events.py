@@ -47,7 +47,7 @@ def list_event_types() -> list[str]:
     ]
 
 
-def add_subparser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
+def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:  # pyright: ignore[reportPrivateUsage]
     """Add ``events`` group to the top-level argparse subparsers."""
     p_events = sub.add_parser("events", help="Event type enumeration (DQ5).")
     events_sub = p_events.add_subparsers(dest="events_subcommand", metavar="subcommand")

@@ -14,3 +14,6 @@ def _cmd_version() -> int:
         return 1
     print(ver)
     return 0
+
+
+__all__ = ["_cmd_version"]

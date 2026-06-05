@@ -26,3 +26,6 @@ def _cmd_health(url: str) -> int:
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
         print(f"FAIL unreachable {url}: {exc}", file=sys.stderr)
         return 1
+
+
+__all__ = ["_DEFAULT_HEALTH_URL", "_cmd_health"]

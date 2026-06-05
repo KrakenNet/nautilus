@@ -15,7 +15,7 @@ from nautilus.attestation.key_ring import KeyRing
 from nautilus.cli._common import err, ok, require_reviewer
 
 
-def add_subparser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
+def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:  # pyright: ignore[reportPrivateUsage]
     """Add ``key`` group to the top-level argparse subparsers."""
     p_key = sub.add_parser("key", help="Key management (AC-18.c / AC-18.e).")
     key_sub = p_key.add_subparsers(dest="key_subcommand", metavar="subcommand")

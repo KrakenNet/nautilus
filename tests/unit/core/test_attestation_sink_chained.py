@@ -100,7 +100,7 @@ class TestBrokerSinkWiring:
 
         config = NautilusConfig.model_construct(attestation=self._config(tmp_path, chained=True))
         service = AttestationService.generate_keypair()
-        sink = Broker._build_attestation_sink(config, service)
+        sink = Broker._build_attestation_sink(config, service)  # pyright: ignore[reportPrivateUsage]
         assert isinstance(sink, ChainedFileAttestationSink)
 
     def test_chained_spec_without_attestation_raises(self, tmp_path: Path) -> None:
@@ -108,12 +108,12 @@ class TestBrokerSinkWiring:
 
         config = NautilusConfig.model_construct(attestation=self._config(tmp_path, chained=True))
         with pytest.raises(ValueError, match="requires attestation.enabled"):
-            Broker._build_attestation_sink(config, None)
+            Broker._build_attestation_sink(config, None)  # pyright: ignore[reportPrivateUsage]
 
     def test_unchained_spec_unaffected(self, tmp_path: Path) -> None:
         from nautilus.config.models import NautilusConfig
         from nautilus.core.attestation_sink import FileAttestationSink
 
         config = NautilusConfig.model_construct(attestation=self._config(tmp_path, chained=False))
-        sink = Broker._build_attestation_sink(config, None)
+        sink = Broker._build_attestation_sink(config, None)  # pyright: ignore[reportPrivateUsage]
         assert isinstance(sink, FileAttestationSink)

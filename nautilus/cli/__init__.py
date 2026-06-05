@@ -23,24 +23,24 @@ import argparse
 import asyncio
 import contextlib
 import sys
-import urllib  # noqa: F401 - re-exported for test monkeypatching
-import urllib.request  # noqa: F401 - re-exported for test monkeypatching
+import urllib  # noqa: F401  # pyright: ignore[reportUnusedImport] - re-exported for test monkeypatching
+import urllib.request  # noqa: F401  # pyright: ignore[reportUnusedImport] - re-exported for test monkeypatching
 from importlib import metadata
 
 from nautilus.cli.health import (
-    _DEFAULT_HEALTH_URL,
-    _cmd_health,
+    _DEFAULT_HEALTH_URL,  # pyright: ignore[reportPrivateUsage]
+    _cmd_health,  # pyright: ignore[reportPrivateUsage]
 )
 from nautilus.cli.serve import (
-    _DEFAULT_BIND,
-    _enforce_air_gap,
-    _load_config_for_serve,
-    _run_both,
-    _run_mcp,
-    _run_rest,
-    _split_bind,
+    _DEFAULT_BIND,  # pyright: ignore[reportPrivateUsage]
+    _enforce_air_gap,  # pyright: ignore[reportPrivateUsage]
+    _load_config_for_serve,  # pyright: ignore[reportPrivateUsage]
+    _run_both,  # pyright: ignore[reportPrivateUsage]
+    _run_mcp,  # pyright: ignore[reportPrivateUsage]
+    _run_rest,  # pyright: ignore[reportPrivateUsage]
+    _split_bind,  # pyright: ignore[reportPrivateUsage]
 )
-from nautilus.cli.version import _cmd_version
+from nautilus.cli.version import _cmd_version  # pyright: ignore[reportPrivateUsage]
 
 __all__ = [
     "_DEFAULT_BIND",
@@ -213,11 +213,11 @@ def _cmd_serve(args: argparse.Namespace) -> int:
 
     try:
         if transport == "rest":
-            asyncio.run(_cli_module._run_rest(broker, host, port))
+            asyncio.run(_cli_module._run_rest(broker, host, port))  # pyright: ignore[reportPrivateUsage]
         elif transport == "mcp":
-            asyncio.run(_cli_module._run_mcp(broker, mcp_mode, host, port))
+            asyncio.run(_cli_module._run_mcp(broker, mcp_mode, host, port))  # pyright: ignore[reportPrivateUsage]
         else:
-            asyncio.run(_cli_module._run_both(broker, host, port, mcp_mode))
+            asyncio.run(_cli_module._run_both(broker, host, port, mcp_mode))  # pyright: ignore[reportPrivateUsage]
     except KeyboardInterrupt:
         pass
     finally:

@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 
 class SandboxRegressionError(Exception):
@@ -59,7 +59,7 @@ def _rule_fires(proposed_rule: dict[str, Any], entry: dict[str, Any]) -> bool:  
     the regression check (AC-35.7.c) is safety-critical; false positives
     in cascade/dead-rule flags are acceptable (AC-35.7.d).
     """
-    lhs = proposed_rule.get("lhs") or []
+    lhs: list[Any] = proposed_rule.get("lhs") or []
     # Empty LHS: unconditional — always fires.
     if not lhs:
         return True
@@ -67,11 +67,13 @@ def _rule_fires(proposed_rule: dict[str, Any], entry: dict[str, Any]) -> bool:  
     for pattern in lhs:
         if not isinstance(pattern, dict):
             continue
-        conditions = pattern.get("conditions") or []
+        pattern_dict = cast("dict[str, Any]", pattern)
+        conditions: list[Any] = pattern_dict.get("conditions") or []
         if not conditions:
             return True
         # If every condition's slot is present in the entry, consider it fired.
-        slots_needed = [c.get("slot") for c in conditions if isinstance(c, dict) and c.get("slot")]
+        cond_dicts = [cast("dict[str, Any]", c) for c in conditions if isinstance(c, dict)]
+        slots_needed: list[Any] = [cd.get("slot") for cd in cond_dicts if cd.get("slot")]
         if all(s in entry for s in slots_needed):
             return True
     return False
@@ -82,15 +84,15 @@ def _rule_denies(proposed_rule: dict[str, Any]) -> bool:
 
     Supports both ``rhs`` (list) and ``then`` (dict/list) representations.
     """
-    rhs = proposed_rule.get("rhs") or proposed_rule.get("then") or []
-    if isinstance(rhs, dict):
-        rhs = [rhs]
-    for action in rhs:
+    rhs: Any = proposed_rule.get("rhs") or proposed_rule.get("then") or []
+    rhs_list: list[Any] = [rhs] if isinstance(rhs, dict) else rhs
+    for action in rhs_list:
         if not isinstance(action, dict):
             continue
-        if action.get("deny") is True:
+        action_dict = cast("dict[str, Any]", action)
+        if action_dict.get("deny") is True:
             return True
-        if action.get("action") == "deny":
+        if action_dict.get("action") == "deny":
             return True
     return False
 
@@ -100,11 +102,10 @@ def _cascade_depth(proposed_rule: dict[str, Any]) -> int:
 
     For the naive replay each asserted fact counts as one cascade step.
     """
-    rhs = proposed_rule.get("rhs") or proposed_rule.get("then") or []
-    if isinstance(rhs, dict):
-        rhs = [rhs]
+    rhs: Any = proposed_rule.get("rhs") or proposed_rule.get("then") or []
+    rhs_list: list[Any] = [rhs] if isinstance(rhs, dict) else rhs
     depth = 0
-    for action in rhs:
+    for action in rhs_list:
         if not isinstance(action, dict):
             continue
         if "assert" in action:
@@ -119,11 +120,10 @@ def _wm_size_delta(proposed_rule: dict[str, Any], fires: bool) -> int:
     """
     if not fires:
         return 0
-    rhs = proposed_rule.get("rhs") or proposed_rule.get("then") or []
-    if isinstance(rhs, dict):
-        rhs = [rhs]
+    rhs: Any = proposed_rule.get("rhs") or proposed_rule.get("then") or []
+    rhs_list: list[Any] = [rhs] if isinstance(rhs, dict) else rhs
     delta = 0
-    for action in rhs:
+    for action in rhs_list:
         if not isinstance(action, dict):
             continue
         if "assert" in action:

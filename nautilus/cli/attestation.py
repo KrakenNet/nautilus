@@ -23,7 +23,7 @@ from pathlib import Path
 from nautilus.cli._common import err, ok
 
 
-def add_subparser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
+def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:  # pyright: ignore[reportPrivateUsage]
     """Add ``attestation`` group to the top-level argparse subparsers."""
     p_att = sub.add_parser("attestation", help="Chained attestation log tools (offline verify).")
     att_sub = p_att.add_subparsers(dest="attestation_subcommand", metavar="subcommand")

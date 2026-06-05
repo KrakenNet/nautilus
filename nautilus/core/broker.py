@@ -1316,7 +1316,7 @@ class Broker:
         # skip hashing and sign a hash_skipped=True claim instead (DQ2 LOCKED).
         # Adapters without a ``capabilities`` attribute default to deterministic.
         hash_skipped = any(
-            "non_deterministic" in getattr(self._adapters.get(sid), "capabilities", set())
+            "non_deterministic" in getattr(self._adapters.get(sid), "capabilities", set[str]())
             for sid in sources_queried
         )
         # AC-19.a — compute response hash; omit for non-deterministic adapters

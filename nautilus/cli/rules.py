@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 
 
-def add_subparser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
+def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:  # pyright: ignore[reportPrivateUsage]
     """Add ``rules`` group to the top-level argparse subparsers."""
     p_rules = sub.add_parser("rules", help="Rule management subcommands.")
     rules_sub = p_rules.add_subparsers(dest="rules_subcommand", metavar="subcommand")
@@ -91,14 +91,14 @@ def _cmd_history(args: argparse.Namespace) -> int:
     store = LineageStore()
     # Filter: list_by_derived_from uses parent_id; for module filter we
     # scan all records and match rule_name prefix == module.
-    all_records = store._all_records()  # noqa: SLF001
+    all_records = store._all_records()  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
     module = args.module
     matching = [
         r for r in all_records if r.rule_name.startswith(f"{module}/") or r.rule_name == module
     ]
 
     if getattr(args, "json", False):
-        output = []
+        output: list[dict[str, object]] = []
         for rec in sorted(matching, key=lambda r: (r.rule_name, r.version)):
             output.append(
                 {

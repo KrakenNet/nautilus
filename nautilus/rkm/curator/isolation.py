@@ -12,6 +12,7 @@ surface via ``nautilus rules validate``.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any, cast
 
 import yaml
 
@@ -47,27 +48,29 @@ def assert_module_isolation(meta_rule_yaml: Path, module: str = "curator") -> No
     tracks marks; we use rule index as a proxy).
     """
     routing_templates = _routing_owned_templates()
-    raw = yaml.safe_load(meta_rule_yaml.read_text())
-    rules = raw.get("rules", []) if raw else []
+    raw: Any = yaml.safe_load(meta_rule_yaml.read_text())
+    raw_dict = cast("dict[str, Any]", raw) if isinstance(raw, dict) else {}
+    rules: list[Any] = raw_dict.get("rules", [])
 
     for rule_idx, rule in enumerate(rules):
-        rule_name = rule.get("name", f"rule[{rule_idx}]")
-        rhs = rule.get("rhs", []) or rule.get("then", {})
+        rule_dict = cast("dict[str, Any]", rule)
+        rule_name: str = str(rule_dict.get("name", f"rule[{rule_idx}]"))
+        rhs: Any = rule_dict.get("rhs", []) or rule_dict.get("then", {})
 
         # Normalise: ``rhs`` can be a list of action dicts OR a single dict.
-        if isinstance(rhs, dict):
-            rhs = [rhs]
+        rhs_list: list[Any] = [rhs] if isinstance(rhs, dict) else rhs
 
-        for action in rhs:
+        for action in rhs_list:
             if not isinstance(action, dict):
                 continue
+            action_dict = cast("dict[str, Any]", action)
             for op in ("assert", "modify", "retract"):
-                target = action.get(op)
+                target: Any = action_dict.get(op)
                 if target is None:
                     continue
-                template = None
+                template: str | None = None
                 if isinstance(target, dict):
-                    template = target.get("template")
+                    template = cast("dict[str, Any]", target).get("template")
                 elif isinstance(target, str):
                     template = target
                 if template and template in routing_templates:

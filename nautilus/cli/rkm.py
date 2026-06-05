@@ -22,8 +22,13 @@ import argparse
 import dataclasses
 import json
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from nautilus.cli._common import err, ok, require_reviewer, warn
+
+if TYPE_CHECKING:
+    from nautilus.rkm.queue import ProposalQueue
+    from nautilus.rkm.types import Proposal
 
 # Default queue/lineage dirs (relative to cwd / project root convention)
 _DEFAULT_QUEUE_DIR = Path(".nautilus/rkm/queue")
@@ -35,7 +40,7 @@ _DEFAULT_LINEAGE_DIR = Path(".nautilus/rkm/lineage")
 # ---------------------------------------------------------------------------
 
 
-def add_subparser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
+def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:  # pyright: ignore[reportPrivateUsage]
     """Add ``rkm`` group to the top-level argparse subparsers."""
     p_rkm = sub.add_parser("rkm", help="Review-queue and lineage management.")
     rkm_sub = p_rkm.add_subparsers(dest="rkm_subcommand", metavar="subcommand")
@@ -134,21 +139,21 @@ def _dispatch_queue(args: argparse.Namespace) -> int:
     return 2
 
 
-def _open_queue() -> object:
+def _open_queue() -> ProposalQueue:
     from nautilus.rkm.queue import ProposalQueue
 
     return ProposalQueue(_DEFAULT_QUEUE_DIR)
 
 
-def _proposal_as_dict(proposal: object) -> dict:  # type: ignore[type-arg]
-    d = dataclasses.asdict(proposal)  # type: ignore[arg-type]
-    d["proposed_at"] = proposal.proposed_at.isoformat()  # type: ignore[attr-defined]
+def _proposal_as_dict(proposal: Proposal) -> dict[str, Any]:
+    d = dataclasses.asdict(proposal)
+    d["proposed_at"] = proposal.proposed_at.isoformat()
     return d
 
 
 def _cmd_queue_list(args: argparse.Namespace) -> int:
     queue = _open_queue()
-    proposals = queue.list(  # type: ignore[attr-defined]
+    proposals = queue.list(
         status=args.status,
         min_confidence=args.min_confidence,
     )
@@ -159,14 +164,14 @@ def _cmd_queue_list(args: argparse.Namespace) -> int:
         ok("no proposals")
         return 0
     for p in proposals:
-        conf = p.validation.get("confidence", "?")  # type: ignore[attr-defined]
-        print(f"  {p.proposal_id}  status={p.status}  confidence={conf}")  # type: ignore[attr-defined]
+        conf = p.validation.get("confidence", "?")
+        print(f"  {p.proposal_id}  status={p.status}  confidence={conf}")
     return 0
 
 
 def _cmd_queue_show(args: argparse.Namespace) -> int:
     queue = _open_queue()
-    proposal = queue.get(args.proposal_id)  # type: ignore[attr-defined]
+    proposal = queue.get(args.proposal_id)
     if proposal is None:
         err(f"proposal {args.proposal_id} not found")
         return 1
@@ -182,14 +187,14 @@ def _cmd_queue_show(args: argparse.Namespace) -> int:
 def _cmd_queue_approve(args: argparse.Namespace) -> int:
     reviewer = require_reviewer()  # exits 1 if not set (DQ4)
     queue = _open_queue()
-    proposal = queue.get(args.proposal_id)  # type: ignore[attr-defined]
+    proposal = queue.get(args.proposal_id)
     if proposal is None:
         err(f"proposal {args.proposal_id} not found")
         return 1
 
     # Idempotency: already approved/promoted → treat as success
-    if proposal.status in ("approved", "promoted"):  # type: ignore[attr-defined]
-        msg = f"proposal {args.proposal_id} already_approved (status={proposal.status})"  # type: ignore[attr-defined]
+    if proposal.status in ("approved", "promoted"):
+        msg = f"proposal {args.proposal_id} already_approved (status={proposal.status})"
         if getattr(args, "json", False):
             print(json.dumps({"status": "already_approved", "proposal_id": args.proposal_id}))
         else:
@@ -204,7 +209,7 @@ def _cmd_queue_approve(args: argparse.Namespace) -> int:
         result = approve_proposal(
             args.proposal_id,
             reviewer,
-            queue=queue,  # type: ignore[arg-type]
+            queue=queue,
             lineage=lineage,
             router=None,
             audit_logger=None,
@@ -239,7 +244,7 @@ def _cmd_queue_approve(args: argparse.Namespace) -> int:
 def _cmd_queue_reject(args: argparse.Namespace) -> int:
     reviewer = require_reviewer()  # exits 1 if not set (DQ4)
     queue = _open_queue()
-    proposal = queue.get(args.proposal_id)  # type: ignore[attr-defined]
+    proposal = queue.get(args.proposal_id)
     if proposal is None:
         err(f"proposal {args.proposal_id} not found")
         return 1
@@ -251,7 +256,7 @@ def _cmd_queue_reject(args: argparse.Namespace) -> int:
             args.proposal_id,
             reviewer,
             args.reason,
-            queue=queue,  # type: ignore[arg-type]
+            queue=queue,
             audit_logger=None,
         )
     except AlreadyDecidedError as exc:
@@ -280,15 +285,15 @@ def _cmd_queue_reject(args: argparse.Namespace) -> int:
 def _cmd_queue_diff(args: argparse.Namespace) -> int:
     """Show schema diff. Peer determined by DQ6 heuristic (longest-common-prefix)."""
     queue = _open_queue()
-    proposal = queue.get(args.proposal_id)  # type: ignore[attr-defined]
+    proposal = queue.get(args.proposal_id)
     if proposal is None:
         err(f"proposal {args.proposal_id} not found")
         return 1
 
-    derived_from: list[str] = list(proposal.lineage.get("derived_from", []))  # type: ignore[attr-defined]
+    derived_from: list[str] = list(proposal.lineage.get("derived_from", []))
     peer = _peer_from_derived_from(derived_from)
 
-    artifact = proposal.artifact  # type: ignore[attr-defined]
+    artifact = proposal.artifact
     print(f"  proposal : {args.proposal_id}")
     print(f"  peer     : {peer}")
     print(f"  artifact : {json.dumps(artifact, indent=2, default=str)}")
@@ -331,9 +336,9 @@ def _cmd_lineage(args: argparse.Namespace) -> int:
     if not records:
         # Try looking up via queue proposal
         queue = _open_queue()
-        proposal = queue.get(args.id)  # type: ignore[attr-defined]
+        proposal = queue.get(args.id)
         if proposal is not None:
-            rule_name = proposal.artifact.get("name", args.id)  # type: ignore[attr-defined]
+            rule_name = proposal.artifact.get("name", args.id)
             records = lineage.history(rule_name)
 
     if not records:
@@ -346,7 +351,7 @@ def _cmd_lineage(args: argparse.Namespace) -> int:
     records = records[-depth:]
 
     if getattr(args, "json", False):
-        out = []
+        out: list[dict[str, Any]] = []
         for r in records:
             d = dataclasses.asdict(r)
             d["promoted_at"] = r.promoted_at.isoformat()

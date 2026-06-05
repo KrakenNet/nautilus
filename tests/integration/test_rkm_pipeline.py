@@ -7,6 +7,7 @@ Also iterates the hand-curated shadow-pair fixture suite (AC-35.6.a/b).
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -31,9 +32,9 @@ def test_pipeline_submits_proposal_to_queue(tmp_path: Path) -> None:
     assert queue.get(proposal.proposal_id) is not None
 
 
-def _load_pair(pair_dir: Path) -> tuple[dict, dict, str]:
-    rule_a = yaml.safe_load((pair_dir / "rule_a.yaml").read_text())
-    rule_b = yaml.safe_load((pair_dir / "rule_b.yaml").read_text())
+def _load_pair(pair_dir: Path) -> tuple[dict[str, Any], dict[str, Any], str]:
+    rule_a: dict[str, Any] = yaml.safe_load((pair_dir / "rule_a.yaml").read_text())
+    rule_b: dict[str, Any] = yaml.safe_load((pair_dir / "rule_b.yaml").read_text())
     expected = (pair_dir / "expected_relation.txt").read_text().strip()
     return rule_a, rule_b, expected
 
@@ -42,7 +43,9 @@ def _has_relation(flags: tuple[ShadowFlag, ...], relation: str) -> bool:
     return any(f.relation == relation for f in flags)
 
 
-def _check_pair(rule_a: dict, rule_b: dict, expected: str, pair_name: str) -> None:
+def _check_pair(
+    rule_a: dict[str, Any], rule_b: dict[str, Any], expected: str, pair_name: str
+) -> None:
     """Assert fixture pair yields expected relation. False-negatives are failures."""
     flags_ab = shadow_check(rule_b, [rule_a])  # is B subsumed/shadowed by A?
     flags_ba = shadow_check(rule_a, [rule_b])  # is A subsumed/shadowed by B?

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 import pytest
 
 from nautilus.attestation.jwks import export_jwks
@@ -16,7 +18,8 @@ def test_ac_18_c_jwks_contains_one_entry_per_active_key() -> None:
     jwks = export_jwks(ring)
     assert "keys" in jwks
     assert isinstance(jwks["keys"], list)
-    kids_in_jwks = {entry["kid"] for entry in jwks["keys"]}
+    keys = cast(list[dict[str, Any]], jwks["keys"])
+    kids_in_jwks = {entry["kid"] for entry in keys}
     kids_active = {entry.kid for entry in ring.active()}
     assert kids_in_jwks == kids_active
 

@@ -20,7 +20,7 @@ def export_jwks(key_ring: KeyRing) -> dict[str, Any]:
     Emits ``kty=OKP`` + ``crv=Ed25519`` entries (Ed25519 = EdDSA family,
     per RFC 8037). Used by adapters to verify session tokens (AC-18.c).
     """
-    entries = []
+    entries: list[dict[str, Any]] = []
     for key_entry in key_ring.active():
         public_key = key_ring.load_public_key(key_entry)
         # Ed25519 public key in raw 32-byte form for OKP JWK.

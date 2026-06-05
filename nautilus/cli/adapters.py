@@ -13,15 +13,19 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+from typing import TYPE_CHECKING, Any
 
 from nautilus.cli._common import err, ok, require_reviewer, warn
+
+if TYPE_CHECKING:
+    from nautilus.adapters.schema import AdapterSchema
 
 # ---------------------------------------------------------------------------
 # Public interface
 # ---------------------------------------------------------------------------
 
 
-def add_subparser(sub: argparse._SubParsersAction) -> None:  # type: ignore[type-arg]
+def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:  # pyright: ignore[reportPrivateUsage]
     """Add ``adapters`` group to the top-level argparse subparsers."""
     p = sub.add_parser("adapters", help="Adapter registry and schema operations.")
     adapters_sub = p.add_subparsers(dest="adapters_subcommand", metavar="subcommand")
@@ -93,15 +97,15 @@ def dispatch(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
-def _open_store() -> object:
+def _open_store() -> object:  # pyright: ignore[reportUnusedFunction]
     from nautilus.adapters.schema import SchemaFingerprintStore
 
     return SchemaFingerprintStore(root=None)
 
 
-def _schema_as_dict(schema: object) -> dict:  # type: ignore[type-arg]
-    d = dataclasses.asdict(schema)  # type: ignore[arg-type]
-    d["fetched_at"] = schema.fetched_at.isoformat()  # type: ignore[attr-defined]
+def _schema_as_dict(schema: AdapterSchema) -> dict[str, Any]:
+    d = dataclasses.asdict(schema)
+    d["fetched_at"] = schema.fetched_at.isoformat()
     return d
 
 
@@ -112,11 +116,14 @@ def _schema_as_dict(schema: object) -> dict:  # type: ignore[type-arg]
 
 def _cmd_list(args: argparse.Namespace) -> int:
     """List registered adapters from the broker config (best-effort)."""
+    from nautilus.adapters.base import Adapter
+
+    adapters: list[Adapter]
     try:
         from nautilus.core.broker import Broker
 
         broker = Broker.from_config(None)  # type: ignore[arg-type]
-        adapters = list(broker.adapters.values())  # type: ignore[attr-defined]
+        adapters = list(broker._adapters.values())  # pyright: ignore[reportPrivateUsage]
     except Exception:  # noqa: BLE001
         adapters = []
 
@@ -125,7 +132,7 @@ def _cmd_list(args: argparse.Namespace) -> int:
         adapters = [a for a in adapters if getattr(a, "status", "unknown") == status_filter]
 
     if getattr(args, "json", False):
-        out = []
+        out: list[dict[str, object]] = []
         for a in adapters:
             out.append(
                 {
@@ -253,7 +260,7 @@ def _cmd_schema_ack(args: argparse.Namespace) -> int:
     return 0
 
 
-def _get_adapter_schema(name: str) -> object | None:
+def _get_adapter_schema(name: str) -> AdapterSchema | None:
     """Try to retrieve an AdapterSchema for the named adapter. Best-effort."""
     from nautilus.adapters.schema import AdapterSchema
 

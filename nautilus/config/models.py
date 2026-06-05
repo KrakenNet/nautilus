@@ -357,7 +357,7 @@ class RkmConfig(BaseModel):
 class NautilusConfig(BaseModel):
     """Root ``nautilus.yaml`` document (design §4.1, §4.10, extended §3.11)."""
 
-    sources: list[SourceConfig] = Field(default_factory=list)
+    sources: list[SourceConfig] = Field(default_factory=list[SourceConfig])
     agents: dict[str, AgentRecord] = Field(default_factory=dict)
     attestation: AttestationConfig = Field(default_factory=AttestationConfig)
     rules: RulesConfig = Field(default_factory=RulesConfig)

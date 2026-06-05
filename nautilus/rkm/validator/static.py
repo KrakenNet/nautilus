@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
@@ -85,9 +85,10 @@ def validate_static(rule_yaml_path: Path) -> StaticResult:
     except yaml.YAMLError as exc:
         line = 1
         col = 1
-        if hasattr(exc, "problem_mark") and exc.problem_mark is not None:  # type: ignore[union-attr]
-            line = exc.problem_mark.line + 1  # type: ignore[union-attr]
-            col = exc.problem_mark.column + 1  # type: ignore[union-attr]
+        mark = getattr(exc, "problem_mark", None)
+        if mark is not None:
+            line = int(mark.line) + 1
+            col = int(mark.column) + 1
         return StaticResult(
             ok=False,
             errors=(
@@ -115,8 +116,9 @@ def validate_static(rule_yaml_path: Path) -> StaticResult:
             ),
         )
 
-    rules = data["rules"]
-    if not isinstance(rules, list):
+    data_dict = cast("dict[str, Any]", data)
+    rules_raw: Any = data_dict["rules"]
+    if not isinstance(rules_raw, list):
         return StaticResult(
             ok=False,
             errors=(
@@ -129,6 +131,7 @@ def validate_static(rule_yaml_path: Path) -> StaticResult:
                 ),
             ),
         )
+    rules = cast("list[Any]", rules_raw)
 
     # Build a node-lookup helper for line numbers.
     _node_lookup = _NodeLookup(root_node)
@@ -149,7 +152,8 @@ def validate_static(rule_yaml_path: Path) -> StaticResult:
             )
             continue
 
-        rule_name: str = str(rule.get("name", f"<unnamed-{rule_idx}>"))
+        rule_dict = cast("dict[str, Any]", rule)
+        rule_name: str = str(rule_dict.get("name", f"<unnamed-{rule_idx}>"))
         name_line = _node_lookup.rule_field_line(rule_idx, "name")
 
         # Duplicate rule name check (AC-35.5.b).
@@ -166,12 +170,14 @@ def validate_static(rule_yaml_path: Path) -> StaticResult:
         seen_names.add(rule_name)
 
         # Unknown template references in lhs (AC-35.5.b).
-        lhs = rule.get("lhs") or []
+        lhs: Any = rule_dict.get("lhs") or []
         if isinstance(lhs, list):
-            for pattern_idx, pattern in enumerate(lhs):
+            lhs_list = cast("list[Any]", lhs)
+            for pattern_idx, pattern in enumerate(lhs_list):
                 if not isinstance(pattern, dict):
                     continue
-                tmpl = pattern.get("template")
+                pattern_dict = cast("dict[str, Any]", pattern)
+                tmpl: Any = pattern_dict.get("template")
                 if tmpl is not None and tmpl not in _KNOWN_TEMPLATES:
                     tmpl_line = _node_lookup.lhs_template_line(rule_idx, pattern_idx)
                     errors.append(

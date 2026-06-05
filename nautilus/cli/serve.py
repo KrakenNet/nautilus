@@ -157,3 +157,14 @@ async def _run_both(
         _run_rest(broker, host, port),
         _run_mcp(broker, mcp_mode, host, mcp_port),
     )
+
+
+__all__ = [
+    "_DEFAULT_BIND",
+    "_enforce_air_gap",
+    "_load_config_for_serve",
+    "_run_both",
+    "_run_mcp",
+    "_run_rest",
+    "_split_bind",
+]

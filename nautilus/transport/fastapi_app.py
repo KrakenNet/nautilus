@@ -597,7 +597,7 @@ def create_app(
                 detail=f"rule not found: {rule_name!r}",
             )
         latest = versions[-1]
-        serialized_versions = []
+        serialized_versions: list[dict[str, Any]] = []
         for r in versions:
             d = dataclasses.asdict(r)
             d["promoted_at"] = r.promoted_at.isoformat()

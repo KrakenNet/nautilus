@@ -1,3 +1,7 @@
+# starlette >= 1.2 TestClient annotations reference httpx private modules,
+# which pyright strict surfaces as Unknown at every call site. Relax only
+# the Unknown-type rules here; all other strict checks remain active.
+# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
 """Integration tests for admin UI full flow (Task 3.9).
 
 Verifies end-to-end rendering of admin pages with real router, mock

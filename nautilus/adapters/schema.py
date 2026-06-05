@@ -86,7 +86,8 @@ class AdapterSchema:
         Reuses nautilus/core/attestation_payload.py:58 _stable_json
         and :69 _sha256. Shared.md line 311-313.
         """
-        from nautilus.core.attestation_payload import _sha256  # reuse anchor :69
+        # reuse anchor :69
+        from nautilus.core.attestation_payload import _sha256  # pyright: ignore[reportPrivateUsage]
 
         # Convert to a plain dict for stable serialisation.
         payload = dataclasses.asdict(self)

@@ -6,13 +6,22 @@ penalty term. Pure function — no I/O, no mocks.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, cast
+
 import pytest
 
 from nautilus.rkm.validator.sandbox import SandboxResult
 from nautilus.rkm.validator.scoring import score
 from nautilus.rkm.validator.shadow import ShadowFlag
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 pytestmark = pytest.mark.unit
+
+# pytest.approx is typed with an Unknown ``expected`` parameter in the bundled
+# stubs; expose it via a fully-typed alias so strict mode stays clean.
+_approx = cast("Callable[[float], object]", pytest.approx)  # pyright: ignore[reportUnknownMemberType]
 
 
 def _clean_sandbox(
@@ -44,29 +53,29 @@ def test_ac_35_8_a_clean_sandbox_returns_base_score_one() -> None:
 
 def test_ac_35_8_a_regression_penalty_is_minus_0_3_each() -> None:
     breakdown = score(_clean_sandbox(regressions=1), ())
-    assert breakdown.regression_penalty == pytest.approx(-0.3)
-    assert breakdown.total == pytest.approx(0.7)
+    assert breakdown.regression_penalty == _approx(-0.3)
+    assert breakdown.total == _approx(0.7)
 
 
 def test_ac_35_8_a_relaxation_penalty_is_minus_0_2_each() -> None:
     breakdown = score(_clean_sandbox(relaxations=1), ())
-    assert breakdown.relaxation_penalty == pytest.approx(-0.2)
+    assert breakdown.relaxation_penalty == _approx(-0.2)
 
 
 def test_ac_35_8_a_shadow_penalty_is_minus_0_1_each() -> None:
     flag = ShadowFlag(existing_rule="rule_a", relation="shadows")
     breakdown = score(_clean_sandbox(), (flag,))
-    assert breakdown.shadow_penalty == pytest.approx(-0.1)
+    assert breakdown.shadow_penalty == _approx(-0.1)
 
 
 def test_ac_35_8_a_low_fire_rate_penalty_is_minus_0_1() -> None:
     breakdown = score(_clean_sandbox(fire_rate_pct=1.0), ())
-    assert breakdown.fire_rate_penalty == pytest.approx(-0.1)
+    assert breakdown.fire_rate_penalty == _approx(-0.1)
 
 
 def test_ac_35_8_a_cascade_warn_penalty_is_minus_0_05_each() -> None:
     breakdown = score(_clean_sandbox(cascade_max=4), ())  # cascade > 3 = warn
-    assert breakdown.cascade_penalty == pytest.approx(-0.05)
+    assert breakdown.cascade_penalty == _approx(-0.05)
 
 
 def test_ac_35_8_b_boundary_above_0_9_is_auto_promote_eligible() -> None:

@@ -1,3 +1,7 @@
+# starlette >= 1.2 TestClient annotations reference httpx private modules,
+# which pyright strict surfaces as Unknown at every call site. Relax only
+# the Unknown-type rules here; all other strict checks remain active.
+# pyright: reportUnknownMemberType=false, reportUnknownVariableType=false, reportUnknownArgumentType=false
 """Smoke tests for :mod:`nautilus.transport.fastapi_app` (VERIFY 2.19).
 
 Mock-driven: no live network, no real Broker. The factory accepts an
