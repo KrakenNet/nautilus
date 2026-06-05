@@ -147,6 +147,11 @@ def _build_parser() -> argparse.ArgumentParser:
 
     _events_mod.add_subparser(sub)
 
+    # attestation ----------------------------------------------------------
+    from nautilus.cli import attestation as _attestation_mod
+
+    _attestation_mod.add_subparser(sub)
+
     return parser
 
 
@@ -272,6 +277,10 @@ def main(argv: list[str] | None = None) -> int:
         from nautilus.cli import events as _events_mod
 
         return _events_mod.dispatch(args)
+    if args.command == "attestation":
+        from nautilus.cli import attestation as _attestation_mod
+
+        return _attestation_mod.dispatch(args)
     # argparse enforces required=True; this is defensive.
     parser.print_help(sys.stderr)
     return 2

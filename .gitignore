@@ -250,3 +250,6 @@ specs/operator-platform/.progress-task-2-1.md
 .playwright-mcp
 graphify-out/.graphify_python
 .forge/
+
+# Experiment outputs
+results/

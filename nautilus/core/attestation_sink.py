@@ -36,6 +36,8 @@ from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 import httpx
+from fathom.attestation import AttestationService
+from fathom.chained_log import ChainedAttestationLog
 from pydantic import BaseModel, ConfigDict
 
 log = logging.getLogger(__name__)
@@ -139,6 +141,54 @@ class FileAttestationSink:
         # the adapter release step to proceed.
         with contextlib.suppress(Exception):
             self._fh.close()
+
+
+class ChainedFileAttestationSink:
+    """Hash-chained, JWS-signed append-only JSONL sink (FileSinkSpec ``chained: true``).
+
+    Wraps :class:`fathom.chained_log.ChainedAttestationLog`: every emitted
+    :class:`AttestationPayload` becomes one chained line carrying
+    ``prev_sha256`` linkage and an EdDSA JWS, so deletion, reordering, or
+    edits of emitted attestations are detectable offline
+    (``nautilus attestation verify``). The signing public key is exported
+    beside the log as ``<path>.pub.pem``; durability matches
+    :class:`FileAttestationSink` (fsync per append, AC-14.2).
+
+    Fail-closed: if the log is found corrupt (e.g. torn write), every
+    ``emit`` raises. Per AC-14.5 the broker logs that at WARNING and
+    continues — the corruption is surfaced by the verify CLI and the
+    admin audit viewer's chain badge rather than by breaking the hot path.
+    """
+
+    def __init__(
+        self,
+        path: Path | str,
+        service: AttestationService,
+        *,
+        checkpoint_interval: int = 0,
+    ) -> None:
+        self._log = ChainedAttestationLog(
+            path, service, checkpoint_interval=checkpoint_interval
+        )
+        self._closed = False
+
+    @property
+    def path(self) -> Path:
+        return self._log.path
+
+    async def emit(self, payload: AttestationPayload) -> None:
+        """Sign + append one chained JSONL line (fsynced by the chain log)."""
+        if self._closed:
+            raise ValueError("emit on closed ChainedFileAttestationSink")
+        self._log.append(payload.model_dump(mode="json"))
+
+    async def close(self) -> None:
+        """Idempotent close."""
+        if self._closed:
+            return
+        self._closed = True
+        with contextlib.suppress(Exception):
+            self._log.close()
 
 
 class RetryPolicy(BaseModel):
@@ -260,6 +310,7 @@ class HttpAttestationSink:
 __all__ = [
     "AttestationPayload",
     "AttestationSink",
+    "ChainedFileAttestationSink",
     "FileAttestationSink",
     "HttpAttestationSink",
     "NullAttestationSink",

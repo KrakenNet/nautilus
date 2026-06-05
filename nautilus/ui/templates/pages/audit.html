@@ -6,6 +6,19 @@
 {% block dashboard_content %}
 <h1>Audit Log</h1>
 
+<div class="chain-banner" id="attestation-chain-status">
+    Attestation chain:
+    {% if attestation_chain is none %}
+    <span class="badge">NOT CHAINED</span>
+    {% elif attestation_chain.ok %}
+    <span class="badge badge-success">VERIFIED ({{ attestation_chain.count }} records)</span>
+    <span class="chain-head">head {{ attestation_chain.head_short }}</span>
+    {% else %}
+    <span class="badge badge-danger">BROKEN</span>
+    <span class="chain-head">{{ attestation_chain.error }}</span>
+    {% endif %}
+</div>
+
 {% include "partials/audit_filters.html" %}
 
 <div class="table-wrap">

@@ -142,10 +142,21 @@ class NullSinkSpec(BaseModel):
 
 
 class FileSinkSpec(BaseModel):
-    """Append-only JSONL attestation sink with per-emit flush + fsync (AC-14.2)."""
+    """Append-only JSONL attestation sink with per-emit flush + fsync (AC-14.2).
+
+    ``chained: true`` upgrades the sink to a hash-chained, JWS-signed log
+    (:class:`fathom.chained_log.ChainedAttestationLog`): each line carries
+    ``prev_sha256`` linkage plus an EdDSA signature, so deletion, reordering,
+    or edits are detectable offline via ``nautilus attestation verify``.
+    Requires ``attestation.enabled`` with a signing key. ``checkpoint_interval``
+    (>0) appends a signed checkpoint record every N emissions for
+    tail-truncation anchoring.
+    """
 
     type: Literal["file"] = "file"
     path: str
+    chained: bool = False
+    checkpoint_interval: int = 0
 
 
 class RetryPolicySpec(BaseModel):

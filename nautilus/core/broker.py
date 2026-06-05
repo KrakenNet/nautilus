@@ -70,6 +70,7 @@ from nautilus.core.attestation_payload import build_payload, compute_response_ha
 from nautilus.core.attestation_sink import (
     AttestationPayload,
     AttestationSink,
+    ChainedFileAttestationSink,
     FileAttestationSink,
     HttpAttestationSink,
     NullAttestationSink,
@@ -383,7 +384,7 @@ class Broker:
         intent_analyzer = cls._build_intent_analyzer(config, pattern_analyzer)
 
         attestation = cls._build_attestation(config)
-        attestation_sink = cls._build_attestation_sink(config)
+        attestation_sink = cls._build_attestation_sink(config, attestation)
 
         user_rules_dirs = [Path(d) for d in config.rules.user_rules_dirs]
         router = FathomRouter(
@@ -530,7 +531,9 @@ class Broker:
         return InMemorySessionStore()
 
     @staticmethod
-    def _build_attestation_sink(config: NautilusConfig) -> AttestationSink:
+    def _build_attestation_sink(
+        config: NautilusConfig, attestation: AttestationService | None
+    ) -> AttestationSink:
         """Construct the attestation sink per design §3.14 / FR-28.
 
         Selects the concrete :class:`AttestationSink` implementation based on
@@ -539,12 +542,26 @@ class Broker:
         - ``"null"`` (default) → :class:`NullAttestationSink` — no-op; preserves
           NFR-5 for Phase-1 YAML fixtures with no ``attestation.sink`` entry.
         - ``"file"`` → :class:`FileAttestationSink` — append-only JSONL with
-          per-emit ``flush`` + ``os.fsync`` (AC-14.2).
+          per-emit ``flush`` + ``os.fsync`` (AC-14.2); with ``chained: true``,
+          :class:`ChainedFileAttestationSink` — hash-chained + JWS-signed
+          lines verifiable offline via ``nautilus attestation verify``.
         - ``"http"`` → :class:`HttpAttestationSink` — POST to verifier URL with
           retry + dead-letter spill (AC-14.3).
         """
         sink_spec = config.attestation.sink
         if isinstance(sink_spec, FileSinkSpec):
+            if sink_spec.chained:
+                if attestation is None:
+                    msg = (
+                        "attestation.sink.chained requires attestation.enabled "
+                        "with a signing key"
+                    )
+                    raise ValueError(msg)
+                return ChainedFileAttestationSink(
+                    Path(sink_spec.path),
+                    attestation,
+                    checkpoint_interval=sink_spec.checkpoint_interval,
+                )
             return FileAttestationSink(Path(sink_spec.path))
         if isinstance(sink_spec, HttpSinkSpec):
             rp_spec = sink_spec.retry_policy
