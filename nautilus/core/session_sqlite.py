@@ -155,12 +155,17 @@ class SqliteSessionStore:
             )
 
     async def aclose(self) -> None:
-        """Idempotent close — release the sqlite connection (FR-17)."""
+        """Idempotent close — release the sqlite connection (FR-17).
+
+        Takes ``_lock`` so an in-flight ``aget``/``aupdate`` worker thread
+        finishes before the shared connection is closed underneath it.
+        """
         if self._closed:
             return
         self._closed = True
-        conn = self._conn
-        self._conn = None
+        async with self._lock:
+            conn = self._conn
+            self._conn = None
         if conn is not None:
             await asyncio.to_thread(conn.close)
 

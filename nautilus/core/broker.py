@@ -417,7 +417,7 @@ class Broker:
         audit_path = Path(config.audit.path)
         audit_logger = AuditLogger(sink=FileSink(path=audit_path))
 
-        session_store = cls._build_session_store(config)
+        session_store = cls._build_session_store(config, base_dir=Path(path).parent)
 
         synthesizer = BasicSynthesizer()
 
@@ -506,7 +506,9 @@ class Broker:
         )
 
     @staticmethod
-    def _build_session_store(config: NautilusConfig) -> SessionStore | AsyncSessionStore:
+    def _build_session_store(
+        config: NautilusConfig, *, base_dir: Path
+    ) -> SessionStore | AsyncSessionStore:
         """Construct the session store per ``config.session_store.backend``.
 
         - ``memory`` (default) → :class:`InMemorySessionStore` (Phase-1 compat,
@@ -520,8 +522,17 @@ class Broker:
           durable single-node store, no Postgres required (#26).
         - ``redis`` → reserved; falls back to in-memory until Phase 2 lands a
           Redis adapter (intentional soft-land per design §3.11).
+
+        A relative ``sqlite_path`` is resolved against ``base_dir`` (the
+        config file's directory — same convention as the ``facts/`` dir)
+        so the database location does not depend on the process CWD; a
+        restart from a different working directory must reopen the SAME
+        store, not silently mint an empty one.
         """
         sess_cfg = config.session_store
+        sqlite_path = Path(sess_cfg.sqlite_path)
+        if not sqlite_path.is_absolute():
+            sqlite_path = base_dir / sqlite_path
         if sess_cfg.backend == "postgres":
             import os
 
@@ -533,10 +544,10 @@ class Broker:
             return PostgresSessionStore(
                 dsn,
                 on_failure=sess_cfg.on_failure,
-                sqlite_path=sess_cfg.sqlite_path,
+                sqlite_path=sqlite_path,
             )
         if sess_cfg.backend == "sqlite":
-            return SqliteSessionStore(sess_cfg.sqlite_path)
+            return SqliteSessionStore(sqlite_path)
         return InMemorySessionStore()
 
     @staticmethod

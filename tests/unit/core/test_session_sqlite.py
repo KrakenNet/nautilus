@@ -244,9 +244,26 @@ def test_build_session_store_sqlite_backend(tmp_path: Path) -> None:
     cfg = NautilusConfig.model_validate(
         {"session_store": {"backend": "sqlite", "sqlite_path": str(tmp_path / "s.db")}}
     )
-    store = Broker._build_session_store(cfg)  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+    store = Broker._build_session_store(  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+        cfg, base_dir=tmp_path
+    )
     assert isinstance(store, SqliteSessionStore)
     assert store.path == tmp_path / "s.db"
+
+
+@pytest.mark.unit
+def test_build_session_store_resolves_relative_path_against_config_dir(
+    tmp_path: Path,
+) -> None:
+    """A relative sqlite_path must not depend on the process CWD."""
+    cfg = NautilusConfig.model_validate(
+        {"session_store": {"backend": "sqlite", "sqlite_path": "./.nautilus/sessions.db"}}
+    )
+    store = Broker._build_session_store(  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+        cfg, base_dir=tmp_path
+    )
+    assert isinstance(store, SqliteSessionStore)
+    assert store.path == tmp_path / ".nautilus" / "sessions.db"
 
 
 @pytest.mark.unit
@@ -261,6 +278,8 @@ def test_build_session_store_pg_plumbs_sqlite_path(tmp_path: Path) -> None:
             }
         }
     )
-    store: Any = Broker._build_session_store(cfg)  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+    store: Any = Broker._build_session_store(  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
+        cfg, base_dir=tmp_path
+    )
     assert isinstance(store, PostgresSessionStore)
     assert store._sqlite_path == tmp_path / "fb.db"  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
