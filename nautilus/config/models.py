@@ -213,6 +213,10 @@ class RulesConfig(BaseModel):
     """Routing-rules subsection of ``nautilus.yaml`` (design §4.10)."""
 
     user_rules_dirs: list[str] = Field(default_factory=list)
+    # #27 — post-run engine-output consistency checks (v1 hardening,
+    # roadmap §05:432). On by default; opt out for performance-sensitive
+    # deployments.
+    consistency_checks: bool = True
 
 
 class AuditConfig(BaseModel):
