@@ -9,10 +9,16 @@ injection characters ``^`` / ``\\n`` / ``\\r`` (AC-11.1, NFR-4, NFR-18).
 The composed query is handed to httpx as a ``sysparm_query`` request parameter
 so httpx handles URL-encoding — no value is ever string-interpolated into the
 URL path. The sanitiser is the primary defence; httpx encoding is secondary.
+
+A ``sys_attachment`` source whose scope pins ``sys_id`` additionally fetches
+the attachment binary via the Attachment API and returns it on the row as
+``content_b64`` (see :meth:`ServiceNowAdapter._attach_content` for the guard
+rails: pin requirement, size caps, fan-out cap, sys_id validation).
 """
 
 from __future__ import annotations
 
+import base64
 import re
 import time
 from datetime import UTC, datetime
@@ -39,6 +45,18 @@ from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
 # Default row cap when the intent does not specify a ``LIMIT``.
 _DEFAULT_LIMIT: int = 1000
+
+# Attachment-content fetch: when a source is configured on ``sys_attachment``
+# and the scope pins ``sys_id``, the binary is downloaded via the Attachment
+# API and added to the row as ``content_b64``. Caps keep a pinned query from
+# becoming a bulk-download channel.
+_ATTACHMENT_TABLE: str = "sys_attachment"
+_MAX_ATTACHMENT_BYTES: int = 10 * 1024 * 1024
+_MAX_ATTACHMENT_FETCHES: int = 10
+
+# ServiceNow sys_id shape — validated before a response-row value is ever
+# interpolated into the Attachment-API request path.
+_SYS_ID_PATTERN: re.Pattern[str] = re.compile(r"^[0-9a-f]{32}$")
 
 # Table name regex per design §3.11 / AC-11.1. Matches ServiceNow table
 # identifiers: lowercase letter first, then lowercase / digits / underscore.
@@ -279,11 +297,57 @@ class ServiceNowAdapter:
         body: Any = response.json()
         rows: list[dict[str, Any]] = _coerce_rows(body, limit=_DEFAULT_LIMIT)
 
+        if self._table == _ATTACHMENT_TABLE and _scope_pins_sys_id(scope):
+            await self._attach_content(self._client, rows, headers)
+
         return AdapterResult(
             source_id=self._config.id,
             rows=rows,
             duration_ms=duration_ms,
         )
+
+    async def _attach_content(
+        self,
+        client: httpx.AsyncClient,
+        rows: list[dict[str, Any]],
+        headers: dict[str, str] | None,
+    ) -> None:
+        """Download pinned attachment binaries; add ``content_b64`` per row.
+
+        Only reached for ``sys_attachment`` queries whose scope pins
+        ``sys_id`` — a broad metadata query must never fan out into bulk
+        downloads. Each row's ``sys_id`` is regex-validated before it is
+        interpolated into the request path; size is checked twice (metadata
+        ``size_bytes`` pre-check, then the downloaded body). Per-row guard
+        failures are recorded as ``content_error`` so metadata survives;
+        only the fan-out cap is a hard error.
+        """
+        if len(rows) > _MAX_ATTACHMENT_FETCHES:
+            raise AdapterError(
+                f"sn-attachment-fetch-cap: {len(rows)} rows pinned, "
+                f"cap is {_MAX_ATTACHMENT_FETCHES}"
+            )
+        for row in rows:
+            sys_id = str(row.get("sys_id", ""))
+            if not _SYS_ID_PATTERN.match(sys_id):
+                row["content_error"] = "sn-invalid-sys-id"
+                continue
+            try:
+                declared = int(str(row.get("size_bytes", "") or "0"))
+            except ValueError:
+                declared = 0
+            if declared > _MAX_ATTACHMENT_BYTES:
+                row["content_error"] = "attachment-too-large"
+                continue
+            response = await client.get(
+                f"/api/now/attachment/{sys_id}/file", headers=headers
+            )
+            response.raise_for_status()
+            content = response.content
+            if len(content) > _MAX_ATTACHMENT_BYTES:
+                row["content_error"] = "attachment-too-large"
+                continue
+            row["content_b64"] = base64.b64encode(content).decode("ascii")
 
     async def get_schema(self) -> AdapterSchema:
         """Return schema via sys_dictionary table query. AC-21, OQ3."""
@@ -326,6 +390,11 @@ class ServiceNowAdapter:
             )
         except Exception:  # noqa: BLE001
             return AdapterSchema.unknown(self._config.id, self.source_type)
+
+
+def _scope_pins_sys_id(scope: list[ScopeConstraint]) -> bool:
+    """True when some constraint pins ``sys_id`` via ``=`` or ``IN``."""
+    return any(c.field == "sys_id" and c.operator in ("=", "IN") for c in scope)
 
 
 def _coerce_rows(body: Any, limit: int) -> list[dict[str, Any]]:
