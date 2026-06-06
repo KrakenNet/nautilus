@@ -40,6 +40,7 @@ from nautilus.adapters.base import Adapter, AdapterError, ScopeEnforcementError
 from nautilus.adapters.elasticsearch import ElasticsearchAdapter
 from nautilus.adapters.embedder import Embedder, NoopEmbedder
 from nautilus.adapters.influxdb import InfluxDBAdapter
+from nautilus.adapters.llm import LLMAdapter
 from nautilus.adapters.neo4j import Neo4jAdapter
 from nautilus.adapters.pgvector import PgVectorAdapter
 from nautilus.adapters.postgres import PostgresAdapter
@@ -135,6 +136,7 @@ ADAPTER_REGISTRY: dict[str, type[Adapter]] = {
     "servicenow": ServiceNowAdapter,
     "influxdb": InfluxDBAdapter,
     "s3": S3Adapter,
+    "llm": LLMAdapter,
 }
 
 
