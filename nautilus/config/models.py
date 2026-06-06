@@ -100,7 +100,7 @@ class SourceConfig(BaseModel):
         "s3",
         "llm",
         "custom",
-        "demo-local"
+        "demo-local",
     ]
     description: str
     classification: str
