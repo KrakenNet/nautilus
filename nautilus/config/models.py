@@ -99,6 +99,8 @@ class SourceConfig(BaseModel):
         "influxdb",
         "s3",
         "llm",
+        "custom",
+        "demo-local"
     ]
     description: str
     classification: str
