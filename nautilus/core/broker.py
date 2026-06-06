@@ -58,6 +58,7 @@ from nautilus.attestation.session_token import (
     SessionTokenClaims,
     SessionTokenError,
     SessionTokenService,
+)
 
 from nautilus.audit.logger import AuditLogger
 from nautilus.config.agent_registry import AgentRegistry, UnknownAgentError
