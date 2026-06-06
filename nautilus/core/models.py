@@ -158,6 +158,10 @@ class BrokerResponse(BaseModel):
     cap_breached: bool | None = None
     fact_set_hash: str | None = None
     source_session_signatures: dict[str, dict[str, Any]] | None = None
+    # Session-provenance JWS (#18, AC-18.a). Populated only when the broker
+    # is configured with ``session_tokens.enabled: true``; ``None`` otherwise
+    # so Phase-1 responses round-trip unchanged (NFR-5).
+    session_token: str | None = None
 
 
 class HandoffDecision(BaseModel):
@@ -214,7 +218,7 @@ class AuditEntry(BaseModel):
     fallback_used: bool | None = None
     scope_hash_version: Literal["v1", "v2"] | None = None
     session_id_source: Literal["context", "transport", "stdio_request_id"] | None = None
-    session_store_mode: Literal["primary", "degraded_memory"] | None = None
+    session_store_mode: Literal["primary", "degraded_memory", "degraded_sqlite"] | None = None
     event_type: (
         Literal[
             "request",

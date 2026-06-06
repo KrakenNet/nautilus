@@ -50,9 +50,20 @@ nav:
   - Getting Started: getting-started.md
   - How-to Guides:
       - Overview: how-to/index.md
+      - Operator Guide: how-to/operator-guide.md
+      - Authoring Rules: how-to/authoring-rules.md
+      - Developing Adapters: how-to/developing-adapters.md
+      - Add a Postgres Source: how-to/add-a-postgres-source.md
+      - Write a Routing Rule: how-to/write-a-routing-rule.md
+      - Configure Attestation: how-to/configure-attestation.md
+      - Verify a Token: how-to/verify-a-token.md
+      - Add an LLM Source: how-to/add-an-llm-source.md
+      - Monitor with Grafana: how-to/monitor-with-grafana.md
   - Concepts:
       - Overview: concepts/index.md
       - Architecture: concepts/architecture.md
+      - The Attestation Chain: concepts/attestation-chain.md
+      - RKM Rule Lifecycle: concepts/rkm-lifecycle.md
   - Reference:
       - Overview: reference/index.md
       - Python SDK: reference/python-sdk.md

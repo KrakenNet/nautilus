@@ -351,3 +351,119 @@ def test_no_public_query_api() -> None:
         assert not hasattr(broker, "query")
     finally:
         broker.close()
+
+
+# ---------------------------------------------------------------------------
+# #24 — auto-generated base intent vocabulary from SourceConfig.data_types
+# ---------------------------------------------------------------------------
+
+
+def _write_yaml(tmp_path: Path, body: str) -> Path:
+    """Write a minimal nautilus.yaml under ``tmp_path`` and return its path."""
+    dst = tmp_path / "nautilus.yaml"
+    dst.write_text(body, encoding="utf-8")
+    return dst
+
+
+def _analyzer_keyword_map(broker: Broker) -> dict[str, list[str]]:
+    """Read the wired pattern analyzer's (lowercased) keyword map.
+
+    The analyzer is private but stable; the broker exposes no public accessor
+    for the materialized vocabulary in Phase 1 (design §3.1).
+    """
+    analyzer = broker._intent_analyzer  # type: ignore[attr-defined]  # noqa: SLF001
+    return analyzer._keyword_map  # type: ignore[attr-defined, no-any-return]  # noqa: SLF001
+
+
+@pytest.mark.unit
+def test_data_types_generate_keyword_vocabulary(tmp_path: Path) -> None:
+    """#24: sources declaring ``data_types`` with no keyword_map seed the vocab."""
+    cfg = _write_yaml(
+        tmp_path,
+        """
+sources:
+  - id: nvd_db
+    type: postgres
+    description: "test"
+    classification: unclassified
+    data_types: [cve, scan_result]
+    connection: ${TEST_PG_DSN}
+    table: vulns
+rules:
+  user_rules_dirs: []
+attestation:
+  enabled: false
+""",
+    )
+    broker = Broker.from_config(cfg)
+    try:
+        keyword_map = _analyzer_keyword_map(broker)
+        assert keyword_map["cve"] == ["cve"]
+        # Underscores normalize to spaces in the generated keyword variant.
+        assert keyword_map["scan_result"] == ["scan_result", "scan result"]
+    finally:
+        broker.close()
+
+
+@pytest.mark.unit
+def test_explicit_keyword_map_overrides_generated_entry(tmp_path: Path) -> None:
+    """#24: an explicit keyword_map entry wins over the generated base on collision."""
+    cfg = _write_yaml(
+        tmp_path,
+        """
+sources:
+  - id: nvd_db
+    type: postgres
+    description: "test"
+    classification: unclassified
+    data_types: [vulnerability]
+    connection: ${TEST_PG_DSN}
+    table: vulns
+rules:
+  user_rules_dirs: []
+analysis:
+  keyword_map:
+    vulnerability: [vuln, weakness]
+attestation:
+  enabled: false
+""",
+    )
+    broker = Broker.from_config(cfg)
+    try:
+        keyword_map = _analyzer_keyword_map(broker)
+        # Explicit list replaces the generated ["vulnerability"] base wholesale.
+        assert keyword_map["vulnerability"] == ["vuln", "weakness"]
+    finally:
+        broker.close()
+
+
+@pytest.mark.unit
+def test_empty_data_types_leaves_vocabulary_unchanged(tmp_path: Path) -> None:
+    """#24: a source with empty ``data_types`` contributes no generated entries."""
+    cfg = _write_yaml(
+        tmp_path,
+        """
+sources:
+  - id: nvd_db
+    type: postgres
+    description: "test"
+    classification: unclassified
+    data_types: []
+    connection: ${TEST_PG_DSN}
+    table: vulns
+rules:
+  user_rules_dirs: []
+analysis:
+  keyword_map:
+    asset: [host, server]
+attestation:
+  enabled: false
+""",
+    )
+    broker = Broker.from_config(cfg)
+    try:
+        keyword_map = _analyzer_keyword_map(broker)
+        # Only the explicit entry survives; no generated keys from empty data_types.
+        assert keyword_map == {"asset": ["host", "server"]}
+    finally:
+        broker.close()

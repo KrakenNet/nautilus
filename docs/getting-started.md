@@ -19,20 +19,21 @@ Create a `nautilus.yaml`:
 ```yaml
 sources:
   - id: main-db
-    adapter: postgres
-    dsn: ${DATABASE_URL}
+    type: postgres
+    description: "Primary application database"
     classification: confidential
     data_types: [users, orders]
+    allowed_purposes: [support]
+    connection: ${DATABASE_URL}
+    table: orders
 
 rules:
-  paths:
-    - ./rules/
+  user_rules_dirs: []
 
 attestation:
   enabled: true
 
 audit:
-  sink: file
   path: ./audit.jsonl
 ```
 

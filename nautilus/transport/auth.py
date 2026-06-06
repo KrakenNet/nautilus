@@ -19,7 +19,7 @@ otherwise. Read-only probes (``/healthz``, ``/readyz``) stay un-gated.
 from __future__ import annotations
 
 import secrets
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import APIKeyHeader
@@ -132,11 +132,26 @@ async def verify_session_token(
     token_value = request.headers.get(_SESSION_TOKEN_HEADER)
     if not token_value:
         return None
+    from nautilus.attestation.session_token import SessionTokenError, SessionTokenService
+
+    # AC-18.f — prefer the broker's token service so verification failures
+    # emit ``session_token_verification_failed`` audit entries. The
+    # isinstance guard keeps mock-broker tests on the unaudited fallback.
+    broker: Any = getattr(request.app.state, "broker", None)
+    broker_service = getattr(broker, "session_tokens", None) if broker is not None else None
+    if isinstance(broker_service, SessionTokenService):
+        try:
+            claims: SessionTokenClaims = broker.verify_session_token(token_value)
+            return claims
+        except SessionTokenError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Invalid session token: {exc.reason_code}",
+            ) from exc
+
     key_ring = getattr(request.app.state, "key_ring", None)
     if key_ring is None:
         return None
-    from nautilus.attestation.session_token import SessionTokenError, SessionTokenService
-
     broker_instance_id = getattr(request.app.state, "broker_instance_id", "unknown")
     service = SessionTokenService(key_ring=key_ring, broker_instance_id=broker_instance_id)
     try:

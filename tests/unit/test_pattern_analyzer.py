@@ -23,10 +23,26 @@ import string
 
 import pytest
 
-from nautilus.analysis.pattern_matching import PatternMatchingIntentAnalyzer
+from nautilus.analysis.pattern_matching import (
+    PatternMatchingIntentAnalyzer,
+    build_keyword_map,
+)
+from nautilus.config.models import SourceConfig
 from nautilus.core.models import IntentAnalysis
 
 pytestmark = pytest.mark.unit
+
+
+def _source(source_id: str, data_types: list[str]) -> SourceConfig:
+    """Minimal :class:`SourceConfig` carrying only the fields this suite needs."""
+    return SourceConfig(
+        id=source_id,
+        type="postgres",
+        description="test source",
+        classification="unclassified",
+        data_types=data_types,
+        connection="postgres://ignored/0",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -252,3 +268,64 @@ def test_nfr_13_determinism_independent_of_context_dict_mutations() -> None:
     b = analyzer.analyze(intent, {"unrelated": "metadata", "nested": {"x": [1, 2, 3]}})
 
     assert a.model_dump() == b.model_dump()
+
+
+# ---------------------------------------------------------------------------
+# #24 — auto-generated base vocabulary from SourceConfig.data_types
+# ---------------------------------------------------------------------------
+
+
+def test_build_keyword_map_generates_entry_per_data_type() -> None:
+    """Each declared ``data_type`` becomes a keyword entry; underscores normalize.
+
+    The raw token is always a keyword; a space-normalized variant is added only
+    when it differs from the raw token (multi-word/underscore types).
+    """
+    sources = [_source("s1", ["cve", "scan_result"])]
+    keyword_map = build_keyword_map(sources, {})
+
+    assert keyword_map == {
+        "cve": ["cve"],
+        "scan_result": ["scan_result", "scan result"],
+    }
+
+
+def test_build_keyword_map_dedupes_data_types_across_sources() -> None:
+    """A data type declared by multiple sources yields exactly one entry."""
+    sources = [_source("s1", ["vulnerability"]), _source("s2", ["vulnerability", "patch"])]
+    keyword_map = build_keyword_map(sources, {})
+
+    assert set(keyword_map) == {"vulnerability", "patch"}
+    assert keyword_map["vulnerability"] == ["vulnerability"]
+
+
+def test_build_keyword_map_explicit_entry_wins_on_collision() -> None:
+    """An explicit ``keyword_map`` entry overrides the generated base wholesale."""
+    sources = [_source("s1", ["vulnerability"])]
+    explicit = {"vulnerability": ["vuln", "weakness"]}
+    keyword_map = build_keyword_map(sources, explicit)
+
+    # Explicit list replaces the generated ["vulnerability"] base entirely.
+    assert keyword_map["vulnerability"] == ["vuln", "weakness"]
+
+
+def test_build_keyword_map_explicit_only_keys_are_preserved() -> None:
+    """Explicit entries for data types no source declares still pass through."""
+    sources = [_source("s1", ["cve"])]
+    explicit = {"asset": ["host", "server"]}
+    keyword_map = build_keyword_map(sources, explicit)
+
+    assert keyword_map == {
+        "cve": ["cve"],
+        "asset": ["host", "server"],
+    }
+
+
+def test_build_keyword_map_empty_data_types_yields_explicit_only() -> None:
+    """Sources with empty ``data_types`` contribute nothing; behavior unchanged."""
+    sources = [_source("s1", []), _source("s2", [])]
+    explicit = {"asset": ["host"]}
+
+    assert build_keyword_map(sources, explicit) == {"asset": ["host"]}
+    # And with no explicit overlay either, an empty map results.
+    assert build_keyword_map(sources, {}) == {}

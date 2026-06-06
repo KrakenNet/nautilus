@@ -27,6 +27,11 @@ Endpoints (all under ``/v1`` except health probes):
 - ``GET /v1/rules/{rule_name}/lineage`` — lineage DAG (AC-35.10.b).
 - ``POST /v1/rules/{rule_name}/retract`` — retract rule (AC-35.10.a/d).
 - ``POST /v1/rules/{rule_name}/rollback`` — rollback to version (AC-35.10.d).
+- ``GET /v1/audit`` — paginated audit-entry query with server-side filters
+  (agent_id, source_id, event_type, start/end, cursor, limit, order); auth
+  required (#32).
+- ``GET /v1/audit/{request_id}`` — single audit-entry lookup; 404 when
+  absent; auth required (#32).
 
 Write endpoints (``POST /v1/request``, ``POST /v1/query``) are gated on
 :func:`nautilus.transport.auth.require_api_key` when
@@ -39,11 +44,13 @@ restarts.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from fastapi import Depends, FastAPI, Query, Request, Response, status
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
 from nautilus.attestation.jwks import export_jwks
 from nautilus.attestation.key_ring import KeyRing
@@ -53,12 +60,20 @@ from nautilus.core.metrics import register_rkm_queue
 from nautilus.core.models import BrokerRequest, BrokerResponse
 from nautilus.transport.auth import api_key_header, proxy_trust_dependency, verify_api_key
 from nautilus.ui import create_admin_router
+from nautilus.ui.audit_reader import AuditReader
+from nautilus.ui.dependencies import get_auth_user
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
 
 _READY_PROBE_KEY = "_ready_probe_"
+
+# Hard cap on /v1/audit page size — bounds result set for SIEM / dashboard
+# pulls regardless of caller-supplied ``limit`` (#32 acceptance: bounded
+# result set size).
+_AUDIT_MAX_LIMIT = 500
+_AUDIT_DEFAULT_LIMIT = 50
 
 
 def _resolve_auth_config(broker: Broker | None) -> tuple[str, list[str]]:
@@ -90,6 +105,24 @@ def _resolve_auth_config(broker: Broker | None) -> tuple[str, list[str]]:
         for k in keys_raw:  # pyright: ignore[reportUnknownVariableType]
             keys.append(str(k))  # pyright: ignore[reportUnknownArgumentType]
     return (mode, keys)
+
+
+def _find_audit_entry(reader: AuditReader, request_id: str) -> Any:
+    """Page through the audit log (newest-first) for ``request_id``.
+
+    Returns the matching ``AuditEntry`` or ``None``. Cursor pagination
+    keeps memory bounded on GB-sized logs; the loop terminates when the
+    reader stops handing back a ``next_cursor``.
+    """
+    cursor: str | None = None
+    while True:
+        page = reader.read_page(cursor=cursor, sort="desc")
+        for entry in page.entries:
+            if entry.request_id == request_id:
+                return entry
+        if not page.next_cursor or page.next_cursor == cursor:
+            return None
+        cursor = page.next_cursor
 
 
 def create_app(
@@ -134,10 +167,16 @@ def create_app(
         mode, keys = _resolve_auth_config(broker)
         app.state.auth_mode = mode
         app.state.api_keys = keys
-        # Key ring for session-token endpoints (AC-18.a–g). One shared
-        # instance per process; rotated in-place via KeyRing.rotate().
-        app.state.key_ring = KeyRing()
-        app.state.broker_instance_id = getattr(broker, "_instance_id", "default")
+        # Key ring for session-token endpoints (AC-18.a–g). Reuse the
+        # broker's ring when session tokens are enabled — the ring is
+        # in-memory, so a separate transport-level instance could never
+        # verify broker-minted tokens. Falls back to a standalone ring
+        # (legacy behaviour) when the broker has none. The isinstance
+        # guards keep mock-broker tests (MagicMock attrs) on the fallback.
+        broker_ring = getattr(broker, "key_ring", None)
+        app.state.key_ring = broker_ring if isinstance(broker_ring, KeyRing) else KeyRing()
+        broker_iid = getattr(broker, "instance_id", None)
+        app.state.broker_instance_id = broker_iid if isinstance(broker_iid, str) else "default"
         app.state.ready = True
         # Wire Prometheus RKM queue collector (AC-35.9.f).
         register_rkm_queue(lambda: getattr(app.state, "proposal_queue", None))
@@ -311,12 +350,21 @@ def create_app(
             return {"keys": []}
         return export_jwks(key_ring)
 
-    @app.post("/v1/sessions", tags=["attestation"])
+    @app.post(
+        "/v1/sessions",
+        tags=["attestation"],
+        dependencies=[Depends(_write_guard)],
+    )
     async def post_sessions(  # pyright: ignore[reportUnusedFunction]
         body: dict[str, Any],
         request: Request,
     ) -> dict[str, Any]:
-        """Issue a session token (AC-18.a). Body: session_id, agent_id, purpose, clearance."""
+        """Issue a session token (AC-18.a). Body: session_id, agent_id, purpose, clearance.
+
+        Auth-gated (#18 security review): an unauthenticated caller must not
+        be able to mint broker-valid tokens bound to arbitrary agent/session
+        ids — that would bypass the session-pinning property entirely.
+        """
         key_ring: KeyRing | None = getattr(request.app.state, "key_ring", None)
         if key_ring is None:
             from fastapi import HTTPException
@@ -327,12 +375,27 @@ def create_app(
             )
         broker_instance_id: str = getattr(request.app.state, "broker_instance_id", "default")
         service = SessionTokenService(key_ring=key_ring, broker_instance_id=broker_instance_id)
-        token = service.issue(
-            session_id=body.get("session_id", ""),
-            agent_id=body.get("agent_id", ""),
-            purpose=body.get("purpose", ""),
-            clearance=body.get("clearance", ""),
-        )
+        # AC-18.f — issue through the broker when its token service is live so
+        # the ``session_token_issued`` audit event lands in the JSONL stream.
+        # The isinstance guard keeps mock-broker tests on the unaudited path.
+        broker: Broker | None = getattr(request.app.state, "broker", None)
+        broker_service = getattr(broker, "session_tokens", None) if broker is not None else None
+        if isinstance(broker_service, SessionTokenService):
+            service = broker_service
+            assert broker is not None  # noqa: S101 — broker_service implies broker
+            token = broker.issue_session_token(
+                session_id=body.get("session_id", ""),
+                agent_id=body.get("agent_id", ""),
+                purpose=body.get("purpose", ""),
+                clearance=body.get("clearance", ""),
+            )
+        else:
+            token = service.issue(
+                session_id=body.get("session_id", ""),
+                agent_id=body.get("agent_id", ""),
+                purpose=body.get("purpose", ""),
+                clearance=body.get("clearance", ""),
+            )
         claims = service.verify(token)
         return {
             "token": token,
@@ -737,6 +800,113 @@ def create_app(
             "new_version": new_version,
             "record": d,
         }
+
+    # ------------------------------------------------------------------
+    # Public audit query API — #32 (SIEM ingestion, compliance pipelines)
+    # ------------------------------------------------------------------
+
+    async def _read_guard(request: Request) -> str:
+        """Authenticate a read request via the shared admin/API auth path.
+
+        Wraps :func:`get_auth_user` so FastAPI introspects *this* function's
+        signature (``Request`` is resolvable here) rather than the imported
+        dependency's, whose ``Request`` annotation is TYPE_CHECKING-only.
+        """
+        return await get_auth_user(request)
+
+    def _audit_reader(request: Request, page_size: int = _AUDIT_DEFAULT_LIMIT) -> AuditReader:
+        """Build an :class:`AuditReader` over the broker's configured log."""
+        from fastapi import HTTPException
+
+        broker: Broker | None = getattr(request.app.state, "broker", None)
+        if broker is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Broker not ready",
+            )
+        # Mirror nautilus.ui.dependencies.get_audit_path — the audit log path
+        # lives on the broker's config (the same source the admin UI reads).
+        audit_path = str(broker._config.audit.path)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+        return AuditReader(audit_path, page_size=page_size)
+
+    def _parse_audit_dt(value: str | None) -> datetime | None:
+        """Parse an ISO-8601 datetime query param, or 400 on bad input."""
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError as exc:
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"invalid datetime: {value!r}",
+            ) from exc
+
+    @app.get(
+        "/v1/audit",
+        dependencies=[Depends(_read_guard)],
+        tags=["audit"],
+    )
+    async def get_audit(  # pyright: ignore[reportUnusedFunction]
+        request: Request,
+        agent_id: str | None = None,
+        source_id: str | None = None,
+        event_type: str | None = None,
+        start: str | None = None,
+        end: str | None = None,
+        cursor: str | None = None,
+        limit: int = Query(default=_AUDIT_DEFAULT_LIMIT, ge=1, le=_AUDIT_MAX_LIMIT),
+        order: str = Query(default="desc", pattern="^(asc|desc)$"),
+    ) -> dict[str, Any]:
+        """Paginated audit-entry query with server-side filters (#32).
+
+        Filters (``agent_id``, ``source_id``, ``event_type``,
+        ``start``/``end``) and cursor pagination are delegated to
+        :class:`AuditReader`. ``limit`` is capped at ``_AUDIT_MAX_LIMIT`` to
+        bound the result set. Returns ``{"entries": [...], "next_cursor":
+        ...}`` where each entry is a JSON-mode ``AuditEntry`` dump.
+        """
+        reader = _audit_reader(request, page_size=limit)
+        page = await run_in_threadpool(
+            reader.read_page,
+            cursor,
+            agent_id=agent_id,
+            source_id=source_id,
+            event_type=event_type,
+            start=_parse_audit_dt(start),
+            end=_parse_audit_dt(end),
+            sort="asc" if order == "asc" else "desc",
+        )
+        return {
+            "entries": [e.model_dump(mode="json") for e in page.entries],
+            "next_cursor": page.next_cursor,
+        }
+
+    @app.get(
+        "/v1/audit/{request_id}",
+        dependencies=[Depends(_read_guard)],
+        tags=["audit"],
+    )
+    async def get_audit_entry(  # pyright: ignore[reportUnusedFunction]
+        request_id: str,
+        request: Request,
+    ) -> dict[str, Any]:
+        """Single audit-entry lookup by ``request_id`` (#32); 404 when absent.
+
+        Scans pages from newest to oldest (the common case is a recent
+        request) until the entry is found or the log is exhausted.
+        """
+        from fastapi import HTTPException
+
+        reader = _audit_reader(request)
+        entry = await run_in_threadpool(_find_audit_entry, reader, request_id)
+        if entry is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"audit entry not found: {request_id!r}",
+            )
+        return entry.model_dump(mode="json")
 
     # ------------------------------------------------------------------
     # Root redirect — / → /admin

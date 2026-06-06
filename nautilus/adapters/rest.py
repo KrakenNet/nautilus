@@ -34,6 +34,7 @@ import httpx
 from nautilus.adapters.base import (
     AdapterError,
     ScopeEnforcementError,
+    session_token_headers,
     validate_field,
 )
 from nautilus.adapters.schema import AdapterSchema
@@ -403,13 +404,16 @@ class RestAdapter:
         Any 3xx status code is refused regardless of target — the adapter
         never follows redirects (NFR-17).
         """
-        del intent, context  # Phase 2: intent/context not consumed by REST adapter
+        del intent  # Phase 2: intent not consumed by REST adapter
         if self._client is None or self._config is None or self._base_host is None:
             raise AdapterError("RestAdapter.execute called before connect()")
 
         path = self._endpoint.path if self._endpoint is not None else ""
         method = self._endpoint.method if self._endpoint is not None else "GET"
         params = self._build_params(scope)
+        # AC-18.b — forward the broker-issued session-provenance token so
+        # downstream services can correlate the call to its session.
+        headers = session_token_headers(context)
 
         started = time.perf_counter()
         # Wrap via ``httpx.QueryParams`` so httpx handles URL-encoding; pass a
@@ -419,7 +423,9 @@ class RestAdapter:
         # pyright strict invariance check).
         params_tuple: tuple[tuple[str, str], ...] = tuple(params)
         query = httpx.QueryParams(params_tuple)
-        response: httpx.Response = await self._client.request(method, path, params=query)
+        response: httpx.Response = await self._client.request(
+            method, path, params=query, headers=headers
+        )
         duration_ms = int((time.perf_counter() - started) * 1000)
 
         _enforce_no_cross_host_redirect(response, self._base_host)

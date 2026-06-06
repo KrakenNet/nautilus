@@ -23,6 +23,10 @@ import httpx
 from nautilus.adapters.base import (
     AdapterError,
     ScopeEnforcementError,
+    session_token_headers,
+)
+from nautilus.adapters.rest import (
+    _reject_private_ip_literal,  # pyright: ignore[reportPrivateUsage]
 )
 from nautilus.adapters.schema import AdapterField, AdapterSchema, AdapterTable
 from nautilus.config.models import (
@@ -139,9 +143,16 @@ class ServiceNowAdapter:
         if self._client is not None:
             return
 
+        # #18 security review — the session-provenance token now rides on
+        # every request (AC-18.b), so refuse private/loopback/metadata IP
+        # literals just like the REST adapter, and pin redirect behaviour
+        # explicitly (httpx defaults to no-follow; make it load-bearing).
+        _reject_private_ip_literal(config.connection)
+
         client_kwargs: dict[str, Any] = {
             "base_url": config.connection,
             "auth": _auth_for_config(config),
+            "follow_redirects": False,
         }
         a = config.auth
         if isinstance(a, MtlsAuth):
@@ -244,12 +255,14 @@ class ServiceNowAdapter:
         handles URL-encoding; no value ever reaches the URL path through
         string interpolation (NFR-4).
         """
-        del intent, context  # Phase 2: intent/context not consumed by SN adapter
+        del intent  # Phase 2: intent not consumed by SN adapter
         if self._client is None or self._config is None or self._table is None:
             raise AdapterError("ServiceNowAdapter.execute called before connect()")
 
         sysparm_query = self._build_sysparm_query(scope)  # noqa: SQLGREP
         path = f"/api/now/table/{self._table}"
+        # AC-18.b — forward the broker-issued session-provenance token.
+        headers = session_token_headers(context)
 
         started = time.perf_counter()
         params_tuple: tuple[tuple[str, str], ...] = (
@@ -257,7 +270,9 @@ class ServiceNowAdapter:
             ("sysparm_limit", str(_DEFAULT_LIMIT)),
         )
         query = httpx.QueryParams(params_tuple)
-        response: httpx.Response = await self._client.request("GET", path, params=query)
+        response: httpx.Response = await self._client.request(
+            "GET", path, params=query, headers=headers
+        )
         duration_ms = int((time.perf_counter() - started) * 1000)
 
         response.raise_for_status()
