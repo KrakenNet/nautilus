@@ -14,6 +14,12 @@ Failure policy (NFR-7, D-1):
   internal :class:`~nautilus.core.session.InMemorySessionStore`; ``mode``
   flips to ``"degraded_memory"`` and ``degraded_since`` records the UTC
   timestamp. Recovery-probe cadence lives in the broker (design §8).
+- ``on_failure="fallback_sqlite"`` (#26, roadmap §05:422): degrade to a
+  :class:`~nautilus.core.session_sqlite.SqliteSessionStore` at
+  ``sqlite_path`` instead — ``mode`` flips to ``"degraded_sqlite"`` and
+  session state survives a broker restart, unlike the in-memory fallback.
+  If the SQLite store itself cannot be opened, the failure escalates to
+  :class:`SessionStoreUnavailableError` (no silent downgrade to memory).
 """
 
 from __future__ import annotations
@@ -21,9 +27,15 @@ from __future__ import annotations
 import contextlib
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any, Literal, cast
 
 from nautilus.core.session import InMemorySessionStore
+from nautilus.core.session_sqlite import SqliteSessionStore
+
+# Fallback database location when ``fallback_sqlite`` is selected without an
+# explicit ``sqlite_path`` (mirrors the ``.nautilus/`` convention used by keys).
+_DEFAULT_SQLITE_PATH: Path = Path(".nautilus/sessions.db")
 
 # ``asyncpg`` is a Phase-2 runtime dep (pyproject) but imports are deferred
 # into ``setup`` / ``aget`` / ``aupdate`` to keep ``from nautilus.core.session_pg
@@ -68,8 +80,8 @@ class SessionStoreUnavailableError(Exception):
     """
 
 
-FailureMode = Literal["fail_closed", "fallback_memory"]
-Mode = Literal["primary", "degraded_memory"]
+FailureMode = Literal["fail_closed", "fallback_memory", "fallback_sqlite"]
+Mode = Literal["primary", "degraded_memory", "degraded_sqlite"]
 
 
 class PostgresSessionStore:
@@ -82,7 +94,11 @@ class PostgresSessionStore:
         dsn: Postgres DSN (``postgres://user:pw@host:port/db``).
         on_failure: Failure policy — ``"fail_closed"`` (default, NFR-7 safe
             default) raises :class:`SessionStoreUnavailableError` on connect
-            failure; ``"fallback_memory"`` degrades to an in-memory store.
+            failure; ``"fallback_memory"`` degrades to an in-memory store;
+            ``"fallback_sqlite"`` degrades to a durable SQLite store at
+            ``sqlite_path`` (#26).
+        sqlite_path: Database file for the ``"fallback_sqlite"`` policy.
+            Ignored under other policies.
     """
 
     def __init__(
@@ -90,12 +106,15 @@ class PostgresSessionStore:
         dsn: str,
         *,
         on_failure: FailureMode = "fail_closed",
+        sqlite_path: str | Path | None = None,
     ) -> None:
         self._dsn: str = dsn
         self._on_failure: FailureMode = on_failure
+        self._sqlite_path: Path = Path(sqlite_path) if sqlite_path else _DEFAULT_SQLITE_PATH
         self._pool: Any = None
         self._closed: bool = False
         self._degraded_memory: InMemorySessionStore | None = None
+        self._degraded_sqlite: SqliteSessionStore | None = None
         self._degraded_since: datetime | None = None
         self._mode: Mode = "primary"
 
@@ -105,7 +124,8 @@ class PostgresSessionStore:
 
     @property
     def mode(self) -> Mode:
-        """``"primary"`` while asyncpg is healthy; ``"degraded_memory"`` after fallback."""
+        """``"primary"`` while asyncpg is healthy; ``"degraded_memory"`` /
+        ``"degraded_sqlite"`` after fallback (per ``on_failure``)."""
         return self._mode
 
     @property
@@ -157,10 +177,25 @@ class PostgresSessionStore:
             raise SessionStoreUnavailableError(
                 f"PostgresSessionStore unavailable (dsn={self._sanitized_dsn()}): {exc}"
             ) from exc
-        # fallback_memory: degrade, do not raise.
-        self._degraded_memory = InMemorySessionStore()
+        if self._on_failure == "fallback_sqlite":
+            # #26 — durable degradation: session state survives restarts.
+            # If SQLite itself cannot be opened, escalate rather than
+            # silently downgrading to memory (the operator chose durability).
+            sqlite_store = SqliteSessionStore(self._sqlite_path)
+            try:
+                await sqlite_store.setup()
+            except Exception as sqlite_exc:  # noqa: BLE001 — any sqlite3/OS error
+                raise SessionStoreUnavailableError(
+                    f"PostgresSessionStore unavailable (dsn={self._sanitized_dsn()}: {exc}) "
+                    f"and sqlite fallback at {self._sqlite_path} failed: {sqlite_exc}"
+                ) from sqlite_exc
+            self._degraded_sqlite = sqlite_store
+            self._mode = "degraded_sqlite"
+        else:
+            # fallback_memory: degrade, do not raise.
+            self._degraded_memory = InMemorySessionStore()
+            self._mode = "degraded_memory"
         self._degraded_since = datetime.now(UTC)
-        self._mode = "degraded_memory"
         # Release any partial pool so we do not leak sockets.
         pool = self._pool
         self._pool = None
@@ -184,6 +219,8 @@ class PostgresSessionStore:
 
     async def aget(self, session_id: str) -> dict[str, Any]:
         """Fetch the state row for ``session_id`` (empty dict if absent)."""
+        if self._degraded_sqlite is not None:
+            return await self._degraded_sqlite.aget(session_id)
         if self._degraded_memory is not None:
             return self._degraded_memory.get(session_id)
         if self._pool is None:
@@ -200,6 +237,9 @@ class PostgresSessionStore:
 
     async def aupdate(self, session_id: str, entry: dict[str, Any]) -> None:
         """Merge ``entry`` into the session row (upsert with JSONB concat)."""
+        if self._degraded_sqlite is not None:
+            await self._degraded_sqlite.aupdate(session_id, entry)
+            return
         if self._degraded_memory is not None:
             self._degraded_memory.update(session_id, entry)
             return
@@ -237,6 +277,10 @@ class PostgresSessionStore:
         if pool is not None:
             await pool.close()
         self._degraded_memory = None
+        sqlite_store = self._degraded_sqlite
+        self._degraded_sqlite = None
+        if sqlite_store is not None:
+            await sqlite_store.aclose()
 
 
 __all__ = [

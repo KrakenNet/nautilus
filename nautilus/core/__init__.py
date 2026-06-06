@@ -54,6 +54,7 @@ from nautilus.core.session_pg import (  # noqa: E402
     PostgresSessionStore,
     SessionStoreUnavailableError,
 )
+from nautilus.core.session_sqlite import SqliteSessionStore  # noqa: E402
 
 __all__ = [
     "AsyncSessionStore",
@@ -69,4 +70,5 @@ __all__ = [
     "PostgresSessionStore",
     "SessionStore",
     "SessionStoreUnavailableError",
+    "SqliteSessionStore",
 ]

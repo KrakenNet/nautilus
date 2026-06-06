@@ -214,7 +214,7 @@ class AuditEntry(BaseModel):
     fallback_used: bool | None = None
     scope_hash_version: Literal["v1", "v2"] | None = None
     session_id_source: Literal["context", "transport", "stdio_request_id"] | None = None
-    session_store_mode: Literal["primary", "degraded_memory"] | None = None
+    session_store_mode: Literal["primary", "degraded_memory", "degraded_sqlite"] | None = None
     event_type: (
         Literal[
             "request",
