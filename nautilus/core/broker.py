@@ -399,6 +399,7 @@ class Broker:
             built_in_rules_dir=BUILT_IN_RULES_DIR,
             user_rules_dirs=user_rules_dirs,
             attestation=attestation,
+            check_consistency=config.rules.consistency_checks,
         )
 
         # AC-35.2.b/d — load manual relationship facts into the engine at
@@ -702,7 +703,10 @@ class Broker:
             _metrics.requests_total.add(1)
             try:
                 await self._run_pipeline(agent_id, intent, context, state)
-            except PolicyEngineError:
+            except PolicyEngineError as exc:
+                # #27 — record the engine failure (e.g. ConsistencyError
+                # check name) on the audit entry before failing closed.
+                state.errored.append(_broker_error(exc, state.request_id))
                 with broker_span(SPAN_AUDIT_EMIT):
                     self._emit_audit(agent_id, state, None)
                 raise

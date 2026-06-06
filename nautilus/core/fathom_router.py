@@ -31,7 +31,7 @@ from fathom import Engine
 from nautilus.config.agent_registry import AgentRegistry
 from nautilus.config.escalation import EscalationRule, load_escalation_packs
 from nautilus.config.models import SourceConfig
-from nautilus.core import PolicyEngineError
+from nautilus.core import ConsistencyError, PolicyEngineError
 from nautilus.core.clips_encoding import encode_multislot
 from nautilus.core.models import (
     DenialRecord,
@@ -104,10 +104,15 @@ class FathomRouter:
         built_in_rules_dir: Path,
         user_rules_dirs: list[Path],
         attestation: Any | None = None,  # AttestationService | None — typed loosely; jwt optional
+        check_consistency: bool = True,
     ) -> None:
         self._built_in_rules_dir = Path(built_in_rules_dir)
         self._user_rules_dirs = [Path(d) for d in user_rules_dirs]
         self._attestation = attestation
+        # #27 — post-run consistency checks; on by default, disabled via
+        # ``rules.consistency_checks: false`` for performance-sensitive
+        # deployments.
+        self._check_consistency_enabled = check_consistency
         try:
             self._engine: Engine = Engine()
             self._engine.load_templates(str(self._built_in_rules_dir / "templates"))
@@ -246,6 +251,20 @@ class FathomRouter:
                     )
                 )
 
+            # #27 — post-run consistency checks (roadmap §05:432). Raw
+            # routing ids (pre-denial-filter) are the reference set: a
+            # scope on a routed-then-denied source is consistent rule
+            # behavior (deny wins), a scope on a never-routed source is not.
+            if self._check_consistency_enabled:
+                self._run_consistency_checks(
+                    agent_fact=agent_fact,
+                    declared_source_ids={s.id for s in sources},
+                    routed_source_ids={str(r["source_id"]) for r in raw_routing},
+                    scopes_by_source=scopes_by_source,
+                    denials=denials,
+                    expected_exposure_count=exposure_count,
+                )
+
             duration_us = int(getattr(result, "duration_us", 0) or 0)
             rule_trace = list(getattr(result, "rule_trace", []) or [])
 
@@ -271,6 +290,93 @@ class FathomRouter:
             raise PolicyEngineError(
                 f"FathomRouter.route() failed for agent_id={agent_id!r}: {exc}"
             ) from exc
+
+    def _run_consistency_checks(
+        self,
+        *,
+        agent_fact: dict[str, str],
+        declared_source_ids: set[str],
+        routed_source_ids: set[str],
+        scopes_by_source: dict[str, list[ScopeConstraint]],
+        denials: list[DenialRecord],
+        expected_exposure_count: int,
+    ) -> None:
+        """Assert post-run engine output is internally consistent (#27).
+
+        Mitigates the design §4-ops failure mode: a meta-rule or manual
+        rule asserts facts that trigger an unexpected retraction cascade,
+        leaving working memory inconsistent. Each check raises
+        :class:`ConsistencyError` (a :class:`PolicyEngineError` subclass,
+        so the broker fails closed and audits) with the check name.
+
+        Checks:
+        - ``routing_unknown_source`` — every ``routing_decision``
+          references a source declared in the registry.
+        - ``scope_without_routing`` — every ``scope_constraint``
+          references a ``routing_decision`` for the same source.
+        - ``denial_unknown_source`` — every ``denial_record`` references
+          a declared source.
+        - ``denial_missing_linkage`` — every ``denial_record`` carries a
+          non-empty ``reason`` and ``rule_name``.
+        - ``agent_fact_integrity`` — exactly one ``agent`` fact survives
+          evaluation, with the asserted id/clearance/purpose slots intact.
+        - ``session_exposure_count`` — the ``session_exposure`` fact count
+          matches what :meth:`_assert_session` asserted (no surprise
+          retractions or injections).
+        """
+        unknown_routed = routed_source_ids - declared_source_ids
+        if unknown_routed:
+            raise ConsistencyError(
+                "routing_unknown_source",
+                f"routing_decision references undeclared source(s) {sorted(unknown_routed)!r}",
+            )
+
+        unscoped = set(scopes_by_source) - routed_source_ids
+        if unscoped:
+            raise ConsistencyError(
+                "scope_without_routing",
+                f"scope_constraint without a routing_decision for source(s) {sorted(unscoped)!r}",
+            )
+
+        for denial in denials:
+            if denial.source_id not in declared_source_ids:
+                raise ConsistencyError(
+                    "denial_unknown_source",
+                    f"denial_record references undeclared source {denial.source_id!r}",
+                )
+            if not denial.reason.strip() or not denial.rule_name.strip():
+                raise ConsistencyError(
+                    "denial_missing_linkage",
+                    f"denial_record for source {denial.source_id!r} is missing "
+                    f"reason/rule_name linkage (reason={denial.reason!r}, "
+                    f"rule_name={denial.rule_name!r})",
+                )
+
+        agent_facts = self._engine.query("agent")
+        if len(agent_facts) != 1:
+            raise ConsistencyError(
+                "agent_fact_integrity",
+                f"expected exactly 1 agent fact after evaluation, found {len(agent_facts)}",
+            )
+        surviving = agent_facts[0]
+        for slot in ("id", "clearance", "purpose"):
+            asserted = agent_fact[slot]
+            actual = str(surviving.get(slot, ""))
+            if actual != asserted:
+                raise ConsistencyError(
+                    "agent_fact_integrity",
+                    f"agent fact slot {slot!r} mutated during evaluation: "
+                    f"asserted {asserted!r}, found {actual!r}",
+                )
+
+        exposure_facts = self._engine.query("session_exposure")
+        if len(exposure_facts) != expected_exposure_count:
+            raise ConsistencyError(
+                "session_exposure_count",
+                f"expected {expected_exposure_count} session_exposure fact(s) "
+                f"after evaluation, found {len(exposure_facts)} "
+                "(unexpected retraction cascade or injection)",
+            )
 
     def _assert_session(self, session: dict[str, Any]) -> int:
         """Assert one ``session`` fact + one ``session_exposure`` per multislot element.
