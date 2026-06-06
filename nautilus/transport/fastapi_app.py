@@ -86,6 +86,8 @@ def _clean_identity(value: Any) -> str:
     if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in text):
         return ""
     return text
+
+
 # Hard cap on /v1/audit page size — bounds result set for SIEM / dashboard
 # pulls regardless of caller-supplied ``limit`` (#32 acceptance: bounded
 # result set size).
