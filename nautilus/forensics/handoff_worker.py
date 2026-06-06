@@ -389,7 +389,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    from nautilus.observability.logging import configure_logging
+
+    configure_logging("text")
     ns = _parse_args()
     raise SystemExit(asyncio.run(_cli_main(ns)))
 
