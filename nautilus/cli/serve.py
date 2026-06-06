@@ -30,13 +30,53 @@ def _split_bind(bind: str) -> tuple[str, int]:
     return host, port
 
 
+def _is_loopback_host(url: str) -> bool:
+    """True when ``url``'s host is a loopback address (or ``localhost``)."""
+    import ipaddress
+    from urllib.parse import urlsplit
+
+    host = urlsplit(url).hostname
+    if not host:
+        return False
+    host = host.rstrip(".")  # FQDN trailing dot: "localhost." is loopback too
+    if host == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 def _enforce_air_gap(raw: dict[str, Any]) -> dict[str, Any]:
     """Mutate ``raw`` YAML dict for ``--air-gapped``; emit WARN on each override.
 
-    Overrides ``analysis.mode`` to ``"pattern"`` and drops
-    ``analysis.provider`` (NFR-1, AC-15.3). Non-destructive on configs
-    that already conform (no WARN emitted in that case).
+    Overrides ``analysis.mode`` to ``"pattern"``, drops
+    ``analysis.provider`` (NFR-1, AC-15.3), and removes any ``type: llm``
+    source whose ``connection`` host is not loopback (#43): an LLM source
+    is only air-gap compatible when the inference server is local.
+    Non-destructive on configs that already conform (no WARN emitted in
+    that case).
     """
+    sources_raw = raw.get("sources")
+    if isinstance(sources_raw, list):
+        kept: list[Any] = []
+        for entry in cast("list[Any]", sources_raw):
+            if (
+                isinstance(entry, dict)
+                and cast("dict[str, Any]", entry).get("type") == "llm"
+                and not _is_loopback_host(str(cast("dict[str, Any]", entry).get("connection", "")))
+            ):
+                entry_dict = cast("dict[str, Any]", entry)
+                print(
+                    f"WARN: --air-gapped drops LLM source "
+                    f"id={entry_dict.get('id')!r} — connection host is not "
+                    f"loopback (NFR-1, #43)",
+                    file=sys.stderr,
+                )
+                continue
+            kept.append(entry)
+        raw["sources"] = kept
+
     analysis_raw = raw.get("analysis")
     analysis: dict[str, Any] = (
         cast("dict[str, Any]", analysis_raw) if isinstance(analysis_raw, dict) else {}

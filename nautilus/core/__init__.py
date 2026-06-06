@@ -19,6 +19,21 @@ class PolicyEngineError(Exception):
     """
 
 
+class ConsistencyError(PolicyEngineError):
+    """Raised when post-run engine output fails a consistency check (#27).
+
+    Mitigates the design §4-ops failure mode where a meta-rule or manual
+    rule triggers an unexpected retraction cascade, leaving working memory
+    inconsistent (e.g. session exposure facts retracted mid-evaluation).
+    ``check_name`` identifies the specific assertion that fired so the
+    audit trail and operators can pinpoint the offending rule class.
+    """
+
+    def __init__(self, check_name: str, message: str) -> None:
+        super().__init__(f"consistency check {check_name!r} failed: {message}")
+        self.check_name: str = check_name
+
+
 # Re-exports for ``from nautilus.core import Broker, BrokerResponse``.
 # Placed after ``PolicyEngineError`` definition because
 # ``nautilus.core.broker`` imports it at module load time.
@@ -39,6 +54,7 @@ from nautilus.core.session_pg import (  # noqa: E402
     PostgresSessionStore,
     SessionStoreUnavailableError,
 )
+from nautilus.core.session_sqlite import SqliteSessionStore  # noqa: E402
 
 __all__ = [
     "AsyncSessionStore",
@@ -46,6 +62,7 @@ __all__ = [
     "AttestationSink",
     "Broker",
     "BrokerResponse",
+    "ConsistencyError",
     "FileAttestationSink",
     "InMemorySessionStore",
     "NullAttestationSink",
@@ -53,4 +70,5 @@ __all__ = [
     "PostgresSessionStore",
     "SessionStore",
     "SessionStoreUnavailableError",
+    "SqliteSessionStore",
 ]

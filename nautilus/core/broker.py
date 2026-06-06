@@ -40,6 +40,7 @@ from nautilus.adapters.base import Adapter, AdapterError, ScopeEnforcementError
 from nautilus.adapters.elasticsearch import ElasticsearchAdapter
 from nautilus.adapters.embedder import Embedder, NoopEmbedder
 from nautilus.adapters.influxdb import InfluxDBAdapter
+from nautilus.adapters.llm import LLMAdapter
 from nautilus.adapters.neo4j import Neo4jAdapter
 from nautilus.adapters.pgvector import PgVectorAdapter
 from nautilus.adapters.postgres import PostgresAdapter
@@ -58,7 +59,7 @@ from nautilus.attestation.session_token import (
     SessionTokenClaims,
     SessionTokenError,
     SessionTokenService,
-
+)
 from nautilus.audit.logger import AuditLogger
 from nautilus.config.agent_registry import AgentRegistry, UnknownAgentError
 from nautilus.config.loader import ConfigError, load_config
@@ -100,6 +101,7 @@ from nautilus.core.models import (
 )
 from nautilus.core.session import AsyncSessionStore, InMemorySessionStore, SessionStore
 from nautilus.core.session_pg import PostgresSessionStore
+from nautilus.core.session_sqlite import SqliteSessionStore
 from nautilus.core.temporal import TemporalFilter
 from nautilus.observability.metrics import NautilusMetrics
 from nautilus.observability.spans import (
@@ -134,6 +136,7 @@ ADAPTER_REGISTRY: dict[str, type[Adapter]] = {
     "servicenow": ServiceNowAdapter,
     "influxdb": InfluxDBAdapter,
     "s3": S3Adapter,
+    "llm": LLMAdapter,
 }
 
 
@@ -270,7 +273,7 @@ def _build_audit_entry(
     agent_id: str,
     state: _RequestState,
     attestation_token: str | None,
-    session_store_mode: Literal["primary", "degraded_memory"] | None,
+    session_store_mode: Literal["primary", "degraded_memory", "degraded_sqlite"] | None,
 ) -> AuditEntry:
     """Materialize a flat :class:`AuditEntry` from pipeline state (design §4.9)."""
     prov = state.llm_provenance
@@ -429,6 +432,7 @@ class Broker:
             built_in_rules_dir=BUILT_IN_RULES_DIR,
             user_rules_dirs=user_rules_dirs,
             attestation=attestation,
+            check_consistency=config.rules.consistency_checks,
         )
 
         # AC-35.2.b/d — load manual relationship facts into the engine at
@@ -454,7 +458,7 @@ class Broker:
         audit_path = Path(config.audit.path)
         audit_logger = AuditLogger(sink=FileSink(path=audit_path))
 
-        session_store = cls._build_session_store(config)
+        session_store = cls._build_session_store(config, base_dir=Path(path).parent)
 
         synthesizer = BasicSynthesizer()
 
@@ -549,7 +553,9 @@ class Broker:
         )
 
     @staticmethod
-    def _build_session_store(config: NautilusConfig) -> SessionStore | AsyncSessionStore:
+    def _build_session_store(
+        config: NautilusConfig, *, base_dir: Path
+    ) -> SessionStore | AsyncSessionStore:
         """Construct the session store per ``config.session_store.backend``.
 
         - ``memory`` (default) → :class:`InMemorySessionStore` (Phase-1 compat,
@@ -557,12 +563,23 @@ class Broker:
         - ``postgres`` → :class:`PostgresSessionStore` over ``dsn`` (or
           ``TEST_PG_DSN`` env var when ``dsn`` is unset, so integration
           fixtures reuse pg_container without duplicating YAML plumbing);
-          ``on_failure`` flips between ``fail_closed`` and ``fallback_memory``
-          (NFR-7).
+          ``on_failure`` selects ``fail_closed``, ``fallback_memory``, or
+          ``fallback_sqlite`` at ``sqlite_path`` (NFR-7, #26).
+        - ``sqlite`` → :class:`SqliteSessionStore` at ``sqlite_path`` —
+          durable single-node store, no Postgres required (#26).
         - ``redis`` → reserved; falls back to in-memory until Phase 2 lands a
           Redis adapter (intentional soft-land per design §3.11).
+
+        A relative ``sqlite_path`` is resolved against ``base_dir`` (the
+        config file's directory — same convention as the ``facts/`` dir)
+        so the database location does not depend on the process CWD; a
+        restart from a different working directory must reopen the SAME
+        store, not silently mint an empty one.
         """
         sess_cfg = config.session_store
+        sqlite_path = Path(sess_cfg.sqlite_path)
+        if not sqlite_path.is_absolute():
+            sqlite_path = base_dir / sqlite_path
         if sess_cfg.backend == "postgres":
             import os
 
@@ -571,7 +588,13 @@ class Broker:
                 raise ConfigError(
                     "session_store.backend=postgres requires 'dsn' or TEST_PG_DSN env var"
                 )
-            return PostgresSessionStore(dsn, on_failure=sess_cfg.on_failure)
+            return PostgresSessionStore(
+                dsn,
+                on_failure=sess_cfg.on_failure,
+                sqlite_path=sqlite_path,
+            )
+        if sess_cfg.backend == "sqlite":
+            return SqliteSessionStore(sqlite_path)
         return InMemorySessionStore()
 
     @staticmethod
@@ -903,7 +926,10 @@ class Broker:
             _metrics.requests_total.add(1)
             try:
                 await self._run_pipeline(agent_id, intent, context, state)
-            except PolicyEngineError:
+            except PolicyEngineError as exc:
+                # #27 — record the engine failure (e.g. ConsistencyError
+                # check name) on the audit entry before failing closed.
+                state.errored.append(_broker_error(exc, state.request_id))
                 with broker_span(SPAN_AUDIT_EMIT):
                     self._emit_audit(agent_id, state, None)
                 raise
@@ -1676,7 +1702,9 @@ class Broker:
             _build_audit_entry(agent_id, state, attestation_token, self._session_store_mode())
         )
 
-    def _session_store_mode(self) -> Literal["primary", "degraded_memory"] | None:
+    def _session_store_mode(
+        self,
+    ) -> Literal["primary", "degraded_memory", "degraded_sqlite"] | None:
         """Surface the session-store mode for the audit entry (NFR-7, design §3.2).
 
         :class:`PostgresSessionStore` exposes a ``mode`` property; the Phase-1
@@ -1684,7 +1712,7 @@ class Broker:
         carry ``session_store_mode: null`` (NFR-5 round-trip).
         """
         mode: Any = getattr(self._session_store, "mode", None)
-        if mode in ("primary", "degraded_memory"):
+        if mode in ("primary", "degraded_memory", "degraded_sqlite"):
             return mode  # type: ignore[no-any-return]
         return None
 
@@ -1820,7 +1848,7 @@ class Broker:
         Also runs schema fingerprint checks for all registered adapters per
         AC-21.c/e. Adapters with major drift are quarantined.
         """
-        if isinstance(self._session_store, PostgresSessionStore):
+        if isinstance(self._session_store, (PostgresSessionStore, SqliteSessionStore)):
             await self._session_store.setup()
         await self._check_schema_fingerprints()
 

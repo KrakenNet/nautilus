@@ -26,6 +26,7 @@ _SUPPORTED_TYPES = {
     "servicenow",
     "influxdb",
     "s3",
+    "llm",
 }
 
 

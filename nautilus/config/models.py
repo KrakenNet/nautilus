@@ -93,6 +93,7 @@ class SourceConfig(BaseModel):
         "servicenow",
         "influxdb",
         "s3",
+        "llm",
     ]
     description: str
     classification: str
@@ -114,6 +115,9 @@ class SourceConfig(BaseModel):
     compartments: str = ""
     sub_category: str = ""
     like_style: Literal["starts_with", "regex"] = "starts_with"
+    # llm-only (#43): model name sent to the OpenAI-compatible endpoint at
+    # ``connection``. Required for ``type: llm`` (enforced by LLMAdapter).
+    model: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -213,6 +217,10 @@ class RulesConfig(BaseModel):
     """Routing-rules subsection of ``nautilus.yaml`` (design §4.10)."""
 
     user_rules_dirs: list[str] = Field(default_factory=list)
+    # #27 — post-run engine-output consistency checks (v1 hardening,
+    # roadmap §05:432). On by default; opt out for performance-sensitive
+    # deployments.
+    consistency_checks: bool = True
 
 
 class AuditConfig(BaseModel):
@@ -313,10 +321,27 @@ class SessionStoreConfig(BaseModel):
     ``on_failure`` mirrors :attr:`PostgresSessionStore._on_failure` (NFR-7).
     """
 
-    backend: Literal["memory", "redis", "postgres"] = "memory"
+    backend: Literal["memory", "redis", "postgres", "sqlite"] = "memory"
     ttl_seconds: int = 3600
     dsn: str | None = None
-    on_failure: Literal["fail_closed", "fallback_memory"] = "fail_closed"
+    on_failure: Literal["fail_closed", "fallback_memory", "fallback_sqlite"] = "fail_closed"
+    # #26 — database file for ``backend: sqlite`` and the
+    # ``on_failure: fallback_sqlite`` degradation target.
+    sqlite_path: str = "./.nautilus/sessions.db"
+
+
+class SessionTokenConfig(BaseModel):
+    """Session-provenance token subsection of ``nautilus.yaml`` (#18, AC-18.a–g).
+
+    ``enabled: true`` makes the broker mint an EdDSA JWS on the first
+    request in a session (returned via ``BrokerResponse.session_token``)
+    and verify ``context["session_token"]`` on subsequent requests —
+    fail-closed on tampered/expired tokens. Default OFF preserves the
+    Phase-1 audit JSONL byte-for-byte (NFR-5).
+    """
+
+    enabled: bool = False
+    ttl_seconds: int = 3600
 
 
 class SessionTokenConfig(BaseModel):
