@@ -27,6 +27,11 @@ Endpoints (all under ``/v1`` except health probes):
 - ``GET /v1/rules/{rule_name}/lineage`` — lineage DAG (AC-35.10.b).
 - ``POST /v1/rules/{rule_name}/retract`` — retract rule (AC-35.10.a/d).
 - ``POST /v1/rules/{rule_name}/rollback`` — rollback to version (AC-35.10.d).
+- ``GET /v1/audit`` — paginated audit-entry query with server-side filters
+  (agent_id, source_id, event_type, start/end, cursor, limit, order); auth
+  required (#32).
+- ``GET /v1/audit/{request_id}`` — single audit-entry lookup; 404 when
+  absent; auth required (#32).
 
 Write endpoints (``POST /v1/request``, ``POST /v1/query``) are gated on
 :func:`nautilus.transport.auth.require_api_key` when
@@ -40,11 +45,13 @@ from __future__ import annotations
 
 import re
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from fastapi import Depends, FastAPI, Query, Request, Response, status
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
 from nautilus.attestation.jwks import export_jwks
 from nautilus.attestation.key_ring import KeyRing
@@ -54,6 +61,8 @@ from nautilus.core.metrics import register_rkm_queue
 from nautilus.core.models import BrokerRequest, BrokerResponse
 from nautilus.transport.auth import api_key_header, proxy_trust_dependency, verify_api_key
 from nautilus.ui import create_admin_router
+from nautilus.ui.audit_reader import AuditReader
+from nautilus.ui.dependencies import get_auth_user
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -77,6 +86,11 @@ def _clean_identity(value: Any) -> str:
     if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in text):
         return ""
     return text
+# Hard cap on /v1/audit page size — bounds result set for SIEM / dashboard
+# pulls regardless of caller-supplied ``limit`` (#32 acceptance: bounded
+# result set size).
+_AUDIT_MAX_LIMIT = 500
+_AUDIT_DEFAULT_LIMIT = 50
 
 
 def _resolve_auth_config(broker: Broker | None) -> tuple[str, list[str]]:
@@ -108,6 +122,24 @@ def _resolve_auth_config(broker: Broker | None) -> tuple[str, list[str]]:
         for k in keys_raw:  # pyright: ignore[reportUnknownVariableType]
             keys.append(str(k))  # pyright: ignore[reportUnknownArgumentType]
     return (mode, keys)
+
+
+def _find_audit_entry(reader: AuditReader, request_id: str) -> Any:
+    """Page through the audit log (newest-first) for ``request_id``.
+
+    Returns the matching ``AuditEntry`` or ``None``. Cursor pagination
+    keeps memory bounded on GB-sized logs; the loop terminates when the
+    reader stops handing back a ``next_cursor``.
+    """
+    cursor: str | None = None
+    while True:
+        page = reader.read_page(cursor=cursor, sort="desc")
+        for entry in page.entries:
+            if entry.request_id == request_id:
+                return entry
+        if not page.next_cursor or page.next_cursor == cursor:
+            return None
+        cursor = page.next_cursor
 
 
 def create_app(
@@ -881,6 +913,113 @@ def create_app(
             "new_version": new_version,
             "record": d,
         }
+
+    # ------------------------------------------------------------------
+    # Public audit query API — #32 (SIEM ingestion, compliance pipelines)
+    # ------------------------------------------------------------------
+
+    async def _read_guard(request: Request) -> str:
+        """Authenticate a read request via the shared admin/API auth path.
+
+        Wraps :func:`get_auth_user` so FastAPI introspects *this* function's
+        signature (``Request`` is resolvable here) rather than the imported
+        dependency's, whose ``Request`` annotation is TYPE_CHECKING-only.
+        """
+        return await get_auth_user(request)
+
+    def _audit_reader(request: Request, page_size: int = _AUDIT_DEFAULT_LIMIT) -> AuditReader:
+        """Build an :class:`AuditReader` over the broker's configured log."""
+        from fastapi import HTTPException
+
+        broker: Broker | None = getattr(request.app.state, "broker", None)
+        if broker is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Broker not ready",
+            )
+        # Mirror nautilus.ui.dependencies.get_audit_path — the audit log path
+        # lives on the broker's config (the same source the admin UI reads).
+        audit_path = str(broker._config.audit.path)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+        return AuditReader(audit_path, page_size=page_size)
+
+    def _parse_audit_dt(value: str | None) -> datetime | None:
+        """Parse an ISO-8601 datetime query param, or 400 on bad input."""
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError as exc:
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"invalid datetime: {value!r}",
+            ) from exc
+
+    @app.get(
+        "/v1/audit",
+        dependencies=[Depends(_read_guard)],
+        tags=["audit"],
+    )
+    async def get_audit(  # pyright: ignore[reportUnusedFunction]
+        request: Request,
+        agent_id: str | None = None,
+        source_id: str | None = None,
+        event_type: str | None = None,
+        start: str | None = None,
+        end: str | None = None,
+        cursor: str | None = None,
+        limit: int = Query(default=_AUDIT_DEFAULT_LIMIT, ge=1, le=_AUDIT_MAX_LIMIT),
+        order: str = Query(default="desc", pattern="^(asc|desc)$"),
+    ) -> dict[str, Any]:
+        """Paginated audit-entry query with server-side filters (#32).
+
+        Filters (``agent_id``, ``source_id``, ``event_type``,
+        ``start``/``end``) and cursor pagination are delegated to
+        :class:`AuditReader`. ``limit`` is capped at ``_AUDIT_MAX_LIMIT`` to
+        bound the result set. Returns ``{"entries": [...], "next_cursor":
+        ...}`` where each entry is a JSON-mode ``AuditEntry`` dump.
+        """
+        reader = _audit_reader(request, page_size=limit)
+        page = await run_in_threadpool(
+            reader.read_page,
+            cursor,
+            agent_id=agent_id,
+            source_id=source_id,
+            event_type=event_type,
+            start=_parse_audit_dt(start),
+            end=_parse_audit_dt(end),
+            sort="asc" if order == "asc" else "desc",
+        )
+        return {
+            "entries": [e.model_dump(mode="json") for e in page.entries],
+            "next_cursor": page.next_cursor,
+        }
+
+    @app.get(
+        "/v1/audit/{request_id}",
+        dependencies=[Depends(_read_guard)],
+        tags=["audit"],
+    )
+    async def get_audit_entry(  # pyright: ignore[reportUnusedFunction]
+        request_id: str,
+        request: Request,
+    ) -> dict[str, Any]:
+        """Single audit-entry lookup by ``request_id`` (#32); 404 when absent.
+
+        Scans pages from newest to oldest (the common case is a recent
+        request) until the entry is found or the log is exhausted.
+        """
+        from fastapi import HTTPException
+
+        reader = _audit_reader(request)
+        entry = await run_in_threadpool(_find_audit_entry, reader, request_id)
+        if entry is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"audit entry not found: {request_id!r}",
+            )
+        return entry.model_dump(mode="json")
 
     # ------------------------------------------------------------------
     # Root redirect — / → /admin
