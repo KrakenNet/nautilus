@@ -133,11 +133,24 @@ class KeyRing:
         return new_entry
 
     def revoke(self, kid: str, *, reason: str, reviewer: str) -> None:
-        """Mark a key revoked. Emits ``signing_key_revoked`` audit event."""
+        """Mark a key revoked. Emits ``signing_key_revoked`` audit event.
+
+        The private key material is dropped immediately (the
+        :class:`KeyEntry` docstring contract) — a revoked key must never
+        sign again; only its public PEM stays for JWKS exposure.
+        """
         updated: list[KeyEntry] = []
         for entry in self._keys:
             if entry.kid == kid:
-                updated.append(_with_status(entry, "revoked"))
+                updated.append(
+                    KeyEntry(
+                        kid=entry.kid,
+                        private_key_pem=None,
+                        public_key_pem=entry.public_key_pem,
+                        created_at=entry.created_at,
+                        status="revoked",
+                    )
+                )
             else:
                 updated.append(entry)
         self._keys = updated

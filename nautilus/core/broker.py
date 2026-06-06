@@ -768,6 +768,74 @@ class Broker:
             )
             raise
 
+    def rotate_signing_key(self, *, reviewer: str) -> str:
+        """Rotate the session-token signing key on a LIVE broker (#25).
+
+        Mints a new primary in the shared :class:`KeyRing`; the previous
+        primary moves to ``rotating-out`` so in-flight tokens keep
+        verifying (grace window). Agents presenting old-kid tokens are
+        lazily re-signed on their next request (see
+        :meth:`_process_session_token`). The grace window is closed
+        explicitly via :meth:`revoke_signing_key`.
+
+        Emits a ``signing_key_rotated`` audit entry recording the reviewer
+        and the previous/new kid linkage.
+
+        Returns:
+            The new primary kid.
+
+        Raises:
+            RuntimeError: when session tokens are disabled.
+        """
+        if self._key_ring is None:
+            raise RuntimeError("session tokens are disabled (session_tokens.enabled: false)")
+        previous = self._key_ring.primary().kid
+        new_entry = self._key_ring.rotate()
+        self._emit_session_token_event(
+            "signing_key_rotated",
+            agent_id="",
+            session_id="",
+            request_id=str(uuid.uuid4()),
+            trace=[
+                f"reviewer={reviewer}",
+                f"previous_kid={previous}",
+                f"new_kid={new_entry.kid}",
+            ],
+        )
+        return new_entry.kid
+
+    def revoke_signing_key(self, kid: str, *, reason: str, reviewer: str) -> None:
+        """Revoke a signing key immediately on a LIVE broker (#25).
+
+        Tokens signed by ``kid`` stop verifying at once —
+        :meth:`SessionTokenService.verify` rejects revoked entries — so
+        this is the explicit end of a rotation's grace window.
+
+        Emits a ``signing_key_revoked`` audit entry.
+
+        Raises:
+            RuntimeError: when session tokens are disabled.
+            KeyError: when ``kid`` is not in the ring.
+            ValueError: when ``kid`` is the current primary — revoking it
+                would make :meth:`KeyRing.primary` silently auto-generate
+                an unaudited replacement (security review C1). Rotate
+                first, then revoke the rotated-out key.
+        """
+        if self._key_ring is None:
+            raise RuntimeError("session tokens are disabled (session_tokens.enabled: false)")
+        if self._key_ring.verifier_for(kid) is None:
+            raise KeyError(kid)
+        if kid == self._key_ring.primary().kid:
+            raise ValueError(f"kid {kid!r} is the current primary; rotate first, then revoke")
+        self._key_ring.revoke(kid, reason=reason, reviewer=reviewer)
+        self._emit_session_token_event(
+            "signing_key_revoked",
+            agent_id="",
+            session_id="",
+            request_id=str(uuid.uuid4()),
+            trace=[f"reviewer={reviewer}", f"kid={kid}", f"reason={reason}"],
+        )
+
     def request(
         self,
         agent_id: str,
@@ -1493,6 +1561,30 @@ class Broker:
                 raise
             state.session_id = claims.session_id
             state.session_token = presented
+            # #25 lazy re-sign: a token signed by a rotating-out key still
+            # verifies (grace window), but we hand back a fresh primary-signed
+            # token on the response so agents converge on the new key without
+            # a push channel — tokens are bearer credentials. The re-signed
+            # token keeps the ORIGINAL expiry (security review C2): re-keying
+            # must not extend the session's lifetime.
+            assert self._key_ring is not None  # noqa: S101 — service implies ring
+            if claims.kid != self._key_ring.primary().kid:
+                fresh = self._session_tokens.issue(
+                    session_id=claims.session_id,
+                    agent_id=claims.agent_id,
+                    purpose=claims.purpose,
+                    clearance=claims.clearance,
+                    expires_at=claims.expires_at,
+                )
+                state.session_token = fresh
+                context["session_token"] = fresh
+                self._emit_session_token_event(
+                    "session_token_issued",
+                    agent_id=claims.agent_id,
+                    session_id=claims.session_id,
+                    request_id=state.request_id,
+                    trace=[f"resigned-from-kid={claims.kid}"],
+                )
             return
         # First request in the session — mint a token. A missing session_id
         # gets a broker-generated one so the token always pins a session.
@@ -1525,18 +1617,25 @@ class Broker:
 
     def _emit_session_token_event(
         self,
-        event_type: Literal["session_token_issued", "session_token_verification_failed"],
+        event_type: Literal[
+            "session_token_issued",
+            "session_token_verification_failed",
+            "signing_key_rotated",
+            "signing_key_revoked",
+        ],
         *,
         agent_id: str,
         session_id: str,
         request_id: str,
         errors: list[ErrorRecord] | None = None,
+        trace: list[str] | None = None,
     ) -> None:
-        """Minimal audit entry for token lifecycle events (AC-18.f).
+        """Minimal audit entry for token/key lifecycle events (AC-18.f, #25).
 
         Mirrors the ``attestation_emitted`` pattern in
         :meth:`_emit_attestation` — non-request fields collapse to zero
         values; ``trace_id`` correlates back to the triggering request.
+        ``trace`` markers (reviewer, kid linkage) land in ``rule_trace``.
         """
         self._audit_logger.emit(
             AuditEntry(
@@ -1547,7 +1646,7 @@ class Broker:
                 facts_asserted_summary={},
                 denial_records=[],
                 error_records=list(errors) if errors else [],
-                rule_trace=[],
+                rule_trace=list(trace) if trace else [],
                 sources_queried=[],
                 sources_denied=[],
                 sources_errored=[],

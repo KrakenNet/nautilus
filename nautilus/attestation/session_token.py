@@ -76,8 +76,15 @@ class SessionTokenService:
         agent_id: str,
         purpose: str,
         clearance: str,
+        expires_at: int | None = None,
     ) -> str:
-        """Mint a compact JWS. Header carries ``kid``. AC-18.a + AC-18.f."""
+        """Mint a compact JWS. Header carries ``kid``. AC-18.a + AC-18.f.
+
+        ``expires_at`` overrides the default ``now + ttl`` expiry — used by
+        the broker's lazy re-sign after key rotation (#25) so a re-keyed
+        token keeps the ORIGINAL expiry instead of granting a fresh TTL
+        (otherwise rotation grace would enable perpetual session extension).
+        """
         primary = self._key_ring.primary()
         private_key = self._key_ring.load_private_key(primary)
         now = int(time.time())
@@ -87,7 +94,7 @@ class SessionTokenService:
             "purpose": purpose,
             "clearance": clearance,
             "issued_at": now,
-            "expires_at": now + self._ttl_seconds,
+            "expires_at": expires_at if expires_at is not None else now + self._ttl_seconds,
             "broker_instance_id": self._broker_instance_id,
             "kid": primary.kid,
         }
@@ -121,6 +128,11 @@ class SessionTokenService:
         entry = self._key_ring.verifier_for(kid)
         if entry is None:
             raise SessionTokenError("unknown_kid", f"Unknown kid: {kid!r}")
+        if entry.status == "revoked":
+            # Revocation ends the grace window immediately (#25): a revoked
+            # key's public PEM stays in the ring for JWKS exposure, but
+            # tokens it signed MUST stop verifying.
+            raise SessionTokenError("unknown_kid", f"Key {kid!r} has been revoked")
 
         public_key = self._key_ring.load_public_key(entry)
 
