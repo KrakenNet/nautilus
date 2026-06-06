@@ -15,7 +15,11 @@ Key properties:
   the router-issued :class:`IntentAnalysis` and :class:`ScopeConstraint`
   list — :func:`_assemble_prompt`'s signature does not accept the request
   ``context``, so session tokens / clearance / embeddings can never leak
-  into a prompt by construction.
+  into a prompt by construction. Note ``raw_intent``/``entities`` are
+  agent-supplied and reach the prompt *by design* (they ARE the request);
+  the mitigation for adversarial intent text is data-plane treatment —
+  the LLM's output is provenance-marked data policed by CLIPS, never
+  routing input.
 - **Provenance marking**: every returned row carries
   ``provenance="llm_generated"`` so escalation/denial rules can
   distinguish generated content from records of fact.
@@ -41,7 +45,7 @@ from nautilus.adapters.base import (
 )
 from nautilus.adapters.rest import _auth_for_config  # pyright: ignore[reportPrivateUsage]
 from nautilus.adapters.schema import AdapterSchema
-from nautilus.config.models import SourceConfig
+from nautilus.config.models import MtlsAuth, SourceConfig
 from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
 _DEFAULT_TIMEOUT_S = 30.0
@@ -140,6 +144,14 @@ class LLMAdapter:
             raise AdapterError(
                 f"LLMAdapter source '{config.id}' requires a 'model' field in its source block"
             )
+        if isinstance(config.auth, MtlsAuth):
+            # Fail closed rather than silently dropping the credential:
+            # _auth_for_config returns None for mTLS (RestAdapter wires it
+            # via client cert kwargs, which this adapter doesn't support).
+            raise AdapterError(
+                f"LLMAdapter source '{config.id}' does not support mTLS auth; "
+                "use bearer/basic or front the endpoint with a TLS-terminating proxy"
+            )
         self._config = config
         self._model = config.model
         if self._client is None:
@@ -147,6 +159,10 @@ class LLMAdapter:
                 base_url=config.connection,
                 timeout=_DEFAULT_TIMEOUT_S,
                 auth=_auth_for_config(config),
+                # Never follow redirects (RestAdapter precedent, NFR-17):
+                # a 3xx pointing at e.g. a metadata endpoint is parsed as a
+                # non-OpenAI response shape and surfaces as AdapterError.
+                follow_redirects=False,
             )
 
     async def execute(

@@ -38,6 +38,7 @@ def _is_loopback_host(url: str) -> bool:
     host = urlsplit(url).hostname
     if not host:
         return False
+    host = host.rstrip(".")  # FQDN trailing dot: "localhost." is loopback too
     if host == "localhost":
         return True
     try:

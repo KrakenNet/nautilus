@@ -81,6 +81,18 @@ async def test_connect_requires_model() -> None:
         await adapter.connect(_source(model=None))
 
 
+async def test_connect_rejects_mtls_auth() -> None:
+    """mTLS would be silently dropped by _auth_for_config — fail closed instead."""
+    from nautilus.config.models import MtlsAuth
+
+    source = _source()
+    source = source.model_copy(
+        update={"auth": MtlsAuth(cert_path="/tmp/c.pem", key_path="/tmp/k.pem")}
+    )
+    with pytest.raises(AdapterError, match="mTLS"):
+        await LLMAdapter().connect(source)
+
+
 async def test_execute_before_connect_raises() -> None:
     with pytest.raises(AdapterError, match="before connect"):
         await LLMAdapter().execute(_intent(), [], {})
@@ -287,7 +299,7 @@ async def test_brokered_request_routes_to_llm_and_signs_hash_skipped(tmp_path: P
     captured: list[dict[str, Any]] = []
     adapter = _install_llm_adapter(broker, captured)
     await adapter.connect(_source())
-    broker._connected_adapters = {"llm_src"}  # noqa: SLF001
+    broker._connected_adapters = {"llm_src"}  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
 
     try:
         resp = await broker.arequest(
@@ -329,7 +341,7 @@ async def test_brokered_request_denial_rules_apply(tmp_path: Path) -> None:
     captured: list[dict[str, Any]] = []
     adapter = _install_llm_adapter(broker, captured)
     await adapter.connect(_source())
-    broker._connected_adapters = {"llm_src"}  # noqa: SLF001
+    broker._connected_adapters = {"llm_src"}  # pyright: ignore[reportPrivateUsage]  # noqa: SLF001
 
     try:
         resp = await broker.arequest(
@@ -357,10 +369,12 @@ def test_air_gap_drops_non_loopback_llm_source(capsys: pytest.CaptureFixture[str
             {"id": "remote_llm", "type": "llm", "connection": "https://api.example.com/v1"},
             {"id": "local_llm", "type": "llm", "connection": "http://127.0.0.1:8000/v1"},
             {"id": "localhost_llm", "type": "llm", "connection": "http://localhost:8000/v1"},
+            {"id": "fqdn_llm", "type": "llm", "connection": "http://localhost.:8000/v1"},
+            {"id": "v6_llm", "type": "llm", "connection": "http://[::1]:8000/v1"},
             {"id": "pg", "type": "postgres", "connection": "postgres://remote/db"},
         ]
     }
     result = _enforce_air_gap(raw)
     kept_ids = [s["id"] for s in result["sources"]]
-    assert kept_ids == ["local_llm", "localhost_llm", "pg"]
+    assert kept_ids == ["local_llm", "localhost_llm", "fqdn_llm", "v6_llm", "pg"]
     assert "remote_llm" in capsys.readouterr().err
