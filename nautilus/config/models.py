@@ -93,6 +93,7 @@ class SourceConfig(BaseModel):
         "servicenow",
         "influxdb",
         "s3",
+        "llm",
     ]
     description: str
     classification: str
@@ -114,6 +115,9 @@ class SourceConfig(BaseModel):
     compartments: str = ""
     sub_category: str = ""
     like_style: Literal["starts_with", "regex"] = "starts_with"
+    # llm-only (#43): model name sent to the OpenAI-compatible endpoint at
+    # ``connection``. Required for ``type: llm`` (enforced by LLMAdapter).
+    model: str | None = None
 
 
 # ---------------------------------------------------------------------------
