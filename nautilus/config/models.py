@@ -89,7 +89,6 @@ class SourceConfig(BaseModel):
     # Unknown types still fail closed: the loader pre-validates against
     # built-ins + declared adapter types, and Broker._build_adapter raises
     # ConfigError for any type missing from the merged registry.
-    type: str
     type: Literal[
         "postgres",
         "pgvector",
