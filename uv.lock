@@ -1610,7 +1610,6 @@ requires-dist = [{ name = "pydantic", specifier = ">=2.0" }]
 
 [[package]]
 name = "nautilus-rkm"
-version = "0.1.5"
 source = { editable = "." }
 dependencies = [
     { name = "aiobotocore" },

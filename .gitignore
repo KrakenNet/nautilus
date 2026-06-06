@@ -4,6 +4,8 @@
 .vscode
 .cursor
 .worktrees
+.forge
+.nautilus
 
 # VE (verification environment) ephemeral artifacts
 .ve-*.txt
@@ -251,3 +253,4 @@ graphify-out/.graphify_python
 
 # Experiment outputs
 results/
+nautilus-audit.jsonl
