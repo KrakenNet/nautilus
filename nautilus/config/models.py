@@ -84,16 +84,12 @@ class SourceConfig(BaseModel):
     """
 
     id: str
-    type: Literal[
-        "postgres",
-        "pgvector",
-        "elasticsearch",
-        "rest",
-        "neo4j",
-        "servicenow",
-        "influxdb",
-        "s3",
-    ]
+    # Open string (not a closed Literal) so entry-point-discovered and
+    # local-path adapters (#17) can be referenced from source blocks.
+    # Unknown types still fail closed: the loader pre-validates against
+    # built-ins + declared adapter types, and Broker._build_adapter raises
+    # ConfigError for any type missing from the merged registry.
+    type: str
     description: str
     classification: str
     data_types: list[str]
@@ -354,10 +350,34 @@ class RkmConfig(BaseModel):
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
 
 
+class LocalAdapterConfig(BaseModel):
+    """One local-path adapter entry under top-level ``adapters:`` (#17).
+
+    Loads an :class:`~nautilus.adapters.base.Adapter` subclass from a
+    single-file Python module on disk, for in-repo / private adapters that
+    don't warrant a published entry-point package. Relative ``module_path``
+    resolves against the config-file directory (same convention as the
+    ``facts/`` dir and ``session_store.sqlite_path``).
+
+    ``source_type`` is declared explicitly so the config loader can
+    validate source blocks without importing the module; the broker
+    fails closed if it doesn't match the class's ``source_type`` ClassVar.
+
+    Security: the referenced module is executed at broker start with the
+    broker's privileges — treat ``adapters:`` entries with the same trust
+    as installed packages, and keep the config file operator-writable only.
+    """
+
+    module_path: str
+    class_name: str = Field(alias="class")
+    source_type: str
+
+
 class NautilusConfig(BaseModel):
     """Root ``nautilus.yaml`` document (design §4.1, §4.10, extended §3.11)."""
 
     sources: list[SourceConfig] = Field(default_factory=list[SourceConfig])
+    adapters: list[LocalAdapterConfig] = Field(default_factory=list[LocalAdapterConfig])
     agents: dict[str, AgentRecord] = Field(default_factory=dict)
     attestation: AttestationConfig = Field(default_factory=AttestationConfig)
     rules: RulesConfig = Field(default_factory=RulesConfig)

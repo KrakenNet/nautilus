@@ -1,0 +1,56 @@
+# {{ adapter_name }}
+
+Nautilus adapter for the `{{ source_type }}` source type, scaffolded with
+`nautilus adapters new`.
+
+## Develop
+
+```bash
+pip install -e ".[test]"
+pytest -v          # SDK compliance suite
+```
+
+Replace the in-memory sample rows in `src/{{ package_name }}/__init__.py`
+with your real data source.
+
+## Use with a Nautilus broker
+
+### Option A — installed package (entry-point discovery)
+
+```bash
+pip install -e .
+```
+
+The broker discovers `{{ class_name }}` via the `nautilus.adapters`
+entry-point group. Reference it from a source block:
+
+```yaml
+sources:
+  - id: my-source
+    type: {{ source_type }}
+    description: "..."
+    classification: unclassified
+    data_types: [generic]
+    connection: "<dsn-or-path>"
+```
+
+Confirm it loaded:
+
+```bash
+nautilus adapters list
+```
+
+### Option B — local path (no packaging)
+
+Skip installation and point the broker at the module file directly:
+
+```yaml
+adapters:
+  - module_path: ./adapters/{{ package_name }}.py   # relative to nautilus.yaml
+    class: {{ class_name }}
+    source_type: {{ source_type }}
+```
+
+Note: local-path loading imports a single module file; copy
+`src/{{ package_name }}/__init__.py` to a standalone `.py` file for this
+mode (no relative imports).

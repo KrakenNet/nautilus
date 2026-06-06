@@ -1,0 +1,49 @@
+"""SDK compliance tests for {{ class_name }}.
+
+Run: pytest -v
+"""
+
+from __future__ import annotations
+
+import pytest
+from nautilus_adapter_sdk.config import SourceConfig
+from nautilus_adapter_sdk.testing.compliance import AdapterComplianceSuite
+
+from {{ package_name }} import {{ class_name }}
+
+
+@pytest.fixture
+def source_config() -> SourceConfig:
+    return SourceConfig(
+        id="test-{{ source_type }}",
+        type="{{ source_type }}",
+        description="Test {{ source_type }} source",
+        classification="unclassified",
+        data_types=["generic"],
+    )
+
+
+class Test{{ class_name }}Compliance:
+    """Official Nautilus Adapter SDK compliance suite."""
+
+    @pytest.fixture(autouse=True)
+    def _setup(self, source_config: SourceConfig) -> None:
+        self.suite = AdapterComplianceSuite(
+            adapter_factory={{ class_name }},
+            source_config=source_config,
+        )
+
+    async def test_lifecycle(self) -> None:
+        await self.suite.test_connect_execute_close_lifecycle()
+
+    async def test_valid_operator(self) -> None:
+        await self.suite.test_scope_enforcement_valid_operator()
+
+    async def test_invalid_operator(self) -> None:
+        await self.suite.test_scope_enforcement_invalid_operator()
+
+    async def test_idempotent_close(self) -> None:
+        await self.suite.test_idempotent_close()
+
+    async def test_error_path(self) -> None:
+        await self.suite.test_error_path_returns_error_record()

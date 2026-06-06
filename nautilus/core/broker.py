@@ -24,14 +24,16 @@ import asyncio
 import contextlib
 import hashlib
 import importlib.metadata
+import importlib.util
 import logging
+import sys
 import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from fathom.attestation import AttestationService
 from fathom.audit import FileSink
@@ -58,6 +60,7 @@ from nautilus.config.models import (
     AnthropicProviderSpec,
     FileSinkSpec,
     HttpSinkSpec,
+    LocalAdapterConfig,
     LocalInferenceProviderSpec,
     NautilusConfig,
     NullSinkSpec,
@@ -127,12 +130,26 @@ ADAPTER_REGISTRY: dict[str, type[Adapter]] = {
 }
 
 
+def _adapter_protocol_gaps(obj: type) -> list[str]:
+    """Names of :class:`Adapter` protocol members missing from ``obj``.
+
+    ``issubclass(obj, Adapter)`` raises ``TypeError`` because the protocol
+    carries the non-method ``source_type`` ClassVar, so conformance is
+    checked structurally: the three lifecycle methods must be callable and
+    ``source_type`` must be present.
+    """
+    gaps = [m for m in ("connect", "execute", "close") if not callable(getattr(obj, m, None))]
+    if not isinstance(getattr(obj, "source_type", None), str):
+        gaps.append("source_type")
+    return gaps
+
+
 def _discover_adapters() -> dict[str, type[Adapter]]:
     """Load adapter classes advertised via ``nautilus.adapters`` entry points.
 
     Each entry point name is the ``source_type`` key and must resolve to an
-    :class:`Adapter` subclass.  Broken plugins are logged and skipped so one
-    bad third-party package can never take down the broker.
+    :class:`Adapter` implementation.  Broken plugins are logged and skipped
+    so one bad third-party package can never take down the broker.
 
     Returns a dict that can be merged over :data:`ADAPTER_REGISTRY`.
     """
@@ -148,14 +165,17 @@ def _discover_adapters() -> dict[str, type[Adapter]]:
                     type(obj).__name__,
                 )
                 continue
-            if not issubclass(obj, Adapter):  # type: ignore[arg-type]  # runtime_checkable Protocol w/ ClassVar
+            gaps = _adapter_protocol_gaps(obj)
+            if gaps:
                 log.warning(
-                    "adapter entry-point '%s' resolved to %s, not an Adapter subclass; skipping",
+                    "adapter entry-point '%s' resolved to %s, which is missing Adapter "
+                    "protocol members %s; skipping",
                     ep.name,
                     obj.__name__,
+                    gaps,
                 )
                 continue
-            discovered[ep.name] = obj
+            discovered[ep.name] = cast("type[Adapter]", obj)
             log.debug("discovered adapter entry-point %s -> %s", ep.name, obj)
         except Exception:  # noqa: BLE001
             log.warning(
@@ -165,6 +185,76 @@ def _discover_adapters() -> dict[str, type[Adapter]]:
                 exc_info=True,
             )
     return discovered
+
+
+def _load_local_adapters(
+    adapter_configs: list[LocalAdapterConfig],
+    *,
+    base_dir: Path,
+) -> dict[str, type[Adapter]]:
+    """Load adapter classes from local-path ``adapters:`` config entries (#17).
+
+    Unlike entry-point discovery (best-effort: broken third-party plugins
+    are skipped), local-path entries are explicit operator config — any
+    failure raises :class:`ConfigError` so a typo'd path or class name
+    can't be silently masked.
+
+    Relative ``module_path`` resolves against ``base_dir`` (the config-file
+    directory). The declared ``source_type`` must match the class's
+    ``source_type`` ClassVar.
+
+    Security note: the module is executed with the broker's privileges.
+    ``adapters:`` entries carry the same trust as installed packages; the
+    config file must only be writable by the operator.
+    """
+    loaded: dict[str, type[Adapter]] = {}
+    for i, cfg in enumerate(adapter_configs):
+        module_path = Path(cfg.module_path)
+        if not module_path.is_absolute():
+            module_path = base_dir / module_path
+        if not module_path.is_file():
+            raise ConfigError(
+                f"adapters[{i}]: module_path does not exist or is not a file: {module_path}"
+            )
+
+        module_name = f"nautilus_local_adapter_{i}_{module_path.stem}"
+        spec = importlib.util.spec_from_file_location(module_name, module_path)
+        if spec is None or spec.loader is None:
+            raise ConfigError(f"adapters[{i}]: cannot import module from {module_path}")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        try:
+            spec.loader.exec_module(module)
+        except Exception as exc:
+            del sys.modules[module_name]
+            raise ConfigError(f"adapters[{i}]: error executing {module_path}: {exc}") from exc
+
+        obj: object = getattr(module, cfg.class_name, None)
+        if obj is None:
+            raise ConfigError(f"adapters[{i}]: class '{cfg.class_name}' not found in {module_path}")
+        if not isinstance(obj, type):
+            raise ConfigError(f"adapters[{i}]: '{cfg.class_name}' in {module_path} is not a class")
+        gaps = _adapter_protocol_gaps(obj)
+        if gaps:
+            raise ConfigError(
+                f"adapters[{i}]: '{cfg.class_name}' in {module_path} does not implement "
+                f"the Adapter protocol (missing: {gaps})"
+            )
+        actual_type = getattr(obj, "source_type", None)
+        if actual_type != cfg.source_type:
+            raise ConfigError(
+                f"adapters[{i}]: declared source_type='{cfg.source_type}' does not match "
+                f"{cfg.class_name}.source_type={actual_type!r} in {module_path}"
+            )
+
+        loaded[cfg.source_type] = cast("type[Adapter]", obj)
+        log.info(
+            "loaded local adapter %s from %s as source type '%s'",
+            cfg.class_name,
+            module_path,
+            cfg.source_type,
+        )
+    return loaded
 
 
 if TYPE_CHECKING:
@@ -404,8 +494,13 @@ class Broker:
         # loudly on missing embedder rather than silent zero vectors).
         broker_default_embedder: Embedder = NoopEmbedder(strict=True)
 
-        # Merge static registry with entry-point discovered plugins.
-        adapter_registry = {**ADAPTER_REGISTRY, **_discover_adapters()}
+        # Merge static registry with entry-point discovered plugins and
+        # local-path adapters (#17). Explicit config wins over discovery.
+        adapter_registry = {
+            **ADAPTER_REGISTRY,
+            **_discover_adapters(),
+            **_load_local_adapters(config.adapters, base_dir=Path(path).parent),
+        }
 
         adapters: dict[str, Adapter] = {}
         for source in registry:

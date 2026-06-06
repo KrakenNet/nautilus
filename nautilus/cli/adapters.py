@@ -1,6 +1,7 @@
-"""``nautilus adapters`` subcommand surface (#21).
+"""``nautilus adapters`` subcommand surface (#21 + #17).
 
 Subcommands:
+    adapters new <name> [--dir PATH]
     adapters list [--status active|quarantined|unknown] [--json]
     adapters schema <name> [--json]
     adapters schema-fingerprint <name>
@@ -13,6 +14,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from nautilus.cli._common import err, ok, require_reviewer, warn
@@ -29,6 +31,18 @@ def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> N
     """Add ``adapters`` group to the top-level argparse subparsers."""
     p = sub.add_parser("adapters", help="Adapter registry and schema operations.")
     adapters_sub = p.add_subparsers(dest="adapters_subcommand", metavar="subcommand")
+
+    # new
+    p_new = adapters_sub.add_parser(
+        "new", help="Scaffold a new adapter package from the bundled template."
+    )
+    p_new.add_argument("name", help="Distribution name, e.g. my-csv-adapter.")
+    p_new.add_argument(
+        "--dir",
+        default=".",
+        dest="dir",
+        help="Parent directory to create the package in (default: current directory).",
+    )
 
     # list
     p_list = adapters_sub.add_parser("list", help="List registered adapters.")
@@ -72,6 +86,8 @@ def dispatch(args: argparse.Namespace) -> int:
     """Dispatch a parsed ``adapters`` invocation. Returns process exit code."""
     try:
         subcommand = getattr(args, "adapters_subcommand", None)
+        if subcommand == "new":
+            return _cmd_new(args)
         if subcommand == "list":
             return _cmd_list(args)
         if subcommand == "schema":
@@ -84,7 +100,7 @@ def dispatch(args: argparse.Namespace) -> int:
             return _cmd_schema_ack(args)
         err(
             "adapters: no subcommand given"
-            " (try: list, schema, schema-fingerprint, schema-diff, schema-ack)"
+            " (try: new, list, schema, schema-fingerprint, schema-diff, schema-ack)"
         )
         return 2
     except SystemExit as exc:
@@ -112,6 +128,67 @@ def _schema_as_dict(schema: AdapterSchema) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Subcommand handlers
 # ---------------------------------------------------------------------------
+
+_NAME_PATTERN = r"^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+
+# Template shipped as package data — see [tool.setuptools.package-data].
+_TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates" / "adapter"
+
+
+def _scaffold_names(name: str) -> dict[str, str]:
+    """Derive template variables from the distribution name.
+
+    ``my-csv-adapter`` -> package ``my_csv_adapter``, class ``MyCsvAdapter``,
+    source type ``my-csv`` (a trailing ``-adapter`` token is dropped from the
+    class name and source type, not the package name).
+    """
+    parts = name.split("-")
+    stem_parts = parts[:-1] if len(parts) > 1 and parts[-1] == "adapter" else parts
+    return {
+        "adapter_name": name,
+        "package_name": name.replace("-", "_"),
+        "class_name": "".join(p.capitalize() for p in stem_parts) + "Adapter",
+        "source_type": "-".join(stem_parts),
+    }
+
+
+def _cmd_new(args: argparse.Namespace) -> int:
+    """Scaffold an adapter package via the bundled copier template (#17)."""
+    import re
+
+    name: str = args.name
+    if not re.match(_NAME_PATTERN, name):
+        err(f"invalid adapter name {name!r} (expected lowercase-dashed, e.g. my-csv-adapter)")
+        return 1
+
+    dest = Path(args.dir) / name
+    if dest.exists() and any(dest.iterdir()):
+        err(f"destination already exists and is not empty: {dest}")
+        return 1
+
+    try:
+        from copier import run_copy
+    except ImportError:
+        err("copier is required for 'adapters new' — install it with: pip install copier")
+        return 1
+
+    data = _scaffold_names(name)
+    run_copy(
+        str(_TEMPLATE_DIR),
+        str(dest),
+        data=data,
+        defaults=True,
+        quiet=True,
+    )
+
+    ok(f"scaffolded adapter package at {dest}")
+    print(f"  source type : {data['source_type']}")
+    print(f"  class       : {data['package_name']}.{data['class_name']}")
+    print("  next steps  :")
+    print(f"    cd {dest}")
+    print('    pip install -e ".[test]" && pytest -v')
+    print("    nautilus adapters list   # confirm discovery once installed")
+    return 0
 
 
 def _cmd_list(args: argparse.Namespace) -> int:

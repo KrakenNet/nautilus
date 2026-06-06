@@ -1,0 +1,30 @@
+[project]
+name = "{{ adapter_name }}"
+version = "0.1.0"
+description = "Nautilus adapter for the '{{ source_type }}' source type."
+requires-python = ">=3.13"
+dependencies = [
+    "nautilus-adapter-sdk",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+
+# Registers {{ class_name }} under the '{{ source_type }}' source type so the
+# Nautilus broker discovers it automatically once this package is installed.
+[project.entry-points."nautilus.adapters"]
+{{ source_type }} = "{{ package_name }}:{{ class_name }}"
+
+[build-system]
+requires = ["setuptools>=77.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

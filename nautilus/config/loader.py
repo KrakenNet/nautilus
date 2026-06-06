@@ -5,6 +5,7 @@ Implements FR-1, FR-2 (design §4.1, §4.10).
 
 from __future__ import annotations
 
+import importlib.metadata
 import os
 import re
 from pathlib import Path
@@ -118,6 +119,8 @@ def load_config(path: str | Path) -> NautilusConfig:
         raise ConfigError("Config must define a 'sources' list")
     sources_list = cast(list[object], sources_raw)
 
+    supported_types = _SUPPORTED_TYPES | _extra_source_types(interpolated_dict)
+
     seen_ids: set[str] = set()
     for entry in sources_list:
         if not isinstance(entry, dict):
@@ -131,13 +134,32 @@ def load_config(path: str | Path) -> NautilusConfig:
         seen_ids.add(source_id)
 
         source_type = entry_dict.get("type")
-        if source_type not in _SUPPORTED_TYPES:
+        if source_type not in supported_types:
             raise ConfigError(
                 f"Unsupported source type='{source_type}' for id='{source_id}' "
-                f"(supported: {sorted(_SUPPORTED_TYPES)})"
+                f"(supported: {sorted(supported_types)})"
             )
 
     try:
         return NautilusConfig.model_validate(interpolated_dict)
     except Exception as exc:
         raise ConfigError(f"Config validation failed: {exc}") from exc
+
+
+def _extra_source_types(interpolated_dict: dict[str, Any]) -> set[str]:
+    """Source types beyond the built-ins (#17).
+
+    Union of ``nautilus.adapters`` entry-point names (installed adapter
+    packages) and the ``source_type`` declared on each local-path
+    ``adapters:`` entry. Declared-but-wrong local types are caught later,
+    fail-closed, by ``Broker._load_local_adapters``.
+    """
+    extra = {ep.name for ep in importlib.metadata.entry_points(group="nautilus.adapters")}
+    adapters_raw = interpolated_dict.get("adapters")
+    if isinstance(adapters_raw, list):
+        for entry in cast(list[object], adapters_raw):
+            if isinstance(entry, dict):
+                declared = cast(dict[str, object], entry).get("source_type")
+                if isinstance(declared, str):
+                    extra.add(declared)
+    return extra

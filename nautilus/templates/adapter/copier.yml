@@ -1,0 +1,22 @@
+# Copier template for `nautilus adapters new` (#17).
+#
+# All answers are supplied programmatically by nautilus/cli/adapters.py;
+# the help text is for anyone running `copier copy` against this template
+# directly.
+_subdirectory: template
+
+adapter_name:
+  type: str
+  help: Distribution name (e.g. my-csv-adapter)
+
+package_name:
+  type: str
+  help: Python import package name (e.g. my_csv_adapter)
+
+class_name:
+  type: str
+  help: Adapter class name (e.g. MyCsvAdapter)
+
+source_type:
+  type: str
+  help: Source type key used in nautilus.yaml source blocks (e.g. my-csv)
