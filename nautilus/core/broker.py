@@ -49,7 +49,10 @@ from nautilus.adapters.schema import SchemaFingerprintStore, classify_drift
 from nautilus.adapters.servicenow import ServiceNowAdapter
 from nautilus.analysis.fallback import FallbackIntentAnalyzer
 from nautilus.analysis.llm.base import LLMIntentProvider, LLMProvenance
-from nautilus.analysis.pattern_matching import PatternMatchingIntentAnalyzer
+from nautilus.analysis.pattern_matching import (
+    PatternMatchingIntentAnalyzer,
+    build_keyword_map,
+)
 from nautilus.audit.logger import AuditLogger
 from nautilus.config.agent_registry import AgentRegistry, UnknownAgentError
 from nautilus.config.loader import ConfigError, load_config
@@ -359,8 +362,9 @@ class Broker:
         Order of operations mirrors design §15 build sequence:
         1. Load + validate config.
         2. Build :class:`SourceRegistry`.
-        3. Build :class:`PatternMatchingIntentAnalyzer` from
-           ``analysis.keyword_map``.
+        3. Build :class:`PatternMatchingIntentAnalyzer` from the keyword map
+           auto-generated from each source's ``data_types`` (#24), overlaid
+           with explicit ``analysis.keyword_map`` entries.
         4. Build :class:`FathomRouter` against the built-in rules tree +
            any configured user rules.
         5. Build per-source :class:`Adapter` instances (NOT connected —
@@ -378,8 +382,12 @@ class Broker:
         registry = SourceRegistry(config.sources)
         agent_registry = AgentRegistry(config.agents)
 
+        # Auto-generate base intent vocabulary from each source's declared
+        # ``data_types`` (#24); explicit ``analysis.keyword_map`` entries
+        # overlay and win on key collision.
+        keyword_map = build_keyword_map(registry.sources, config.analysis.keyword_map)
         pattern_analyzer = PatternMatchingIntentAnalyzer(
-            keyword_map=config.analysis.keyword_map,
+            keyword_map=keyword_map,
         )
         intent_analyzer = cls._build_intent_analyzer(config, pattern_analyzer)
 
