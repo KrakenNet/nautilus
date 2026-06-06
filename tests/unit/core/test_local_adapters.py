@@ -135,6 +135,16 @@ def test_broken_module_raises_config_error(tmp_path: Path) -> None:
         _load_local_adapters([_entry(str(bad))], base_dir=tmp_path)
 
 
+def test_failure_rolls_back_all_sys_modules_entries(tmp_path: Path) -> None:
+    """A later entry's failure must not leave earlier modules in sys.modules."""
+    import sys
+
+    good = _write_module(tmp_path)
+    with pytest.raises(ConfigError, match="does not exist"):
+        _load_local_adapters([_entry(str(good)), _entry("nope.py")], base_dir=tmp_path)
+    assert "nautilus_local_adapter_0_demo_local_adapter" not in sys.modules
+
+
 # ---------------------------------------------------------------------------
 # _adapter_protocol_gaps + entry-point discovery regression
 # ---------------------------------------------------------------------------

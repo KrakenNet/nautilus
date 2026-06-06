@@ -208,52 +208,64 @@ def _load_local_adapters(
     config file must only be writable by the operator.
     """
     loaded: dict[str, type[Adapter]] = {}
-    for i, cfg in enumerate(adapter_configs):
-        module_path = Path(cfg.module_path)
-        if not module_path.is_absolute():
-            module_path = base_dir / module_path
-        if not module_path.is_file():
-            raise ConfigError(
-                f"adapters[{i}]: module_path does not exist or is not a file: {module_path}"
-            )
+    registered: list[str] = []  # sys.modules names to roll back on failure
+    try:
+        for i, cfg in enumerate(adapter_configs):
+            module_path = Path(cfg.module_path)
+            if not module_path.is_absolute():
+                module_path = base_dir / module_path
+            if not module_path.is_file():
+                raise ConfigError(
+                    f"adapters[{i}]: module_path does not exist or is not a file: {module_path}"
+                )
 
-        module_name = f"nautilus_local_adapter_{i}_{module_path.stem}"
-        spec = importlib.util.spec_from_file_location(module_name, module_path)
-        if spec is None or spec.loader is None:
-            raise ConfigError(f"adapters[{i}]: cannot import module from {module_path}")
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[module_name] = module
-        try:
-            spec.loader.exec_module(module)
-        except Exception as exc:
-            del sys.modules[module_name]
-            raise ConfigError(f"adapters[{i}]: error executing {module_path}: {exc}") from exc
+            module_name = f"nautilus_local_adapter_{i}_{module_path.stem}"
+            spec = importlib.util.spec_from_file_location(module_name, module_path)
+            if spec is None or spec.loader is None:
+                raise ConfigError(f"adapters[{i}]: cannot import module from {module_path}")
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[module_name] = module
+            registered.append(module_name)
+            try:
+                spec.loader.exec_module(module)
+            except Exception as exc:
+                raise ConfigError(f"adapters[{i}]: error executing {module_path}: {exc}") from exc
 
-        obj: object = getattr(module, cfg.class_name, None)
-        if obj is None:
-            raise ConfigError(f"adapters[{i}]: class '{cfg.class_name}' not found in {module_path}")
-        if not isinstance(obj, type):
-            raise ConfigError(f"adapters[{i}]: '{cfg.class_name}' in {module_path} is not a class")
-        gaps = _adapter_protocol_gaps(obj)
-        if gaps:
-            raise ConfigError(
-                f"adapters[{i}]: '{cfg.class_name}' in {module_path} does not implement "
-                f"the Adapter protocol (missing: {gaps})"
-            )
-        actual_type = getattr(obj, "source_type", None)
-        if actual_type != cfg.source_type:
-            raise ConfigError(
-                f"adapters[{i}]: declared source_type='{cfg.source_type}' does not match "
-                f"{cfg.class_name}.source_type={actual_type!r} in {module_path}"
-            )
+            obj: object = getattr(module, cfg.class_name, None)
+            if obj is None:
+                raise ConfigError(
+                    f"adapters[{i}]: class '{cfg.class_name}' not found in {module_path}"
+                )
+            if not isinstance(obj, type):
+                raise ConfigError(
+                    f"adapters[{i}]: '{cfg.class_name}' in {module_path} is not a class"
+                )
+            gaps = _adapter_protocol_gaps(obj)
+            if gaps:
+                raise ConfigError(
+                    f"adapters[{i}]: '{cfg.class_name}' in {module_path} does not implement "
+                    f"the Adapter protocol (missing: {gaps})"
+                )
+            actual_type = getattr(obj, "source_type", None)
+            if actual_type != cfg.source_type:
+                raise ConfigError(
+                    f"adapters[{i}]: declared source_type='{cfg.source_type}' does not match "
+                    f"{cfg.class_name}.source_type={actual_type!r} in {module_path}"
+                )
 
-        loaded[cfg.source_type] = cast("type[Adapter]", obj)
-        log.info(
-            "loaded local adapter %s from %s as source type '%s'",
-            cfg.class_name,
-            module_path,
-            cfg.source_type,
-        )
+            loaded[cfg.source_type] = cast("type[Adapter]", obj)
+            log.info(
+                "loaded local adapter %s from %s as source type '%s'",
+                cfg.class_name,
+                module_path,
+                cfg.source_type,
+            )
+    except ConfigError:
+        # Fail closed without residue: a half-loaded adapter list must not
+        # leave earlier modules registered in sys.modules.
+        for name in registered:
+            sys.modules.pop(name, None)
+        raise
     return loaded
 
 
