@@ -12,6 +12,9 @@ Schema per line::
 
 - Any ``extra={...}`` keys passed to a logging call are emitted as
   top-level fields (e.g. ``log.info("...", extra={"request_id": rid})``).
+  The passthrough is unfiltered by design — callers MUST NOT put
+  credentials, DSNs, or tokens into ``extra`` (they would land verbatim
+  in SIEM-ingested logs).
 - ``trace_id`` / ``span_id`` are attached when an OpenTelemetry span is
   active (the OTel SDK is optional — enrichment degrades to a no-op).
 
