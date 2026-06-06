@@ -90,6 +90,7 @@ from nautilus.core.models import (
 )
 from nautilus.core.session import AsyncSessionStore, InMemorySessionStore, SessionStore
 from nautilus.core.session_pg import PostgresSessionStore
+from nautilus.core.session_sqlite import SqliteSessionStore
 from nautilus.core.temporal import TemporalFilter
 from nautilus.observability.metrics import NautilusMetrics
 from nautilus.observability.spans import (
@@ -257,7 +258,7 @@ def _build_audit_entry(
     agent_id: str,
     state: _RequestState,
     attestation_token: str | None,
-    session_store_mode: Literal["primary", "degraded_memory"] | None,
+    session_store_mode: Literal["primary", "degraded_memory", "degraded_sqlite"] | None,
 ) -> AuditEntry:
     """Materialize a flat :class:`AuditEntry` from pipeline state (design §4.9)."""
     prov = state.llm_provenance
@@ -513,8 +514,10 @@ class Broker:
         - ``postgres`` → :class:`PostgresSessionStore` over ``dsn`` (or
           ``TEST_PG_DSN`` env var when ``dsn`` is unset, so integration
           fixtures reuse pg_container without duplicating YAML plumbing);
-          ``on_failure`` flips between ``fail_closed`` and ``fallback_memory``
-          (NFR-7).
+          ``on_failure`` selects ``fail_closed``, ``fallback_memory``, or
+          ``fallback_sqlite`` at ``sqlite_path`` (NFR-7, #26).
+        - ``sqlite`` → :class:`SqliteSessionStore` at ``sqlite_path`` —
+          durable single-node store, no Postgres required (#26).
         - ``redis`` → reserved; falls back to in-memory until Phase 2 lands a
           Redis adapter (intentional soft-land per design §3.11).
         """
@@ -527,7 +530,13 @@ class Broker:
                 raise ConfigError(
                     "session_store.backend=postgres requires 'dsn' or TEST_PG_DSN env var"
                 )
-            return PostgresSessionStore(dsn, on_failure=sess_cfg.on_failure)
+            return PostgresSessionStore(
+                dsn,
+                on_failure=sess_cfg.on_failure,
+                sqlite_path=sess_cfg.sqlite_path,
+            )
+        if sess_cfg.backend == "sqlite":
+            return SqliteSessionStore(sess_cfg.sqlite_path)
         return InMemorySessionStore()
 
     @staticmethod
@@ -1228,7 +1237,9 @@ class Broker:
             _build_audit_entry(agent_id, state, attestation_token, self._session_store_mode())
         )
 
-    def _session_store_mode(self) -> Literal["primary", "degraded_memory"] | None:
+    def _session_store_mode(
+        self,
+    ) -> Literal["primary", "degraded_memory", "degraded_sqlite"] | None:
         """Surface the session-store mode for the audit entry (NFR-7, design §3.2).
 
         :class:`PostgresSessionStore` exposes a ``mode`` property; the Phase-1
@@ -1236,7 +1247,7 @@ class Broker:
         carry ``session_store_mode: null`` (NFR-5 round-trip).
         """
         mode: Any = getattr(self._session_store, "mode", None)
-        if mode in ("primary", "degraded_memory"):
+        if mode in ("primary", "degraded_memory", "degraded_sqlite"):
             return mode  # type: ignore[no-any-return]
         return None
 
@@ -1372,7 +1383,7 @@ class Broker:
         Also runs schema fingerprint checks for all registered adapters per
         AC-21.c/e. Adapters with major drift are quarantined.
         """
-        if isinstance(self._session_store, PostgresSessionStore):
+        if isinstance(self._session_store, (PostgresSessionStore, SqliteSessionStore)):
             await self._session_store.setup()
         await self._check_schema_fingerprints()
 

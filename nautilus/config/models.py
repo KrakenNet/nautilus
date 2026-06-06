@@ -313,10 +313,13 @@ class SessionStoreConfig(BaseModel):
     ``on_failure`` mirrors :attr:`PostgresSessionStore._on_failure` (NFR-7).
     """
 
-    backend: Literal["memory", "redis", "postgres"] = "memory"
+    backend: Literal["memory", "redis", "postgres", "sqlite"] = "memory"
     ttl_seconds: int = 3600
     dsn: str | None = None
-    on_failure: Literal["fail_closed", "fallback_memory"] = "fail_closed"
+    on_failure: Literal["fail_closed", "fallback_memory", "fallback_sqlite"] = "fail_closed"
+    # #26 — database file for ``backend: sqlite`` and the
+    # ``on_failure: fallback_sqlite`` degradation target.
+    sqlite_path: str = "./.nautilus/sessions.db"
 
 
 # ---------------------------------------------------------------------------
