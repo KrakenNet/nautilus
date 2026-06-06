@@ -97,8 +97,9 @@ class _FakeAdapter:
         if self._raises is not None:
             raise self._raises(f"fake_adapter {self._source_id} configured to raise")
         rows = list(self._rows)
-        # Mirror the real adapter contract (issue #19): deterministic adapters
-        # populate ``response_hash`` at the adapter boundary.
+        # Exercise the optional adapter-pre-set path (issue #19): an adapter MAY
+        # set ``response_hash`` itself; the broker honors it and otherwise derives
+        # the per-source hash centrally from ``rows`` at the synthesis boundary.
         return AdapterResult(
             source_id=self._source_id,
             rows=rows,

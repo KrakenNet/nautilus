@@ -22,7 +22,6 @@ from typing import Any, ClassVar
 from nautilus.adapters.base import AdapterError, ScopeEnforcementError
 from nautilus.adapters.schema import AdapterSchema
 from nautilus.config.models import SourceConfig
-from nautilus.core.attestation_payload import compute_raw_response_hash
 from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
 # Default row cap when the intent does not specify a ``LIMIT``.
@@ -190,7 +189,6 @@ class S3Adapter:
                 source_id=self._config.id,
                 rows=[],
                 duration_ms=0,
-                response_hash=compute_raw_response_hash([]),
             )
 
         started = time.perf_counter()
@@ -216,7 +214,6 @@ class S3Adapter:
             source_id=self._config.id,
             rows=rows,
             duration_ms=duration_ms,
-            response_hash=compute_raw_response_hash(rows),
         )
 
     async def get_schema(self) -> AdapterSchema:

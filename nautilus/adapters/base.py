@@ -183,14 +183,16 @@ class Adapter(Protocol):
 
         Returns:
             An :class:`AdapterResult` with ``rows`` populated on success
-            or ``error`` populated on runtime failure. On success a
-            deterministic adapter MUST also populate ``response_hash`` with
-            ``compute_raw_response_hash(rows)`` — a ``sha256:<hex>`` digest of
-            this source's raw response, computed at the adapter boundary before
-            any cross-source synthesis (issue #19, design §5.7 Weakness 7).
-            Non-deterministic adapters (``capabilities`` containing
-            ``"non_deterministic"``, e.g. the LLM adapter) MUST leave
-            ``response_hash`` as ``None`` so the broker signs
+            or ``error`` populated on runtime failure. The per-source
+            chain-of-custody digest (issue #19, design §5.7 Weakness 7) is
+            computed centrally by the broker over ``rows`` at the pre-synthesis
+            boundary, so a normal deterministic adapter need not touch
+            ``response_hash`` (it defaults to ``None``). An adapter MAY set
+            ``response_hash`` itself only when the bytes it wants hashed differ
+            from ``rows`` (no current adapter does); the broker honors a
+            pre-set value and otherwise derives it. Non-deterministic adapters
+            (``capabilities`` containing ``"non_deterministic"``, e.g. the LLM
+            adapter) are excluded from hashing entirely so the broker signs
             ``hash_skipped=True`` instead (AC-19.g).
 
         Raises:

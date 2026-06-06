@@ -26,7 +26,6 @@ from nautilus.adapters.embedder import Embedder, EmbeddingUnavailableError, Noop
 from nautilus.adapters.postgres import PostgresAdapter
 from nautilus.adapters.schema import AdapterSchema
 from nautilus.config.models import SourceConfig
-from nautilus.core.attestation_payload import compute_raw_response_hash
 from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
 # asyncpg's ``init`` hook has signature ``async (conn) -> None``; we re-export
@@ -255,7 +254,6 @@ class PgVectorAdapter(PostgresAdapter):
             source_id=config.id,
             rows=rows,
             duration_ms=duration_ms,
-            response_hash=compute_raw_response_hash(rows),
         )
 
     async def get_schema(self) -> AdapterSchema:  # type: ignore[override]

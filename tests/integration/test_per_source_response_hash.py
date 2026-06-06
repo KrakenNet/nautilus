@@ -24,7 +24,7 @@ boundary.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 
@@ -88,7 +88,42 @@ class _HashingFakeAdapter:
         return AdapterSchema.unknown(self._source_id, self.source_type)
 
 
-def _install_fakes(broker: Broker, fakes: dict[str, _HashingFakeAdapter]) -> None:
+class _NonDeterministicFakeAdapter:
+    """Fake llm-style adapter: declares ``non_deterministic`` and never hashes.
+
+    Mirrors the real LLM adapter contract (AC-19.g): it returns rows but leaves
+    ``response_hash`` unset, and the ``non_deterministic`` capability tells the
+    broker to exclude it from ``source_response_hashes`` and to sign
+    ``hash_skipped=True``.
+    """
+
+    source_type: str = "fake-llm"
+    capabilities: ClassVar[frozenset[str]] = frozenset({"non_deterministic"})
+
+    def __init__(self, source_id: str, rows: list[dict[str, Any]]) -> None:
+        self._source_id = source_id
+        self._rows = rows
+
+    async def connect(self, config: SourceConfig) -> None:
+        del config
+
+    async def execute(
+        self,
+        intent: IntentAnalysis,
+        scope: list[ScopeConstraint],
+        context: dict[str, Any],
+    ) -> AdapterResult:
+        del intent, scope, context
+        return AdapterResult(source_id=self._source_id, rows=list(self._rows), duration_ms=0)
+
+    async def close(self) -> None:
+        return None
+
+    async def get_schema(self) -> AdapterSchema:
+        return AdapterSchema.unknown(self._source_id, self.source_type)
+
+
+def _install_fakes(broker: Broker, fakes: dict[str, Any]) -> None:
     """Swap the broker's real adapters for fakes and mark them connected.
 
     Reaching into the private adapter maps mirrors ``tests/unit/test_broker.py``:
@@ -213,3 +248,44 @@ async def test_row_mutation_after_adapter_return_is_detectable() -> None:
     assert compute_raw_response_hash(tampered) != signed_hash, (
         "row mutation must be detectable against the signed per-source hash"
     )
+
+
+@pytest.mark.integration
+async def test_mixed_deterministic_and_llm_coexistence() -> None:
+    """Findings #3/#4 (issue #19): a request mixing a deterministic source and a
+    non-deterministic (llm) source signs ``hash_skipped=True`` (the whole-response
+    hash is unverifiable) AND a ``source_response_hashes`` map that covers ONLY the
+    deterministic source. This locks the documented coexistence decision: the two
+    claims are not mutually exclusive — per-source custody survives for the sources
+    that ARE deterministic, while the llm source is signalled as unhashed by its
+    absence from the map.
+    """
+    nvd_rows = [{"id": 1, "cve": "CVE-0"}]
+    broker = Broker.from_config(FIXTURE_PATH)
+    captured: dict[str, Any] = {}
+    try:
+        _install_fakes(
+            broker,
+            {
+                "nvd_db": _HashingFakeAdapter("nvd_db", nvd_rows),
+                "internal_vulns": _NonDeterministicFakeAdapter(
+                    "internal_vulns", [{"id": 2, "summary": "llm text"}]
+                ),
+            },
+        )
+        _capture_signed_payloads(broker, captured)
+        resp = await broker.arequest("agent-alpha", "vulnerability scan", _ctx())
+        assert set(resp.sources_queried) == {"nvd_db", "internal_vulns"}
+    finally:
+        await broker.aclose()
+
+    payload = captured["payload"]
+    # Whole-response hash is skipped (the llm row makes the merged blob unverifiable).
+    assert payload["hash_skipped"] is True
+    assert "response_hash" not in payload
+    # Per-source custody still holds for the deterministic source only.
+    hashes = payload["source_response_hashes"]
+    assert set(hashes) == {"nvd_db"}, (
+        "the non-deterministic source must be absent from the per-source map"
+    )
+    assert hashes["nvd_db"] == compute_raw_response_hash(nvd_rows)
