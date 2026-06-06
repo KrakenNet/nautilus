@@ -158,6 +158,10 @@ class BrokerResponse(BaseModel):
     cap_breached: bool | None = None
     fact_set_hash: str | None = None
     source_session_signatures: dict[str, dict[str, Any]] | None = None
+    # Session-provenance JWS (#18, AC-18.a). Populated only when the broker
+    # is configured with ``session_tokens.enabled: true``; ``None`` otherwise
+    # so Phase-1 responses round-trip unchanged (NFR-5).
+    session_token: str | None = None
 
 
 class HandoffDecision(BaseModel):

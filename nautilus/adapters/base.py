@@ -127,6 +127,28 @@ def render_field(field: str) -> str:
     return quote_identifier(field)
 
 
+SESSION_TOKEN_HEADER = "X-Nautilus-Session-Token"
+"""HTTP header carrying the broker-issued session-provenance JWS (#18, AC-18.b).
+
+Mirrors ``nautilus.transport.auth._SESSION_TOKEN_HEADER`` — duplicated here so
+the adapter layer never imports the transport layer.
+"""
+
+
+def session_token_headers(context: dict[str, Any]) -> dict[str, str] | None:
+    """Build the outbound session-token header from request ``context`` (AC-18.b).
+
+    The broker injects ``context["session_token"]`` when session tokens are
+    enabled (#18); HTTP-family adapters forward it so downstream services can
+    correlate calls to their originating session. Returns ``None`` when no
+    token is present — httpx treats ``headers=None`` as "no extra headers".
+    """
+    token = context.get("session_token")
+    if isinstance(token, str) and token:
+        return {SESSION_TOKEN_HEADER: token}
+    return None
+
+
 @runtime_checkable
 class Adapter(Protocol):
     """Adapter Protocol mirroring design §3.5 verbatim."""
@@ -190,12 +212,14 @@ class Adapter(Protocol):
 
 
 __all__ = [
+    "SESSION_TOKEN_HEADER",
     "Adapter",
     "AdapterError",
     "EmbeddingUnavailableError",
     "ScopeEnforcementError",
     "quote_identifier",
     "render_field",
+    "session_token_headers",
     "validate_field",
     "validate_operator",
 ]

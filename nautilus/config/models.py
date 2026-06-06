@@ -326,6 +326,20 @@ class SessionStoreConfig(BaseModel):
     sqlite_path: str = "./.nautilus/sessions.db"
 
 
+class SessionTokenConfig(BaseModel):
+    """Session-provenance token subsection of ``nautilus.yaml`` (#18, AC-18.a–g).
+
+    ``enabled: true`` makes the broker mint an EdDSA JWS on the first
+    request in a session (returned via ``BrokerResponse.session_token``)
+    and verify ``context["session_token"]`` on subsequent requests —
+    fail-closed on tampered/expired tokens. Default OFF preserves the
+    Phase-1 audit JSONL byte-for-byte (NFR-5).
+    """
+
+    enabled: bool = False
+    ttl_seconds: int = 3600
+
+
 # ---------------------------------------------------------------------------
 # Root config document.
 # ---------------------------------------------------------------------------
@@ -373,4 +387,5 @@ class NautilusConfig(BaseModel):
     api: ApiConfig = Field(default_factory=ApiConfig)
     mcp: MCPConfig = Field(default_factory=MCPConfig)
     session_store: SessionStoreConfig = Field(default_factory=SessionStoreConfig)
+    session_tokens: SessionTokenConfig = Field(default_factory=SessionTokenConfig)
     rkm: RkmConfig = Field(default_factory=RkmConfig)
