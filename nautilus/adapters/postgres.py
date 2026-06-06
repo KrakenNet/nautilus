@@ -170,7 +170,7 @@ class PostgresAdapter:
     # at the tail of ``_build_sql``. The f-string uses only ``$N`` positional
     # placeholders (hardened in Task 2.8); tag the method line so the guard
     # treats it as a non-call.
-    async def execute(  # noqa: SQLGREP
+    async def execute(  # sqlgrep: ignore
         self,
         intent: IntentAnalysis,
         scope: list[ScopeConstraint],

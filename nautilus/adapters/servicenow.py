@@ -239,7 +239,7 @@ class ServiceNowAdapter:
     # def, the assignment, and the param-key line takes them out of the scan;
     # the def line carries a trailing noqa so the scan drops that line.
     @classmethod
-    def _build_sysparm_query(cls, scope: list[ScopeConstraint]) -> str:  # noqa: SQLGREP
+    def _build_sysparm_query(cls, scope: list[ScopeConstraint]) -> str:  # sqlgrep: ignore
         """Compose the ``sysparm_query`` string from ``scope`` (AC-11.2)."""
         return "^".join(cls._render_segment(c) for c in scope)
 
@@ -259,14 +259,14 @@ class ServiceNowAdapter:
         if self._client is None or self._config is None or self._table is None:
             raise AdapterError("ServiceNowAdapter.execute called before connect()")
 
-        sysparm_query = self._build_sysparm_query(scope)  # noqa: SQLGREP
+        sysparm_query = self._build_sysparm_query(scope)  # sqlgrep: ignore
         path = f"/api/now/table/{self._table}"
         # AC-18.b — forward the broker-issued session-provenance token.
         headers = session_token_headers(context)
 
         started = time.perf_counter()
         params_tuple: tuple[tuple[str, str], ...] = (
-            ("sysparm_query", sysparm_query),  # noqa: SQLGREP
+            ("sysparm_query", sysparm_query),  # sqlgrep: ignore
             ("sysparm_limit", str(_DEFAULT_LIMIT)),
         )
         query = httpx.QueryParams(params_tuple)
@@ -297,7 +297,7 @@ class ServiceNowAdapter:
             params_tuple: tuple[tuple[str, str], ...] = (
                 # _table is regex-validated at connect() (^[a-z][a-z0-9_]*$),
                 # so interpolation cannot carry sysparm_query metacharacters.
-                ("sysparm_query", f"name={self._table}"),  # noqa: SQLGREP
+                ("sysparm_query", f"name={self._table}"),  # sqlgrep: ignore
                 ("sysparm_fields", "element,internal_type,mandatory"),
                 ("sysparm_limit", "1000"),
             )

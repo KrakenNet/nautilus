@@ -34,7 +34,7 @@ walks one adapter file per parameter so the failure message names the file.
 
 Allowlist
 ---------
-Lines tagged with a trailing ``# noqa: SQLGREP`` comment are excluded from
+Lines tagged with a trailing ``# sqlgrep: ignore`` comment are excluded from
 the scan. This is reserved for rare legitimate adjacency (e.g. a method
 definition whose name happens to collide with the DB-call regex, or a
 quoted-identifier SQL string that has already been hardened via
@@ -57,7 +57,7 @@ DBCALL = re.compile(r"\b(execute|executemany|fetch|fetchrow|fetchval)\s*\(")
 PERCENT_FORMAT = re.compile(r"['\"][^'\"]*%s[^'\"]*['\"]\s*%\s*[\(\w]")
 
 WINDOW = 5
-NOQA_TAG = "# noqa: SQLGREP"
+SQLGREP_TAG = "# sqlgrep: ignore"
 
 _ADAPTERS_DIR = Path(__file__).resolve().parents[2] / "nautilus" / "adapters"
 
@@ -70,13 +70,13 @@ def _adapter_files() -> list[Path]:
 def _filter_lines(raw: list[str]) -> list[tuple[int, str]]:
     """Drop allowlisted lines; return ``(1-indexed-line-no, text)`` tuples.
 
-    Filtering removes the line entirely from the scan so a ``# noqa: SQLGREP``
+    Filtering removes the line entirely from the scan so a ``# sqlgrep: ignore``
     tag on a method definition (e.g. ``async def execute(...)``) doesn't
     merely shift the window — it takes that line out of consideration.
     """
     kept: list[tuple[int, str]] = []
     for idx, line in enumerate(raw, start=1):
-        if NOQA_TAG in line.rstrip():
+        if SQLGREP_TAG in line.rstrip():
             continue
         kept.append((idx, line))
     return kept
@@ -98,7 +98,7 @@ def _scan_file(path: Path) -> list[str]:
             violations.append(
                 f"{path}:{start_lineno}: f-string within {WINDOW} lines of a "
                 f"DB call (execute/fetch/...). Use $N placeholders or tag "
-                f"the false-positive line with '{NOQA_TAG}'."
+                f"the false-positive line with '{SQLGREP_TAG}'."
             )
         if PERCENT_FORMAT.search(window_text) and DBCALL.search(window_text):
             violations.append(
@@ -113,7 +113,7 @@ def test_no_fstring_or_percent_formatting_near_db_calls() -> None:
     """No adapter file interpolates into a SQL string near a DB call.
 
     Done-when (Task 3.13): 0 matches across ``nautilus/adapters/*.py``
-    (after excluding lines tagged ``# noqa: SQLGREP``).
+    (after excluding lines tagged ``# sqlgrep: ignore``).
     """
     assert _ADAPTERS_DIR.is_dir(), f"adapter source tree not found at {_ADAPTERS_DIR}"
     files = _adapter_files()
@@ -134,7 +134,7 @@ def test_no_fstring_or_percent_formatting_near_db_calls() -> None:
 
 # Per-adapter sensitive-call tokens. Each entry maps an adapter filename to a
 # regex matching the call site(s) that would admit injection if co-located
-# with an f-string interpolation. The 5-line window and ``# noqa: SQLGREP``
+# with an f-string interpolation. The 5-line window and ``# sqlgrep: ignore``
 # allowlist are shared with the Phase-1 guard above.
 _ADAPTER_SENSITIVE_TOKENS: dict[str, re.Pattern[str]] = {
     # ES DSL ``Search.query(...)``; also catches ``search.query(`` /
@@ -175,7 +175,7 @@ def _scan_file_for_sensitive_token(path: Path, token: re.Pattern[str]) -> list[s
                 f"{path}:{start_lineno}: f-string within {WINDOW} lines of "
                 f"sensitive call matching /{token.pattern}/. Use typed "
                 f"query/parameter binding or tag the false-positive line "
-                f"with '{NOQA_TAG}'."
+                f"with '{SQLGREP_TAG}'."
             )
     return violations
 
@@ -190,13 +190,13 @@ def _scan_rest_url_concat(path: Path) -> list[str]:
     raw = path.read_text(encoding="utf-8").splitlines()
     violations: list[str] = []
     for lineno, line in enumerate(raw, start=1):
-        if NOQA_TAG in line.rstrip():
+        if SQLGREP_TAG in line.rstrip():
             continue
         if _REST_URL_CONCAT.search(line):
             violations.append(
                 f"{path}:{lineno}: manual URL concatenation via f-string "
                 f"(base_url interpolation). Route scope through "
-                f"``httpx.QueryParams`` or tag the line with '{NOQA_TAG}'."
+                f"``httpx.QueryParams`` or tag the line with '{SQLGREP_TAG}'."
             )
     return violations
 
@@ -210,7 +210,7 @@ def test_no_fstring_near_new_adapter_sensitive_calls(adapter_filename: str) -> N
     """No Phase-2 adapter co-locates an f-string with its sensitive call site.
 
     Done-when (Task 4.8): 0 matches across ``elasticsearch.py``, ``neo4j.py``,
-    and ``servicenow.py`` (after excluding ``# noqa: SQLGREP`` lines). REST
+    and ``servicenow.py`` (after excluding ``# sqlgrep: ignore`` lines). REST
     is covered by :func:`test_rest_adapter_no_url_fstring_concat` because its
     hazard shape is single-line rather than a co-occurrence window.
     """

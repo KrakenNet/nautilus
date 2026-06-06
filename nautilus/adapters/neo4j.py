@@ -305,7 +305,7 @@ class Neo4jAdapter:
     # identifier-quoting (label/property regex-validated then backticked) — no
     # user-supplied value reaches the Cypher template (NFR-4). Tag the def line
     # so the guard treats it as a known-safe co-occurrence.
-    async def execute(  # noqa: SQLGREP
+    async def execute(  # sqlgrep: ignore
         self,
         intent: IntentAnalysis,
         scope: list[ScopeConstraint],

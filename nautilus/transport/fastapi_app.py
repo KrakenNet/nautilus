@@ -43,6 +43,7 @@ restarts.
 
 from __future__ import annotations
 
+import re
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -68,6 +69,24 @@ if TYPE_CHECKING:
 
 
 _READY_PROBE_KEY = "_ready_probe_"
+
+# kids are ``str(uuid.uuid4())`` at generation (key_ring._generate_entry);
+# validating the path segment keeps arbitrary caller bytes out of audit
+# trace strings (#25 security review I1).
+_KID_PATTERN = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+
+
+def _clean_identity(value: Any) -> str:
+    """Strip + reject control characters in reviewer/reason fields (#25 I1).
+
+    Returns the cleaned string, or ``""`` when the value is missing or
+    contains control characters — callers treat ``""`` as a 400.
+    """
+    text = str(value or "").strip()
+    if any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in text):
+        return ""
+    return text
+
 
 # Hard cap on /v1/audit page size — bounds result set for SIEM / dashboard
 # pulls regardless of caller-supplied ``limit`` (#32 acceptance: bounded
@@ -408,6 +427,102 @@ def create_app(
             "broker_instance_id": claims.broker_instance_id,
             "kid": claims.kid,
         }
+
+    @app.post(
+        "/v1/keys/rotate",
+        tags=["attestation"],
+        dependencies=[Depends(_write_guard)],
+    )
+    async def post_keys_rotate(  # pyright: ignore[reportUnusedFunction]
+        body: dict[str, Any],
+        request: Request,
+    ) -> dict[str, Any]:
+        """Rotate the live broker's session-token signing key (#25).
+
+        Body: ``{"reviewer": "<operator identity>"}`` (required). The old
+        primary moves to rotating-out (grace window — in-flight tokens keep
+        verifying and are lazily re-signed); close the window via
+        ``POST /v1/keys/{kid}/revoke``. 409 when session tokens are disabled.
+        """
+        from fastapi import HTTPException
+
+        broker: Broker | None = getattr(request.app.state, "broker", None)
+        if broker is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Broker not ready",
+            )
+        reviewer = _clean_identity(body.get("reviewer"))
+        if not reviewer:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="reviewer is required (no control characters)",
+            )
+        try:
+            new_kid = broker.rotate_signing_key(reviewer=reviewer)
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
+        return {"new_primary_kid": new_kid, "reviewer": reviewer}
+
+    @app.post(
+        "/v1/keys/{kid}/revoke",
+        tags=["attestation"],
+        dependencies=[Depends(_write_guard)],
+    )
+    async def post_keys_revoke(  # pyright: ignore[reportUnusedFunction]
+        kid: str,
+        body: dict[str, Any],
+        request: Request,
+    ) -> dict[str, Any]:
+        """Revoke a signing key on the live broker (#25) — ends the grace window.
+
+        Body: ``{"reviewer": "...", "reason": "..."}`` (both required).
+        404 for unknown kid; 409 when session tokens are disabled.
+        """
+        from fastapi import HTTPException
+
+        broker: Broker | None = getattr(request.app.state, "broker", None)
+        if broker is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Broker not ready",
+            )
+        # kids are uuid4 strings at generation; reject anything else before
+        # it reaches audit trace strings (security review I1).
+        if not _KID_PATTERN.fullmatch(kid):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="kid must be a UUID",
+            )
+        reviewer = _clean_identity(body.get("reviewer"))
+        reason = _clean_identity(body.get("reason"))
+        if not reviewer or not reason:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="reviewer and reason are required (no control characters)",
+            )
+        try:
+            broker.revoke_signing_key(kid, reason=reason, reviewer=reviewer)
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
+        except ValueError as exc:
+            # Refusing to revoke the current primary (rotate first).
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
+        except KeyError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"kid {kid!r} not found",
+            ) from exc
+        return {"revoked_kid": kid, "reviewer": reviewer, "reason": reason}
 
     # ------------------------------------------------------------------
     # Adapter schema endpoint (AC-21.a)
