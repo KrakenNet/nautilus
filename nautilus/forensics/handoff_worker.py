@@ -385,12 +385,21 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         dest="window_s",
         help="Windowing horizon in seconds (default 3600).",
     )
+    parser.add_argument(
+        "--log-format",
+        choices=("text", "json"),
+        default="text",
+        dest="log_format",
+        help="Application log format (#28): 'text' (default) or 'json' for SIEM ingestion.",
+    )
     return parser.parse_args(argv)
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    from nautilus.observability.logging import configure_logging
+
     ns = _parse_args()
+    configure_logging(ns.log_format)
     raise SystemExit(asyncio.run(_cli_main(ns)))
 
 

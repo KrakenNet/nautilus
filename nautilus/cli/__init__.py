@@ -116,6 +116,15 @@ def _build_parser() -> argparse.ArgumentParser:
             "config (NFR-1). WARN is emitted naming each overridden field."
         ),
     )
+    p_serve.add_argument(
+        "--log-format",
+        choices=("text", "json"),
+        default="text",
+        help=(
+            "Application log format (#28): 'text' for local dev (default), "
+            "'json' for SIEM-ingestable structured lines on stdout."
+        ),
+    )
 
     # rkm -----------------------------------------------------------------
     from nautilus.cli import rkm as _rkm_mod
@@ -170,6 +179,12 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     honoured.
     """
     import nautilus.cli as _cli_module
+
+    # #28 — structured logging is applied at the process entry point only;
+    # library modules keep plain ``logging.getLogger(__name__)``.
+    from nautilus.observability.logging import configure_logging
+
+    configure_logging(getattr(args, "log_format", "text"))
 
     config_path = _Path(args.config)
     if not config_path.is_file():
