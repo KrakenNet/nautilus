@@ -27,7 +27,7 @@ services:
       context: ../..
       dockerfile: examples/full-showcase/Dockerfile
     ports:
-      - "8000:8000"
+      - "8001:8000"
     volumes:
       - ./nautilus.yaml:/config/nautilus.yaml:ro
       - audit-data:/data/audit
@@ -73,7 +73,7 @@ services:
   postgres:
     image: postgres:16-alpine
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
       - POSTGRES_USER=nautilus
       - POSTGRES_PASSWORD=nautilus
@@ -230,7 +230,7 @@ services:
   prometheus:
     image: prom/prometheus:v2.53.0
     ports:
-      - "9090:9090"
+      - "9092:9090"
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
     extra_hosts:

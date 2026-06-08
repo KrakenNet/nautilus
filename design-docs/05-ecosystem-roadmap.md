@@ -480,7 +480,7 @@ The promotion threshold is lower (6 weekly observations vs. 10 sequential) becau
 
 **Weeks 22.5: Write surface (gated, dual-control, defer-by-default)**
 
-> Discovered while integrating cve_remediation pilot (Harbor v0.x): adapter
+> Discovered while integrating cve_remediation pilot (Stargraph v0.x): adapter
 > `execute()` is GET-only by design (`nautilus/adapters/servicenow.py:258`).
 > Real-world remediation pipelines need the broker to *propose* a write
 > (CR creation, doc publish, KG writeback) AND have governance still
