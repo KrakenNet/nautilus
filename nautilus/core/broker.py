@@ -313,6 +313,12 @@ class _RequestState:
     sources_skipped: list[str] = field(default_factory=list[str])
     errored: list[ErrorRecord] = field(default_factory=list[ErrorRecord])
     data: dict[str, list[dict[str, Any]]] = field(default_factory=dict[str, list[dict[str, Any]]])
+    # Per-source chain-of-custody digests (issue #19, design §5.7). Populated
+    # from each successful ``AdapterResult.response_hash`` in
+    # ``_gather_adapter_results``; threaded into the signed attestation as the
+    # ``source_response_hashes`` claim. Non-deterministic adapters (llm) omit
+    # their entry so the broker still signs ``hash_skipped=True`` (AC-19.g).
+    source_response_hashes: dict[str, str] = field(default_factory=dict[str, str])
     attestation_token: str | None = None
     scope_hash_version: Literal["v1", "v2"] | None = None  # set by `_sign`
     # Session-provenance JWS (#18) — echoed/minted by `_process_session_token`
@@ -1377,6 +1383,7 @@ class Broker:
                     rule_trace=state.rule_trace,
                     session_id=state.session_id,
                     response=state.data or None,
+                    source_response_hashes=state.source_response_hashes or None,
                 )
             state.attestation_token = token
             state.scope_hash_version = scope_hash_version
@@ -1632,7 +1639,29 @@ class Broker:
                 continue
             successful.append(res)
             state.sources_queried.append(source_id)
+            # Per-source chain-of-custody hash (issue #19, AC-19), computed
+            # centrally over each source's raw rows at this pre-synthesis
+            # boundary. An adapter MAY pre-populate ``response_hash`` (e.g. to
+            # hash bytes that differ from ``rows``); we honor it when present and
+            # otherwise derive it here so deterministic adapters need no per-impl
+            # hashing. Non-deterministic adapters (llm) declare the
+            # ``non_deterministic`` capability and are omitted so ``_sign`` still
+            # emits ``hash_skipped=True`` (AC-19.g).
+            if not self._is_non_deterministic(source_id):
+                state.source_response_hashes[source_id] = (
+                    res.response_hash
+                    if res.response_hash is not None
+                    else compute_response_hash(res.rows)
+                )
         return successful
+
+    def _is_non_deterministic(self, source_id: str) -> bool:
+        """True iff ``source_id``'s adapter declares the ``non_deterministic``
+        capability (e.g. the llm adapter); such sources are never hashed (AC-19.g).
+        """
+        return "non_deterministic" in getattr(
+            self._adapters.get(source_id), "capabilities", set[str]()
+        )
 
     def _build_response(self, state: _RequestState) -> BrokerResponse:
         """Materialize the user-facing :class:`BrokerResponse` from ``state``."""
@@ -1869,6 +1898,7 @@ class Broker:
         rule_trace: list[str],
         session_id: str,
         response: dict[str, Any] | None = None,
+        source_response_hashes: dict[str, str] | None = None,
     ) -> tuple[str, Literal["v1", "v2"], dict[str, Any]]:
         """Compose the Nautilus attestation payload and sign it (design §9.3).
 
@@ -1896,12 +1926,13 @@ class Broker:
             raise RuntimeError("attestation is disabled")
 
         # AC-19.g — if any queried adapter declares non-deterministic capability,
-        # skip hashing and sign a hash_skipped=True claim instead (DQ2 LOCKED).
-        # Adapters without a ``capabilities`` attribute default to deterministic.
-        hash_skipped = any(
-            "non_deterministic" in getattr(self._adapters.get(sid), "capabilities", set[str]())
-            for sid in sources_queried
-        )
+        # skip the *whole-response* hash and sign a hash_skipped=True claim
+        # instead (DQ2 LOCKED). Adapters without a ``capabilities`` attribute
+        # default to deterministic. Note: in a MIXED request (some deterministic
+        # sources + an llm source) this is True yet ``source_response_hashes``
+        # still carries the deterministic sources' per-source digests — see the
+        # coexistence contract documented in ``build_payload``.
+        hash_skipped = any(self._is_non_deterministic(sid) for sid in sources_queried)
         # AC-19.a — compute response hash; omit for non-deterministic adapters
         # and for legacy path (response=None, e.g. no data returned).
         if hash_skipped or response is None:
@@ -1917,6 +1948,7 @@ class Broker:
             list(rule_trace),
             response_hash=response_hash,
             hash_skipped=hash_skipped,
+            source_response_hashes=source_response_hashes,
         )
 
         # Nautilus-specific decision marker; the Fathom JWT carries this as

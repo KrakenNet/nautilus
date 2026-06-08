@@ -174,6 +174,7 @@ def build_payload(
     rule_trace: Any,
     response_hash: str | None = None,
     hash_skipped: bool = False,
+    source_response_hashes: dict[str, str] | None = None,
 ) -> tuple[dict[str, Any], Literal["v1", "v2"]]:
     """Build the Nautilus attestation payload + its scope-hash version.
 
@@ -210,6 +211,25 @@ def build_payload(
     }
     if response_hash is not None:
         payload["response_hash"] = response_hash
+    if source_response_hashes:
+        # Per-source chain-of-custody claim (issue #19, design §5.7). Added
+        # alongside the whole-response ``response_hash`` (kept for backward
+        # compat so existing verifiers that read ``response_hash`` still work).
+        # Covered by the JWT ``input_hash`` because the whole payload is the
+        # signed ``input_facts`` (see ``Broker._sign``).
+        #
+        # COEXISTENCE WITH hash_skipped (DECISION, issue #19): in a MIXED request
+        # that fans out to BOTH a non-deterministic source (llm) and one or more
+        # deterministic sources, ``hash_skipped=True`` is set globally (the
+        # *whole-response* hash is unverifiable because of the llm row) YET this
+        # map still carries the deterministic sources' per-source digests. That
+        # is intentional and is the entire point of per-source custody: a
+        # verifier gets real integrity for postgres/etc. even when the merged
+        # blob cannot be re-hashed. Read together: ``hash_skipped`` describes the
+        # whole-response hash only; ``source_response_hashes`` enumerates exactly
+        # which sources ARE covered (sources absent from the map — e.g. the llm —
+        # are the unhashed ones). The two are NOT mutually exclusive by design.
+        payload["source_response_hashes"] = dict(source_response_hashes)
     if hash_skipped:
         payload["hash_skipped"] = True
     return payload, version
@@ -220,8 +240,23 @@ def compute_response_hash(adapter_result: Any) -> str:
 
     Wraps :func:`_stable_json` + :func:`_sha256` (the existing scheme at
     lines 58 + 69). AC-19.a.
+
+    This is the *single* canonical hashing entry point. Per-source raw hashing
+    (issue #19, design §5.7) reuses it verbatim via the
+    :data:`compute_raw_response_hash` alias below so the "same canonical scheme"
+    guarantee is structural, not documentary: there is exactly one
+    implementation, whether hashing a whole merged response or one source's raw
+    rows (``sort_keys=True`` → dict key order is irrelevant; byte-sensitive to
+    content, AC-19.f).
     """
     return _sha256(adapter_result)
 
 
-__all__ = ["build_payload", "compute_response_hash"]
+# Per-source raw hashing (issue #19) is byte-identical to the whole-response
+# hash above — same canonical JSON + SHA-256. Aliased rather than duplicated so
+# every caller shares one implementation (the "same canonical scheme" guarantee
+# is enforced by identity, not by two docstrings agreeing).
+compute_raw_response_hash = compute_response_hash
+
+
+__all__ = ["build_payload", "compute_raw_response_hash", "compute_response_hash"]

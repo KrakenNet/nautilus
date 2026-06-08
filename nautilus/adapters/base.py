@@ -183,7 +183,17 @@ class Adapter(Protocol):
 
         Returns:
             An :class:`AdapterResult` with ``rows`` populated on success
-            or ``error`` populated on runtime failure.
+            or ``error`` populated on runtime failure. The per-source
+            chain-of-custody digest (issue #19, design §5.7 Weakness 7) is
+            computed centrally by the broker over ``rows`` at the pre-synthesis
+            boundary, so a normal deterministic adapter need not touch
+            ``response_hash`` (it defaults to ``None``). An adapter MAY set
+            ``response_hash`` itself only when the bytes it wants hashed differ
+            from ``rows`` (no current adapter does); the broker honors a
+            pre-set value and otherwise derives it. Non-deterministic adapters
+            (``capabilities`` containing ``"non_deterministic"``, e.g. the LLM
+            adapter) are excluded from hashing entirely so the broker signs
+            ``hash_skipped=True`` instead (AC-19.g).
 
         Raises:
             ScopeEnforcementError: If ``scope`` violates the operator or

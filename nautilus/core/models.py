@@ -136,6 +136,12 @@ class AdapterResult(BaseModel):
     rows: list[dict[str, Any]]
     duration_ms: int
     error: ErrorRecord | None = None
+    # Per-source chain-of-custody digest (issue #19, design §5.7 Weakness 7).
+    # ``sha256:<hex>`` over this adapter's RAW upstream response, computed at
+    # the adapter boundary before any Nautilus synthesis/cross-source merge.
+    # Optional/default None so non-deterministic adapters (e.g. llm,
+    # ``hash_skipped``) and Phase-1/legacy results round-trip unchanged (NFR-5).
+    response_hash: str | None = None
 
 
 class BrokerResponse(BaseModel):

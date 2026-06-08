@@ -28,9 +28,18 @@ Claims worth checking:
   (`GET /v1/audit/{request_id}`).
 - `response_hash` — hash of the response data; recompute to prove the
   data you hold is the data that was attested.
-- `hash_skipped: true` — present instead of `response_hash` when a
-  non-deterministic source (e.g. an LLM) was queried; such responses
-  cannot be re-verified by re-execution, and the token says so honestly.
+- `hash_skipped: true` — present instead of the whole-response
+  `response_hash` when a non-deterministic source (e.g. an LLM) was
+  queried; the *merged* response cannot be re-verified by re-execution,
+  and the token says so honestly.
+- `source_response_hashes` — a `{source_id: "sha256:..."}` map of
+  per-source digests captured at the adapter boundary. This claim can be
+  present **even when `hash_skipped: true`**: in a mixed request (an LLM
+  source plus deterministic sources), the whole-response hash is skipped
+  but the deterministic sources still carry verifiable per-source
+  hashes. Read it as "exactly these sources are covered" — any queried
+  source absent from the map (e.g. the LLM) is the unhashed one. Recompute
+  each entry over that source's rows to prove its data is intact.
 
 ## Session tokens
 
