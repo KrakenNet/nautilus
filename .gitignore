@@ -254,3 +254,4 @@ graphify-out/.graphify_python
 # Experiment outputs
 results/
 nautilus-audit.jsonl
+audit/*

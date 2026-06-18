@@ -6,7 +6,7 @@
 
 ## Retentive Knowledge Model (v2)
 
-The Retentive Knowledge Model (RKM) is what separates Nautilus from every GraphRAG system, knowledge graph, and data routing tool. The name reflects the system's architecture: a rules-based expert system that is structurally and functionally equivalent to a neural network (per Hruska et al., 1991), retaining learned knowledge as certainty factors and relationship facts that persist and refine over time. The system gets smarter through four mechanisms — all governed by rules, not by probabilistic inference at query time. **All RKM features are v2.**
+The Retentive Knowledge Model (RKM) is what separates Nautilus from every GraphRAG system, knowledge graph, and data routing tool. The name reflects the system's architecture: a rules-based expert system that is structurally and functionally equivalent to a neural network (per Hruska et al., 1991), retaining learned knowledge as certainty factors and relationship facts that persist and refine over time. The system gets smarter through five mechanisms — all governed by rules, not by probabilistic inference at query time. The first four learn from live operation; the fifth bootstraps a starting landscape before any traffic exists. **All RKM features are v2.**
 
 ### 1. Meta-Rules (Rules That Write Rules)
 
@@ -238,6 +238,50 @@ rules:
 **Implementation timing:** Expert Networks are a late v2 feature. Prerequisites: stable rule base with sufficient audit log history (minimum ~1000 labeled decisions for meaningful training), the Fathom `certainty` declaration, and the expert network parser (CLIPS-to-network translation). The learning algorithms themselves are well-documented in the literature. The parser is the primary engineering effort.
 
 **Reference:** Hruska, S.I., Dalke, A., Ferguson, J.J., and Lacher, R.C. (1991). "Expert Networks in CLIPS." NASA Conference Publication 10090, NASA Johnson Space Center.
+
+### 5. Source Research (Cold-Start Bootstrapping)
+
+The four mechanisms above all require traffic before they produce anything. Meta-rules need ~10 sequential observations to promote a relationship; expert networks need ~1000 labeled decisions; the LLM knowledge engineer reasons over *recent request patterns* that do not exist yet. On a freshly configured broker the knowledge landscape is empty — relationship facts are manually authored (see *Relationships as Facts*, below), and there is no observed affinity data at all. The first weeks of a deployment are exactly when proactive suggestions and affinity-based routing add the least value, precisely because nothing has been learned.
+
+Source Research addresses the cold start. It is a maintenance-time proposer — a sibling of the LLM knowledge engineer — that does not wait for request patterns. It interrogates the configured sources directly and proposes an initial knowledge landscape.
+
+```python
+class SourceResearcher:
+    def bootstrap(self, source_registry):
+        proposals = []
+        for source in source_registry:
+            schema = source.adapter.get_schema()         # already required (v1)
+            docs   = source.config.get("doc_refs", [])    # optional README/schema docs
+            prompt = f"""
+            Source: {source.id} ({source.adapter_type})
+            Declared data_types: {source.data_types}
+            Schema (columns/types): {schema.columns}
+            Reference docs: {docs}
+
+            Propose, as Fathom facts:
+            1. data_type_affinity — pairs of data types in this source likely
+               requested together, with a *prior* strength (0.0-1.0).
+            2. source_relationship — overlaps/supplements/feeds_into links to
+               OTHER sources in the registry, inferred from data_type overlap.
+            3. vocabulary — synonyms and purpose mappings implied by the schema.
+
+            These are hypotheses, not observations. Output Fathom YAML only.
+            """
+            proposals += self.parse_and_validate(llm.generate(prompt))
+        return proposals
+```
+
+Every proposal enters the **same validation pipeline** as any other auto-generated knowledge (see *Rule Conflict Detection and Validation Pipeline*, below) — static analysis, shadow/subsumption check, sandbox replay, confidence scoring. Source Research never writes directly to the active rule set.
+
+**Priors, not facts.** This is the load-bearing constraint. Every other RKM mechanism grounds confidence in observation count — a `data_type_affinity` with `observation_count: 12` means the pattern was *seen* 12 times. A researched affinity has been seen zero times; it is a hypothesis derived from structure, not behavior. Researched facts therefore enter with `status: proposed` and a capped prior strength (recommended: ≤0.5 on the affinity `strength` / relationship `confidence` slot, regardless of how confident the LLM sounds). They are confirmed — or quietly retired by the `freshness_weight` decay function — by subsequent real observation. The meta-rule pattern tracker treats a researched candidate exactly as one it discovered itself: live traffic increments `observation_count` toward the promotion threshold. Source Research supplies the prior; live observation supplies the posterior.
+
+**When it runs:**
+- *Onboarding* — once, when a source is first registered, to seed a landscape so day-one suggestions are non-empty.
+- *Schema drift* — when a `schema_drift` fact is asserted (schema fingerprinting, see 05 — Known Weaknesses §6), re-research the changed source so its researched priors track the new schema instead of going stale.
+
+**Air-gapped mode:** disabled, identical to the LLM knowledge engineer. In air-gapped deployments the cold start is covered by manual authoring and meta-rule observation alone.
+
+**Implementation timing:** v2, alongside the LLM knowledge engineer — it shares the YAML parser, the validation hook, and the air-gapped gating. Lower-risk than expert networks: no new learning algorithm, only a new proposer and a prior-strength cap.
 
 ---
 

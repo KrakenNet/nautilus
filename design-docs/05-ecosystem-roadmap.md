@@ -545,6 +545,62 @@ The promotion threshold is lower (6 weekly observations vs. 10 sequential) becau
 
 ---
 
+## Future Direction: Capability Brokering
+
+The v2 write surface (see Development Roadmap, Weeks 22.5) extends Nautilus from brokering *reads* to brokering *writes*. But a write is just one kind of side-effecting capability. The machinery that gates a write — two-key control, per-source opt-in, idempotency tokens, write attestation, default-deny rule pack, rate ceiling — generalizes to gating *any* capability an agent wants to invoke: an MCP tool call, a skill, an external API action. Capability Brokering is that generalization.
+
+This is a design sketch, not a roadmap commitment. It is the logical extension of the write surface and is gated by the same prerequisite: the write surface must ship and prove its dual-control model first.
+
+### The boundary that must not move
+
+The ecosystem rests on one line: **Nautilus governs what agents *know*; Bosun governs what agents *do*.** Capability Brokering sits directly on that seam, so the split must be drawn precisely:
+
+- **In scope — governing *access* to a capability.** Agent submits intent; Nautilus decides *which* tools/skills/MCP endpoints the agent's clearance and purpose permit, applies scope constraints, signs an attestation over the decision, and audits it. The output is a set of *permitted capability handles* (alongside any data the request also routed to). This is intent → routing with the target set widened from `{data sources}` to `{data sources, capabilities}` — same request lifecycle, same fail-closed posture.
+- **Out of scope — *executing* the capability.** Nautilus does not spawn subagents, build system prompts, run an LLM, call the tool, or synthesize tool output into an answer. That is runtime LLM reasoning and action-taking — explicitly out of scope (see *Explicitly Not In Scope*) and the domain of Bosun and the orchestrator. A broker that executes is no longer deterministic and no longer attestable: you cannot sign "the same request gets the same answer" over a subagent's generative output.
+
+The single-entrypoint goal — one governed front door per agent — is achieved by placing **Nautilus (access) and Bosun (action) behind a thin gateway**, not by absorbing the orchestrator into Nautilus.
+
+```
+Agent ──intent──▶ Nautilus ──"may use: [tool_a, tool_c]; data: {...}"──▶ Orchestrator
+   (control plane: policy·scope·attest·audit over data AND capabilities)      │
+                                                                              │ runs subagents,
+                                                                  builds prompts, calls tools
+                                                                              │
+                                                                       each action ──▶ Bosun
+                                                                          (governs what it DOES)
+```
+
+### What a capability source looks like
+
+A capability is registered like any other source, with capability-specific policy fields that mirror the write-surface gates:
+
+```yaml
+sources:
+  - id: jira-mcp
+    kind: capability                  # vs. the default data-source kind
+    adapter: mcp
+    endpoint: ${JIRA_MCP_URL}
+    classification: internal
+    capabilities: [create_issue, comment, transition]
+    capability_allowed_purposes: [incident-response, remediation]   # distinct from read purposes
+    write_allowed: false              # default-deny; explicit opt-in per capability
+    max_invocations_per_minute: 10    # rate ceiling, mirrors max_writes_per_minute
+```
+
+Routing rules evaluate `(clearance, purpose, capability)` the same way they evaluate `(clearance, purpose, source)` today, and **deny still wins** on conflict. The attestation token carries a `capability_grant` claim block (which handles were authorized, under which rule), so a downstream system can prove the agent was *permitted* to call `create_issue` — separate from Bosun's later proof that the call it actually made was *allowed*.
+
+### Why this is on-thesis
+
+Governing access to a capability is the same act as governing access to data: decide, scope, attest, audit, fail closed. The only addition over the write surface is that the *target* of the grant is a tool rather than a row set. Nautilus stays a control plane over both knowledge and capability access; it never becomes the executor. Cumulative-exposure tracking extends naturally — "this agent has already been granted three side-effecting capabilities this session; gate the fourth" is the action-side analogue of cumulative read exposure.
+
+### Prerequisites
+
+1. **Write surface shipped and stable.** Capability Brokering reuses its two-key control, idempotency, attestation, and default-deny machinery. No point generalizing an unproven mechanism.
+2. **Bosun integration defined.** The grant/action split only holds if Bosun reliably governs the action half. A capability grant with no downstream action-governance is a half-open door.
+3. **Attestation schema for grants.** The `capability_grant` claim block must be specified alongside the existing routing and write attestation blocks.
+
+---
+
 ## Future Direction: Knowledge Federation
 
 The v2 Blackboard architecture introduces multiple specialized CLIPS instances within a single Nautilus deployment. Knowledge Federation extends this concept across organizational boundaries: multiple independent Nautilus instances that selectively share learned knowledge without sharing data, access logs, or session state.
