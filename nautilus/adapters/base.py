@@ -151,20 +151,25 @@ def session_token_headers(context: dict[str, Any]) -> dict[str, str] | None:
 
 @runtime_checkable
 class Adapter(Protocol):
-    """Adapter Protocol mirroring design §3.5 verbatim."""
+    """Adapter Protocol mirroring design §3.5 verbatim.
+
+    Capability contract (design §3.5, AC-19.g, issue #56 review): a
+    non-deterministic adapter — one whose ``rows`` are not byte-reproducible
+    across identical requests, e.g. an LLM — MUST expose a class attribute
+    ``capabilities: ClassVar[frozenset[str]]`` containing ``"non_deterministic"``
+    (see :class:`~nautilus.adapters.llm.LLMAdapter`). The broker then excludes it
+    from per-source response hashing and signs ``hash_skipped=True`` instead;
+    hashing a non-reproducible source would sign a digest that can never be
+    re-verified. Deterministic adapters omit ``capabilities`` entirely and
+    ``Broker._is_non_deterministic`` defaults the missing attribute to
+    deterministic. It is intentionally NOT a typed Protocol member: a
+    ``@runtime_checkable`` data member is required, not optional, which would
+    break ``isinstance`` and ``type[Adapter]`` assignability for every
+    deterministic adapter that legitimately omits it — so the contract is
+    documented here instead.
+    """
 
     source_type: ClassVar[str]
-
-    # Capability flags (design §3.5). A non-deterministic adapter — one whose
-    # ``rows`` are not byte-reproducible across identical requests, e.g. an LLM —
-    # MUST include ``"non_deterministic"`` here so the broker excludes it from
-    # per-source response hashing and signs ``hash_skipped=True`` instead
-    # (AC-19.g, issue #56 review). Deterministic adapters may omit the attribute
-    # entirely; the default empty set means the broker treats them as
-    # deterministic and hashes their rows. Declaring it on the Protocol makes the
-    # contract explicit so a non-deterministic adapter that forgets to set it is
-    # a visible type/contract omission rather than a silent mis-hash.
-    capabilities: ClassVar[frozenset[str]] = frozenset()
 
     async def connect(self, config: SourceConfig) -> None:
         """Initialise adapter state (pools, clients) for ``config``.

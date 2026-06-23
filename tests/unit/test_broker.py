@@ -64,9 +64,6 @@ class _FakeAdapter:
     """
 
     source_type: str = "fake"
-    # Deterministic adapter — declares the (empty) capabilities contract so it
-    # fully satisfies the runtime-checkable Adapter Protocol (issue #56 review #3).
-    capabilities: frozenset[str] = frozenset()
 
     def __init__(
         self,
