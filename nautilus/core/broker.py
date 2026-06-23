@@ -404,6 +404,10 @@ def _build_audit_entry(
         sources_skipped=state.sources_skipped,
         sources_errored=[e.source_id for e in state.errored],
         attestation_token=attestation_token,
+        # Per-source chain-of-custody digests on the canonical request entry so
+        # they are verifiable from a single audit record — and are recorded even
+        # when attestation/JWT signing is disabled (issue #56 review findings #1/#2).
+        source_response_hashes=state.source_response_hashes or None,
         duration_ms=state.duration_ms(),
         scope_hash_version=state.scope_hash_version,
         session_store_mode=session_store_mode,

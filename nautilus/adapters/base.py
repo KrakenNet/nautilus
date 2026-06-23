@@ -155,6 +155,17 @@ class Adapter(Protocol):
 
     source_type: ClassVar[str]
 
+    # Capability flags (design §3.5). A non-deterministic adapter — one whose
+    # ``rows`` are not byte-reproducible across identical requests, e.g. an LLM —
+    # MUST include ``"non_deterministic"`` here so the broker excludes it from
+    # per-source response hashing and signs ``hash_skipped=True`` instead
+    # (AC-19.g, issue #56 review). Deterministic adapters may omit the attribute
+    # entirely; the default empty set means the broker treats them as
+    # deterministic and hashes their rows. Declaring it on the Protocol makes the
+    # contract explicit so a non-deterministic adapter that forgets to set it is
+    # a visible type/contract omission rather than a silent mis-hash.
+    capabilities: ClassVar[frozenset[str]] = frozenset()
+
     async def connect(self, config: SourceConfig) -> None:
         """Initialise adapter state (pools, clients) for ``config``.
 

@@ -17,10 +17,19 @@ from __future__ import annotations
 
 import pytest
 
+from nautilus.adapters.base import Adapter
 from nautilus.core.attestation_payload import compute_raw_response_hash
 from nautilus.core.models import AdapterResult
 
 pytestmark = pytest.mark.unit
+
+
+def test_adapter_protocol_declares_capabilities_default() -> None:
+    """Issue #56 review (#3): the Adapter Protocol declares ``capabilities`` so the
+    non-deterministic contract is explicit; it defaults to empty (deterministic), so
+    deterministic adapters may omit it without being mis-classified silently.
+    """
+    assert Adapter.capabilities == frozenset()
 
 
 def test_adapter_result_has_no_response_hash_field() -> None:

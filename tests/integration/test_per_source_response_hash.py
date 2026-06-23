@@ -356,3 +356,50 @@ async def test_source_response_hashes_recorded_in_audit_log() -> None:
     emitted = [e for e in entries if getattr(e, "event_type", None) == "attestation_emitted"]
     assert len(emitted) == 1, "exactly one attestation_emitted event per request"
     assert emitted[0].source_response_hashes == {"nvd_db": compute_raw_response_hash(nvd_rows)}
+
+
+@pytest.mark.integration
+async def test_source_response_hashes_on_primary_request_entry() -> None:
+    """Issue #56 review (#1): the per-source digests appear on the canonical
+    ``event_type == "request"`` AuditEntry, so a single audit record is verifiable
+    without correlating the secondary ``attestation_emitted`` event.
+    """
+    nvd_rows = [{"id": 1, "cve": "CVE-0"}]
+    broker = Broker.from_config(FIXTURE_PATH)
+    entries: list[Any] = []
+    try:
+        _install_fakes(broker, {"nvd_db": _HashingFakeAdapter("nvd_db", nvd_rows)})
+        _capture_audit_entries(broker, entries)
+        await broker.arequest("agent-alpha", "vulnerability scan", _ctx())
+    finally:
+        await broker.aclose()
+
+    request_entries = [e for e in entries if getattr(e, "event_type", None) == "request"]
+    assert len(request_entries) == 1, "exactly one request entry per request"
+    assert request_entries[0].source_response_hashes == {
+        "nvd_db": compute_raw_response_hash(nvd_rows)
+    }
+
+
+@pytest.mark.integration
+async def test_source_response_hashes_recorded_when_attestation_disabled() -> None:
+    """Issue #56 review (#2): with JWT attestation disabled, the per-source digests
+    are still persisted on the request AuditEntry rather than silently discarded.
+    """
+    nvd_rows = [{"id": 1, "cve": "CVE-0"}]
+    broker = Broker.from_config(FIXTURE_PATH)
+    entries: list[Any] = []
+    try:
+        _install_fakes(broker, {"nvd_db": _HashingFakeAdapter("nvd_db", nvd_rows)})
+        broker._attestation = None  # type: ignore[attr-defined]  # noqa: SLF001 — disable signing
+        _capture_audit_entries(broker, entries)
+        resp = await broker.arequest("agent-alpha", "vulnerability scan", _ctx())
+        assert resp.attestation_token is None, "attestation must be disabled for this test"
+    finally:
+        await broker.aclose()
+
+    request_entries = [e for e in entries if getattr(e, "event_type", None) == "request"]
+    assert len(request_entries) == 1
+    assert request_entries[0].source_response_hashes == {
+        "nvd_db": compute_raw_response_hash(nvd_rows)
+    }
