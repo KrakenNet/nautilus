@@ -1,6 +1,11 @@
 # Nautilus docs orchestration
 
-.PHONY: docs-build docs-serve docs-check docs-clean
+.PHONY: init docs-build docs-serve docs-check docs-clean
+
+# Set up a local dev environment: install deps + pre-commit hooks
+init:
+	uv sync --all-extras
+	uv run pre-commit install
 
 # Strict build (fails on any warning)
 docs-build:

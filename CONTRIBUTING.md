@@ -27,6 +27,16 @@ Please read and follow our [Code of Conduct](CODE_OF_CONDUCT.md) before particip
    uv run pytest -m unit
    ```
 
+## Finding Something to Work On
+
+Browse the [issue tracker](https://github.com/KrakenNet/nautilus/issues) and look at the labels:
+
+- **`good first issue`** — start here. Scoped work that needs no deep codebase knowledge.
+- **`help wanted`** — issues where maintainers would welcome a contributor.
+- **`needs-decision` / `needs-design`** — the approach or design isn't settled yet. Please don't open a PR for these; leave a comment with your thoughts instead.
+
+For anything non-trivial, comment on the issue to say you're picking it up before you start, so we can avoid duplicate work.
+
 ## Development Workflow
 
 ### Branching

@@ -11,7 +11,17 @@ concurrency:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.13", "3.14"]
+        # macOS leg catches cross-platform regressions in the unit suite
+        # (``pytest -m unit`` needs no Docker, so it runs everywhere).
+        include:
+          - os: macos-latest
+            python-version: "3.13"
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
@@ -19,7 +29,7 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.14"
+          python-version: ${{ matrix.python-version }}
 
       # ``--all-extras`` so pyright sees the optional LLM providers
       # (anthropic, openai) and OTel/docs deps. Without them, pyright
@@ -39,4 +49,12 @@ jobs:
         run: uv run pyright
 
       - name: Test
-        run: uv run pytest -m unit --tb=short -q
+        run: uv run pytest -m unit --tb=short --cov-report=xml -q
+
+      - name: Upload coverage
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'
+        uses: codecov/codecov-action@v6
+        with:
+          files: coverage.xml
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false

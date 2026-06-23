@@ -3,13 +3,18 @@
 > Policy-first data broker for AI agents. One call plans, routes, enforces, attests, and audits.
 
 [![PyPI](https://img.shields.io/pypi/v/nautilus-rkm.svg)](https://pypi.org/project/nautilus-rkm/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Downloads](https://img.shields.io/pypi/dm/nautilus-rkm.svg)](https://pypi.org/project/nautilus-rkm/)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![CI](https://github.com/KrakenNet/nautilus/actions/workflows/ci.yml/badge.svg)](https://github.com/KrakenNet/nautilus/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/KrakenNet/nautilus/branch/main/graph/badge.svg)](https://codecov.io/gh/KrakenNet/nautilus)
 [![Docs](https://github.com/KrakenNet/nautilus/actions/workflows/docs-deploy.yml/badge.svg)](https://krakennet.github.io/nautilus/)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/E6Cf8WFDf)
+
+> **Part of the [Kraken](https://github.com/KrakenNet) stack:** [Fathom](https://github.com/KrakenNet/fathom) (reasoning engine) · [**Nautilus**](https://github.com/KrakenNet/nautilus) (policy data broker) · [Stargraph](https://github.com/KrakenNet/stargraph) (agent-graph framework).
 
 **Current version:** 0.1.3
-**License:** MIT
+**License:** Apache-2.0
 **Language:** Python 3.13+
 **Package Manager:** uv
 **Maintained by:** [KrakenNet](https://github.com/KrakenNet)
@@ -185,6 +190,12 @@ We welcome contributions! Please read our [Contributing Guide](CONTRIBUTING.md) 
 
 To report a security vulnerability, please see our [Security Policy](SECURITY.md). Do not open a public issue for security concerns.
 
+## Star History
+
+<a href="https://star-history.com/#KrakenNet/nautilus&Date">
+  <img src="https://api.star-history.com/svg?repos=KrakenNet/nautilus&type=Date" alt="Star History Chart" width="600">
+</a>
+
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+Apache-2.0 — see [LICENSE](LICENSE) for details.

@@ -232,7 +232,6 @@ def _cmd_list(args: argparse.Namespace) -> int:
 
 
 def _cmd_schema(args: argparse.Namespace) -> int:
-
     schema = _get_adapter_schema(args.name)
     if schema is None:
         warn(f"no schema available for adapter {args.name!r}")
