@@ -136,12 +136,13 @@ class AdapterResult(BaseModel):
     rows: list[dict[str, Any]]
     duration_ms: int
     error: ErrorRecord | None = None
-    # Per-source chain-of-custody digest (issue #19, design §5.7 Weakness 7).
-    # ``sha256:<hex>`` over this adapter's RAW upstream response, computed at
-    # the adapter boundary before any Nautilus synthesis/cross-source merge.
-    # Optional/default None so non-deterministic adapters (e.g. llm,
-    # ``hash_skipped``) and Phase-1/legacy results round-trip unchanged (NFR-5).
-    response_hash: str | None = None
+    # NOTE: AdapterResult intentionally carries NO ``response_hash`` field. The
+    # per-source chain-of-custody digest (issue #19, design §5.7 Weakness 7) is
+    # computed centrally by the broker over ``rows`` at the pre-synthesis
+    # boundary (``Broker._gather_adapter_results``). An adapter-supplied digest
+    # would be an unverifiable trust channel into the signed attestation — a
+    # malicious or buggy adapter could forge it — so it is deliberately absent
+    # (issue #56 review).
 
 
 class BrokerResponse(BaseModel):
@@ -220,6 +221,11 @@ class AuditEntry(BaseModel):
     llm_model: str | None = None
     llm_version: str | None = None
     raw_response_hash: str | None = None
+    # Per-source chain-of-custody digests mirrored from the signed attestation's
+    # ``source_response_hashes`` claim so they can be verified offline from the
+    # audit log alone (issue #19 / issue #56 review). Optional/default None for
+    # NFR-5 round-trip of Phase-1 and non-attestation entries.
+    source_response_hashes: dict[str, str] | None = None
     prompt_version: str | None = None
     fallback_used: bool | None = None
     scope_hash_version: Literal["v1", "v2"] | None = None

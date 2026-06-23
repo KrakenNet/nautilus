@@ -6,9 +6,11 @@ broker-level hash over the whole synthesized response, but the design
 boundary over the adapter's own response, carried on
 :class:`AdapterResult`.
 
-Test A — :class:`AdapterResult` must carry a ``response_hash`` field and the
-shared :func:`compute_raw_response_hash` helper must produce a
-``sha256:``-prefixed, deterministic, byte-sensitive digest.
+Test A — the broker owns hashing: :class:`AdapterResult` exposes NO
+``response_hash`` field (issue #56 review — an adapter-supplied digest would be
+an unverifiable trust channel into the signed attestation), and the shared
+:func:`compute_raw_response_hash` helper produces a ``sha256:``-prefixed,
+deterministic, byte-sensitive digest.
 """
 
 from __future__ import annotations
@@ -21,23 +23,13 @@ from nautilus.core.models import AdapterResult
 pytestmark = pytest.mark.unit
 
 
-def test_adapter_result_has_response_hash_field() -> None:
-    """AC-19: a successful AdapterResult can carry a per-source response_hash."""
-    rows = [{"id": 1, "cve": "CVE-2026-0001"}]
-    result = AdapterResult(
-        source_id="pg",
-        rows=rows,
-        duration_ms=1,
-        response_hash=compute_raw_response_hash(rows),
-    )
-    assert result.response_hash is not None
-    assert result.response_hash.startswith("sha256:")
-
-
-def test_response_hash_defaults_to_none() -> None:
-    """NFR-5: the field is optional so legacy/non-deterministic results round-trip."""
-    result = AdapterResult(source_id="llm", rows=[], duration_ms=0)
-    assert result.response_hash is None
+def test_adapter_result_has_no_response_hash_field() -> None:
+    """Security (issue #56 review): AdapterResult must NOT expose a
+    ``response_hash`` field. The per-source digest is computed centrally by the
+    broker over ``rows`` (``Broker._gather_adapter_results``); an adapter-supplied
+    digest would let a malicious/buggy adapter forge the signed attestation.
+    """
+    assert "response_hash" not in AdapterResult.model_fields
 
 
 def test_compute_raw_response_hash_is_sha256_prefixed() -> None:

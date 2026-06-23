@@ -34,7 +34,6 @@ from nautilus import Broker, BrokerResponse
 from nautilus.adapters.base import Adapter, AdapterError
 from nautilus.adapters.schema import AdapterSchema
 from nautilus.config.models import SourceConfig
-from nautilus.core.attestation_payload import compute_raw_response_hash
 from nautilus.core.broker import Broker as CoreBroker
 from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
@@ -96,15 +95,12 @@ class _FakeAdapter:
             await asyncio.sleep(self._sleep_for)
         if self._raises is not None:
             raise self._raises(f"fake_adapter {self._source_id} configured to raise")
-        rows = list(self._rows)
-        # Exercise the optional adapter-pre-set path (issue #19): an adapter MAY
-        # set ``response_hash`` itself; the broker honors it and otherwise derives
-        # the per-source hash centrally from ``rows`` at the synthesis boundary.
+        # The broker derives the per-source chain-of-custody hash centrally from
+        # ``rows`` at the synthesis boundary; adapters never supply it (issue #56).
         return AdapterResult(
             source_id=self._source_id,
-            rows=rows,
+            rows=list(self._rows),
             duration_ms=0,
-            response_hash=compute_raw_response_hash(rows),
         )
 
     async def close(self) -> None:

@@ -313,11 +313,12 @@ class _RequestState:
     sources_skipped: list[str] = field(default_factory=list[str])
     errored: list[ErrorRecord] = field(default_factory=list[ErrorRecord])
     data: dict[str, list[dict[str, Any]]] = field(default_factory=dict[str, list[dict[str, Any]]])
-    # Per-source chain-of-custody digests (issue #19, design §5.7). Populated
-    # from each successful ``AdapterResult.response_hash`` in
-    # ``_gather_adapter_results``; threaded into the signed attestation as the
-    # ``source_response_hashes`` claim. Non-deterministic adapters (llm) omit
-    # their entry so the broker still signs ``hash_skipped=True`` (AC-19.g).
+    # Per-source chain-of-custody digests (issue #19, design §5.7). Computed by
+    # the broker over each source's returned rows in ``_gather_adapter_results``
+    # (never supplied by the adapter, issue #56 review); threaded into the signed
+    # attestation as the ``source_response_hashes`` claim. Non-deterministic
+    # adapters (llm) omit their entry so the broker still signs
+    # ``hash_skipped=True`` (AC-19.g).
     source_response_hashes: dict[str, str] = field(default_factory=dict[str, str])
     attestation_token: str | None = None
     scope_hash_version: Literal["v1", "v2"] | None = None  # set by `_sign`
@@ -1421,6 +1422,12 @@ class Broker:
         response_hash: str | None = nautilus_payload.get("response_hash")
         hash_skipped: bool = bool(nautilus_payload.get("hash_skipped", False))
         legacy: bool = response_hash is None and not hash_skipped
+        # AC-19 / issue #56 review — persist the per-source digests so the
+        # ``source_response_hashes`` claim is independently verifiable from the
+        # audit log, not only from the signed JWT.
+        source_response_hashes: dict[str, str] | None = nautilus_payload.get(
+            "source_response_hashes"
+        )
         self._audit_logger.emit(
             AuditEntry(
                 timestamp=AuditLogger.utcnow(),
@@ -1438,6 +1445,7 @@ class Broker:
                 schema_version=2,
                 trace_id=request_id,
                 raw_response_hash=response_hash if not legacy else None,
+                source_response_hashes=source_response_hashes,
             )
         )
 
@@ -1640,19 +1648,16 @@ class Broker:
             successful.append(res)
             state.sources_queried.append(source_id)
             # Per-source chain-of-custody hash (issue #19, AC-19), computed
-            # centrally over each source's raw rows at this pre-synthesis
-            # boundary. An adapter MAY pre-populate ``response_hash`` (e.g. to
-            # hash bytes that differ from ``rows``); we honor it when present and
-            # otherwise derive it here so deterministic adapters need no per-impl
-            # hashing. Non-deterministic adapters (llm) declare the
-            # ``non_deterministic`` capability and are omitted so ``_sign`` still
-            # emits ``hash_skipped=True`` (AC-19.g).
+            # centrally by the broker over each source's raw rows at this
+            # pre-synthesis boundary. The digest is ALWAYS derived from the rows
+            # the broker actually returns and attests; the adapter does not (and
+            # cannot) supply it, so a malicious or buggy adapter cannot inject an
+            # arbitrary hash into the signed attestation token (issue #56 review).
+            # Non-deterministic adapters (llm) declare the ``non_deterministic``
+            # capability and are omitted so ``_sign`` still emits
+            # ``hash_skipped=True`` (AC-19.g).
             if not self._is_non_deterministic(source_id):
-                state.source_response_hashes[source_id] = (
-                    res.response_hash
-                    if res.response_hash is not None
-                    else compute_response_hash(res.rows)
-                )
+                state.source_response_hashes[source_id] = compute_response_hash(res.rows)
         return successful
 
     def _is_non_deterministic(self, source_id: str) -> bool:

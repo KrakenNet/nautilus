@@ -51,10 +51,11 @@ def set_test_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 class _HashingFakeAdapter:
-    """Minimal Adapter Protocol impl that honors the issue #19 contract.
+    """Minimal Adapter Protocol impl returning fixed rows.
 
-    A deterministic adapter MUST populate ``response_hash`` at the adapter
-    boundary via :func:`compute_raw_response_hash` over its own rows.
+    A deterministic adapter returns only ``rows``; the broker computes the
+    per-source chain-of-custody digest centrally over those rows (issue #56
+    review), so the adapter never sets a digest itself.
     """
 
     source_type: str = "fake"
@@ -73,12 +74,10 @@ class _HashingFakeAdapter:
         context: dict[str, Any],
     ) -> AdapterResult:
         del intent, scope, context
-        rows = list(self._rows)
         return AdapterResult(
             source_id=self._source_id,
-            rows=rows,
+            rows=list(self._rows),
             duration_ms=0,
-            response_hash=compute_raw_response_hash(rows),
         )
 
     async def close(self) -> None:
@@ -289,3 +288,71 @@ async def test_mixed_deterministic_and_llm_coexistence() -> None:
         "the non-deterministic source must be absent from the per-source map"
     )
     assert hashes["nvd_db"] == compute_raw_response_hash(nvd_rows)
+
+
+def _capture_audit_entries(broker: Broker, sink: list[Any]) -> None:
+    """Wrap the broker's audit logger so emitted ``AuditEntry`` objects are captured."""
+    original = broker._audit_logger.emit  # type: ignore[attr-defined]  # noqa: SLF001
+
+    def _wrapped(entry: Any) -> Any:
+        sink.append(entry)
+        return original(entry)
+
+    broker._audit_logger.emit = _wrapped  # type: ignore[attr-defined]  # noqa: SLF001
+
+
+@pytest.mark.integration
+async def test_adapter_supplied_hash_is_not_trusted() -> None:
+    """Security (issue #56 review): a digest smuggled onto the AdapterResult must
+    NOT reach the signed attestation. The broker recomputes every per-source hash
+    from the adapter's actual rows, so a malicious or buggy adapter cannot forge
+    the ``source_response_hashes`` claim (attestation forgery).
+    """
+    rows = [{"id": 1, "cve": "CVE-0"}]
+    forged = "sha256:" + "0" * 64
+
+    class _ForgingFakeAdapter(_HashingFakeAdapter):
+        async def execute(
+            self,
+            intent: IntentAnalysis,
+            scope: list[ScopeConstraint],
+            context: dict[str, Any],
+        ) -> AdapterResult:
+            res = await super().execute(intent, scope, context)
+            # Smuggle a lie onto the result object, bypassing the model schema.
+            object.__setattr__(res, "response_hash", forged)
+            return res
+
+    broker = Broker.from_config(FIXTURE_PATH)
+    captured: dict[str, Any] = {}
+    try:
+        _install_fakes(broker, {"nvd_db": _ForgingFakeAdapter("nvd_db", rows)})
+        _capture_signed_payloads(broker, captured)
+        await broker.arequest("agent-alpha", "vulnerability scan", _ctx())
+    finally:
+        await broker.aclose()
+
+    signed = captured["payload"]["source_response_hashes"]["nvd_db"]
+    assert signed == compute_raw_response_hash(rows), "broker must hash the real rows"
+    assert signed != forged, "adapter-supplied digest must never reach the attestation"
+
+
+@pytest.mark.integration
+async def test_source_response_hashes_recorded_in_audit_log() -> None:
+    """Issue #56 review (audit gap): the per-source digests are signed into the
+    JWT AND persisted on the ``attestation_emitted`` AuditEntry, so they can be
+    verified offline from the audit log alone.
+    """
+    nvd_rows = [{"id": 1, "cve": "CVE-0"}]
+    broker = Broker.from_config(FIXTURE_PATH)
+    entries: list[Any] = []
+    try:
+        _install_fakes(broker, {"nvd_db": _HashingFakeAdapter("nvd_db", nvd_rows)})
+        _capture_audit_entries(broker, entries)
+        await broker.arequest("agent-alpha", "vulnerability scan", _ctx())
+    finally:
+        await broker.aclose()
+
+    emitted = [e for e in entries if getattr(e, "event_type", None) == "attestation_emitted"]
+    assert len(emitted) == 1, "exactly one attestation_emitted event per request"
+    assert emitted[0].source_response_hashes == {"nvd_db": compute_raw_response_hash(nvd_rows)}
