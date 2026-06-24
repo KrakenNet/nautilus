@@ -1,13 +1,13 @@
 [project]
 name = "nautilus-rkm"
 version = "0.1.3"
-description = "Nautilus data broker + reasoning engine: intent-aware scoped query execution, multi-agent handoffs, LLM intent analysis, and forensic escalation via Fathom rules"
+description = "Policy-first data broker for AI agents — one call plans, routes, enforces, attests, and audits every data access. Built on Fathom."
 readme = "README.md"
 requires-python = ">=3.13"
 license = "Apache-2.0"
 # TODO: add author email once the maintainer publishes one.
 authors = [{ name = "se-jo-ma" }]
-keywords = ["fathom", "policy", "broker", "security", "scope", "clips", "ai-agent", "data-broker", "routing", "audit", "attestation", "compliance", "nist", "hipaa", "mcp"]
+keywords = ["ai-agents", "data-broker", "policy-engine", "data-governance", "access-control", "rbac", "fathom", "clips", "security", "audit", "attestation", "compliance", "nist", "hipaa", "mcp", "llm", "rules-engine", "broker", "policy", "routing"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -20,6 +20,8 @@ classifiers = [
     "Topic :: System :: Systems Administration",
     "Framework :: FastAPI",
     "Typing :: Typed",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
     "fathom-rules>=0.3.4",
@@ -42,9 +44,9 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/KrakenNet/nautilus"
+Homepage = "https://krakennet.github.io/nautilus"
 Repository = "https://github.com/KrakenNet/nautilus"
-Documentation = "https://nautilus.krakn.ai"
+Documentation = "https://krakennet.github.io/nautilus"
 Changelog = "https://github.com/KrakenNet/nautilus/blob/main/CHANGELOG.md"
 Issues = "https://github.com/KrakenNet/nautilus/issues"
 
