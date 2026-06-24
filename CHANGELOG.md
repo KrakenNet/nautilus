@@ -5,6 +5,14 @@ All notable changes to `nautilus-rkm` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1](https://github.com/KrakenNet/nautilus/compare/v0.2.0...v0.2.1) (2026-06-24)
+
+
+### Bug Fixes
+
+* **ci:** repair invalid Dependabot cooldown (semver-*-days unsupported for non-semver ecosystems) ([#71](https://github.com/KrakenNet/nautilus/issues/71)) ([af70491](https://github.com/KrakenNet/nautilus/commit/af70491fa353fd7fe361b250d269fd6c77be81d2))
+* use `cooldown.default-days` only — valid for every ecosystem. Validated against Dependabot's own config check on this PR before merge. ([af70491](https://github.com/KrakenNet/nautilus/commit/af70491fa353fd7fe361b250d269fd6c77be81d2))
+
 ## [0.2.0](https://github.com/KrakenNet/nautilus/compare/v0.1.3...v0.2.0) (2026-06-24)
 
 

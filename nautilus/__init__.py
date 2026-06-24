@@ -8,6 +8,6 @@ from __future__ import annotations
 from nautilus.core.broker import Broker
 from nautilus.core.models import BrokerResponse
 
-__version__ = "0.2.0"  # x-release-please-version
+__version__ = "0.2.1"  # x-release-please-version
 
 __all__ = ["Broker", "BrokerResponse", "__version__"]
