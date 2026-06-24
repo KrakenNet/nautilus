@@ -255,3 +255,7 @@ graphify-out/.graphify_python
 results/
 nautilus-audit.jsonl
 audit/*
+
+### internal cruft (kept local, not shipped) ###
+elevator-pitch.md
+design-docs/

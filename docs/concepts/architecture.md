@@ -33,7 +33,7 @@ ServiceNow, InfluxDB, S3. Third-party adapters register via
 
 ## Policy routing
 
-Routing is powered by [Fathom](https://github.com/se-jo-ma/fathom), a
+Routing is powered by [Fathom](https://github.com/KrakenNet/fathom), a
 CLIPS-based expert system. Rules evaluate the `(clearance, purpose, source)`
 triple and emit `allow`, `deny`, or `scope` decisions. Scope constraints
 are passed to adapters as WHERE-clause fragments with injection-safe field

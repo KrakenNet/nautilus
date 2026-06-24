@@ -1,6 +1,6 @@
 FROM python:3.14-slim
 
-LABEL maintainer="se-jo-ma"
+LABEL maintainer="KrakenNet"
 LABEL description="Reproducible benchmark environment for Nautilus load testing"
 
 WORKDIR /bench

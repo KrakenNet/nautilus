@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 license = "Apache-2.0"
 # TODO: add author email once the maintainer publishes one.
-authors = [{ name = "se-jo-ma" }]
+authors = [{ name = "KrakenNet" }]
 keywords = ["ai-agents", "data-broker", "policy-engine", "data-governance", "access-control", "rbac", "fathom", "clips", "security", "audit", "attestation", "compliance", "nist", "hipaa", "mcp", "llm", "rules-engine", "broker", "policy", "routing"]
 classifiers = [
     "Development Status :: 3 - Alpha",
