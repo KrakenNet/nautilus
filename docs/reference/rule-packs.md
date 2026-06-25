@@ -14,7 +14,7 @@ Registered via entry point: `fathom.packs` → `data-routing-nist`
 HIPAA-compliant routing rules. Enforces minimum-necessary access controls
 and PHI handling requirements.
 
-Registered via entry point: `fathom.packs` → `data-routing-hipaa`
+Registered via entry point: `fathom.packs` → `data-routing-hipaa = "nautilus.rule_packs.data_routing_hipaa"`
 
 ## Loading a rule pack
 
