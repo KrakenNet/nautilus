@@ -61,7 +61,7 @@ finally:
     broker.close()
 ```
 
-See the [Getting Started guide](https://krakennet.github.io/nautilus//getting-started/) for a full walkthrough.
+See the [Getting Started guide](https://krakennet.github.io/nautilus/getting-started/) for a full walkthrough.
 
 ## What Ships Today
 
@@ -76,7 +76,7 @@ See the [Getting Started guide](https://krakennet.github.io/nautilus//getting-st
 
 **Adapters (8 built-in)**
 - PostgreSQL, PgVector, Elasticsearch, Neo4j, REST, ServiceNow, InfluxDB, S3
-- Pluggable via entry points and the [Adapter SDK](https://krakennet.github.io/nautilus//reference/adapter-sdk/)
+- Pluggable via entry points and the [Adapter SDK](https://krakennet.github.io/nautilus/reference/adapter-sdk/)
 
 **Transports**
 - FastAPI REST server (`POST /v1/request`, health/readiness probes)
@@ -158,10 +158,10 @@ audit:
 
 Full documentation is available at [nautilus.krakn.ai](https://krakennet.github.io/nautilus/).
 
-- [Getting Started](https://krakennet.github.io/nautilus//getting-started/)
-- [Concepts](https://krakennet.github.io/nautilus//concepts/)
-- [How-to Guides](https://krakennet.github.io/nautilus//how-to/)
-- [Reference](https://krakennet.github.io/nautilus//reference/)
+- [Getting Started](https://krakennet.github.io/nautilus/getting-started/)
+- [Concepts](https://krakennet.github.io/nautilus/concepts/)
+- [How-to Guides](https://krakennet.github.io/nautilus/how-to/)
+- [Reference](https://krakennet.github.io/nautilus/reference/)
 
 ## Related Projects
 
