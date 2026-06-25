@@ -1,6 +1,6 @@
 site_name: Nautilus Adapter SDK
 site_description: Documentation for the Nautilus Adapter SDK — build third-party data adapters for the Nautilus routing platform.
-site_url: https://se-jo-ma.github.io/nautilus/sdk/
+site_url: https://krakennet.github.io/nautilus/sdk/
 
 theme:
   name: material

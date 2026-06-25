@@ -1611,7 +1611,7 @@
 ServiceNow, InfluxDB, S3. Third-party adapters register via
 <code>[project.entry-points."nautilus.adapters"]</code>.</p>
 <h2 id="policy-routing">Policy routing<a class="headerlink" href="#policy-routing" title="Permanent link">&para;</a></h2>
-<p>Routing is powered by <a href="https://github.com/se-jo-ma/fathom">Fathom</a>, a
+<p>Routing is powered by <a href="https://github.com/KrakenNet/fathom">Fathom</a>, a
 CLIPS-based expert system. Rules evaluate the <code>(clearance, purpose, source)</code>
 triple and emit <code>allow</code>, <code>deny</code>, or <code>scope</code> decisions. Scope constraints
 are passed to adapters as WHERE-clause fragments with injection-safe field
