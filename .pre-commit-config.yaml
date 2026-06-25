@@ -21,4 +21,5 @@ repos:
     rev: v2.4.1
     hooks:
       - id: codespell
-        args: [--skip, "uv.lock,*.lock"]
+        # thirdParty is a required dcoapp config key (.github/dco.yml), not a typo.
+        args: [--skip, "uv.lock,*.lock", -L, thirdparty]

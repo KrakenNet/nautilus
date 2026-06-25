@@ -10,7 +10,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # True ``code`` when a PR changes anything that isn't pure documentation, so the
+  # required ``test`` job can skip on docs-only PRs (a skipped required check counts
+  # as a pass). Negation-only failure mode is safe: if dorny ever ignored the ``!``
+  # patterns, ``**`` matches everything → ``code`` stays true → test runs anyway.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - '**'
+              - '!**/*.md'
+              - '!docs/**'
+              - '!mkdocs.yml'
+              - '!LICENSE'
+
   test:
+    needs: changes
+    if: github.event_name == 'push' || needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false

@@ -19,6 +19,7 @@
 - [ ] Type check passes (`uv run pyright`)
 - [ ] Documentation updated (if applicable)
 - [ ] Changelog updated (if applicable)
+- [ ] All commits are signed off (DCO) — committed with `git commit -s`. If the `DCO` check fails, follow the remediation command it comments (no rebase needed).
 
 ## Related Issues
 
