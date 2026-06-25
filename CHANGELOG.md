@@ -5,6 +5,16 @@ All notable changes to `nautilus-rkm` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2](https://github.com/KrakenNet/nautilus/compare/v0.2.1...v0.2.2) (2026-06-25)
+
+
+### Documentation
+
+* fix doubled slash docs URLs ([#133](https://github.com/KrakenNet/nautilus/issues/133)) ([84a3e0e](https://github.com/KrakenNet/nautilus/commit/84a3e0ecad21c6053d681be16a7f42146d34510f))
+* fix HIPAA rule-pack entry point ([#134](https://github.com/KrakenNet/nautilus/issues/134)) ([7a67868](https://github.com/KrakenNet/nautilus/commit/7a67868ed4104dab4ab2d782068c636e5228d544))
+* fix quickstart Python version ([#132](https://github.com/KrakenNet/nautilus/issues/132)) ([32eacbf](https://github.com/KrakenNet/nautilus/commit/32eacbf2be0c2f6fe819626209059474be605ec6))
+* update current version in README ([#135](https://github.com/KrakenNet/nautilus/issues/135)) ([48083bb](https://github.com/KrakenNet/nautilus/commit/48083bbaeead2149c061f1f72044e121c05b2a6d))
+
 ## [0.2.1](https://github.com/KrakenNet/nautilus/compare/v0.2.0...v0.2.1) (2026-06-24)
 
 
