@@ -17,6 +17,8 @@ import sys
 from pathlib import Path
 from typing import Any, cast
 
+from nautilus.cli._common import err, ok, warn
+
 
 def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:  # pyright: ignore[reportPrivateUsage]
     """Add ``rules`` group to the top-level argparse subparsers."""
@@ -88,7 +90,7 @@ def dispatch(args: argparse.Namespace) -> int:
         return _cmd_test(args)
     if subcommand == "history":
         return _cmd_history(args)
-    print("ERROR: unknown rules subcommand", file=sys.stderr)
+    err("unknown rules subcommand")
     return 2
 
 
@@ -98,7 +100,7 @@ def _cmd_validate(args: argparse.Namespace) -> int:
 
     file_path = Path(args.file)
     if not file_path.is_file():
-        print(f"ERROR: file not found: {file_path}", file=sys.stderr)
+        err(f"file not found: {file_path}")
         return 1
 
     result = validate_static(file_path)
@@ -106,10 +108,10 @@ def _cmd_validate(args: argparse.Namespace) -> int:
         print(f"OK: {file_path}")
         return 0
 
-    for err in result.errors:
-        hint_suffix = f" Hint: {err.hint}" if err.hint else ""
+    for serr in result.errors:
+        hint_suffix = f" Hint: {serr.hint}" if serr.hint else ""
         print(
-            f"ERROR {err.file}:{err.line}: {err.message}{hint_suffix}",
+            f"ERROR {serr.file}:{serr.line}: {serr.message}{hint_suffix}",
             file=sys.stderr,
         )
     return 1
@@ -129,7 +131,6 @@ def _cmd_test(args: argparse.Namespace) -> int:
 
     import yaml
 
-    from nautilus.cli._common import err, ok, warn
     from nautilus.rkm.types import ConfidenceBreakdown
     from nautilus.rkm.validator.sandbox import (
         SandboxRegressionError,

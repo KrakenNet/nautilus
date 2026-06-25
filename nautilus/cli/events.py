@@ -13,7 +13,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
+
+from nautilus.cli._common import err
 
 
 def list_event_types() -> list[str]:
@@ -62,7 +63,7 @@ def dispatch(args: argparse.Namespace) -> int:
     sub = getattr(args, "events_subcommand", None)
     if sub == "list":
         return _cmd_list(args)
-    print("ERROR: events: subcommand required (list).", file=sys.stderr)
+    err("events: subcommand required (list).")
     return 1
 
 
