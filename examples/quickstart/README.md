@@ -4,7 +4,7 @@ Minimal setup: one Postgres source, pattern-matching analysis, file-backed audit
 
 ## Prerequisites
 
-- Python 3.14+
+- Python 3.13+
 - A PostgreSQL database (or use `examples/full-showcase/` for a Docker-based setup)
 - Nautilus installed: `uv sync` from the repo root
 
