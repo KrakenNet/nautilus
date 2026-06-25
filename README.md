@@ -13,7 +13,7 @@
 
 > **Part of the [Kraken](https://github.com/KrakenNet) stack:** [Fathom](https://github.com/KrakenNet/fathom) (reasoning engine) · [**Nautilus**](https://github.com/KrakenNet/nautilus) (policy data broker) · [Stargraph](https://github.com/KrakenNet/stargraph) (agent-graph framework).
 
-**Current version:** 0.1.3
+**Current version:** 0.1.5
 **License:** Apache-2.0
 **Language:** Python 3.13+
 **Package Manager:** uv
