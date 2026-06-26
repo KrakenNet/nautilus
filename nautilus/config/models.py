@@ -84,11 +84,14 @@ class SourceConfig(BaseModel):
     """
 
     id: str
-    # Open string (not a closed Literal) so entry-point-discovered and
-    # local-path adapters (#17) can be referenced from source blocks.
-    # Unknown types still fail closed: the loader pre-validates against
-    # built-ins + declared adapter types, and Broker._build_adapter raises
-    # ConfigError for any type missing from the merged registry.
+    # Pydantic Literal: only these 11 values validate at the model layer --
+    # 9 built-ins plus two reserved extension slots (``custom``, ``demo-local``).
+    # The loader still pre-validates YAML ``type`` against built-ins
+    # (``_SUPPORTED_TYPES``) + ``_extra_source_types`` (entry points + declared
+    # local adapters). Values admitted by ``_extra_source_types`` that are not in
+    # this Literal pass the loader check but are rejected at ``model_validate``.
+    # Broker._build_adapter raises ConfigError for any type missing from the
+    # merged registry.
     type: Literal[
         "postgres",
         "pgvector",
