@@ -5,6 +5,13 @@ All notable changes to `nautilus-rkm` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3](https://github.com/KrakenNet/nautilus/compare/v0.2.2...v0.2.3) (2026-06-26)
+
+
+### Documentation
+
+* correct SourceConfig.type comment to match closed Literal ([#138](https://github.com/KrakenNet/nautilus/issues/138)) ([5c71810](https://github.com/KrakenNet/nautilus/commit/5c718101bb2f5e8ecd567ac4f7db1ec5d9a241a5))
+
 ## [0.2.2](https://github.com/KrakenNet/nautilus/compare/v0.2.1...v0.2.2) (2026-06-25)
 
 
