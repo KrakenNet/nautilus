@@ -156,7 +156,7 @@ audit:
 
 ## Documentation
 
-Full documentation is available at [nautilus.krakn.ai](https://krakennet.github.io/nautilus/).
+Full documentation is available at [krakennet.github.io/nautilus](https://krakennet.github.io/nautilus/).
 
 - [Getting Started](https://krakennet.github.io/nautilus/getting-started/)
 - [Concepts](https://krakennet.github.io/nautilus/concepts/)
