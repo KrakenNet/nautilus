@@ -94,10 +94,12 @@ once: built-ins < entry points < local paths.
 ```python
 from nautilus_adapter_sdk import validate_operator, validate_field
 
+ALLOWED_FIELDS = {"id", "status"}
+
 async def execute(self, intent, scope, context):
     for constraint in scope:
         validate_operator(constraint.operator)   # raises ScopeEnforcementError
-        validate_field(constraint.field)
+        validate_field(constraint.field, ALLOWED_FIELDS)
     ...
 ```
 
