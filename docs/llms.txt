@@ -5,25 +5,25 @@
 Nautilus brokers every data access behind a single request: it plans the query, routes to the right source, enforces policy (HIPAA / NIST / scope) via Fathom rules, attests the decision with a signed token, and writes an audit record. For regulated, air-gapped, and cleared workloads.
 
 ## Documentation
-- [Home](https://krakennet.github.io/nautilus/latest/): What Nautilus is and the one-call broker model.
-- [Getting Started](https://krakennet.github.io/nautilus/latest/getting-started/): Install, configure a source, run your first brokered request.
+- [Home](https://nautilus.krakn.ai/latest/): What Nautilus is and the one-call broker model.
+- [Getting Started](https://nautilus.krakn.ai/latest/getting-started/): Install, configure a source, run your first brokered request.
 
 ## Concepts
-- [Architecture](https://krakennet.github.io/nautilus/latest/concepts/architecture/): Plan → route → enforce → attest → audit.
-- [The Attestation Chain](https://krakennet.github.io/nautilus/latest/concepts/attestation-chain/): How signed tokens make each access provable.
-- [RKM Rule Lifecycle](https://krakennet.github.io/nautilus/latest/concepts/rkm-lifecycle/): How Fathom rules govern routing decisions.
+- [Architecture](https://nautilus.krakn.ai/latest/concepts/architecture/): Plan → route → enforce → attest → audit.
+- [The Attestation Chain](https://nautilus.krakn.ai/latest/concepts/attestation-chain/): How signed tokens make each access provable.
+- [RKM Rule Lifecycle](https://nautilus.krakn.ai/latest/concepts/rkm-lifecycle/): How Fathom rules govern routing decisions.
 
 ## How-to
-- [Operator Guide](https://krakennet.github.io/nautilus/latest/how-to/operator-guide/): Deploy and run the broker.
-- [Write a Routing Rule](https://krakennet.github.io/nautilus/latest/how-to/write-a-routing-rule/): Author policy that routes and scopes access.
-- [Configure Attestation](https://krakennet.github.io/nautilus/latest/how-to/configure-attestation/): Sign and verify access tokens.
-- [Add a Postgres Source](https://krakennet.github.io/nautilus/latest/how-to/add-a-postgres-source/): Connect a data source through an adapter.
+- [Operator Guide](https://nautilus.krakn.ai/latest/how-to/operator-guide/): Deploy and run the broker.
+- [Write a Routing Rule](https://nautilus.krakn.ai/latest/how-to/write-a-routing-rule/): Author policy that routes and scopes access.
+- [Configure Attestation](https://nautilus.krakn.ai/latest/how-to/configure-attestation/): Sign and verify access tokens.
+- [Add a Postgres Source](https://nautilus.krakn.ai/latest/how-to/add-a-postgres-source/): Connect a data source through an adapter.
 
 ## Reference
-- [Python SDK](https://krakennet.github.io/nautilus/latest/reference/python-sdk/)
-- [REST API](https://krakennet.github.io/nautilus/latest/reference/rest-api/)
-- [CLI](https://krakennet.github.io/nautilus/latest/reference/cli/)
-- [Rule Packs](https://krakennet.github.io/nautilus/latest/reference/rule-packs/)
+- [Python SDK](https://nautilus.krakn.ai/latest/reference/python-sdk/)
+- [REST API](https://nautilus.krakn.ai/latest/reference/rest-api/)
+- [CLI](https://nautilus.krakn.ai/latest/reference/cli/)
+- [Rule Packs](https://nautilus.krakn.ai/latest/reference/rule-packs/)
 
 ## Links
 - [PyPI: nautilus-rkm](https://pypi.org/project/nautilus-rkm/)
