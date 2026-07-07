@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://nautilus.krakn.ai/latest/sitemap.xml
