@@ -296,6 +296,31 @@ class TestS3ScopeMapping:
         assert len(result.rows) == 0
 
     @pytest.mark.asyncio
+    async def test_tag_filter_in_uses_exact_membership(self, adapter: S3Adapter) -> None:
+        adapter._client.list_objects_v2.return_value = {  # pyright: ignore[reportPrivateUsage,reportOptionalMemberAccess]
+            "Contents": [
+                {"Key": "partial.txt", "Size": 10, "LastModified": "2024-01-01"},
+                {"Key": "exact.txt", "Size": 20, "LastModified": "2024-01-02"},
+            ],
+        }
+        adapter._client.get_object_tagging.side_effect = [  # pyright: ignore[reportPrivateUsage,reportOptionalMemberAccess]
+            {"TagSet": [{"Key": "region", "Value": "eu"}]},
+            {"TagSet": [{"Key": "region", "Value": "euw"}]},
+        ]
+        scope = [_sc("tag.region", "IN", ["euro", "euw"], source_id="docs")]
+
+        result = await adapter.execute(intent=AsyncMock(), scope=scope, context={})
+
+        assert [row["key"] for row in result.rows] == ["exact.txt"]
+
+    @pytest.mark.asyncio
+    async def test_tag_filter_in_requires_list(self, adapter: S3Adapter) -> None:
+        scope = [_sc("tag.region", "IN", "euw", source_id="docs")]
+
+        with pytest.raises(ScopeEnforcementError, match="requires a list value"):
+            await adapter.execute(intent=AsyncMock(), scope=scope, context={})
+
+    @pytest.mark.asyncio
     async def test_classification_filter_matches(self, adapter: S3Adapter) -> None:
         scope = [_sc("classification", "=", "confidential", source_id="docs")]
         await adapter.execute(intent=AsyncMock(), scope=scope, context={})
