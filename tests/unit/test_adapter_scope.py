@@ -114,6 +114,17 @@ class TestInfluxDBScopeMapping:
         assert "strings.containsStr" in flux
         assert 'substr: "web"' in flux
 
+    def test_like_operator_underscore(self) -> None:
+        """SQL '_' must not be embedded as a literal '?' in containsStr (#110)."""
+        flux = _build_flux([_sc("host", "LIKE", "user_name")])
+        assert "strings.containsStr" in flux
+        # containsStr is a literal substring test: a '?' would be searched for
+        # literally and could never match values like 'username'.
+        assert "?" not in flux
+        # The derived substring must be one actually contained in values that
+        # SQL LIKE 'user_name' matches (e.g. 'username').
+        assert 'substr: "username"' in flux
+
     def test_between_operator(self) -> None:
         flux = _build_flux([_sc("cpu", "BETWEEN", [10, 90])])
         assert 'r["cpu"] >= 10 and r["cpu"] <= 90' in flux
