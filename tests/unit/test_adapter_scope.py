@@ -124,6 +124,9 @@ class TestInfluxDBScopeMapping:
         # The derived substring must be one actually contained in values that
         # SQL LIKE 'user_name' matches (e.g. 'username').
         assert 'substr: "username"' in flux
+        # Multi-underscore patterns collapse to a single literal substring.
+        flux_multi = _build_flux([_sc("host", "LIKE", "a_b_c")])
+        assert 'substr: "abc"' in flux_multi
 
     def test_between_operator(self) -> None:
         flux = _build_flux([_sc("cpu", "BETWEEN", [10, 90])])
