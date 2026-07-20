@@ -184,8 +184,10 @@ class InfluxDBAdapter:
                     raise ScopeEnforcementError(
                         f"Operator 'LIKE' requires a string value, got {type(value).__name__}"
                     )
-                # Simplified: strip SQL wildcards for containsStr.
-                pattern = value.replace("%", "").replace("_", "?")
+                # Simplified: strip SQL wildcards ('%' and '_') for literal containsStr
+                # containment. Do NOT map '_' -> '?' here: containsStr has no wildcard
+                # semantics, so a '?' would be searched for literally (issue #110).
+                pattern = value.replace("%", "").replace("_", "")
                 filters.append(
                     f'strings.containsStr(v: r["{field}"], substr: {_flux_escape(pattern)})'
                 )
