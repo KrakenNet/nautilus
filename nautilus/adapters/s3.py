@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import contextlib
 import time
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 from nautilus.adapters.base import AdapterError, ScopeEnforcementError
 from nautilus.adapters.schema import AdapterSchema
@@ -26,6 +26,7 @@ from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
 # Default row cap when the intent does not specify a ``LIMIT``.
 _DEFAULT_LIMIT: int = 1000
+_TagFilter = tuple[str, str, str | list[str]]
 
 
 class S3Adapter:
@@ -139,7 +140,7 @@ class S3Adapter:
 
         prefix: str | None = None
         exact_key: str | None = None
-        tag_filters: list[tuple[str, str, str]] = []  # (tag_name, op, value)
+        tag_filters: list[_TagFilter] = []  # (tag_name, op, value)
         classification_filter: str | None = None
 
         for constraint in scope:
@@ -169,7 +170,12 @@ class S3Adapter:
                     raise ScopeEnforcementError(
                         f"S3Adapter: unsupported operator '{op}' for tag filter"
                     )
-                tag_filters.append((tag_name, op, str(value)))
+                if op == "IN":
+                    if not isinstance(value, list):
+                        raise ScopeEnforcementError("S3Adapter: IN operator requires a list value")
+                    tag_filters.append((tag_name, op, cast(list[str], value)))
+                else:
+                    tag_filters.append((tag_name, op, str(value)))
             elif field == "classification":
                 if op != "=":
                     raise ScopeEnforcementError(
@@ -244,7 +250,7 @@ class S3Adapter:
     async def _list_objects(
         self,
         prefix: str | None,
-        tag_filters: list[tuple[str, str, str]],
+        tag_filters: list[_TagFilter],
         limit: int,
     ) -> list[dict[str, Any]]:
         """List objects with optional prefix, applying tag filters post-list."""
@@ -279,7 +285,7 @@ class S3Adapter:
     async def _matches_tags(
         self,
         key: str,
-        tag_filters: list[tuple[str, str, str]],
+        tag_filters: list[_TagFilter],
     ) -> bool:
         """Check whether an object's tags satisfy all tag filter constraints."""
         if self._client is None:
@@ -297,15 +303,18 @@ class S3Adapter:
 
         for tag_name, op, expected in tag_filters:
             actual = tags.get(tag_name)
-            if op == "=":
+            if op == "IN":
+                assert isinstance(expected, list)
+                if actual is None or actual not in expected:
+                    return False
+            elif op == "=":
+                assert isinstance(expected, str)
                 if actual != expected:
                     return False
             elif op == "!=":
+                assert isinstance(expected, str)
                 if actual == expected:
                     return False
-            elif op == "IN" and (actual is None or actual not in expected):
-                # Value was stringified from a list; for IN we check membership.
-                return False
 
         return True
 
