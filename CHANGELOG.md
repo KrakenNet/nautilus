@@ -5,6 +5,13 @@ All notable changes to `nautilus-rkm` are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.5](https://github.com/KrakenNet/nautilus/compare/v0.2.4...v0.2.5) (2026-07-20)
+
+
+### Bug Fixes
+
+* stop embedding literal '?' in InfluxDB containsStr substring for LIKE patterns ([#110](https://github.com/KrakenNet/nautilus/issues/110)) ([#160](https://github.com/KrakenNet/nautilus/issues/160)) ([3074387](https://github.com/KrakenNet/nautilus/commit/3074387448bcb26e0667b7b4cfbc231c8e13f9e0))
+
 ## [0.2.4](https://github.com/KrakenNet/nautilus/compare/v0.2.3...v0.2.4) (2026-06-29)
 
 
