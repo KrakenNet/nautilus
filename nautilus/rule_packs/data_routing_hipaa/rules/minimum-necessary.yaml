@@ -1,0 +1,33 @@
+# HIPAA 45 CFR 164.502(b) — Minimum Necessary.
+#
+# A source carrying PHI is scoped to the requesting agent's purpose, so a request
+# cannot pull more PHI than the stated purpose justifies.
+module: nautilus-routing
+ruleset: hipaa-minimum-necessary
+version: "1.0"
+rules:
+  - name: minimum-necessary-phi-scope
+    description: "Scope PHI-bearing sources to the requesting agent's stated purpose."
+    salience: 140
+    when:
+      - template: agent
+        conditions:
+          - slot: purpose
+            bind: ?purpose
+      - template: source
+        conditions:
+          - slot: id
+            bind: ?sid
+          - slot: data_types
+            bind: ?dts
+          - test: '(python-function overlaps ?dts "phi")'
+    then:
+      action: route
+      reason: "HIPAA minimum necessary: PHI scoped to stated purpose"
+      assert:
+        - template: scope_constraint
+          slots:
+            source_id: "?sid"
+            field: "purpose"
+            operator: '(sym-cat "=")'
+            value: "?purpose"

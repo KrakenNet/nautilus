@@ -546,6 +546,7 @@ class Broker:
             user_rules_dirs=user_rules_dirs,
             attestation=attestation,
             check_consistency=config.rules.consistency_checks,
+            rule_packs=config.rules.packs,
         )
 
         # AC-35.2.b/d — load manual relationship facts into the engine at

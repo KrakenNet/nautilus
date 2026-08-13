@@ -1,0 +1,39 @@
+# NIST SP 800-53 AC-6 — Least Privilege.
+#
+# Reduce the data scope to the minimum necessary for the stated purpose when the
+# source carries a classification at or above `confidential`.
+#
+# Rules join the built-in `nautilus-routing` module rather than declaring their
+# own: they operate on the same working memory as the built-in routing rules and
+# must interleave with them by salience. Salience 140 sits in the documented
+# scope_constraint band (130-150), i.e. after denial (170-190) and before routing
+# (100), so a source that is going to be denied is never scoped first.
+module: nautilus-routing
+ruleset: nist-ac-6-least-privilege
+version: "1.0"
+rules:
+  - name: ac-6-least-privilege
+    description: "AC-6: constrain confidential-and-above sources to the requesting agent's purpose."
+    salience: 140
+    when:
+      - template: agent
+        conditions:
+          - slot: purpose
+            bind: ?purpose
+      - template: source
+        conditions:
+          - slot: id
+            bind: ?sid
+          - slot: classification
+            bind: ?cls
+          - test: '(member$ ?cls (create$ "confidential" "secret" "top-secret"))'
+    then:
+      action: route
+      reason: "AC-6 least privilege: scope limited to stated purpose"
+      assert:
+        - template: scope_constraint
+          slots:
+            source_id: "?sid"
+            field: "purpose"
+            operator: '(sym-cat "=")'
+            value: "?purpose"

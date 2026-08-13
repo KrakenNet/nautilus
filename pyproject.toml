@@ -112,6 +112,7 @@ exclude = ["tests*", "specs*", "docs*"]
 [tool.setuptools.package-data]
 "nautilus.analysis.llm.prompts" = ["*.txt"]
 "nautilus.rules" = ["**/*.yaml"]
+"nautilus.rule_packs" = ["**/*.yaml", "**/*.md"]
 "nautilus.ui" = ["templates/**/*", "static/*"]
 "nautilus" = ["templates/adapter/**/*"]
 

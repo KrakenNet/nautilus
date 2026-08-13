@@ -105,9 +105,14 @@ class FathomRouter:
         user_rules_dirs: list[Path],
         attestation: Any | None = None,  # AttestationService | None — typed loosely; jwt optional
         check_consistency: bool = True,
+        rule_packs: list[str] | None = None,
     ) -> None:
         self._built_in_rules_dir = Path(built_in_rules_dir)
         self._user_rules_dirs = [Path(d) for d in user_rules_dirs]
+        # Rule packs resolve through the ``fathom.packs`` entry-point group by
+        # name (e.g. ``data-routing-nist``), not by filesystem path, so an
+        # installed third-party pack loads the same way a shipped one does.
+        self._rule_packs = list(rule_packs or [])
         self._attestation = attestation
         # #27 — post-run consistency checks; on by default, disabled via
         # ``rules.consistency_checks: false`` for performance-sensitive
@@ -131,6 +136,11 @@ class FathomRouter:
             self._engine.load_rules(str(_meta_dir))
             for user_dir in self._user_rules_dirs:
                 self._engine.load_rules(str(user_dir))
+            # Packs load last: their rules join the built-in ``nautilus-routing``
+            # module and reference built-in templates, both of which must
+            # already exist in the environment.
+            for pack_name in self._rule_packs:
+                self._engine.load_pack(pack_name)
             # Escalation packs are YAML → EscalationRule models loaded once;
             # _assert_escalation_rules re-pushes them as facts per request
             # (engine.clear_facts() wipes facts each route() call).

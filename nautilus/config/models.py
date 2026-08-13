@@ -224,6 +224,10 @@ class RulesConfig(BaseModel):
     """Routing-rules subsection of ``nautilus.yaml`` (design §4.10)."""
 
     user_rules_dirs: list[str] = Field(default_factory=list)
+    # Rule packs by ``fathom.packs`` entry-point name (e.g. ``data-routing-nist``).
+    # Resolved by name rather than path so an installed third-party pack loads
+    # the same way a shipped one does.
+    packs: list[str] = Field(default_factory=list)
     # #27 — post-run engine-output consistency checks (v1 hardening,
     # roadmap §05:432). On by default; opt out for performance-sensitive
     # deployments.

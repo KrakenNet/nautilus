@@ -1,0 +1,21 @@
+# Descriptive metadata only. Fathom's RulePackLoader discovers content by
+# scanning the templates/, modules/, functions/, and rules/ subdirectories of
+# the package this entry point resolves to -- it does not read this file. Keep
+# the listing below in sync with what is actually on disk.
+name: data-routing-nist
+version: "0.2.0"
+description: >-
+  NIST SP 800-53 access-control rules for Nautilus data routing, limited to the
+  controls expressible over the facts the broker asserts.
+compliance_framework: "NIST SP 800-53"
+author: Project Fathom
+license: Apache-2.0
+
+rules:
+  - rules/ac-6-least-privilege.yaml
+  - rules/ac-16-security-attributes.yaml
+
+disclaimer: >-
+  Reference implementation only -- not certified for production compliance.
+  Organizations must validate rules against their specific regulatory
+  requirements and engage qualified compliance personnel.

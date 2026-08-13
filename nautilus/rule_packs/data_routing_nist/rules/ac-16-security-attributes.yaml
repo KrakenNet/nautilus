@@ -1,0 +1,33 @@
+# NIST SP 800-53 AC-16 — Security and Privacy Attributes.
+#
+# The control requires a classification label to be bound before data is routed,
+# and blocks the request when it is not ("block_if_unbound"). A source with an
+# empty `classification` slot has no label, so it cannot be routed.
+#
+# This is distinct from the built-in `default-classification-deny`, which denies
+# when a *present* classification is not dominated by the agent's clearance. This
+# rule denies when the label is absent altogether.
+module: nautilus-routing
+ruleset: nist-ac-16-security-attributes
+version: "1.0"
+rules:
+  - name: ac-16-unbound-security-attributes
+    description: "AC-16: deny sources routed without a bound classification label."
+    salience: 180
+    when:
+      - template: source
+        conditions:
+          - slot: id
+            bind: ?sid
+          - slot: classification
+            bind: ?cls
+          - test: '(eq ?cls "")'
+    then:
+      action: deny
+      reason: "AC-16: source has no bound classification label"
+      assert:
+        - template: denial_record
+          slots:
+            source_id: "?sid"
+            reason: "AC-16: source has no bound classification label"
+            rule_name: "ac-16-unbound-security-attributes"
