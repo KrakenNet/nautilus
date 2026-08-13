@@ -304,3 +304,64 @@ def test_rule_trace_determinism_same_input_same_trace() -> None:
         ]
     finally:
         router.close()
+
+
+# ---------------------------------------------------------------------------
+# (g) Purpose-TTL expiry
+# ---------------------------------------------------------------------------
+#
+# ``rules/temporal.yaml::purpose-expired-deny`` shipped with no test at all.
+# It asserted a single ``denial_record`` with ``source_id: "*"``, documented as
+# "the broker interprets ``*`` as all sources at the Phase-2 routing layer".
+# Nothing interpreted it. Two independent failures resulted:
+#
+#   1. ``_check_consistency``'s ``denial_unknown_source`` check rejects any
+#      denial naming a source outside the registry, so an expired purpose
+#      raised ConsistencyError instead of denying.
+#   2. Even with that check bypassed, ``Broker._route`` filters routed sources
+#      by exact ``source_id`` match, so a ``"*"`` denial excludes nothing.
+#
+# The rule now emits one ``denial_record`` per declared source, matching every
+# other denial rule in the tree.
+
+
+class TestPurposeTTLExpiry:
+    """An elapsed purpose TTL denies every source instead of raising."""
+
+    @staticmethod
+    def _route_with_ttl(start_ts: float, ttl_seconds: float) -> RouteResult:
+        router = _make_router()
+        return router.route(
+            agent_id="agent-1",
+            context={"clearance": "secret", "purpose": "audit"},
+            intent=IntentAnalysis(
+                raw_intent="pull vulns", data_types_needed=["vulnerability"], entities=[]
+            ),
+            sources=_three_sources(),
+            session={
+                "session_id": "s1",
+                "purpose_start_ts": start_ts,
+                "purpose_ttl_seconds": ttl_seconds,
+            },
+        )
+
+    def test_expired_purpose_denies_every_source(self) -> None:
+        """An elapsed TTL denies all declared sources and routes none."""
+        result = self._route_with_ttl(start_ts=1.0, ttl_seconds=60.0)
+
+        expected = {s.id for s in _three_sources()}
+        denied = {d.source_id for d in result.denial_records}
+        assert denied == expected, f"expected every source denied, got {sorted(denied)}"
+        assert all(d.rule_name == "purpose-expired-deny" for d in result.denial_records)
+        assert "*" not in denied, "wildcard source_id is not interpreted anywhere"
+
+    def test_expired_purpose_reaches_the_trace(self) -> None:
+        result = self._route_with_ttl(start_ts=1.0, ttl_seconds=60.0)
+        assert any(t.endswith("::purpose-expired-deny") for t in result.rule_trace), (
+            f"purpose-expired-deny absent from trace: {result.rule_trace}"
+        )
+
+    def test_zero_ttl_does_not_deny(self) -> None:
+        """The template default (0.0) must not produce spurious denials (NFR-5)."""
+        result = self._route_with_ttl(start_ts=0.0, ttl_seconds=0.0)
+        assert not any(d.rule_name == "purpose-expired-deny" for d in result.denial_records)
