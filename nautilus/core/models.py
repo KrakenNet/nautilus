@@ -94,6 +94,24 @@ class DenialRecord(BaseModel):
     rule_name: str
 
 
+class InputFact(BaseModel):
+    """One fact as it was asserted into the engine for a single request.
+
+    ``facts_asserted_summary`` records only ``template -> count``, which is
+    enough to say *how many* facts a request produced and nothing about *what*
+    they were. Replaying a recorded decision — the RKM sandbox's whole job —
+    needs the slot values, so this records them verbatim at the point of
+    assertion.
+
+    Slot values are the already-encoded strings/numbers handed to
+    ``Engine.assert_fact`` (multislots arrive space-encoded), so a replay
+    asserts byte-identical input without re-running any encoding step.
+    """
+
+    template: str
+    slots: dict[str, str | int | float]
+
+
 class RouteResult(BaseModel):
     """Output of ``FathomRouter.route`` — design §3.4.
 
@@ -109,6 +127,10 @@ class RouteResult(BaseModel):
     rule_trace: list[str]
     duration_us: int = 0
     facts_asserted_summary: dict[str, int] = Field(default_factory=dict)
+    # Verbatim record of every fact asserted for this request, in assertion
+    # order. Defaults empty so callers constructing RouteResult directly
+    # (tests, handoff paths) are unaffected.
+    input_facts: list[InputFact] = Field(default_factory=list["InputFact"])
 
 
 class ErrorRecord(BaseModel):
@@ -231,6 +253,11 @@ class AuditEntry(BaseModel):
     scope_hash_version: Literal["v1", "v2"] | None = None
     session_id_source: Literal["context", "transport", "stdio_request_id"] | None = None
     session_store_mode: Literal["primary", "degraded_memory", "degraded_sqlite"] | None = None
+    # Verbatim engine input for this request, in assertion order. Optional so
+    # Phase-1 lines and non-routing entries (handoff, transport errors)
+    # round-trip unchanged (NFR-5). Present, a consumer can rebuild the exact
+    # working memory the decision was made from.
+    input_facts: list[InputFact] | None = None
     event_type: (
         Literal[
             "request",

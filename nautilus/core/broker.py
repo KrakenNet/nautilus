@@ -306,6 +306,7 @@ class _RequestState:
         default_factory=dict[str, list[ScopeConstraint]]
     )
     denial_records: list[Any] = field(default_factory=list[Any])
+    input_facts: list[Any] = field(default_factory=list[Any])
     rule_trace: list[str] = field(default_factory=list[str])
     facts_summary: dict[str, int] = field(default_factory=dict[str, int])
     sources_queried: list[str] = field(default_factory=list[str])
@@ -341,6 +342,7 @@ class _RequestState:
         self.denial_records = route_result.denial_records
         self.rule_trace = list(route_result.rule_trace)
         self.facts_summary = dict(route_result.facts_asserted_summary)
+        self.input_facts = list(route_result.input_facts)
 
     def duration_ms(self) -> int:
         """Integer millisecond delta since ``started`` (design §4.1)."""
@@ -394,6 +396,7 @@ def _build_audit_entry(
         raw_intent=state.intent,
         intent_analysis=state.intent_analysis,
         facts_asserted_summary=state.facts_summary,
+        input_facts=state.input_facts or None,
         routing_decisions=state.routing_decisions,
         scope_constraints=[c for cs in state.scope_by_source.values() for c in cs],
         denial_records=state.denial_records,

@@ -35,6 +35,7 @@ from nautilus.core import ConsistencyError, PolicyEngineError
 from nautilus.core.clips_encoding import encode_multislot
 from nautilus.core.models import (
     DenialRecord,
+    InputFact,
     IntentAnalysis,
     RouteResult,
     RoutingDecision,
@@ -186,20 +187,23 @@ class FathomRouter:
         del agent_registry
         try:
             self._engine.clear_facts()
+            # Reset per request; _assert appends to this as facts go in, so the
+            # record cannot drift from what was actually asserted.
+            self._input_facts: list[InputFact] = []
 
             agent_fact = {
                 "id": agent_id,
                 "clearance": str(context.get("clearance", "")),
                 "purpose": str(context.get("purpose", "")),
             }
-            self._engine.assert_fact("agent", agent_fact)
+            self._assert("agent", agent_fact)
 
             intent_fact = {
                 "raw": intent.raw_intent,
                 "data_types_needed": encode_multislot(intent.data_types_needed),
                 "entities": encode_multislot(intent.entities),
             }
-            self._engine.assert_fact("intent", intent_fact)
+            self._assert("intent", intent_fact)
 
             for source in sources:
                 source_fact = {
@@ -209,7 +213,7 @@ class FathomRouter:
                     "data_types": encode_multislot(source.data_types),
                     "allowed_purposes": encode_multislot(source.allowed_purposes),
                 }
-                self._engine.assert_fact("source", source_fact)
+                self._assert("source", source_fact)
 
             exposure_count = self._assert_session(session)
 
@@ -217,49 +221,7 @@ class FathomRouter:
 
             result = self._engine.evaluate()
 
-            raw_routing = self._engine.query("routing_decision")
-            raw_scopes = self._engine.query("scope_constraint")
-            raw_denials = self._engine.query("denial_record")
-
-            denials = [
-                DenialRecord(
-                    source_id=str(d["source_id"]),
-                    reason=str(d["reason"]),
-                    rule_name=str(d["rule_name"]),
-                )
-                for d in raw_denials
-            ]
-            denied_ids = {d.source_id for d in denials}
-
-            routing = [
-                RoutingDecision(
-                    source_id=str(r["source_id"]),
-                    reason=str(r["reason"]),
-                )
-                for r in raw_routing
-                if str(r["source_id"]) not in denied_ids
-            ]
-
-            scopes_by_source: dict[str, list[ScopeConstraint]] = {}
-            for s in raw_scopes:
-                sid = str(s["source_id"])
-                # Pass through the optional temporal slots when a rule
-                # populated them — downstream ``build_scope_payload``
-                # flips to ``scope_hash_version == "v2"`` whenever any
-                # constraint carries a non-empty ``expires_at`` /
-                # ``valid_from`` (FR-19, D-7).
-                _expires_at = s.get("expires_at") if hasattr(s, "get") else None
-                _valid_from = s.get("valid_from") if hasattr(s, "get") else None
-                scopes_by_source.setdefault(sid, []).append(
-                    ScopeConstraint(
-                        source_id=sid,
-                        field=str(s["field"]),
-                        operator=s["operator"],  # validated by Pydantic Literal
-                        value=s["value"],
-                        expires_at=str(_expires_at) if _expires_at else None,
-                        valid_from=str(_valid_from) if _valid_from else None,
-                    )
-                )
+            routing, scopes_by_source, denials, raw_routing = self._decode_working_memory()
 
             # #27 — post-run consistency checks (roadmap §05:432). Raw
             # routing ids (pre-denial-filter) are the reference set: a
@@ -278,13 +240,14 @@ class FathomRouter:
             duration_us = int(getattr(result, "duration_us", 0) or 0)
             rule_trace = list(getattr(result, "rule_trace", []) or [])
 
-            facts_summary = {
-                "agent": 1,
-                "intent": 1,
-                "source": len(sources),
-                "session": 1,
-                "session_exposure": exposure_count,
-            }
+            # Derived from what was actually asserted rather than
+            # hand-maintained: the previous literal hardcoded five templates
+            # and silently omitted ``escalation_rule``, so the summary
+            # understated engine input on every request that loaded an
+            # escalation pack.
+            facts_summary: dict[str, int] = {}
+            for fact in self._input_facts:
+                facts_summary[fact.template] = facts_summary.get(fact.template, 0) + 1
 
             return RouteResult(
                 routing_decisions=routing,
@@ -293,6 +256,7 @@ class FathomRouter:
                 rule_trace=rule_trace,
                 duration_us=duration_us,
                 facts_asserted_summary=facts_summary,
+                input_facts=self._input_facts,
             )
         except PolicyEngineError:
             raise
@@ -300,6 +264,111 @@ class FathomRouter:
             raise PolicyEngineError(
                 f"FathomRouter.route() failed for agent_id={agent_id!r}: {exc}"
             ) from exc
+
+    def replay(self, input_facts: list[InputFact]) -> RouteResult:
+        """Re-evaluate a recorded request from its ``input_facts`` alone.
+
+        Asserts the recorded facts verbatim into a cleared working memory and
+        runs the engine. Nothing is re-derived from the original request: if a
+        decision cannot be reproduced from ``input_facts``, that is a real gap
+        in the record and must surface here rather than be papered over by
+        re-reading the original inputs.
+
+        Consistency checks are skipped. They validate a decision against a live
+        source registry, which a replay does not have — the recorded facts are
+        the whole world. ``facts_asserted_summary`` is recomputed from the
+        replayed facts rather than copied, so a mismatch against the original
+        entry is detectable.
+        """
+        try:
+            self._engine.clear_facts()
+            self._input_facts = []
+            for fact in input_facts:
+                self._assert(fact.template, dict(fact.slots))
+
+            result = self._engine.evaluate()
+            routing, scopes_by_source, denials, _ = self._decode_working_memory()
+
+            facts_summary: dict[str, int] = {}
+            for fact in input_facts:
+                facts_summary[fact.template] = facts_summary.get(fact.template, 0) + 1
+
+            return RouteResult(
+                routing_decisions=routing,
+                scope_constraints=scopes_by_source,
+                denial_records=denials,
+                rule_trace=list(getattr(result, "rule_trace", []) or []),
+                duration_us=int(getattr(result, "duration_us", 0) or 0),
+                facts_asserted_summary=facts_summary,
+                input_facts=self._input_facts,
+            )
+        except PolicyEngineError:
+            raise
+        except Exception as exc:  # noqa: BLE001 — wrap any engine error
+            raise PolicyEngineError(f"FathomRouter.replay() failed: {exc}") from exc
+
+    def _decode_working_memory(
+        self,
+    ) -> tuple[
+        list[RoutingDecision],
+        dict[str, list[ScopeConstraint]],
+        list[DenialRecord],
+        list[Any],
+    ]:
+        """Read decision facts back out of working memory after ``evaluate()``.
+
+        Shared by :meth:`route` and :meth:`replay` so a replayed decision is
+        decoded by exactly the same code as a live one — a replay that decoded
+        differently would report agreement it had not actually demonstrated.
+
+        Returns ``(routing, scopes_by_source, denials, raw_routing)``;
+        ``raw_routing`` is the pre-denial-filter set the consistency checks
+        use as their reference.
+        """
+        raw_routing = self._engine.query("routing_decision")
+        raw_scopes = self._engine.query("scope_constraint")
+        raw_denials = self._engine.query("denial_record")
+
+        denials = [
+            DenialRecord(
+                source_id=str(d["source_id"]),
+                reason=str(d["reason"]),
+                rule_name=str(d["rule_name"]),
+            )
+            for d in raw_denials
+        ]
+        denied_ids = {d.source_id for d in denials}
+
+        routing = [
+            RoutingDecision(
+                source_id=str(r["source_id"]),
+                reason=str(r["reason"]),
+            )
+            for r in raw_routing
+            if str(r["source_id"]) not in denied_ids
+        ]
+
+        scopes_by_source: dict[str, list[ScopeConstraint]] = {}
+        for s in raw_scopes:
+            sid = str(s["source_id"])
+            # Pass through the optional temporal slots when a rule
+            # populated them — downstream ``build_scope_payload``
+            # flips to ``scope_hash_version == "v2"`` whenever any
+            # constraint carries a non-empty ``expires_at`` /
+            # ``valid_from`` (FR-19, D-7).
+            _expires_at = s.get("expires_at") if hasattr(s, "get") else None
+            _valid_from = s.get("valid_from") if hasattr(s, "get") else None
+            scopes_by_source.setdefault(sid, []).append(
+                ScopeConstraint(
+                    source_id=sid,
+                    field=str(s["field"]),
+                    operator=s["operator"],  # validated by Pydantic Literal
+                    value=s["value"],
+                    expires_at=str(_expires_at) if _expires_at else None,
+                    valid_from=str(_valid_from) if _valid_from else None,
+                )
+            )
+        return routing, scopes_by_source, denials, raw_routing
 
     def _run_consistency_checks(
         self,
@@ -388,6 +457,16 @@ class FathomRouter:
                 "(unexpected retraction cascade or injection)",
             )
 
+    def _assert(self, template: str, slots: dict[str, Any]) -> None:
+        """Assert one fact and record it verbatim for the audit trail.
+
+        Every fact the router puts into working memory goes through here, so
+        :attr:`RouteResult.input_facts` is a record of what was actually
+        asserted rather than a reconstruction that can drift from it.
+        """
+        self._engine.assert_fact(template, slots)
+        self._input_facts.append(InputFact(template=template, slots=dict(slots)))
+
     def _assert_session(self, session: dict[str, Any]) -> int:
         """Assert one ``session`` fact + one ``session_exposure`` per multislot element.
 
@@ -418,12 +497,12 @@ class FathomRouter:
             values = _coerce_multislot(session.get(slot))
             by_slot[slot] = values
             session_fact[slot] = encode_multislot(values)
-        self._engine.assert_fact("session", session_fact)
+        self._assert("session", session_fact)
 
         exposure_count = 0
         for category, values in by_slot.items():
             for value in values:
-                self._engine.assert_fact(
+                self._assert(
                     "session_exposure",
                     {
                         "session_id": session_id,
@@ -443,7 +522,7 @@ class FathomRouter:
         model, so no re-encoding is needed (design §3.4).
         """
         for rule in rules:
-            self._engine.assert_fact(
+            self._assert(
                 "escalation_rule",
                 {
                     "id": rule.id,
