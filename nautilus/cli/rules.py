@@ -40,6 +40,12 @@ def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> N
         help="Number of audit entries to replay in sandbox mode (default: 1000).",
     )
     p_validate.add_argument(
+        "--audit-log",
+        dest="audit_log",
+        default=None,
+        help="Audit log to replay in sandbox mode (default: ./audit.jsonl).",
+    )
+    p_validate.add_argument(
         "--json",
         action="store_true",
         help="Emit results as JSON.",
@@ -53,6 +59,23 @@ def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> N
         "--file",
         required=True,
         help="Path to the rule YAML file to test.",
+    )
+    p_test.add_argument(
+        "--replay-n",
+        type=int,
+        default=1000,
+        dest="replay_n",
+        help="Number of audit entries to replay (default: 1000).",
+    )
+    p_test.add_argument(
+        "--min-entries",
+        type=int,
+        default=100,
+        dest="min_entries",
+        help=(
+            "Entries required before the sandbox result is meaningful "
+            "(default: 100, matching rkm.sandbox.min_entries)."
+        ),
     )
     p_test.add_argument(
         "--audit-log",
@@ -95,7 +118,21 @@ def dispatch(args: argparse.Namespace) -> int:
 
 
 def _cmd_validate(args: argparse.Namespace) -> int:
-    """Run static validation on the given rule YAML file."""
+    """Run static validation on the given rule YAML file.
+
+    ``--sandbox``, ``--replay-n``, ``--json`` and ``--audit-log`` are all
+    honoured here. They were previously declared on the parser and never read,
+    so ``--sandbox`` ran no sandbox and ``--json`` printed human-readable text.
+    """
+    import json as _json
+
+    import yaml
+
+    from nautilus.rkm.validator.sandbox import (
+        SandboxRegressionError,
+        SandboxRuleError,
+        sandbox_replay,
+    )
     from nautilus.rkm.validator.static import validate_static
 
     file_path = Path(args.file)
@@ -104,17 +141,88 @@ def _cmd_validate(args: argparse.Namespace) -> int:
         return 1
 
     result = validate_static(file_path)
-    if result.ok:
-        print(f"OK: {file_path}")
+    as_json = bool(getattr(args, "json", False))
+
+    if not result.ok:
+        if as_json:
+            print(
+                _json.dumps(
+                    {
+                        "file": str(file_path),
+                        "ok": False,
+                        "errors": [
+                            {"file": e.file, "line": e.line, "message": e.message}
+                            for e in result.errors
+                        ],
+                    },
+                    indent=2,
+                )
+            )
+            return 1
+        for serr in result.errors:
+            hint_suffix = f" Hint: {serr.hint}" if serr.hint else ""
+            print(
+                f"ERROR {serr.file}:{serr.line}: {serr.message}{hint_suffix}",
+                file=sys.stderr,
+            )
+        return 1
+
+    if not getattr(args, "sandbox", False):
+        if as_json:
+            print(_json.dumps({"file": str(file_path), "ok": True, "errors": []}, indent=2))
+        else:
+            print(f"OK: {file_path}")
         return 0
 
-    for serr in result.errors:
-        hint_suffix = f" Hint: {serr.hint}" if serr.hint else ""
-        print(
-            f"ERROR {serr.file}:{serr.line}: {serr.message}{hint_suffix}",
-            file=sys.stderr,
+    audit_path = Path(getattr(args, "audit_log", None) or "audit.jsonl")
+    if not audit_path.is_file():
+        err(f"audit log not found: {audit_path}")
+        return 1
+
+    document = yaml.safe_load(file_path.read_text(encoding="utf-8")) or {}
+    envelope = {k: v for k, v in document.items() if k in {"module", "ruleset", "version"}}
+    rules = [{**envelope, **r} for r in (document.get("rules") or []) if isinstance(r, dict)]
+    replay_n = int(getattr(args, "replay_n", 1000))
+
+    sandbox_report: list[dict[str, Any]] = []
+    exit_code = 0
+    for rule in rules:
+        name = str(rule.get("name", "<unnamed>"))
+        try:
+            sb = sandbox_replay(rule, audit_path, replay_n=replay_n)
+        except (SandboxRegressionError, SandboxRuleError) as exc:
+            err(f"rule {name!r}: {exc}")
+            sandbox_report.append({"name": name, "ok": False, "error": str(exc)})
+            exit_code = 1
+            continue
+        sandbox_report.append(
+            {
+                "name": name,
+                "ok": True,
+                "replayed": sb.replayed_n_actual,
+                "fired": sb.fired,
+                "relaxations": sb.relaxations,
+                "insufficient_history": sb.insufficient_history,
+                "skipped_no_input_facts": sb.skipped_no_input_facts,
+                "skipped_drifted": sb.skipped_drifted,
+            }
         )
-    return 1
+
+    if as_json:
+        print(
+            _json.dumps(
+                {"file": str(file_path), "ok": exit_code == 0, "sandbox": sandbox_report},
+                indent=2,
+            )
+        )
+    elif exit_code == 0:
+        for row in sandbox_report:
+            print(
+                f"rule {row['name']!r}: replayed={row['replayed']} "
+                f"fired={row['fired']} relaxations={row['relaxations']}"
+            )
+        print(f"OK: {file_path}")
+    return exit_code
 
 
 def _cmd_test(args: argparse.Namespace) -> int:
@@ -172,12 +280,6 @@ def _cmd_test(args: argparse.Namespace) -> int:
     rules: list[dict[str, Any]] = [
         dict(cast("dict[str, Any]", r)) for r in cast("list[Any]", data["rules"])
     ]
-    # The shadow/sandbox heuristics read LHS conditions from 'lhs';
-    # shipped rule packs author them under 'when'. Alias so the
-    # pipeline sees the conditions either way.
-    for rule in rules:
-        if "lhs" not in rule and "when" in rule:
-            rule["lhs"] = rule["when"]
     if not rules:
         warn(f"no rules found in {file_path}")
 
@@ -188,7 +290,12 @@ def _cmd_test(args: argparse.Namespace) -> int:
         name = str(rule.get("name", "<unnamed>"))
         flags = shadow_check(rule, [r for r in rules if r is not rule])
         try:
-            sandbox_result = sandbox_replay(rule, audit_path)
+            sandbox_result = sandbox_replay(
+                rule,
+                audit_path,
+                replay_n=int(getattr(args, "replay_n", 1000)),
+                min_entries=int(getattr(args, "min_entries", 100)),
+            )
         except SandboxRegressionError as exc:
             err(f"rule '{name}': {exc}")
             return 1

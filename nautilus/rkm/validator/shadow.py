@@ -49,9 +49,38 @@ def _salience(rule: dict[str, Any]) -> int:
 
 
 def _lhs_conditions(rule: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return normalised LHS condition list."""
+    """Return a normalised LHS condition list.
+
+    Product rules are written with ``when:`` — a list of
+    ``{template, conditions: [{slot, bind} | {test}]}``. This module was written
+    against an ``lhs:`` schema with ``{template, slots: {...}}``, which the rule
+    compiler does not accept, so every real rule normalised to an empty LHS and
+    no rule could ever be flagged.
+
+    ``when:`` patterns normalise to the set of *constrained slot names* plus any
+    ``test`` expressions verbatim. Subsumption here is about which slots a rule
+    constrains, not what it binds them to: two rules binding ``?sid`` and ``?id``
+    to the same slot constrain identically, and keying on the variable name
+    would make them look unrelated.
+    """
     lhs: list[dict[str, Any]] = rule.get("lhs") or []
-    return lhs
+    if lhs:
+        return lhs
+
+    normalised: list[dict[str, Any]] = []
+    for pattern in rule.get("when") or []:
+        if not isinstance(pattern, dict):
+            continue
+        slots: dict[str, Any] = {}
+        for cond in pattern.get("conditions") or []:
+            if not isinstance(cond, dict):
+                continue
+            if cond.get("slot") is not None:
+                slots[str(cond["slot"])] = ""
+            elif cond.get("test") is not None:
+                slots[f"test:{cond['test']}"] = ""
+        normalised.append({"template": str(pattern.get("template", "")), "slots": slots})
+    return normalised
 
 
 def _condition_key(cond: dict[str, Any]) -> tuple[str, frozenset[tuple[str, str]]]:

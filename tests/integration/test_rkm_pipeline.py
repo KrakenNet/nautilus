@@ -95,3 +95,92 @@ def test_shadow_fixture_suite_no_false_negatives() -> None:
     for pair_dir in pair_dirs:
         rule_a, rule_b, expected = _load_pair(pair_dir)
         _check_pair(rule_a, rule_b, expected, pair_dir.name)
+
+
+# ---------------------------------------------------------------------------
+# The pipeline passes the actual proposal to every stage
+# ---------------------------------------------------------------------------
+#
+# ``run_pipeline`` previously called ``shadow_check({}, [])`` and
+# ``sandbox_replay({}, audit_log)``. An empty rule constrains nothing and
+# asserts nothing, so every proposal — benign, regressive, or uncompilable —
+# produced an identical validation record. These tests fail if that returns.
+
+
+def _proposal_file(tmp_path: Path, name: str, body: dict[str, Any]) -> Path:
+    path = tmp_path / f"{name}.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "module": "nautilus-routing",
+                "ruleset": f"rkm-proposal-{name}",
+                "version": "1.0",
+                "rules": [body],
+            },
+            sort_keys=False,
+        )
+    )
+    return path
+
+
+def test_pipeline_rejects_a_regressive_proposal(tmp_path: Path) -> None:
+    """A rule that withdraws granted access is rejected, with the reason recorded."""
+    from tests.integration.test_rkm_sandbox import DENY_ALL_PII, _write_audit_log
+
+    audit_log = tmp_path / "audit.jsonl"
+    _write_audit_log(audit_log, 5)
+    queue = ProposalQueue(tmp_path / "queue")
+
+    proposal = run_pipeline(
+        _proposal_file(tmp_path, "regressive", DENY_ALL_PII),
+        queue=queue,
+        audit_log=audit_log,
+    )
+    assert proposal.status == "rejected"
+    sandbox = proposal.validation["sandbox"]
+    assert sandbox["error"], "rejection reason must be recorded on the proposal"
+    assert sandbox["regressions"] == 5
+
+
+def test_pipeline_distinguishes_proposals(tmp_path: Path) -> None:
+    """Two different proposals produce different sandbox records.
+
+    This is the discriminating check: with ``{}`` passed to every stage, a
+    benign rule and a regressive one were indistinguishable in the queue.
+    """
+    from tests.integration.test_rkm_sandbox import (
+        DEAD_RULE,
+        DENY_ALL_PII,
+        _write_audit_log,
+    )
+
+    audit_log = tmp_path / "audit.jsonl"
+    _write_audit_log(audit_log, 5)
+    queue = ProposalQueue(tmp_path / "queue")
+
+    benign = run_pipeline(
+        _proposal_file(tmp_path, "benign", DEAD_RULE), queue=queue, audit_log=audit_log
+    )
+    regressive = run_pipeline(
+        _proposal_file(tmp_path, "regressive", DENY_ALL_PII),
+        queue=queue,
+        audit_log=audit_log,
+    )
+
+    assert benign.validation["sandbox"] != regressive.validation["sandbox"]
+    assert benign.status != regressive.status
+
+
+def test_pipeline_rejects_an_uncompilable_proposal(tmp_path: Path) -> None:
+    """A rule the engine will not accept must not be queued as pending."""
+    audit_log = tmp_path / "audit.jsonl"
+    audit_log.write_text("")
+    queue = ProposalQueue(tmp_path / "queue")
+
+    proposal = run_pipeline(
+        _proposal_file(tmp_path, "broken", {"name": "broken", "when": "not-a-list"}),
+        queue=queue,
+        audit_log=audit_log,
+    )
+    assert proposal.status == "rejected"
+    assert proposal.validation["sandbox"]["error"]

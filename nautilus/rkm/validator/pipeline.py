@@ -9,27 +9,79 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
+
+import yaml
 
 from nautilus.rkm.queue import ProposalQueue
 from nautilus.rkm.types import Proposal
-from nautilus.rkm.validator.sandbox import sandbox_replay
+from nautilus.rkm.validator.sandbox import (
+    SandboxRegressionError,
+    SandboxResult,
+    SandboxRuleError,
+    sandbox_replay,
+)
 from nautilus.rkm.validator.scoring import score
 from nautilus.rkm.validator.shadow import shadow_check
 from nautilus.rkm.validator.static import validate_static
+from nautilus.rules import BUILT_IN_RULES_DIR
+
+
+def _load_proposed_rules(rule_yaml: Path) -> list[dict[str, Any]]:
+    """Parse the rule bodies out of a proposal ruleset file."""
+    document = yaml.safe_load(rule_yaml.read_text(encoding="utf-8")) or {}
+    if not isinstance(document, dict):
+        return []
+    envelope = {k: v for k, v in document.items() if k in {"module", "ruleset", "version"}}
+    rules = document.get("rules") or []
+    return [{**envelope, **rule} for rule in rules if isinstance(rule, dict)]
+
+
+def _built_in_ruleset() -> list[dict[str, Any]]:
+    """Every built-in rule body, for shadow/subsumption comparison."""
+    bodies: list[dict[str, Any]] = []
+    for path in sorted((BUILT_IN_RULES_DIR / "rules").glob("*.yaml")):
+        bodies.extend(_load_proposed_rules(path))
+    return bodies
 
 
 def run_pipeline(rule_yaml: Path, *, queue: ProposalQueue, audit_log: Path) -> Proposal:
-    """Run static → shadow → sandbox → score, append a Proposal to the queue."""
+    """Run static → shadow → sandbox → score, append a Proposal to the queue.
+
+    Every stage receives the actual proposed rule. Previously ``shadow_check``
+    and ``sandbox_replay`` were both called with ``{}``: an empty rule
+    constrains nothing and asserts nothing, so shadow analysis compared against
+    an empty ruleset and the sandbox scored a rule that was not the one being
+    proposed. Every proposal scored identically regardless of its content.
+
+    A proposal the engine rejects, or one that regresses the replay corpus, is
+    queued as ``rejected`` with the reason recorded rather than raising — the
+    caller asked for a validation verdict, and "it does not compile" is one.
+    """
     static_result = validate_static(rule_yaml)
-    shadow_flags = shadow_check({}, [])
-    sandbox_result = sandbox_replay({}, audit_log)
+    proposed_rules = _load_proposed_rules(rule_yaml)
+    proposed = proposed_rules[0] if proposed_rules else {}
+
+    shadow_flags = shadow_check(proposed, _built_in_ruleset())
+
+    sandbox_error: str | None = None
+    try:
+        sandbox_result = sandbox_replay(proposed, audit_log)
+    except SandboxRegressionError as exc:
+        sandbox_error = str(exc)
+        sandbox_result = exc.result or _empty_sandbox_result()
+    except SandboxRuleError as exc:
+        sandbox_error = str(exc)
+        sandbox_result = _empty_sandbox_result()
+
     breakdown = score(sandbox_result, shadow_flags)
 
     now = datetime.now(UTC)
+    rejected = sandbox_error is not None or breakdown.total < 0.6
     proposal = Proposal(
         proposal_id=f"prop_{uuid.uuid4().hex}",
         schema_version=2,
-        status="rejected" if breakdown.total < 0.6 else "pending",
+        status="rejected" if rejected else "pending",
         proposer="pipeline",
         proposed_at=now,
         target_module="curator",
@@ -46,6 +98,9 @@ def run_pipeline(rule_yaml: Path, *, queue: ProposalQueue, audit_log: Path) -> P
                 "fired": sandbox_result.fired,
                 "cascade_max": sandbox_result.cascade_max,
                 "insufficient_history": sandbox_result.insufficient_history,
+                "skipped_no_input_facts": sandbox_result.skipped_no_input_facts,
+                "skipped_drifted": sandbox_result.skipped_drifted,
+                "error": sandbox_error,
             },
             "score": breakdown.total,
             "breakdown": {
@@ -64,6 +119,21 @@ def run_pipeline(rule_yaml: Path, *, queue: ProposalQueue, audit_log: Path) -> P
     )
     queue.submit(proposal)
     return proposal
+
+
+def _empty_sandbox_result() -> SandboxResult:
+    """Zeroed result for a proposal the sandbox could not score."""
+    return SandboxResult(
+        replayed_n=0,
+        replayed_n_actual=0,
+        fired=0,
+        regressions=0,
+        relaxations=0,
+        cascade_max=0,
+        wm_growth_pct=0.0,
+        insufficient_history=True,
+        top_triggers=(),
+    )
 
 
 __all__ = ["run_pipeline"]

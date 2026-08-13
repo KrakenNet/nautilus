@@ -169,8 +169,12 @@ def validate_static(rule_yaml_path: Path) -> StaticResult:
             )
         seen_names.add(rule_name)
 
-        # Unknown template references in lhs (AC-35.5.b).
-        lhs: Any = rule_dict.get("lhs") or []
+        # Unknown template references in the rule's LHS (AC-35.5.b).
+        # Product rules author patterns under ``when:``; ``lhs:`` is accepted
+        # for the older proposal shape. Reading only ``lhs`` meant this check
+        # never inspected a real rule — an unknown template in a ``when:``
+        # pattern passed static validation and failed later in the compiler.
+        lhs: Any = rule_dict.get("lhs") or rule_dict.get("when") or []
         if isinstance(lhs, list):
             lhs_list = cast("list[Any]", lhs)
             for pattern_idx, pattern in enumerate(lhs_list):
@@ -243,9 +247,9 @@ class _NodeLookup:
         rule_node = seq[rule_idx]
         if not isinstance(rule_node, yaml.MappingNode):
             return 1
-        # Find 'lhs' key
+        # Find the LHS key ('when' on product rules, 'lhs' on proposals).
         for k, v in rule_node.value:
-            if k.value == "lhs" and isinstance(v, yaml.SequenceNode):
+            if k.value in {"lhs", "when"} and isinstance(v, yaml.SequenceNode):
                 lhs_items = v.value
                 if pattern_idx < len(lhs_items):
                     pattern_node = lhs_items[pattern_idx]
