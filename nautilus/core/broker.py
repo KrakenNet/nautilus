@@ -507,9 +507,7 @@ class Broker:
         # file's directory). A per-call store would be empty on every call, so
         # every check would read as a first registration and drift could never
         # be detected — neither within a process nor across a restart.
-        self._fingerprint_store = SchemaFingerprintStore(
-            root=str(base_dir) if base_dir is not None else None
-        )
+        self._fingerprint_store = SchemaFingerprintStore(root=self._fingerprint_root(base_dir))
         # Adapters quarantined due to major schema drift (AC-21.e, PM Q3 LOCKED).
         # Requests targeting a quarantined adapter surface as ADAPTER_QUARANTINED
         # error records instead of routing to the adapter. Other adapters keep
@@ -853,6 +851,16 @@ class Broker:
     def sources(self) -> list[SourceConfig]:
         """Registered source configs (identifier + metadata) — design §3.1."""
         return self._registry.sources
+
+    @staticmethod
+    def _fingerprint_root(base_dir: Path | None) -> str | None:
+        """Directory the schema baselines persist under, or ``None`` for memory-only.
+
+        A seam, not indirection: the test suite redirects baselines here so
+        many brokers built from one fixture config do not share — or write
+        into the source tree — a store that changes their behaviour.
+        """
+        return str(base_dir) if base_dir is not None else None
 
     @property
     def fingerprint_store(self) -> SchemaFingerprintStore:

@@ -301,11 +301,17 @@ class SchemaFingerprintStore:
         self._root = root
 
     def _path_for(self, adapter_id: str) -> str | None:
-        """On-disk location of ``adapter_id``'s record, or ``None`` if in-memory."""
+        """On-disk location of ``adapter_id``'s record, or ``None`` if in-memory.
+
+        The id becomes a filename, so it must not be able to name a path:
+        a separator or ``..`` would write the baseline outside the store.
+        """
         import os
 
         if self._root is None:
             return None
+        if os.sep in adapter_id or (os.altsep and os.altsep in adapter_id) or ".." in adapter_id:
+            raise ValueError(f"adapter id {adapter_id!r} is not usable as a fingerprint filename")
         return os.path.join(
             self._root, ".nautilus", "adapters", "fingerprints", f"{adapter_id}.json"
         )

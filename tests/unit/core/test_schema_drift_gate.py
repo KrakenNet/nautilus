@@ -132,6 +132,13 @@ class TestFingerprintStorePersistence:
         SchemaFingerprintStore().record("pg", "sha256:abc")
         assert SchemaFingerprintStore(root=str(tmp_path)).get("pg") is None
 
+    def test_an_id_that_names_a_path_is_refused(self, tmp_path: Path) -> None:
+        # The id becomes a filename; a traversing id would put the baseline
+        # somewhere the store does not own.
+        store = SchemaFingerprintStore(root=str(tmp_path))
+        with pytest.raises(ValueError, match="not usable as a fingerprint filename"):
+            store.record("../../escaped", "sha256:abc")
+
     def test_a_corrupt_baseline_reads_as_absent(self, tmp_path: Path) -> None:
         fp_dir = tmp_path / ".nautilus" / "adapters" / "fingerprints"
         fp_dir.mkdir(parents=True)

@@ -23,6 +23,25 @@ import pytest
 from testcontainers.postgres import PostgresContainer  # pyright: ignore[reportMissingTypeStubs]
 
 
+@pytest.fixture(autouse=True)
+def isolate_schema_baselines(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]:
+    """Give each test its own schema-drift baseline directory.
+
+    Baselines persist next to the config file so drift survives a restart.
+    Most tests share ``tests/fixtures/nautilus.yaml`` while swapping in fake
+    adapters, so without this they would write baselines into the source
+    tree and quarantine each other's adapters depending on run order.
+    Within a test the directory is shared, so drift detection stays real.
+    """
+    from nautilus.core.broker import Broker
+
+    root = str(tmp_path_factory.mktemp("schema-baselines"))
+    original = Broker._fingerprint_root  # noqa: SLF001
+    Broker._fingerprint_root = staticmethod(lambda base_dir: root)  # type: ignore[method-assign]  # noqa: SLF001
+    yield
+    Broker._fingerprint_root = original  # type: ignore[method-assign]  # noqa: SLF001
+
+
 @pytest.fixture(scope="session", autouse=True)
 def poc_tmp_cleanup() -> Iterator[None]:
     """Sweep stray ``/tmp/poc-*.jsonl`` artifacts at session start/end.
