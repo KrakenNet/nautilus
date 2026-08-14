@@ -1482,13 +1482,11 @@ class Broker:
             state.scope_by_source.setdefault(constraint.source_id, []).append(constraint)
 
     def _apply_temporal_filter(self, state: _RequestState) -> None:
-        """Drop expired / not-yet-valid scope constraints before adapter fan-out.
+        """Deny any source that loses a scope constraint to the temporal window.
 
         Wires :meth:`TemporalFilter.apply` into ``arequest`` per design
         §3.9 / FR-17. Dropped constraints produce ``scope-expired``
-        :class:`DenialRecord` entries that are appended to
-        ``state.denial_records`` so they surface in the audit trail and
-        the response's ``sources_denied`` aggregation.
+        :class:`DenialRecord` entries appended to ``state.denial_records``.
         """
         filtered, temporal_denials = TemporalFilter.apply(
             state.scope_by_source,
@@ -1503,15 +1501,28 @@ class Broker:
         state: _RequestState,
         denials: list[DenialRecord],
     ) -> None:
-        """Fold temporal-filter denials into request state without re-denying sources.
+        """Fold temporal-filter denials into request state, denying the source.
 
-        ``scope-expired`` only drops *individual constraints* — the source
-        itself may still be routable under its remaining (non-expired)
-        scope. We append the denial records to ``state.denial_records``
-        for audit coverage but leave ``state.sources_denied`` untouched
-        (that aggregator reflects whole-source denials from router rules).
+        A scope constraint is a *restriction*, so dropping one can only widen
+        what the adapter returns. The fan-out treats an empty scope list as
+        "no restrictions", which made an expired grant strictly more
+        permissive than a live one: the adapter ran with no WHERE clause and
+        the caller got the rows the constraint existed to hide.
+
+        The source is therefore denied for this request rather than queried
+        under whatever restrictions happen to survive — the fail-closed
+        reading of the window that :mod:`nautilus.core.temporal` documents.
+        Re-granting means issuing a fresh, unexpired constraint.
         """
         state.denial_records = list(state.denial_records) + list(denials)
+        expired_ids = {d.source_id for d in denials}
+        state.routing_decisions = [
+            rd for rd in state.routing_decisions if rd.source_id not in expired_ids
+        ]
+        for source_id in expired_ids:
+            state.scope_by_source.pop(source_id, None)
+        state.sources_denied = sorted(set(state.sources_denied) | expired_ids)
+        state.sources_skipped = [s for s in state.sources_skipped if s not in expired_ids]
 
     async def _route(self, agent_id: str, context: dict[str, Any], state: _RequestState) -> None:
         """Invoke the Fathom router and classify sources into queried/denied/skipped.
