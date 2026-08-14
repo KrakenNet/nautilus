@@ -106,6 +106,25 @@ def quote_identifier(ident: str) -> str:
     return '"' + ident.replace('"', '""') + '"'
 
 
+def quote_table(table: str) -> str:
+    """Quote a possibly schema-qualified table name.
+
+    ``schema.table`` renders as ``"schema"."table"``; a bare name renders as
+    ``"table"``. Each segment goes through :func:`quote_identifier`, so the
+    same regex guard applies to both.
+
+    Callers used to do ``quote_identifier(table.split(".")[-1])``, which
+    silently discarded the schema: a source declaring
+    ``table: restricted.customers`` emitted ``SELECT * FROM "customers"`` and
+    Postgres resolved it through ``search_path``, reading a different table
+    than the config named.
+    """
+    parts = table.split(".")
+    if len(parts) > 2:
+        raise ScopeEnforcementError(f"table name {table!r} has more than one schema qualifier")
+    return ".".join(quote_identifier(part) for part in parts)
+
+
 def render_field(field: str) -> str:
     """Render a scope field reference as SQL per design §6.2.
 
@@ -243,6 +262,7 @@ __all__ = [
     "EmbeddingUnavailableError",
     "ScopeEnforcementError",
     "quote_identifier",
+    "quote_table",
     "render_field",
     "session_token_headers",
     "validate_field",

@@ -28,6 +28,28 @@ from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 _DEFAULT_LIMIT: int = 1000
 
 
+# One parsed tag predicate: (tag_name, operator, operand). The operand is a
+# tuple of members for ``IN`` and a single string otherwise.
+_TagFilter = tuple[str, str, "str | tuple[str, ...]"]
+
+
+def _tag_operand(op: str, value: Any) -> str | tuple[str, ...]:
+    """Coerce a scope value into the operand ``_matches_tags`` compares against.
+
+    ``IN`` keeps its members separate so membership stays exact. A bare
+    string is one member, not a sequence of characters.
+    """
+    if op != "IN":
+        return str(value)
+    if isinstance(value, str):
+        return (value,)
+    if isinstance(value, (list, tuple, set, frozenset)):
+        return tuple(str(v) for v in value)
+    raise ScopeEnforcementError(
+        f"S3Adapter: IN operator requires a list value, got {type(value).__name__}"
+    )
+
+
 class S3Adapter:
     """S3-compatible object-store adapter backed by ``aiobotocore``.
 
@@ -139,7 +161,11 @@ class S3Adapter:
 
         prefix: str | None = None
         exact_key: str | None = None
-        tag_filters: list[tuple[str, str, str]] = []  # (tag_name, op, value)
+        # (tag_name, op, value). ``IN`` keeps its members as a tuple; it used
+        # to be str(value), which turned ["alice", "bob"] into the literal
+        # "['alice', 'bob']" and made the membership test below a substring
+        # match -- a tag value of "li" passed a filter for alice-or-bob.
+        tag_filters: list[_TagFilter] = []
         classification_filter: str | None = None
 
         for constraint in scope:
@@ -169,7 +195,7 @@ class S3Adapter:
                     raise ScopeEnforcementError(
                         f"S3Adapter: unsupported operator '{op}' for tag filter"
                     )
-                tag_filters.append((tag_name, op, str(value)))
+                tag_filters.append((tag_name, op, _tag_operand(op, value)))
             elif field == "classification":
                 if op != "=":
                     raise ScopeEnforcementError(
@@ -244,7 +270,7 @@ class S3Adapter:
     async def _list_objects(
         self,
         prefix: str | None,
-        tag_filters: list[tuple[str, str, str]],
+        tag_filters: list[_TagFilter],
         limit: int,
     ) -> list[dict[str, Any]]:
         """List objects with optional prefix, applying tag filters post-list."""
@@ -279,7 +305,7 @@ class S3Adapter:
     async def _matches_tags(
         self,
         key: str,
-        tag_filters: list[tuple[str, str, str]],
+        tag_filters: list[_TagFilter],
     ) -> bool:
         """Check whether an object's tags satisfy all tag filter constraints."""
         if self._client is None:
@@ -304,7 +330,8 @@ class S3Adapter:
                 if actual == expected:
                     return False
             elif op == "IN" and (actual is None or actual not in expected):
-                # Value was stringified from a list; for IN we check membership.
+                # ``expected`` is a tuple of members here, so this is exact
+                # membership rather than a substring test.
                 return False
 
         return True

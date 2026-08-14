@@ -42,6 +42,41 @@ def _flux_escape(value: Any) -> str:
     return f'"{s}"'
 
 
+def _flux_like(field: str, pattern: str) -> str:
+    """Translate a SQL ``LIKE`` pattern into an equivalently anchored Flux test.
+
+    The previous translation stripped every ``%`` and always emitted
+    ``containsStr``, so the anchored pattern ``public/%`` also matched
+    ``internal/restricted/public/leak`` -- a widening of the constraint. Each
+    anchoring now maps to the Flux predicate that means the same thing.
+
+    ``_`` (single-character wildcard) has no Flux equivalent and used to be
+    rewritten to a literal ``?``, which matched nothing; it raises now rather
+    than silently changing the predicate in either direction.
+    """
+    if "_" in pattern:
+        raise ScopeEnforcementError(
+            f"InfluxDBAdapter: LIKE pattern {pattern!r} uses the '_' single-character "
+            f"wildcard, which Flux cannot express"
+        )
+    ref = f'r["{field}"]'
+    starts, ends = pattern.startswith("%"), pattern.endswith("%")
+    body = pattern[1 if starts else None : -1 if ends else None]
+    if "%" in body:
+        raise ScopeEnforcementError(
+            f"InfluxDBAdapter: LIKE pattern {pattern!r} has an interior '%' wildcard, "
+            f"which Flux cannot express"
+        )
+    escaped = _flux_escape(body)
+    if starts and ends:
+        return f"strings.containsStr(v: {ref}, substr: {escaped})"
+    if starts:
+        return f"strings.hasSuffix(v: {ref}, suffix: {escaped})"
+    if ends:
+        return f"strings.hasPrefix(v: {ref}, prefix: {escaped})"
+    return f"{ref} == {escaped}"
+
+
 class InfluxDBAdapter:
     """InfluxDB adapter backed by ``influxdb_client.InfluxDBClient``.
 
@@ -111,13 +146,15 @@ class InfluxDBAdapter:
         - ``<`` / ``>`` / ``<=`` / ``>=`` → numeric comparisons
         - ``IN`` → chained ``or`` predicates
         - ``NOT IN`` → chained ``and`` with ``!=``
-        - ``LIKE`` → Flux ``strings.containsStr`` (simplified Phase 1)
+        - ``LIKE`` → ``strings.hasPrefix`` / ``hasSuffix`` / ``containsStr``
+          / equality, chosen by where the ``%`` wildcards sit
         - ``BETWEEN`` → ``>=`` and ``<=`` pair
         - ``IS NULL`` → ``not exists r["field"]``
 
         Measurement/tag/time filters are derived from the field name:
         - ``_measurement`` → ``|> filter(fn: (r) => r._measurement == ...)``
-        - ``_time`` → ``|> range(start: ..., stop: ...)``
+        - ``_time`` → ``|> range(start: ..., stop: ...)``; an operator that
+          cannot be lifted into a range raises rather than being dropped
         - anything else → tag filter
         """
         # Validate all constraints first.
@@ -148,6 +185,15 @@ class InfluxDBAdapter:
                         )
                     range_start = _flux_escape(value[0])
                     range_stop = _flux_escape(value[1])
+                else:
+                    # Anything the range lift cannot express used to fall
+                    # through an unconditional `continue`: the constraint
+                    # vanished with no error and no denial, leaving the
+                    # wide-open -30d default window. Fail closed instead.
+                    raise ScopeEnforcementError(
+                        f"InfluxDBAdapter: operator {op!r} is not expressible as a "
+                        f"time range on '_time' (use <, <=, >, >= or BETWEEN)"
+                    )
                 continue
 
             # Tag/field/measurement filters.
@@ -184,11 +230,7 @@ class InfluxDBAdapter:
                     raise ScopeEnforcementError(
                         f"Operator 'LIKE' requires a string value, got {type(value).__name__}"
                     )
-                # Simplified: strip SQL wildcards for containsStr.
-                pattern = value.replace("%", "").replace("_", "?")
-                filters.append(
-                    f'strings.containsStr(v: r["{field}"], substr: {_flux_escape(pattern)})'
-                )
+                filters.append(_flux_like(field, value))
             elif op == "BETWEEN":
                 if not isinstance(value, (list, tuple)) or len(value) != 2:  # pyright: ignore[reportUnknownArgumentType]
                     raise ScopeEnforcementError("Operator 'BETWEEN' requires a 2-tuple/list value")

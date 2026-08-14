@@ -113,7 +113,11 @@ class SourceConfig(BaseModel):
     metadata_column: str | None = None
     distance_operator: Literal["<=>", "<->", "<#>"] | None = "<=>"
     top_k: int = 10
-    embedder: str | None = None  # name of registered embedder
+    # Only ``default`` (the broker-wide embedder) resolves: there is no
+    # embedder registry, so any other name silently did nothing and every
+    # request to the source failed later with EmbeddingUnavailableError.
+    # Rejecting it at config load makes that a startup error with a reason.
+    embedder: Literal["default"] | None = None
     # Phase 2 additive fields (design §3.5, §3.11).
     index: str | None = None
     label: str | None = None

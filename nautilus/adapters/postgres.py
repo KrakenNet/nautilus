@@ -18,7 +18,7 @@ import asyncpg  # pyright: ignore[reportMissingTypeStubs]
 from nautilus.adapters.base import (
     AdapterError,
     ScopeEnforcementError,
-    quote_identifier,
+    quote_table,
     render_field,
     validate_operator,
 )
@@ -99,10 +99,10 @@ class PostgresAdapter:
 
         Each operator branch renders per the §6.1 template table.
         """
-        # ``table`` is trusted config (validated at config-load time) but
-        # still routed through :func:`quote_identifier` so the regex guard and
-        # double-quoting happen in one vetted helper (NFR-4, Task 2.8).
-        quoted_table = quote_identifier(table.split(".")[-1])
+        # ``table`` is trusted config but still routed through
+        # :func:`quote_table` so the regex guard and double-quoting happen in
+        # one vetted helper (NFR-4, Task 2.8), schema qualifier included.
+        quoted_table = quote_table(table)
 
         where_clauses: list[str] = []
         params: list[Any] = []
