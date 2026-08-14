@@ -334,6 +334,11 @@ class SessionStoreConfig(BaseModel):
 
     backend: Literal["memory", "redis", "postgres", "sqlite"] = "memory"
     ttl_seconds: int = 3600
+    # Lifetime of a session's declared purpose, feeding the session fact's
+    # ``purpose_ttl_seconds`` slot. 0 disables the window, matching the
+    # ``(> ?ttl 0.0)`` guard in the shipped ``purpose-expired-deny`` rule so
+    # existing deployments see no new denials.
+    purpose_ttl_seconds: int = 0
     dsn: str | None = None
     on_failure: Literal["fail_closed", "fallback_memory", "fallback_sqlite"] = "fail_closed"
     # #26 — database file for ``backend: sqlite`` and the

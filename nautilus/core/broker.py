@@ -334,6 +334,10 @@ class _RequestState:
     # Caller-supplied fact-set hash echoed back on the response so client
     # session stores can pin a request to a specific fact snapshot.
     fact_set_hash: str | None = None
+    # Session state as it was read at routing time. ``_update_session`` folds
+    # this request's exposure into it, so the accumulation must start from the
+    # same snapshot the rules evaluated against.
+    session_state: dict[str, Any] = field(default_factory=dict[str, Any])
 
     def apply_route_result(self, route_result: RouteResult) -> None:
         """Copy router output into the mutable request state."""
@@ -347,6 +351,26 @@ class _RequestState:
     def duration_ms(self) -> int:
         """Integer millisecond delta since ``started`` (design §4.1)."""
         return int((time.perf_counter() - self.started) * 1000)
+
+
+# A source is PII-bearing when its declared ``data_types`` carry this marker.
+# It is the same vocabulary the ``session`` template names its counter after
+# (``pii_sources_accessed``) and that the fixtures already use.
+_PII_DATA_TYPE = "pii"
+
+
+def _merge_unique(prior: Any, incoming: list[str]) -> list[str]:
+    """Append ``incoming`` to ``prior`` preserving order, dropping repeats.
+
+    ``prior`` arrives as a JSONB array from the Postgres store, a list from
+    the in-memory store, or a pre-encoded space-separated string from a
+    Phase-1 session; all three coerce the same way the router coerces them.
+    """
+    merged = prior.split() if isinstance(prior, str) else [str(v) for v in prior or []]
+    for value in incoming:
+        if value not in merged:
+            merged.append(value)
+    return merged
 
 
 def _new_request_state(context: dict[str, Any], intent: str) -> _RequestState:
@@ -1397,7 +1421,7 @@ class Broker:
             state.attestation_token = token
             state.scope_hash_version = scope_hash_version
             await self._emit_attestation(token, nautilus_payload, state.request_id)
-        await self._update_session(state)
+        await self._update_session(state, context)
 
     async def _emit_attestation(
         self,
@@ -1533,6 +1557,7 @@ class Broker:
         session_state = await self._session_get(state.session_id) if state.session_id else {}
         if state.session_id:
             session_state.setdefault("id", state.session_id)
+        state.session_state = dict(session_state)
         route_result = self._router.route(
             agent_id=agent_id,
             context=context,
@@ -1549,7 +1574,7 @@ class Broker:
             s.id for s in self._registry if s.id not in selected_ids and s.id not in denied_ids
         )
 
-    async def _update_session(self, state: _RequestState) -> None:
+    async def _update_session(self, state: _RequestState, context: dict[str, Any]) -> None:
         """Cumulative-exposure bookkeeping (design §3.9 — update at end).
 
         Prefers :meth:`AsyncSessionStore.aupdate` when available; falls back
@@ -1557,10 +1582,11 @@ class Broker:
         """
         if not state.session_id:
             return
-        entry = {
+        entry: dict[str, Any] = {
             "last_request_id": state.request_id,
             "last_sources_queried": state.sources_queried,
         }
+        entry.update(self._accumulate_exposure(state, context))
         if hasattr(self._session_store, "aupdate"):
             await self._session_store.aupdate(state.session_id, entry)  # type: ignore[attr-defined]
             return
@@ -1569,6 +1595,54 @@ class Broker:
         # include :class:`AsyncSessionStore` so pyright needs the explicit cast.
         sync_store: SessionStore = self._session_store  # type: ignore[assignment]
         sync_store.update(state.session_id, entry)
+
+    def _accumulate_exposure(self, state: _RequestState, context: dict[str, Any]) -> dict[str, Any]:
+        """Fold this request's exposure into the session's cumulative slots.
+
+        :meth:`FathomRouter._assert_session` reads ``data_types_seen``,
+        ``sources_visited``, ``pii_sources_accessed_list``,
+        ``pii_sources_accessed``, ``purpose_start_ts`` and
+        ``purpose_ttl_seconds`` off the session dict, and nothing wrote any of
+        them: every request asserted zero ``session_exposure`` facts, so
+        cross-request aggregation policy never saw accumulated exposure and
+        the shipped ``purpose-expired-deny`` rule could never fire.
+
+        Accumulation is over sources actually **queried** — a denied or
+        skipped source exposed nothing. The purpose window starts on the
+        first request of a session and restarts whenever the declared purpose
+        changes, since a new purpose is a new grant.
+        """
+        prior = state.session_state
+        by_id = {s.id: s for s in self._registry}
+        queried = [by_id[sid] for sid in state.sources_queried if sid in by_id]
+
+        visited = _merge_unique(prior.get("sources_visited"), state.sources_queried)
+        data_types = _merge_unique(
+            prior.get("data_types_seen"), [dt for s in queried for dt in s.data_types]
+        )
+        pii_sources = _merge_unique(
+            prior.get("pii_sources_accessed_list"),
+            [s.id for s in queried if _PII_DATA_TYPE in s.data_types],
+        )
+        entry: dict[str, Any] = {
+            "sources_visited": visited,
+            "data_types_seen": data_types,
+            "pii_sources_accessed_list": pii_sources,
+            "pii_sources_accessed": len(pii_sources),
+        }
+
+        ttl = self._config.session_store.purpose_ttl_seconds
+        if ttl > 0:
+            purpose = str(context.get("purpose", ""))
+            restarted = purpose != str(prior.get("purpose", "")) or not prior.get(
+                "purpose_start_ts"
+            )
+            entry["purpose"] = purpose
+            entry["purpose_ttl_seconds"] = float(ttl)
+            entry["purpose_start_ts"] = (
+                time.time() if restarted else float(prior["purpose_start_ts"])
+            )
+        return entry
 
     async def _session_get(self, session_id: str) -> dict[str, Any]:
         """Read session state — async path when the store provides it."""

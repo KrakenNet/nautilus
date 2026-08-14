@@ -74,6 +74,7 @@ session_store:
   backend: postgres          # memory | redis | postgres | sqlite
   dsn: ${SESSION_DSN}
   ttl_seconds: 3600
+  purpose_ttl_seconds: 0        # 0 = no purpose window
   on_failure: fallback_sqlite   # fail_closed | fallback_memory | fallback_sqlite
   sqlite_path: /var/lib/nautilus/sessions.db
 ```
@@ -84,6 +85,16 @@ session_store:
 - `on_failure: fallback_sqlite` degrades to SQLite if Postgres is
   unreachable at startup; sessions survive a broker restart and the
   audit trail records `session_store_mode: degraded_sqlite`.
+- `purpose_ttl_seconds` bounds how long a session's declared purpose stays
+  valid. Non-zero arms the built-in `purpose-expired-deny` rule: once the
+  window elapses every source in the request is denied until the agent
+  declares a new purpose, which restarts it. `0` (the default) leaves the
+  window open indefinitely.
+
+Cumulative exposure — `sources_visited`, `data_types_seen` and
+`pii_sources_accessed_list` — accumulates over the sources actually
+queried, and is what escalation packs and any rule matching
+`session_exposure` see.
 
 ### Session tokens (optional)
 
