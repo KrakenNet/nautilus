@@ -132,7 +132,10 @@ venv = ".venv"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests"]
+# The shipped example's compliance suite runs with the repo suite: it is a
+# documented onboarding path ("cd examples/custom-adapter && pytest"), and
+# while it sat outside testpaths every one of its cases errored unnoticed.
+testpaths = ["tests", "examples/custom-adapter"]
 markers = [
     "unit: unit tests",
     "integration: integration tests",

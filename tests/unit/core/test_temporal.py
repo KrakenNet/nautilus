@@ -104,3 +104,42 @@ def test_malformed_iso8601_drops_with_warn_flagged_denial() -> None:
     assert all("malformed" in r for r in reasons)
     # Rule name stays ``scope-expired`` (fail-closed precedence, design §3.9).
     assert {d.rule_name for d in denials} == {"scope-expired"}
+
+
+class TestNaiveWindows:
+    """A rule author can write a window without a timezone (AUDIT.md:931).
+
+    Every other case here uses Z-suffixed timestamps, so ``_normalise``'s
+    naive branch never ran: deleting it left the whole suite green while a
+    naive window would raise ``TypeError: can't compare offset-naive and
+    offset-aware datetimes`` on the request path.
+    """
+
+    def test_a_naive_expiry_in_the_past_still_drops_the_constraint(self) -> None:
+        kept, denials = TemporalFilter.apply(
+            {"src-1": [_constraint(expires_at="2020-01-01T00:00:00")]}, _NOW
+        )
+        assert kept["src-1"] == []
+        assert [d.rule_name for d in denials] == ["scope-expired"]
+
+    def test_a_naive_expiry_in_the_future_keeps_the_constraint(self) -> None:
+        kept, denials = TemporalFilter.apply(
+            {"src-1": [_constraint(expires_at="2099-01-01T00:00:00")]}, _NOW
+        )
+        assert len(kept["src-1"]) == 1
+        assert denials == []
+
+    def test_a_naive_valid_from_in_the_future_drops_the_constraint(self) -> None:
+        kept, denials = TemporalFilter.apply(
+            {"src-1": [_constraint(valid_from="2099-01-01T00:00:00")]}, _NOW
+        )
+        assert kept["src-1"] == []
+        assert [d.rule_name for d in denials] == ["scope-expired"]
+
+    def test_a_naive_window_is_read_against_a_naive_now_too(self) -> None:
+        # ``now`` arrives naive from callers that use datetime.utcnow().
+        kept, _ = TemporalFilter.apply(
+            {"src-1": [_constraint(expires_at="2099-01-01T00:00:00")]},
+            datetime(2026, 4, 15, 12, 0, 0),
+        )
+        assert len(kept["src-1"]) == 1

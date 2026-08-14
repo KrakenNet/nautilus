@@ -20,7 +20,7 @@ from nautilus_adapter_sdk.types import AdapterResult, IntentAnalysis, ScopeConst
 
 # Operators this adapter knows how to enforce. Anything else must raise
 # ScopeEnforcementError (fail closed) — the SDK compliance suite checks this.
-_VALID_OPERATORS = {"=", "eq", "!=", "IN", "NOT IN", "LIKE", "IS NULL"}
+_VALID_OPERATORS = {"=", "!=", "IN", "NOT IN", "LIKE", "IS NULL"}
 
 # Placeholder data so the generated package works out of the box. Delete
 # once connect()/execute() talk to your real source.
@@ -70,7 +70,7 @@ class {{ class_name }}:
                 )
             field = constraint.field
             value = constraint.value
-            if op in ("=", "eq"):
+            if op == "=":
                 rows = [r for r in rows if r.get(field) == str(value)]
             elif op == "!=":
                 rows = [r for r in rows if r.get(field) != str(value)]

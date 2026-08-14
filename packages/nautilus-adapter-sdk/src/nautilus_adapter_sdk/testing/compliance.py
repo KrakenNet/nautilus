@@ -50,7 +50,7 @@ class AdapterComplianceSuite:
             confidence=1.0,
         )
 
-    def _make_scope(self, operator: str = "eq") -> list[ScopeConstraint]:
+    def _make_scope(self, operator: str = "=") -> list[ScopeConstraint]:
         return [
             ScopeConstraint(
                 source_id=self.source_config.id,
@@ -77,7 +77,7 @@ class AdapterComplianceSuite:
         adapter: Adapter = self.adapter_factory()
         await adapter.connect(self.source_config)
         try:
-            result = await adapter.execute(self._make_intent(), self._make_scope("eq"), {})
+            result = await adapter.execute(self._make_intent(), self._make_scope("="), {})
             assert isinstance(result, AdapterResult)
         finally:
             await adapter.close()

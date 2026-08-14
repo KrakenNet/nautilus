@@ -2,7 +2,6 @@
 
 import glob
 import os
-import re
 from typing import Any, cast
 
 import pytest
@@ -25,12 +24,15 @@ PACK_RULE_NAMES = {
     HIPAA_PACK: {"minimum-necessary-phi-scope", "deny-phi-outside-tpo"},
 }
 
-# Expected salience bands by action type
+# Expected salience band per asserted fact template. Keyed on what a rule
+# ASSERTS, not on ``then.action``: every shipped scope rule declares
+# ``action: route``, so an action-keyed lookup finds no band and checks
+# nothing. The ordering these bands encode is load-bearing — denial must
+# outrank scoping, or a source that is about to be denied gets scoped first.
 SALIENCE_BANDS = {
-    "deny": (170, 190),
+    "denial_record": (170, 190),
     "scope_constraint": (130, 150),
-    "constrain": (130, 150),
-    "escalate": (110, 120),
+    "escalation_request": (110, 120),
 }
 
 
@@ -38,29 +40,6 @@ def _discover_yaml(base_dir: str) -> list[str]:
     """Return all .yaml files under *base_dir* using glob.glob."""
     pattern = os.path.join(base_dir, "**", "*.yaml")
     return sorted(glob.glob(pattern, recursive=True))
-
-
-def _collect_salience_values(data: dict[str, Any]) -> list[int]:
-    """Extract all salience integer values from a parsed YAML document."""
-    values: list[int] = []
-    sal = data.get("salience")
-    if isinstance(sal, int):
-        values.append(sal)
-    rules: list[Any] = data.get("rules", [])
-    for rule_obj in rules:
-        if isinstance(rule_obj, dict):
-            rule_sal = cast(dict[str, Any], rule_obj).get("salience")
-            if isinstance(rule_sal, int):
-                values.append(rule_sal)
-    return values
-
-
-def _parse_salience_band(band_str: str) -> tuple[int, int] | None:
-    """Parse a salience_band string like '170-190' into (lo, hi)."""
-    m = re.match(r"(\d+)\s*-\s*(\d+)", str(band_str))
-    if m:
-        return int(m.group(1)), int(m.group(2))
-    return None
 
 
 # ---------------------------------------------------------------------------
@@ -129,64 +108,66 @@ class TestComplianceDisclaimer:
 # ---------------------------------------------------------------------------
 
 
-def _rule_files_with_salience() -> list[tuple[str, str]]:
-    """Collect (path, pack_name) for rule files that contain salience values."""
-    result: list[tuple[str, str]] = []
-    for pack_dir, pack_name in [(NIST_DIR, "NIST"), (HIPAA_DIR, "HIPAA")]:
+def _pack_rules() -> list[tuple[str, dict[str, Any]]]:
+    """Every rule in every pack, as ``(basename, rule)``.
+
+    Discovery is over RULES, not over files that happen to carry a
+    ``salience:`` line: keying the parametrisation on the value under test
+    means deleting that line deletes its own guard.
+    """
+    result: list[tuple[str, dict[str, Any]]] = []
+    for pack_dir, _pack_name in [(NIST_DIR, "NIST"), (HIPAA_DIR, "HIPAA")]:
         rules_dir = os.path.join(pack_dir, "rules")
         for path in _discover_yaml(rules_dir):
             with open(path) as f:
                 data = yaml.safe_load(f)
-            if data and _collect_salience_values(data):
-                result.append((path, pack_name))
+            for rule in cast("list[dict[str, Any]]", (data or {}).get("rules", [])):
+                result.append((os.path.basename(path), rule))
     return result
 
 
 class TestSalienceBands:
-    """Salience values fall within expected bands based on action type."""
+    """Salience values fall within the band for what the rule asserts."""
 
-    _rule_files = _rule_files_with_salience()
+    _rules = _pack_rules()
+
+    def test_the_packs_actually_ship_rules(self) -> None:
+        # Guards the parametrisation below: an empty discovery would make
+        # every case vanish silently.
+        assert len(self._rules) == 4
 
     @pytest.mark.parametrize(
-        "path,pack_name",
-        _rule_files,
-        ids=[os.path.basename(p) for p, _ in _rule_files],
+        "basename,rule",
+        _rules,
+        ids=[f"{name}:{rule.get('name')}" for name, rule in _rules],
     )
-    def test_salience_within_band(self, path: str, pack_name: str) -> None:
-        with open(path) as f:
-            data = yaml.safe_load(f)
+    def test_salience_within_band(self, basename: str, rule: dict[str, Any]) -> None:
+        salience = rule.get("salience")
+        assert isinstance(salience, int), (
+            f"rule {rule.get('name')!r} in {basename} declares no salience; "
+            "it would run at the CLIPS default and interleave arbitrarily"
+        )
 
-        salience_values = _collect_salience_values(data)
-        assert salience_values, f"No salience values found in {path}"
+        asserted = [
+            entry.get("template")
+            for entry in cast("list[dict[str, Any]]", (rule.get("then") or {}).get("assert", []))
+        ]
+        bands = {SALIENCE_BANDS[t] for t in asserted if t in SALIENCE_BANDS}
+        assert bands, (
+            f"rule {rule.get('name')!r} in {basename} asserts {asserted}, none of which "
+            f"has a documented salience band ({sorted(SALIENCE_BANDS)}) — extend "
+            "SALIENCE_BANDS deliberately rather than leaving the rule unchecked"
+        )
+        assert len(bands) == 1, (
+            f"rule {rule.get('name')!r} in {basename} asserts templates from "
+            f"different salience bands: {asserted}"
+        )
 
-        # Determine expected band from salience_band field, action field,
-        # or infer from the known non-overlapping salience ranges.
-        band = None
-        band_str = data.get("salience_band")
-        if band_str:
-            band = _parse_salience_band(band_str)
-
-        if band is None:
-            action = data.get("action", "")
-            band = SALIENCE_BANDS.get(action)
-
-        if band is not None:
-            lo, hi = band
-            for val in salience_values:
-                assert lo <= val <= hi, (
-                    f"Salience {val} outside expected band {lo}-{hi} in {os.path.basename(path)}"
-                )
-        else:
-            # No explicit band or action — verify each value falls in a
-            # known band (deny 170-190, scope_constraint 130-150,
-            # escalate 110-120).
-            all_bands = [(170, 190), (130, 150), (110, 120)]
-            for val in salience_values:
-                in_band = any(lo <= val <= hi for lo, hi in all_bands)
-                assert in_band, (
-                    f"Salience {val} in {os.path.basename(path)} does not "
-                    f"fall within any known band: {all_bands}"
-                )
+        lo, hi = bands.pop()
+        assert lo <= salience <= hi, (
+            f"salience {salience} outside band {lo}-{hi} for {asserted} "
+            f"in {basename} (rule {rule.get('name')!r})"
+        )
 
 
 # ---------------------------------------------------------------------------
