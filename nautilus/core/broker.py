@@ -1112,12 +1112,16 @@ class Broker:
                 # check name) on the audit entry before failing closed.
                 state.errored.append(_broker_error(exc, state.request_id))
                 with broker_span(SPAN_AUDIT_EMIT):
-                    self._emit_audit(agent_id, state, None)
+                    # ``state.attestation_token``, not None: a failure AFTER
+                    # signing (the session write is the one such await) still
+                    # produced a real token that reached the sink, and the
+                    # canonical entry for this request must not deny it.
+                    self._emit_audit(agent_id, state, state.attestation_token)
                 raise
             except Exception as exc:  # noqa: BLE001 — any unexpected error must still audit
                 state.errored.append(_broker_error(exc, state.request_id))
                 with broker_span(SPAN_AUDIT_EMIT):
-                    self._emit_audit(agent_id, state, None)
+                    self._emit_audit(agent_id, state, state.attestation_token)
                 raise
             with broker_span(SPAN_AUDIT_EMIT):
                 self._emit_audit(agent_id, state, state.attestation_token)
@@ -1691,10 +1695,21 @@ class Broker:
         state: _RequestState,
         context: dict[str, Any],
     ) -> tuple[list[asyncio.Task[AdapterResult]], list[str]]:
-        """Lazy-connect + spawn one task per routing decision (design §3.1)."""
+        """Lazy-connect + spawn one task per routed source (design §3.1).
+
+        Per SOURCE, not per routing decision: two rules can route the same
+        source (a user rule alongside a built-in one), and each fact would
+        otherwise execute the adapter again — double cost and double side
+        effects for a non-idempotent source — and duplicate the id in the
+        signed ``sources_queried`` claim.
+        """
         tasks: list[asyncio.Task[AdapterResult]] = []
         task_source_ids: list[str] = []
+        seen: set[str] = set()
         for rd in state.routing_decisions:
+            if rd.source_id in seen:
+                continue
+            seen.add(rd.source_id)
             adapter = await self._prepare_adapter(rd.source_id, state)
             if adapter is None:
                 continue
@@ -1784,7 +1799,15 @@ class Broker:
                 )
                 continue
             if res.error is not None:
-                state.errored.append(res.error)
+                # ``_execute_adapter`` cannot see the request id, so it leaves
+                # trace_id empty for the typed errors and this is the caller
+                # that fills it — otherwise one request's audit entry mixes
+                # correlated and uncorrelated rows.
+                state.errored.append(
+                    res.error
+                    if res.error.trace_id
+                    else res.error.model_copy(update={"trace_id": state.request_id})
+                )
                 continue
             successful.append(res)
             state.sources_queried.append(source_id)
@@ -2018,7 +2041,7 @@ class Broker:
                     source_id=source_id,
                     error_type="ScopeEnforcementError",
                     message=str(exc),
-                    trace_id="",  # filled in by caller via sources_errored
+                    trace_id="",  # filled in by _gather_adapter_results
                 ),
             )
         except AdapterError as exc:
