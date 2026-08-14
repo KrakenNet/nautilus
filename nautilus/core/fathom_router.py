@@ -28,9 +28,9 @@ from typing import TYPE_CHECKING, Any
 
 from fathom import Engine
 
-from nautilus.config.agent_registry import AgentRegistry
+from nautilus.config.agent_registry import AgentRegistry, UnknownAgentError
 from nautilus.config.escalation import EscalationRule, load_escalation_packs
-from nautilus.config.models import SourceConfig
+from nautilus.config.models import AgentRecord, SourceConfig
 from nautilus.core import ConsistencyError, PolicyEngineError
 from nautilus.core.clips_encoding import encode_multislot
 from nautilus.core.models import (
@@ -63,6 +63,18 @@ _SESSION_EXPOSURE_MULTISLOTS: tuple[str, ...] = (
 )
 
 
+def _encode_compartments(names: list[str]) -> str:
+    """Encode compartment names the way ``fathom-dominates`` reads them.
+
+    Compartments are the one slot Fathom parses itself, and
+    ``fathom.engine.parse_compartments`` splits on ``|`` — not whitespace like
+    the ``encode_multislot`` convention the other multislots use. Joining with
+    a space would make ``["alpha", "bravo"]`` a single compartment literally
+    named ``alpha bravo``.
+    """
+    return "|".join(n.strip() for n in names if n.strip())
+
+
 def _coerce_multislot(raw: Any) -> list[str]:
     """Normalize stored-session multislot into a ``list[str]``.
 
@@ -84,6 +96,10 @@ def _coerce_multislot(raw: Any) -> list[str]:
     if isinstance(raw, str):
         return [tok for tok in raw.split() if tok]
     return []
+
+
+_UNKNOWN_AGENT = object()
+"""Sentinel: a registry is configured and does not contain the requested id."""
 
 
 class FathomRouter:
@@ -176,25 +192,48 @@ class FathomRouter:
         4. read ``routing_decision`` / ``scope_constraint`` / ``denial_record``
         5. drop any denied source from ``routing_decisions``
 
-        ``agent_registry`` is accepted additively for forward-compat with the
-        Phase-2 ``agent``-fact enrichment path; it is currently unused because
-        the Phase-1 ``agent`` fact is already materialized from ``context``
-        (``clearance``/``purpose``). Phase-1 callers that pass no registry
-        continue to work unchanged.
+        ``agent_registry``, when non-empty, is the authority for the agent's
+        ``clearance`` and ``compartments``: those are authorization inputs and
+        must not come from the caller. An id the registry does not know is
+        denied outright. When no registry is configured (or it is empty) the
+        Phase-1 behaviour stands and both come from ``context`` — there is no
+        other source of truth, so declaring ``agents:`` in ``nautilus.yaml`` is
+        what turns enforcement on.
         """
-        # The registry is accepted for signature parity with design §2.2; the
-        # Phase-2 agent-enrichment rules land in a later task.
-        del agent_registry
         try:
             self._engine.clear_facts()
             # Reset per request; _assert appends to this as facts go in, so the
             # record cannot drift from what was actually asserted.
             self._input_facts: list[InputFact] = []
 
+            record = self._resolve_agent(agent_id, agent_registry)
+            if record is _UNKNOWN_AGENT:
+                # A registry is configured and does not know this id. Deny every
+                # declared source rather than routing on caller-supplied
+                # attributes, matching declare_handoff's unknown-agent
+                # short-circuit (AC-4.2).
+                return self._deny_all(
+                    sources,
+                    reason=f"unknown agent id={agent_id!r}",
+                    rule_name="unknown-agent",
+                )
+
+            # Clearance and compartments come from the registry whenever the
+            # agent is registered. They are authorization inputs: a caller that
+            # can name its own clearance can read anything, and until this
+            # change `context["clearance"]` was taken verbatim, so declaring
+            # "top-secret" was sufficient to read a secret source.
             agent_fact = {
                 "id": agent_id,
-                "clearance": str(context.get("clearance", "")),
+                "clearance": (
+                    record.clearance if record is not None else str(context.get("clearance", ""))
+                ),
                 "purpose": str(context.get("purpose", "")),
+                "compartments": _encode_compartments(
+                    record.compartments
+                    if record is not None
+                    else _coerce_multislot(context.get("compartments"))
+                ),
             }
             self._assert("agent", agent_fact)
 
@@ -212,6 +251,12 @@ class FathomRouter:
                     "classification": source.classification,
                     "data_types": encode_multislot(source.data_types),
                     "allowed_purposes": encode_multislot(source.allowed_purposes),
+                    # Already pipe-delimited (``SourceConfig.compartments`` is
+                    # a str). Without this the `?src_cmp` binding in
+                    # classification.yaml always resolved to the template
+                    # default "", so every source read as uncompartmented and
+                    # compartment isolation was inert.
+                    "compartments": source.compartments,
                 }
                 self._assert("source", source_fact)
 
@@ -456,6 +501,41 @@ class FathomRouter:
                 f"after evaluation, found {len(exposure_facts)} "
                 "(unexpected retraction cascade or injection)",
             )
+
+    def _resolve_agent(
+        self, agent_id: str, agent_registry: AgentRegistry | None
+    ) -> AgentRecord | None | object:
+        """Resolve the agent's registered identity.
+
+        Returns the :class:`AgentRecord` when registered, ``None`` when no
+        registry is configured at all, and :data:`_UNKNOWN_AGENT` when a
+        registry exists but does not contain ``agent_id``.
+
+        The empty-registry case falls back to caller-supplied attributes
+        because there is no other source of truth for them. Declaring agents
+        in ``nautilus.yaml`` is what turns enforcement on.
+        """
+        if agent_registry is None or len(agent_registry) == 0:
+            return None
+        try:
+            return agent_registry.get(agent_id)
+        except UnknownAgentError:
+            return _UNKNOWN_AGENT
+
+    def _deny_all(self, sources: list[SourceConfig], *, reason: str, rule_name: str) -> RouteResult:
+        """Deny every declared source without consulting the engine."""
+        denials = [
+            DenialRecord(source_id=s.id, reason=reason, rule_name=rule_name) for s in sources
+        ]
+        return RouteResult(
+            routing_decisions=[],
+            scope_constraints={},
+            denial_records=denials,
+            rule_trace=[f"nautilus-routing::{rule_name}"],
+            duration_us=0,
+            facts_asserted_summary={},
+            input_facts=[],
+        )
 
     def _assert(self, template: str, slots: dict[str, Any]) -> None:
         """Assert one fact and record it verbatim for the audit trail.

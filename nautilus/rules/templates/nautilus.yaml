@@ -16,7 +16,7 @@ templates:
       - { name: id,           type: string, required: true }
       - { name: clearance,    type: string, required: true }
       - { name: purpose,      type: string, required: true }
-      - { name: compartments, type: string, default: "" }   # space-separated multislot
+      - { name: compartments, type: string, default: "" }   # pipe-delimited (fathom parse_compartments)
       - { name: sub_category, type: string, default: "" }
 
   - name: intent
@@ -34,7 +34,7 @@ templates:
       - { name: classification,   type: string, required: true }
       - { name: data_types,       type: string, required: true }   # space-separated
       - { name: allowed_purposes, type: string, default: "" }      # space-separated
-      - { name: compartments,     type: string, default: "" }      # space-separated multislot
+      - { name: compartments,     type: string, default: "" }      # pipe-delimited (fathom parse_compartments)
       - { name: sub_category,     type: string, default: "" }
 
   - name: session

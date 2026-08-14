@@ -134,12 +134,13 @@ async def test_classification_e2e_poc_gate(
         )
 
         # -- Request #4: agent clearance `unclassified` < source `cui` ->
-        # default-classification-deny fires. --------------------------------
+        # default-classification-deny fires. Clearance is the registry's, so
+        # this is a different agent rather than a different context value.
         resp4 = await broker.arequest(
-            "a1",
+            "a2",
             "find PII for threat hunting",
             {
-                "clearance": "unclassified",  # overrides registry's cui for this request
+                "clearance": "cui",  # ignored: a2 is registered unclassified
                 "purpose": "threat-hunt",
                 "session_id": "s1",
                 "compartments": "cti",

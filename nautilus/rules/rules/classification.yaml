@@ -15,9 +15,9 @@
 # ``__fathom_decision`` fact and surfaces in
 # ``EvaluationResult.rule_trace`` (see fathom evaluator._capture_trace).
 #
-# Compartments are carried as space-separated strings per the
-# design-§5.1 multislot convention; ``fathom-dominates`` decomposes
-# them via ``compartments_superset`` internally.
+# Compartments are carried as pipe-delimited strings -- ``fathom-dominates``
+# decomposes them via ``compartments_superset``, which splits on ``|``, not
+# on whitespace like the design-§5.1 multislot convention used elsewhere.
 #
 module: nautilus-routing
 ruleset: nautilus-default-classification

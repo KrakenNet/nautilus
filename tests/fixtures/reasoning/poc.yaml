@@ -1,9 +1,10 @@
 # POC milestone fixture (reasoning-engine spec Task 1.15).
 #
 # Single pgvector source classified `cui` with data_types=[pii]. The agent
-# registry declares `a1: clearance=cui` so the default-classification-deny
-# rule is satisfied when the request carries clearance=cui, and trips on a
-# clearance=unclassified request (POC assertion 6).
+# registry declares `a1: clearance=cui`, which satisfies the
+# default-classification-deny rule, and `a2: clearance=unclassified`, which
+# trips it (POC assertion 6). Clearance comes from the registry, so the two
+# cases need two agents -- a request cannot name its own clearance.
 #
 # `attestation.sink.type: file` exercises the store-and-forward path end-to-
 # end; the destination path is env-interpolated so the integration test can
@@ -30,6 +31,9 @@ agents:
   a1:
     id: a1
     clearance: cui
+  a2:
+    id: a2
+    clearance: unclassified
 
 rules:
   user_rules_dirs: []
