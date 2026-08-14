@@ -69,6 +69,7 @@ from nautilus.config.models import (
     AgentRecord,
     AnalysisProviderSpec,
     AnthropicProviderSpec,
+    ApiConfig,
     FileSinkSpec,
     HttpSinkSpec,
     LocalAdapterConfig,
@@ -716,6 +717,10 @@ class Broker:
         - ``redis`` → reserved; falls back to in-memory until Phase 2 lands a
           Redis adapter (intentional soft-land per design §3.11).
 
+        ``ttl_seconds`` reaches every backend: a session idle for longer than
+        the TTL reads as absent, so cumulative exposure state does not
+        accumulate against one session id forever.
+
         A relative ``sqlite_path`` is resolved against ``base_dir`` (the
         config file's directory — same convention as the ``facts/`` dir)
         so the database location does not depend on the process CWD; a
@@ -738,10 +743,11 @@ class Broker:
                 dsn,
                 on_failure=sess_cfg.on_failure,
                 sqlite_path=sqlite_path,
+                ttl_seconds=sess_cfg.ttl_seconds,
             )
         if sess_cfg.backend == "sqlite":
-            return SqliteSessionStore(sqlite_path)
-        return InMemorySessionStore()
+            return SqliteSessionStore(sqlite_path, sess_cfg.ttl_seconds)
+        return InMemorySessionStore(sess_cfg.ttl_seconds)
 
     @staticmethod
     def _build_attestation_sink(
@@ -837,6 +843,15 @@ class Broker:
     def sources(self) -> list[SourceConfig]:
         """Registered source configs (identifier + metadata) — design §3.1."""
         return self._registry.sources
+
+    @property
+    def api_config(self) -> ApiConfig:
+        """``api:`` subsection of the loaded config (host, port, keys, auth).
+
+        Exposed so ``nautilus serve`` can honour ``api.host`` / ``api.port``
+        without re-loading the YAML or reaching into private state.
+        """
+        return self._config.api
 
     @property
     def agent_registry(self) -> AgentRegistry:

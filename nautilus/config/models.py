@@ -89,19 +89,7 @@ class SourceConfig(BaseModel):
     # Unknown types still fail closed: the loader pre-validates against
     # built-ins + declared adapter types, and Broker._build_adapter raises
     # ConfigError for any type missing from the merged registry.
-    type: Literal[
-        "postgres",
-        "pgvector",
-        "elasticsearch",
-        "rest",
-        "neo4j",
-        "servicenow",
-        "influxdb",
-        "s3",
-        "llm",
-        "custom",
-        "demo-local",
-    ]
+    type: str
     description: str
     classification: str
     data_types: list[str]
@@ -309,8 +297,11 @@ class ApiConfig(BaseModel):
     behaviour in :mod:`nautilus.transport.fastapi_app`.
     """
 
+    # Matches ``nautilus serve``'s --bind default. These went unread until
+    # now, so the old 8080 default described nothing; every doc, example and
+    # the CLI itself say 8000.
     host: str = "127.0.0.1"
-    port: int = 8080
+    port: int = 8000
     keys: list[str] = Field(default_factory=list)
 
 

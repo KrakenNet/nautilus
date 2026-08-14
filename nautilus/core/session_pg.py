@@ -99,6 +99,10 @@ class PostgresSessionStore:
             ``sqlite_path`` (#26).
         sqlite_path: Database file for the ``"fallback_sqlite"`` policy.
             Ignored under other policies.
+        ttl_seconds: Idle lifetime of a session row. A row untouched for
+            longer reads as absent and is deleted on the next write. ``0``
+            (or negative) disables expiry. Inherited by whichever store a
+            degradation falls back to, so expiry survives a fallback.
     """
 
     def __init__(
@@ -107,9 +111,11 @@ class PostgresSessionStore:
         *,
         on_failure: FailureMode = "fail_closed",
         sqlite_path: str | Path | None = None,
+        ttl_seconds: int = 0,
     ) -> None:
         self._dsn: str = dsn
         self._on_failure: FailureMode = on_failure
+        self._ttl_seconds: int = ttl_seconds
         self._sqlite_path: Path = Path(sqlite_path) if sqlite_path else _DEFAULT_SQLITE_PATH
         self._pool: Any = None
         self._closed: bool = False
@@ -181,7 +187,7 @@ class PostgresSessionStore:
             # #26 — durable degradation: session state survives restarts.
             # If SQLite itself cannot be opened, escalate rather than
             # silently downgrading to memory (the operator chose durability).
-            sqlite_store = SqliteSessionStore(self._sqlite_path)
+            sqlite_store = SqliteSessionStore(self._sqlite_path, self._ttl_seconds)
             try:
                 await sqlite_store.setup()
             except Exception as sqlite_exc:  # noqa: BLE001 — any sqlite3/OS error
@@ -193,7 +199,7 @@ class PostgresSessionStore:
             self._mode = "degraded_sqlite"
         else:
             # fallback_memory: degrade, do not raise.
-            self._degraded_memory = InMemorySessionStore()
+            self._degraded_memory = InMemorySessionStore(self._ttl_seconds)
             self._mode = "degraded_memory"
         self._degraded_since = datetime.now(UTC)
         # Release any partial pool so we do not leak sockets.
@@ -228,12 +234,18 @@ class PostgresSessionStore:
                 "PostgresSessionStore.aget() called before setup() succeeded"
             )
         row = await self._pool.fetchrow(
-            "SELECT state FROM nautilus_session_state WHERE session_id = $1",
+            "SELECT state FROM nautilus_session_state WHERE session_id = $1" + self._ttl_clause(),
             session_id,
         )
         if row is None:
             return {}
         return _decode_state(row["state"])
+
+    def _ttl_clause(self) -> str:
+        """SQL fragment restricting a read to rows inside the TTL window."""
+        if self._ttl_seconds <= 0:
+            return ""
+        return f" AND updated_at > now() - interval '{int(self._ttl_seconds)} seconds'"
 
     async def aupdate(self, session_id: str, entry: dict[str, Any]) -> None:
         """Merge ``entry`` into the session row (upsert with JSONB concat)."""
@@ -252,6 +264,13 @@ class PostgresSessionStore:
         # would merge at the DB layer but loses the "later wins" Phase-1
         # semantics for nested dicts — keep parity with InMemorySessionStore.
         async with self._pool.acquire() as conn, conn.transaction():
+            if self._ttl_seconds > 0:
+                # Drop every expired row, not just this session's: without it
+                # a store whose sessions are never revisited grows forever.
+                await conn.execute(
+                    "DELETE FROM nautilus_session_state WHERE updated_at <= "
+                    f"now() - interval '{int(self._ttl_seconds)} seconds'"
+                )
             row = await conn.fetchrow(
                 "SELECT state FROM nautilus_session_state WHERE session_id = $1 FOR UPDATE",
                 session_id,

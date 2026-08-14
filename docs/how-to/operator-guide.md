@@ -49,9 +49,12 @@ attestation:
 
 api:
   host: 127.0.0.1
-  port: 8080
+  port: 8000
   keys: ["${NAUTILUS_API_KEY}"]   # enables X-API-Key auth on the REST surface
 ```
+
+`nautilus serve` binds to `api.host:api.port`; an explicit `--bind HOST:PORT`
+overrides them.
 
 Key behaviors:
 
@@ -85,6 +88,10 @@ session_store:
 - `on_failure: fallback_sqlite` degrades to SQLite if Postgres is
   unreachable at startup; sessions survive a broker restart and the
   audit trail records `session_store_mode: degraded_sqlite`.
+- `ttl_seconds` bounds how long a session's accumulated state survives being
+  idle. A session untouched for longer reads as absent — cumulative exposure
+  starts fresh — and expired rows are deleted on the next write, on every
+  backend. `0` disables expiry and keeps state forever.
 - `purpose_ttl_seconds` bounds how long a session's declared purpose stays
   valid. Non-zero arms the built-in `purpose-expired-deny` rule: once the
   window elapses every source in the request is denied until the agent

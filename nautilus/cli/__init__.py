@@ -105,8 +105,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_serve.add_argument(
         "--bind",
-        default=_DEFAULT_BIND,
-        help=f"HOST:PORT for REST (and MCP http) bind (default: {_DEFAULT_BIND}).",
+        default=None,
+        help=(
+            "HOST:PORT for REST (and MCP http) bind. Overrides api.host / "
+            f"api.port from the config; default when neither is set: {_DEFAULT_BIND}."
+        ),
     )
     p_serve.add_argument(
         "--air-gapped",
@@ -195,7 +198,7 @@ def _cmd_serve(args: argparse.Namespace) -> int:
         return 2
 
     try:
-        host, port = _split_bind(args.bind)
+        explicit_bind = _split_bind(args.bind) if args.bind is not None else None
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
@@ -222,6 +225,20 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     except Exception as exc:  # noqa: BLE001 - surface wiring failures cleanly
         print(f"ERROR: broker construction failed: {exc}", file=sys.stderr)
         return 2
+
+    # ``api.host`` / ``api.port`` were modelled, documented and shipped in the
+    # examples but had no reader, so a config asking for 0.0.0.0:9999 served
+    # on 127.0.0.1:8000 anyway -- which is why the root Dockerfile's
+    # bind-less CMD listened on loopback inside the container. An explicit
+    # --bind still wins.
+    host, port = (
+        explicit_bind
+        if explicit_bind is not None
+        else (
+            broker.api_config.host,
+            broker.api_config.port,
+        )
+    )
 
     transport = args.transport
     mcp_mode = args.mcp_mode

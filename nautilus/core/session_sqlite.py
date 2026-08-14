@@ -49,10 +49,14 @@ class SqliteSessionStore:
     Args:
         path: SQLite database file location. Parent directories are
             created on :meth:`setup`.
+        ttl_seconds: Idle lifetime of a session row. A row untouched for
+            longer reads as absent and is deleted on the next write. ``0``
+            (or negative) disables expiry.
     """
 
-    def __init__(self, path: str | Path) -> None:
+    def __init__(self, path: str | Path, ttl_seconds: int = 0) -> None:
         self._path = Path(path)
+        self._ttl_seconds = ttl_seconds
         self._conn: sqlite3.Connection | None = None
         self._lock = asyncio.Lock()
         self._closed: bool = False
@@ -122,12 +126,22 @@ class SqliteSessionStore:
     def _get_sync(self, session_id: str) -> dict[str, Any]:
         conn = self._require_conn()
         row = conn.execute(
-            "SELECT state FROM nautilus_session_state WHERE session_id = ?",
+            f"SELECT state FROM nautilus_session_state WHERE session_id = ?{self._ttl_clause()}",
             (session_id,),
         ).fetchone()
         if row is None:
             return {}
         return _decode_state(row[0])
+
+    def _ttl_clause(self) -> str:
+        """SQL fragment restricting a read to rows inside the TTL window.
+
+        ``updated_at`` is written by ``datetime('now')`` — a fixed-width UTC
+        string — so a lexicographic comparison is a chronological one.
+        """
+        if self._ttl_seconds <= 0:
+            return ""
+        return f" AND updated_at > datetime('now', '-{int(self._ttl_seconds)} seconds')"
 
     async def aupdate(self, session_id: str, entry: dict[str, Any]) -> None:
         """Merge ``entry`` into the session row (read-merge-write upsert)."""
@@ -140,6 +154,13 @@ class SqliteSessionStore:
         # "later wins" Phase-1 merge semantics match InMemorySessionStore and
         # PostgresSessionStore.aupdate.
         with conn:
+            if self._ttl_seconds > 0:
+                # Drop every expired row, not just this session's: without it
+                # a store whose sessions are never revisited grows forever.
+                conn.execute(
+                    "DELETE FROM nautilus_session_state WHERE updated_at <= "
+                    f"datetime('now', '-{int(self._ttl_seconds)} seconds')"
+                )
             row = conn.execute(
                 "SELECT state FROM nautilus_session_state WHERE session_id = ?",
                 (session_id,),

@@ -13,6 +13,7 @@ it (``hasattr(store, 'aget')`` / ``isinstance(store, AsyncSessionStore)``).
 
 from __future__ import annotations
 
+import time
 from typing import Any, Protocol, runtime_checkable
 
 
@@ -79,11 +80,28 @@ class InMemorySessionStore:
     Protocol contract is stable so broker call sites do not change.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, ttl_seconds: int = 0) -> None:
         self._store: dict[str, dict[str, Any]] = {}
+        self._updated_at: dict[str, float] = {}
+        self._ttl_seconds: int = ttl_seconds
+
+    def _expired(self, session_id: str) -> bool:
+        """True when ``session_id`` has been idle longer than the TTL."""
+        if self._ttl_seconds <= 0:
+            return False
+        written = self._updated_at.get(session_id)
+        return written is not None and (time.time() - written) > self._ttl_seconds
 
     def get(self, session_id: str) -> dict[str, Any]:
-        """Return the stored dict for ``session_id`` (empty dict if absent)."""
+        """Return the stored dict for ``session_id`` (empty dict if absent).
+
+        An expired session reads as absent and is dropped, so cumulative
+        exposure does not accumulate against a session id forever.
+        """
+        if self._expired(session_id):
+            self._store.pop(session_id, None)
+            self._updated_at.pop(session_id, None)
+            return {}
         # Return a shallow copy so callers mutating the returned dict do not
         # accidentally persist changes without going through ``update``.
         return dict(self._store.get(session_id, {}))
@@ -94,8 +112,11 @@ class InMemorySessionStore:
         Phase 1 semantics: later keys overwrite earlier keys (dict.update).
         Phase 2 may introduce richer merge strategies per design §3.9.
         """
+        if self._expired(session_id):
+            self._store.pop(session_id, None)
         current = self._store.setdefault(session_id, {})
         current.update(entry)
+        self._updated_at[session_id] = time.time()
 
 
 __all__ = ["AsyncSessionStore", "InMemorySessionStore", "SessionStore"]
