@@ -132,3 +132,22 @@ def pg_container() -> Iterator[str]:
         os.environ.pop("TEST_PG_DSN", None)
         os.environ.pop("TEST_PGV_DSN", None)
         container.stop()
+
+
+def pytest_collection_modifyitems(items: list[Any]) -> None:
+    """Auto-mark every test that needs a live Docker daemon.
+
+    CI selects with ``-m "not docker"``, i.e. a test runs unless it is
+    explicitly excluded. That is deliberate: the previous selection was
+    ``-m unit``, so a test without the ``unit`` marker was silently *not
+    collected* rather than failing, and 399 of 1299 tests — including whole
+    regression suites — never ran in CI. Opt-out cannot fail that way.
+
+    Marking is derived from the fixtures a test actually requests rather than
+    hand-applied per file, so a new test that pulls ``pg_container`` is covered
+    without anyone remembering to tag it.
+    """
+    container_fixtures = {"pg_container"}
+    for item in items:
+        if container_fixtures & set(getattr(item, "fixturenames", ())):
+            item.add_marker(pytest.mark.docker)

@@ -35,7 +35,7 @@ from nautilus.adapters.elasticsearch import ElasticsearchAdapter
 from nautilus.config.models import NoneAuth, SourceConfig
 from nautilus.core.models import IntentAnalysis, ScopeConstraint
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.docker]
 
 
 # ---------------------------------------------------------------------------

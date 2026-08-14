@@ -18,7 +18,9 @@ jobs:
         os: [ubuntu-latest]
         python-version: ["3.13", "3.14"]
         # macOS leg catches cross-platform regressions in the unit suite
-        # (``pytest -m unit`` needs no Docker, so it runs everywhere).
+        # (``pytest -m "not docker"`` needs no Docker, so it runs everywhere).
+        # Selection is opt-OUT: an unmarked test runs. Opt-in selection (-m unit)
+        # silently skipped 399 of 1299 tests, whole regression suites included.
         include:
           - os: macos-latest
             python-version: "3.13"
@@ -49,7 +51,7 @@ jobs:
         run: uv run pyright
 
       - name: Test
-        run: uv run pytest -m unit --tb=short --cov-report=xml -q
+        run: uv run pytest -m "not docker" --tb=short --cov-report=xml -q
 
       - name: Upload coverage
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.13'

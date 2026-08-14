@@ -24,7 +24,7 @@ from nautilus.adapters.neo4j import Neo4jAdapter
 from nautilus.config.models import BasicAuth, SourceConfig
 from nautilus.core.models import IntentAnalysis, ScopeConstraint
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.docker]
 
 
 # ---------------------------------------------------------------------------
