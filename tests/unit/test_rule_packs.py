@@ -2,7 +2,7 @@
 
 import glob
 import os
-from typing import Any, cast
+from typing import Any, TypedDict, cast
 
 import pytest
 import yaml
@@ -120,7 +120,7 @@ def _pack_rules() -> list[tuple[str, dict[str, Any]]]:
         rules_dir = os.path.join(pack_dir, "rules")
         for path in _discover_yaml(rules_dir):
             with open(path) as f:
-                data = yaml.safe_load(f)
+                data = cast("dict[str, Any] | None", yaml.safe_load(f))
             for rule in cast("list[dict[str, Any]]", (data or {}).get("rules", [])):
                 result.append((os.path.basename(path), rule))
     return result
@@ -148,9 +148,9 @@ class TestSalienceBands:
             "it would run at the CLIPS default and interleave arbitrarily"
         )
 
+        then = cast("dict[str, Any]", rule.get("then") or {})
         asserted = [
-            entry.get("template")
-            for entry in cast("list[dict[str, Any]]", (rule.get("then") or {}).get("assert", []))
+            entry.get("template") for entry in cast("list[dict[str, Any]]", then.get("assert", []))
         ]
         bands = {SALIENCE_BANDS[t] for t in asserted if t in SALIENCE_BANDS}
         assert bands, (
@@ -181,7 +181,17 @@ class TestSalienceBands:
 
 # Per-rule triggering requests. Each entry is the minimal request that should
 # put its rule in the trace; see the pack READMEs for the control each maps to.
-TRIGGERS = {
+class Trigger(TypedDict):
+    """One request scenario, shaped to :func:`_route`'s parameters."""
+
+    clearance: str
+    purpose: str
+    classification: str
+    data_types: list[str]
+    allowed_purposes: list[str]
+
+
+TRIGGERS: dict[str, Trigger] = {
     # confidential-or-above source -> purpose scope constraint
     "ac-6-least-privilege": {
         "clearance": "secret",
@@ -332,7 +342,8 @@ class TestRulePacksConfigWiring:
 
         broker = Broker.from_config(cfg_path)
         try:
-            loaded = {r.split("::")[-1] for r in broker._router.engine.rule_registry}
+            registry = broker._router.engine.rule_registry  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+            loaded = {r.split("::")[-1] for r in registry}
         finally:
             broker.close()
         assert PACK_RULE_NAMES[NIST_PACK] <= loaded, (

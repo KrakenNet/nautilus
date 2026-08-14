@@ -238,7 +238,7 @@ class TestUnreplayableEntries:
         log = tmp_path / "audit.jsonl"
         _write_audit_log(log, 5)
         # Strip input_facts from every line, as a pre-input_facts log would be.
-        stripped = []
+        stripped: list[str] = []
         for line in log.read_text(encoding="utf-8").splitlines():
             record = json.loads(line)
             payload = json.loads(record["metadata"]["nautilus_audit_entry"])
@@ -263,7 +263,7 @@ class TestUnreplayableEntries:
         """
         log = tmp_path / "audit.jsonl"
         _write_audit_log(log, 3)
-        rewritten = []
+        rewritten: list[str] = []
         for line in log.read_text(encoding="utf-8").splitlines():
             record = json.loads(line)
             payload = json.loads(record["metadata"]["nautilus_audit_entry"])

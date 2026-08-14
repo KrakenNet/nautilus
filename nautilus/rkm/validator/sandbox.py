@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
@@ -172,11 +172,16 @@ def _load_entries(audit_log_path: Path, replay_n: int) -> list[AuditEntry]:
     entries: list[AuditEntry] = []
     for raw in lines[-replay_n:]:
         try:
-            record = json.loads(raw)
+            record: Any = json.loads(raw)
         except json.JSONDecodeError:
             continue
-        payload = (record.get("metadata") or {}).get(NAUTILUS_METADATA_KEY)
-        if payload is None:
+        if not isinstance(record, dict):
+            continue
+        metadata = cast("dict[str, Any]", record).get("metadata")
+        if not isinstance(metadata, dict):
+            continue
+        payload = cast("dict[str, Any]", metadata).get(NAUTILUS_METADATA_KEY)
+        if not isinstance(payload, str):
             continue
         try:
             entries.append(AuditEntry.model_validate(json.loads(payload)))

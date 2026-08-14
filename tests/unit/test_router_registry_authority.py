@@ -16,6 +16,8 @@ These are thick unit tests: a real engine over the built-in rules tree.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from nautilus.config.agent_registry import AgentRegistry
@@ -49,7 +51,6 @@ def _intent() -> IntentAnalysis:
         raw_intent="find vulnerabilities",
         data_types_needed=["vulnerability"],
         entities=[],
-        confidence=0.9,
     )
 
 
@@ -57,7 +58,7 @@ def _route(
     router: FathomRouter,
     *,
     agent_id: str = "intern",
-    context: dict | None = None,
+    context: dict[str, Any] | None = None,
     sources: list[SourceConfig] | None = None,
     registry: AgentRegistry | None = None,
 ) -> RouteResult:
@@ -71,7 +72,7 @@ def _route(
     )
 
 
-def _registry(**records: dict) -> AgentRegistry:
+def _registry(**records: dict[str, Any]) -> AgentRegistry:
     return AgentRegistry({k: AgentRecord(id=k, **v) for k, v in records.items()})
 
 

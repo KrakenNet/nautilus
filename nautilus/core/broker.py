@@ -29,6 +29,7 @@ import logging
 import sys
 import time
 import uuid
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -367,7 +368,14 @@ def _merge_unique(prior: Any, incoming: list[str]) -> list[str]:
     the in-memory store, or a pre-encoded space-separated string from a
     Phase-1 session; all three coerce the same way the router coerces them.
     """
-    merged = prior.split() if isinstance(prior, str) else [str(v) for v in prior or []]
+    if isinstance(prior, str):
+        merged = prior.split()
+    elif isinstance(prior, Iterable) and not isinstance(prior, (bytes, Mapping)):
+        merged = [str(v) for v in cast("Iterable[object]", prior)]
+    else:
+        # ``None`` from an absent slot, or a scalar a caller wrote by mistake:
+        # start empty rather than raising inside session bookkeeping.
+        merged = []
     for value in incoming:
         if value not in merged:
             merged.append(value)

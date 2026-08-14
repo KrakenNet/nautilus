@@ -17,7 +17,8 @@ from __future__ import annotations
 
 import contextlib
 import time
-from typing import Any, ClassVar
+from collections.abc import Collection
+from typing import Any, ClassVar, cast
 
 from nautilus.adapters.base import AdapterError, ScopeEnforcementError
 from nautilus.adapters.schema import AdapterSchema
@@ -44,7 +45,8 @@ def _tag_operand(op: str, value: Any) -> str | tuple[str, ...]:
     if isinstance(value, str):
         return (value,)
     if isinstance(value, (list, tuple, set, frozenset)):
-        return tuple(str(v) for v in value)
+        members = cast("Collection[object]", value)
+        return tuple(str(v) for v in members)
     raise ScopeEnforcementError(
         f"S3Adapter: IN operator requires a list value, got {type(value).__name__}"
     )

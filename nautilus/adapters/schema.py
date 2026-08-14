@@ -17,7 +17,7 @@ import dataclasses
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 
 @dataclass(frozen=True)
@@ -336,12 +336,14 @@ class SchemaFingerprintStore:
             return None
         try:
             with open(fp_path) as fh:
-                stored = json.load(fh)
+                stored: object = json.load(fh)
         except (OSError, ValueError):
             # An unreadable baseline is not a matching baseline; the caller
             # treats "no baseline" as first registration and re-records.
             return None
-        fingerprint = stored.get("fingerprint") if isinstance(stored, dict) else None
+        if not isinstance(stored, dict):
+            return None
+        fingerprint = cast("dict[str, object]", stored).get("fingerprint")
         if not isinstance(fingerprint, str):
             return None
         self._store[adapter_id] = fingerprint

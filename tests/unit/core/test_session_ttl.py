@@ -15,7 +15,8 @@ import pytest
 
 from nautilus.config.models import NautilusConfig
 from nautilus.core.broker import Broker
-from nautilus.core.session import InMemorySessionStore
+from nautilus.core.session import AsyncSessionStore, InMemorySessionStore, SessionStore
+from nautilus.core.session_pg import PostgresSessionStore
 from nautilus.core.session_sqlite import SqliteSessionStore
 
 
@@ -53,7 +54,7 @@ class TestInMemoryTtl:
         store.update("s1", {"sources_visited": ["a"]})
         monkeypatch.setattr("nautilus.core.session.time.time", lambda: 1011.0)
         store.get("s1")
-        assert "s1" not in store._store
+        assert "s1" not in store._store  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
 
     def test_a_write_after_expiry_starts_from_empty(self, monkeypatch: pytest.MonkeyPatch) -> None:
         store = InMemorySessionStore(ttl_seconds=10)
@@ -142,6 +143,19 @@ class TestSqliteTtl:
         await store.aclose()
 
 
+def _build(config: NautilusConfig, base_dir: Path) -> SessionStore | AsyncSessionStore:
+    """Run the broker's own store factory — the only place the TTL is read."""
+    return Broker._build_session_store(  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+        config, base_dir=base_dir
+    )
+
+
+def _ttl(store: object) -> int:
+    """The TTL a constructed store actually holds."""
+    assert isinstance(store, InMemorySessionStore | SqliteSessionStore | PostgresSessionStore)
+    return store._ttl_seconds  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+
+
 class TestBrokerWiring:
     """The config value has to actually reach the store it configures."""
 
@@ -151,42 +165,40 @@ class TestBrokerWiring:
         )
 
     def test_the_memory_store_gets_the_configured_ttl(self, tmp_path: Path) -> None:
-        store = Broker._build_session_store(
-            self._config(backend="memory", ttl_seconds=42), base_dir=tmp_path
-        )
+        store = _build(self._config(backend="memory", ttl_seconds=42), tmp_path)
         assert isinstance(store, InMemorySessionStore)
-        assert store._ttl_seconds == 42
+        assert _ttl(store) == 42
 
     def test_the_sqlite_store_gets_the_configured_ttl(self, tmp_path: Path) -> None:
-        store = Broker._build_session_store(
-            self._config(backend="sqlite", ttl_seconds=42, sqlite_path="s.db"),
-            base_dir=tmp_path,
-        )
+        store = _build(self._config(backend="sqlite", ttl_seconds=42, sqlite_path="s.db"), tmp_path)
         assert isinstance(store, SqliteSessionStore)
-        assert store._ttl_seconds == 42
+        assert _ttl(store) == 42
 
     def test_the_postgres_store_gets_the_configured_ttl(self, tmp_path: Path) -> None:
-        store = Broker._build_session_store(
-            self._config(backend="postgres", dsn="postgres://h/db", ttl_seconds=42),
-            base_dir=tmp_path,
+        store = _build(
+            self._config(backend="postgres", dsn="postgres://h/db", ttl_seconds=42), tmp_path
         )
-        assert store._ttl_seconds == 42  # type: ignore[union-attr]
+        assert _ttl(store) == 42
 
-    def test_the_postgres_fallback_inherits_the_ttl(self, tmp_path: Path) -> None:
-        # A degradation must not silently turn expiry off.
-        store = Broker._build_session_store(
+    async def test_the_postgres_fallback_inherits_the_ttl(self, tmp_path: Path) -> None:
+        # A degradation must not silently turn expiry off. Port 1 refuses, so
+        # ``setup()`` takes the real ``fallback_memory`` branch.
+        store = _build(
             self._config(
                 backend="postgres",
-                dsn="postgres://h/db",
+                dsn="postgres://127.0.0.1:1/db",
                 ttl_seconds=42,
                 on_failure="fallback_memory",
             ),
-            base_dir=tmp_path,
+            tmp_path,
         )
-        store._degraded_memory = InMemorySessionStore(store._ttl_seconds)  # type: ignore[union-attr]
-        assert store._degraded_memory._ttl_seconds == 42  # type: ignore[union-attr]
+        assert isinstance(store, PostgresSessionStore)
+        await store.setup()
+        degraded = store._degraded_memory  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+        assert degraded is not None
+        assert _ttl(degraded) == 42
 
     def test_the_documented_default_is_one_hour(self, tmp_path: Path) -> None:
-        store = Broker._build_session_store(self._config(), base_dir=tmp_path)
+        store = _build(self._config(), tmp_path)
         assert isinstance(store, InMemorySessionStore)
-        assert store._ttl_seconds == 3600
+        assert _ttl(store) == 3600

@@ -15,14 +15,24 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any, Protocol
 
 from nautilus.rkm.lineage import LineageRecord, LineageStore
 from nautilus.rkm.queue import ProposalQueue
 from nautilus.rkm.types import Proposal
 
-if TYPE_CHECKING:
-    from nautilus.core.fathom_router import FathomRouter
+
+class RulePromoter(Protocol):
+    """The single capability approval needs from a router.
+
+    :class:`~nautilus.core.fathom_router.FathomRouter` satisfies it; naming the
+    capability rather than the class keeps promotion testable against any
+    engine front-end and stops this module importing the router.
+    """
+
+    def reload_rule(self, rule_name: str, rule_yaml: str) -> None:
+        """Load ``rule_yaml`` into the active engine under ``rule_name``."""
+        ...
 
 
 class AlreadyDecidedError(Exception):  # noqa: N818
@@ -70,7 +80,7 @@ def approve_proposal(
     *,
     queue: ProposalQueue,
     lineage: LineageStore,
-    router: FathomRouter | None = None,
+    router: RulePromoter | None = None,
     audit_logger: Any | None = None,
 ) -> ApprovalResult:
     """Approve a pending proposal and promote the rule into the active CLIPS env.
@@ -78,7 +88,7 @@ def approve_proposal(
     Steps:
     1. Validate proposal exists and is ``pending`` (raises :class:`AlreadyDecidedError` if not).
     2. Transition queue to ``approved``.
-    3. If ``router`` provided: call :meth:`FathomRouter.reload_rule`; on failure mark
+    3. If ``router`` provided: call :meth:`RulePromoter.reload_rule`; on failure mark
        ``promotion_failed`` (via queue transition note) and re-raise.
     4. Insert :class:`LineageRecord` if ``lineage`` provided.
     5. Transition queue to ``promoted``.

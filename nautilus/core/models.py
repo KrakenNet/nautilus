@@ -53,6 +53,26 @@ class RoutingDecision(BaseModel):
     reason: str
 
 
+ScopeOperator = Literal[
+    "=",
+    "!=",
+    "IN",
+    "NOT IN",
+    "<",
+    ">",
+    "<=",
+    ">=",
+    "LIKE",
+    "BETWEEN",
+    "IS NULL",
+]
+"""The comparison operators a router may put in a scope constraint (design §4.4).
+
+Named so callers that build or dispatch on a constraint operator can spell the
+same type rather than widening to ``str``.
+"""
+
+
 class ScopeConstraint(BaseModel):
     """Per-source WHERE-clause fragment produced by the router (design §4.4).
 
@@ -63,19 +83,7 @@ class ScopeConstraint(BaseModel):
 
     source_id: str
     field: str
-    operator: Literal[
-        "=",
-        "!=",
-        "IN",
-        "NOT IN",
-        "<",
-        ">",
-        "<=",
-        ">=",
-        "LIKE",
-        "BETWEEN",
-        "IS NULL",
-    ]
+    operator: ScopeOperator
     value: Any  # validated by operator-specific rules
     expires_at: str | None = None
     valid_from: str | None = None

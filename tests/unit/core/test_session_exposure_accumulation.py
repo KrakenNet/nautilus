@@ -22,6 +22,7 @@ from nautilus.adapters.schema import AdapterSchema
 from nautilus.config.models import SourceConfig
 from nautilus.core.broker import Broker
 from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
+from nautilus.core.session import SessionStore
 
 pytestmark = pytest.mark.unit
 
@@ -76,12 +77,21 @@ def _ctx(purpose: str = "threat-analysis") -> dict[str, Any]:
     }
 
 
+async def _session(broker: Broker, session_id: str = "s1") -> dict[str, Any]:
+    """Read persisted session state.
+
+    ``_session_get`` picks the sync or async store surface; the tests need the
+    same resolution, and the broker exposes no public read.
+    """
+    return await broker._session_get(session_id)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+
+
 async def _session_after(n: int, *, config_path: Path = FIXTURE_PATH) -> dict[str, Any]:
     broker = _broker(config_path)
     try:
         for _ in range(n):
             await broker.arequest("a1", "find vulnerabilities", _ctx())
-        return await broker._session_get("s1")  # noqa: SLF001
+        return await _session(broker)
     finally:
         await broker.aclose()
 
@@ -123,14 +133,14 @@ class TestExposureReachesTheEngine:
     async def _exposure_counts(n: int) -> list[int]:
         broker = _broker()
         counts: list[int] = []
-        real_route = broker._router.route  # noqa: SLF001
+        real_route = broker._router.route  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
 
         def spy(**kwargs: Any) -> Any:
             result = real_route(**kwargs)
             counts.append(result.facts_asserted_summary.get("session_exposure", 0))
             return result
 
-        broker._router.route = spy  # type: ignore[method-assign]  # noqa: SLF001
+        broker._router.route = spy  # noqa: SLF001  # pyright: ignore[reportPrivateUsage, reportAttributeAccessIssue]
         try:
             for _ in range(n):
                 await broker.arequest("a1", "find vulnerabilities", _ctx())
@@ -172,9 +182,9 @@ class TestPurposeTTL:
         broker = _broker(cfg)
         try:
             await broker.arequest("a1", "find vulnerabilities", _ctx())
-            first_start = (await broker._session_get("s1"))["purpose_start_ts"]  # noqa: SLF001
+            first_start = (await _session(broker))["purpose_start_ts"]
             await broker.arequest("a1", "find vulnerabilities", _ctx())
-            second_start = (await broker._session_get("s1"))["purpose_start_ts"]  # noqa: SLF001
+            second_start = (await _session(broker))["purpose_start_ts"]
         finally:
             await broker.aclose()
         assert first_start == second_start
@@ -184,9 +194,9 @@ class TestPurposeTTL:
         broker = _broker(cfg)
         try:
             await broker.arequest("a1", "find vulnerabilities", _ctx("threat-analysis"))
-            first_start = (await broker._session_get("s1"))["purpose_start_ts"]  # noqa: SLF001
+            first_start = (await _session(broker))["purpose_start_ts"]
             await broker.arequest("a1", "find vulnerabilities", _ctx("incident-response"))
-            state = await broker._session_get("s1")  # noqa: SLF001
+            state = await _session(broker)
         finally:
             await broker.aclose()
         assert state["purpose"] == "incident-response"
@@ -199,10 +209,10 @@ class TestPurposeTTL:
         try:
             await broker.arequest("a1", "find vulnerabilities", _ctx())
             # Age the window past its TTL without sleeping.
-            state = await broker._session_get("s1")  # noqa: SLF001
-            broker._session_store.update(  # noqa: SLF001
-                "s1", {"purpose_start_ts": state["purpose_start_ts"] - 3600}
-            )
+            state = await _session(broker)
+            store = broker.session_store
+            assert isinstance(store, SessionStore)
+            store.update("s1", {"purpose_start_ts": state["purpose_start_ts"] - 3600})
             resp = await broker.arequest("a1", "find vulnerabilities", _ctx())
         finally:
             await broker.aclose()

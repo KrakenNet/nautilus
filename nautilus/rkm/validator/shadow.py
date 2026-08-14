@@ -27,7 +27,7 @@ Key data model (YAML rule dict)::
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 
 @dataclass(frozen=True)
@@ -68,13 +68,17 @@ def _lhs_conditions(rule: dict[str, Any]) -> list[dict[str, Any]]:
         return lhs
 
     normalised: list[dict[str, Any]] = []
-    for pattern in rule.get("when") or []:
-        if not isinstance(pattern, dict):
+    patterns: list[Any] = rule.get("when") or []
+    for raw_pattern in patterns:
+        if not isinstance(raw_pattern, dict):
             continue
+        pattern = cast("dict[str, Any]", raw_pattern)
         slots: dict[str, Any] = {}
-        for cond in pattern.get("conditions") or []:
-            if not isinstance(cond, dict):
+        conditions: list[Any] = pattern.get("conditions") or []
+        for raw_cond in conditions:
+            if not isinstance(raw_cond, dict):
                 continue
+            cond = cast("dict[str, Any]", raw_cond)
             if cond.get("slot") is not None:
                 slots[str(cond["slot"])] = ""
             elif cond.get("test") is not None:

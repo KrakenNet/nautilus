@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
@@ -27,21 +27,29 @@ from nautilus.rkm.validator.static import validate_static
 from nautilus.rules import BUILT_IN_RULES_DIR
 
 
-def _load_proposed_rules(rule_yaml: Path) -> list[dict[str, Any]]:
-    """Parse the rule bodies out of a proposal ruleset file."""
-    document = yaml.safe_load(rule_yaml.read_text(encoding="utf-8")) or {}
+def load_proposed_rules(rule_yaml: Path) -> list[dict[str, Any]]:
+    """Parse the rule bodies out of a proposal ruleset file.
+
+    Each returned body carries the file-level ``module`` / ``ruleset`` /
+    ``version`` envelope merged in, which is the shape the validators and
+    ``nautilus rules validate`` both need.
+    """
+    document: Any = yaml.safe_load(rule_yaml.read_text(encoding="utf-8"))
     if not isinstance(document, dict):
         return []
-    envelope = {k: v for k, v in document.items() if k in {"module", "ruleset", "version"}}
-    rules = document.get("rules") or []
-    return [{**envelope, **rule} for rule in rules if isinstance(rule, dict)]
+    body = cast("dict[str, Any]", document)
+    envelope = {k: v for k, v in body.items() if k in {"module", "ruleset", "version"}}
+    rules: list[Any] = body.get("rules") or []
+    return [
+        {**envelope, **cast("dict[str, Any]", rule)} for rule in rules if isinstance(rule, dict)
+    ]
 
 
 def _built_in_ruleset() -> list[dict[str, Any]]:
     """Every built-in rule body, for shadow/subsumption comparison."""
     bodies: list[dict[str, Any]] = []
     for path in sorted((BUILT_IN_RULES_DIR / "rules").glob("*.yaml")):
-        bodies.extend(_load_proposed_rules(path))
+        bodies.extend(load_proposed_rules(path))
     return bodies
 
 
@@ -59,7 +67,7 @@ def run_pipeline(rule_yaml: Path, *, queue: ProposalQueue, audit_log: Path) -> P
     caller asked for a validation verdict, and "it does not compile" is one.
     """
     static_result = validate_static(rule_yaml)
-    proposed_rules = _load_proposed_rules(rule_yaml)
+    proposed_rules = load_proposed_rules(rule_yaml)
     proposed = proposed_rules[0] if proposed_rules else {}
 
     shadow_flags = shadow_check(proposed, _built_in_ruleset())

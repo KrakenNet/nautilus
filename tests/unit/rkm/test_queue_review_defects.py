@@ -29,11 +29,11 @@ import pytest
 
 from nautilus.rkm.lineage import LineageStore
 from nautilus.rkm.queue import ProposalQueue
-from nautilus.rkm.review import (
+from nautilus.rkm.review import (  # noqa: SLF001
     AlreadyDecidedError,
     PromotionFailedError,
-    _build_lineage_record,
-    _extract_rule_yaml,
+    _build_lineage_record,  # pyright: ignore[reportPrivateUsage]
+    _extract_rule_yaml,  # pyright: ignore[reportPrivateUsage]
     approve_proposal,
     reject_proposal,
 )
@@ -71,7 +71,9 @@ class TestOldestAgeIsTheOldest:
         queue = ProposalQueue(tmp_path)
         queue.submit(_proposal("prop_ancient", age_seconds=86_400))
         queue.submit(_proposal("prop_fresh", age_seconds=5))
-        assert queue.oldest_age_seconds() == pytest.approx(86_400, abs=30)
+        oldest = queue.oldest_age_seconds()
+        assert oldest is not None
+        assert 86_370 <= oldest <= 86_430
 
 
 class TestMinConfidenceFilters:
@@ -167,13 +169,18 @@ class TestFailedPromotionIsRecoverable:
         )
         return queue, LineageStore(tmp_path / "l")
 
+    @staticmethod
+    def _status(queue: ProposalQueue, proposal_id: str = "prop_a") -> str:
+        proposal = queue.get(proposal_id)
+        assert proposal is not None
+        return proposal.status
+
     def _fail_once(self, queue: ProposalQueue, lineage: LineageStore) -> None:
         with pytest.raises(PromotionFailedError):
             approve_proposal(
                 "prop_a", "alice", queue=queue, lineage=lineage, router=_FailingRouter()
             )
-        assert queue.get("prop_a") is not None
-        assert queue.get("prop_a").status == "approved"  # type: ignore[union-attr]
+        assert self._status(queue) == "approved"
 
     def test_a_failed_promotion_can_be_retried(
         self, stores: tuple[ProposalQueue, LineageStore]
@@ -184,7 +191,7 @@ class TestFailedPromotionIsRecoverable:
         result = approve_proposal("prop_a", "alice", queue=queue, lineage=lineage, router=router)
         assert result.promoted is True
         assert router.loaded == ["prop_a"]
-        assert queue.get("prop_a").status == "promoted"  # type: ignore[union-attr]
+        assert self._status(queue) == "promoted"
 
     def test_a_failed_promotion_can_be_rejected(
         self, stores: tuple[ProposalQueue, LineageStore]
@@ -192,7 +199,7 @@ class TestFailedPromotionIsRecoverable:
         queue, lineage = stores
         self._fail_once(queue, lineage)
         reject_proposal("prop_a", "alice", "cannot promote", queue=queue)
-        assert queue.get("prop_a").status == "rejected"  # type: ignore[union-attr]
+        assert self._status(queue) == "rejected"
 
     def test_a_promoted_proposal_stays_decided(
         self, stores: tuple[ProposalQueue, LineageStore]
@@ -223,5 +230,7 @@ class TestFailedPromotionIsRecoverable:
         queue, lineage = stores
         self._fail_once(queue, lineage)
         approve_proposal("prop_a", "alice", queue=queue, lineage=lineage, router=_AcceptingRouter())
-        decisions = queue.get("prop_a").decisions  # type: ignore[union-attr]
+        promoted = queue.get("prop_a")
+        assert promoted is not None
+        decisions = promoted.decisions
         assert [d.get("to") for d in decisions] == ["approved", "promoted"]

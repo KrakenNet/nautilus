@@ -91,7 +91,7 @@ class TestDuplicateRoutingDecisions:
 
     @staticmethod
     def _duplicate_route(broker: Broker, source_id: str) -> None:
-        real_route = broker._router.route  # noqa: SLF001
+        real_route = broker._router.route  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
 
         def _route(**kwargs: Any) -> Any:
             result = real_route(**kwargs)

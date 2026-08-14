@@ -15,6 +15,7 @@ not merely declared.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
@@ -67,7 +68,7 @@ def _broker() -> Any:
 
 
 @pytest.fixture()
-def client() -> TestClient:
+def client() -> Iterator[TestClient]:
     c = TestClient(create_app(None, existing_broker=_broker()))
     c.__enter__()
     try:

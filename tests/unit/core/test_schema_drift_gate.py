@@ -16,11 +16,12 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 
 from nautilus import Broker
+from nautilus.adapters.base import Adapter
 from nautilus.adapters.schema import (
     AdapterField,
     AdapterSchema,
@@ -56,7 +57,7 @@ def _schema(adapter_id: str, *, with_email: bool) -> AdapterSchema:
 class _SchemaAdapter:
     """Fake adapter whose reported schema the test can change between calls."""
 
-    source_type: str = "fake"
+    source_type: ClassVar[str] = "fake"
 
     def __init__(self, source_id: str) -> None:
         self._source_id = source_id
@@ -83,6 +84,23 @@ class _SchemaAdapter:
         return _schema(self._source_id, with_email=self.with_email)
 
 
+async def _check(broker: Broker, source_id: str, adapter: _SchemaAdapter) -> bool:
+    """Drive the drift gate directly; returns True when it quarantined.
+
+    The gate is deliberately internal — ``TestDriftGateOnTheRequestPath``
+    covers it through ``arequest``. These helpers are the only place the
+    tests reach past the public surface.
+    """
+    return await broker._check_adapter_schema(  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+        source_id, adapter
+    )
+
+
+def _quarantined(broker: Broker) -> set[str]:
+    """The set of adapters the gate has quarantined."""
+    return broker._quarantined_adapters  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+
+
 def _broker(tmp_path: Path) -> tuple[Broker, _SchemaAdapter]:
     """Broker on the shared fixture config, rooted at ``tmp_path``."""
     cfg = tmp_path / "nautilus.yaml"
@@ -94,7 +112,8 @@ def _broker(tmp_path: Path) -> tuple[Broker, _SchemaAdapter]:
     )
     broker = Broker.from_config(cfg)
     adapter = _SchemaAdapter("nvd_db")
-    broker._adapters = {"nvd_db": adapter}  # type: ignore[attr-defined]  # noqa: SLF001
+    registry: dict[str, Adapter] = {"nvd_db": adapter}
+    broker._adapters = registry  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
     return broker, adapter
 
 
@@ -156,33 +175,33 @@ class TestBrokerDriftGate:
     @pytest.mark.asyncio
     async def test_the_first_check_records_a_baseline(self, tmp_path: Path) -> None:
         broker, adapter = _broker(tmp_path)
-        await broker._check_adapter_schema("nvd_db", adapter)  # noqa: SLF001
+        await _check(broker, "nvd_db", adapter)
         assert broker.fingerprint_store.get("nvd_db") is not None
-        assert broker._quarantined_adapters == set()  # noqa: SLF001
+        assert _quarantined(broker) == set()
 
     @pytest.mark.asyncio
     async def test_an_unchanged_schema_does_not_quarantine(self, tmp_path: Path) -> None:
         broker, adapter = _broker(tmp_path)
-        await broker._check_adapter_schema("nvd_db", adapter)  # noqa: SLF001
-        quarantined = await broker._check_adapter_schema("nvd_db", adapter)  # noqa: SLF001
+        await _check(broker, "nvd_db", adapter)
+        quarantined = await _check(broker, "nvd_db", adapter)
         assert quarantined is False
-        assert broker._quarantined_adapters == set()  # noqa: SLF001
+        assert _quarantined(broker) == set()
 
     @pytest.mark.asyncio
     async def test_a_dropped_column_quarantines_the_adapter(self, tmp_path: Path) -> None:
         broker, adapter = _broker(tmp_path)
-        await broker._check_adapter_schema("nvd_db", adapter)  # noqa: SLF001
+        await _check(broker, "nvd_db", adapter)
         adapter.with_email = False
-        quarantined = await broker._check_adapter_schema("nvd_db", adapter)  # noqa: SLF001
+        quarantined = await _check(broker, "nvd_db", adapter)
         assert quarantined is True
-        assert broker._quarantined_adapters == {"nvd_db"}  # noqa: SLF001
+        assert _quarantined(broker) == {"nvd_db"}
 
     @pytest.mark.asyncio
     async def test_drift_is_audited(self, tmp_path: Path) -> None:
         broker, adapter = _broker(tmp_path)
-        await broker._check_adapter_schema("nvd_db", adapter)  # noqa: SLF001
+        await _check(broker, "nvd_db", adapter)
         adapter.with_email = False
-        await broker._check_adapter_schema("nvd_db", adapter)  # noqa: SLF001
+        await _check(broker, "nvd_db", adapter)
         # The Nautilus entry rides inside the fathom record's metadata.
         entries = [
             json.loads(json.loads(line)["metadata"][NAUTILUS_METADATA_KEY])
@@ -197,29 +216,29 @@ class TestBrokerDriftGate:
         async def _boom() -> AdapterSchema:
             raise RuntimeError("upstream down")
 
-        adapter.get_schema = _boom  # type: ignore[method-assign]
-        quarantined = await broker._check_adapter_schema("nvd_db", adapter)  # noqa: SLF001
+        adapter.get_schema = _boom
+        quarantined = await _check(broker, "nvd_db", adapter)
         assert quarantined is False
-        assert broker._quarantined_adapters == set()  # noqa: SLF001
+        assert _quarantined(broker) == set()
 
     @pytest.mark.asyncio
     async def test_drift_survives_a_restart(self, tmp_path: Path) -> None:
         # The baseline is on disk under the config directory, so a second
         # broker over the same config still sees the drift.
         broker, adapter = _broker(tmp_path)
-        await broker._check_adapter_schema("nvd_db", adapter)  # noqa: SLF001
+        await _check(broker, "nvd_db", adapter)
 
         restarted, adapter2 = _broker(tmp_path)
         adapter2.with_email = False
-        quarantined = await restarted._check_adapter_schema("nvd_db", adapter2)  # noqa: SLF001
+        quarantined = await _check(restarted, "nvd_db", adapter2)
         assert quarantined is True
 
     @pytest.mark.asyncio
     async def test_an_operator_ack_clears_the_gate(self, tmp_path: Path) -> None:
         broker, adapter = _broker(tmp_path)
-        await broker._check_adapter_schema("nvd_db", adapter)  # noqa: SLF001
+        await _check(broker, "nvd_db", adapter)
         adapter.with_email = False
-        await broker._check_adapter_schema("nvd_db", adapter)  # noqa: SLF001
+        await _check(broker, "nvd_db", adapter)
 
         broker.fingerprint_store.record_ack(
             "nvd_db",
@@ -229,7 +248,7 @@ class TestBrokerDriftGate:
         )
         restarted, adapter2 = _broker(tmp_path)
         adapter2.with_email = False
-        assert await restarted._check_adapter_schema("nvd_db", adapter2) is False  # noqa: SLF001
+        assert await _check(restarted, "nvd_db", adapter2) is False
 
 
 class TestDriftGateOnTheRequestPath:
@@ -252,7 +271,7 @@ class TestDriftGateOnTheRequestPath:
     async def test_a_drifted_adapter_does_not_serve_the_request_that_found_it(
         self, tmp_path: Path
     ) -> None:
-        broker, adapter = _broker(tmp_path)
+        broker, _adapter = _broker(tmp_path)
         ctx = {"clearance": "unclassified", "purpose": "threat-analysis"}
         await broker.arequest(agent_id="a1", intent="find vulnerabilities", context=ctx)
 

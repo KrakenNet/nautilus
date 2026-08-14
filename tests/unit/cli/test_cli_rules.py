@@ -135,7 +135,9 @@ def _write_audit_log(path: Path, n: int = 120) -> Path:
     shape nothing in Nautilus emits or reads. Replay needs ``input_facts``, so
     these go through the router and the real audit logger.
     """
-    from tests.integration.test_rkm_sandbox import _write_audit_log as _real
+    from tests.integration.test_rkm_sandbox import (  # noqa: SLF001
+        _write_audit_log as _real,  # pyright: ignore[reportPrivateUsage]
+    )
 
     _real(path, n)
     return path

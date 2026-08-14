@@ -29,13 +29,16 @@ from nautilus.adapters.base import ScopeEnforcementError
 from nautilus.adapters.influxdb import InfluxDBAdapter
 from nautilus.adapters.pgvector import PgVectorAdapter
 from nautilus.adapters.postgres import PostgresAdapter
-from nautilus.adapters.s3 import S3Adapter, _tag_operand
-from nautilus.core.models import ScopeConstraint
+from nautilus.adapters.s3 import (  # noqa: SLF001
+    S3Adapter,
+    _tag_operand,  # pyright: ignore[reportPrivateUsage]
+)
+from nautilus.core.models import ScopeConstraint, ScopeOperator
 
 pytestmark = pytest.mark.unit
 
 
-def _scope(field: str, operator: str, value: Any) -> ScopeConstraint:
+def _scope(field: str, operator: ScopeOperator, value: Any) -> ScopeConstraint:
     return ScopeConstraint(source_id="s", field=field, operator=operator, value=value)
 
 
@@ -50,9 +53,9 @@ class TestS3TagInIsExactMembership:
         adapter = S3Adapter()
         client = AsyncMock()
         client.get_object_tagging.return_value = {"TagSet": [{"Key": "owner", "Value": tag_value}]}
-        adapter._client = client  # noqa: SLF001
-        adapter._bucket = "b"  # noqa: SLF001
-        return await adapter._matches_tags(  # noqa: SLF001
+        adapter._client = client  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+        adapter._bucket = "b"  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+        return await adapter._matches_tags(  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
             "k", [("owner", "IN", _tag_operand("IN", members))]
         )
 
@@ -79,18 +82,18 @@ class TestS3TagInIsExactMembership:
 
 
 def _flux(scope: list[ScopeConstraint]) -> str:
-    return InfluxDBAdapter(client=AsyncMock())._build_flux("b", scope, 100)  # noqa: SLF001
+    return InfluxDBAdapter(client=AsyncMock())._build_flux("b", scope, 100)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
 
 
 class TestInfluxTimeConstraintsAreNeverDropped:
     @pytest.mark.parametrize("op", ["=", "!=", "IN", "NOT IN", "LIKE", "IS NULL"])
-    def test_an_unliftable_operator_raises(self, op: str) -> None:
+    def test_an_unliftable_operator_raises(self, op: ScopeOperator) -> None:
         value = ["2020-01-01T00:00:00Z"] if op in ("IN", "NOT IN") else "2020-01-01T00:00:00Z"
         with pytest.raises(ScopeEnforcementError, match="not expressible as a time range"):
             _flux([_scope("_time", op, value)])
 
     @pytest.mark.parametrize(("op", "expected"), [(">=", "start"), ("<=", "stop")])
-    def test_range_operators_still_lift(self, op: str, expected: str) -> None:
+    def test_range_operators_still_lift(self, op: ScopeOperator, expected: str) -> None:
         flux = _flux([_scope("_time", op, "2024-01-01T00:00:00Z")])
         assert f'{expected}: "2024-01-01T00:00:00Z"' in flux
 
@@ -139,17 +142,17 @@ class TestInfluxLikeKeepsItsAnchoring:
 
 class TestSchemaQualifierSurvives:
     def test_postgres_keeps_the_schema(self) -> None:
-        sql, _ = PostgresAdapter()._build_sql(  # noqa: SLF001
+        sql, _ = PostgresAdapter()._build_sql(  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
             "restricted.customers", [_scope("region", "=", "eu")], 1000
         )
         assert 'FROM "restricted"."customers"' in sql
 
     def test_postgres_still_handles_a_bare_name(self) -> None:
-        sql, _ = PostgresAdapter()._build_sql("customers", [], 1000)  # noqa: SLF001
+        sql, _ = PostgresAdapter()._build_sql("customers", [], 1000)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
         assert 'FROM "customers"' in sql
 
     def test_pgvector_keeps_the_schema(self) -> None:
-        sql, _ = PgVectorAdapter()._build_vector_sql(  # noqa: SLF001
+        sql, _ = PgVectorAdapter()._build_vector_sql(  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
             table="restricted.customers",
             embedding_column="emb",
             metadata_column="meta",
@@ -162,8 +165,8 @@ class TestSchemaQualifierSurvives:
 
     def test_a_double_qualifier_is_rejected(self) -> None:
         with pytest.raises(ScopeEnforcementError, match="more than one schema qualifier"):
-            PostgresAdapter()._build_sql("a.b.c", [], 10)  # noqa: SLF001
+            PostgresAdapter()._build_sql("a.b.c", [], 10)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
 
     def test_an_injection_attempt_in_the_schema_is_rejected(self) -> None:
         with pytest.raises(ScopeEnforcementError):
-            PostgresAdapter()._build_sql('x"; DROP TABLE y; --.customers', [], 10)  # noqa: SLF001
+            PostgresAdapter()._build_sql('x"; DROP TABLE y; --.customers', [], 10)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]

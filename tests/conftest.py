@@ -36,10 +36,15 @@ def isolate_schema_baselines(tmp_path_factory: pytest.TempPathFactory) -> Iterat
     from nautilus.core.broker import Broker
 
     root = str(tmp_path_factory.mktemp("schema-baselines"))
-    original = Broker._fingerprint_root  # noqa: SLF001
-    Broker._fingerprint_root = staticmethod(lambda base_dir: root)  # type: ignore[method-assign]  # noqa: SLF001
+
+    def _rooted(base_dir: Path | None) -> str:
+        del base_dir
+        return root
+
+    original = Broker._fingerprint_root  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    Broker._fingerprint_root = staticmethod(_rooted)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
     yield
-    Broker._fingerprint_root = original  # type: ignore[method-assign]  # noqa: SLF001
+    Broker._fingerprint_root = original  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
 
 
 @pytest.fixture(scope="session", autouse=True)

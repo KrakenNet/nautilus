@@ -126,8 +126,7 @@ def _cmd_validate(args: argparse.Namespace) -> int:
     """
     import json as _json
 
-    import yaml
-
+    from nautilus.rkm.validator.pipeline import load_proposed_rules
     from nautilus.rkm.validator.sandbox import (
         SandboxRegressionError,
         SandboxRuleError,
@@ -179,9 +178,9 @@ def _cmd_validate(args: argparse.Namespace) -> int:
         err(f"audit log not found: {audit_path}")
         return 1
 
-    document = yaml.safe_load(file_path.read_text(encoding="utf-8")) or {}
-    envelope = {k: v for k, v in document.items() if k in {"module", "ruleset", "version"}}
-    rules = [{**envelope, **r} for r in (document.get("rules") or []) if isinstance(r, dict)]
+    # Same parse the validator pipeline uses, so a rule the CLI hands to
+    # ``sandbox_replay`` has exactly the shape the pipeline would hand it.
+    rules = load_proposed_rules(file_path)
     replay_n = int(getattr(args, "replay_n", 1000))
 
     sandbox_report: list[dict[str, Any]] = []

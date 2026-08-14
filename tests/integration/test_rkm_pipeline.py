@@ -125,7 +125,10 @@ def _proposal_file(tmp_path: Path, name: str, body: dict[str, Any]) -> Path:
 
 def test_pipeline_rejects_a_regressive_proposal(tmp_path: Path) -> None:
     """A rule that withdraws granted access is rejected, with the reason recorded."""
-    from tests.integration.test_rkm_sandbox import DENY_ALL_PII, _write_audit_log
+    from tests.integration.test_rkm_sandbox import (  # noqa: SLF001
+        DENY_ALL_PII,
+        _write_audit_log,  # pyright: ignore[reportPrivateUsage]
+    )
 
     audit_log = tmp_path / "audit.jsonl"
     _write_audit_log(audit_log, 5)
@@ -148,10 +151,10 @@ def test_pipeline_distinguishes_proposals(tmp_path: Path) -> None:
     This is the discriminating check: with ``{}`` passed to every stage, a
     benign rule and a regressive one were indistinguishable in the queue.
     """
-    from tests.integration.test_rkm_sandbox import (
+    from tests.integration.test_rkm_sandbox import (  # noqa: SLF001
         DEAD_RULE,
         DENY_ALL_PII,
-        _write_audit_log,
+        _write_audit_log,  # pyright: ignore[reportPrivateUsage]
     )
 
     audit_log = tmp_path / "audit.jsonl"
@@ -194,7 +197,10 @@ def test_the_pipeline_writes_the_key_its_readers_read(tmp_path: Path) -> None:
     all read ``validation["confidence"]``, so a scored proposal displayed as
     0.0 on every human-review surface and no confidence filter could match.
     """
-    from tests.integration.test_rkm_sandbox import ROUTE_VULN_DB, _write_audit_log
+    from tests.integration.test_rkm_sandbox import (  # noqa: SLF001
+        ROUTE_VULN_DB,
+        _write_audit_log,  # pyright: ignore[reportPrivateUsage]
+    )
 
     audit_log = tmp_path / "audit.jsonl"
     _write_audit_log(audit_log, 5)

@@ -98,8 +98,15 @@ def _coerce_multislot(raw: Any) -> list[str]:
     return []
 
 
-_UNKNOWN_AGENT = object()
-"""Sentinel: a registry is configured and does not contain the requested id."""
+class _UnknownAgent:
+    """Sentinel type: a registry is configured and lacks the requested id.
+
+    A distinct class rather than a bare ``object()`` so ``isinstance`` narrows
+    the resolve result and the ``AgentRecord`` branch keeps its attributes.
+    """
+
+
+_UNKNOWN_AGENT = _UnknownAgent()
 
 
 class FathomRouter:
@@ -207,7 +214,7 @@ class FathomRouter:
             self._input_facts: list[InputFact] = []
 
             record = self._resolve_agent(agent_id, agent_registry)
-            if record is _UNKNOWN_AGENT:
+            if isinstance(record, _UnknownAgent):
                 # A registry is configured and does not know this id. Deny every
                 # declared source rather than routing on caller-supplied
                 # attributes, matching declare_handoff's unknown-agent
@@ -504,7 +511,7 @@ class FathomRouter:
 
     def _resolve_agent(
         self, agent_id: str, agent_registry: AgentRegistry | None
-    ) -> AgentRecord | None | object:
+    ) -> AgentRecord | _UnknownAgent | None:
         """Resolve the agent's registered identity.
 
         Returns the :class:`AgentRecord` when registered, ``None`` when no

@@ -165,7 +165,8 @@ class TestAuditEntryCarriesInputFacts:
         """Write one entry through the real logger and decode it back off disk."""
         import json
 
-        from fathom.audit import AuditRecord, FileSink
+        from fathom.audit import FileSink
+        from fathom.models import AuditRecord
 
         from nautilus.audit.logger import AuditLogger, decode_nautilus_entry
 
