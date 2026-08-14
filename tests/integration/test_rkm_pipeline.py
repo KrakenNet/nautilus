@@ -184,3 +184,30 @@ def test_pipeline_rejects_an_uncompilable_proposal(tmp_path: Path) -> None:
     )
     assert proposal.status == "rejected"
     assert proposal.validation["sandbox"]["error"]
+
+
+def test_the_pipeline_writes_the_key_its_readers_read(tmp_path: Path) -> None:
+    """`confidence`, not `score`.
+
+    The pipeline wrote ``validation["score"]`` while the REST proposal
+    detail, ``rkm queue list`` and ``ProposalQueue.list(min_confidence=...)``
+    all read ``validation["confidence"]``, so a scored proposal displayed as
+    0.0 on every human-review surface and no confidence filter could match.
+    """
+    from tests.integration.test_rkm_sandbox import ROUTE_VULN_DB, _write_audit_log
+
+    audit_log = tmp_path / "audit.jsonl"
+    _write_audit_log(audit_log, 5)
+    queue = ProposalQueue(tmp_path / "queue")
+
+    proposal = run_pipeline(
+        _proposal_file(tmp_path, "benign", ROUTE_VULN_DB),
+        queue=queue,
+        audit_log=audit_log,
+    )
+    confidence = proposal.validation["confidence"]
+    assert isinstance(confidence, float)
+    assert proposal.validation["confidence_breakdown"]["total"] == confidence
+    # Reachable through the filter the CLI flag feeds.
+    assert [p.proposal_id for p in queue.list(min_confidence=confidence)] == [proposal.proposal_id]
+    assert queue.list(min_confidence=confidence + 0.01) == []

@@ -164,7 +164,7 @@ def _cmd_queue_list(args: argparse.Namespace) -> int:
         ok("no proposals")
         return 0
     for p in proposals:
-        conf = p.validation.get("confidence", "?")
+        conf = p.validation.get("confidence", "?")  # written by run_pipeline
         print(f"  {p.proposal_id}  status={p.status}  confidence={conf}")
     return 0
 
@@ -290,7 +290,11 @@ def _cmd_queue_diff(args: argparse.Namespace) -> int:
         err(f"proposal {args.proposal_id} not found")
         return 1
 
-    derived_from: list[str] = list(proposal.lineage.get("derived_from", []))
+    # ``or`` rather than a dict default: run_pipeline writes
+    # ``lineage={"derived_from": None}``, so the key is present, the default
+    # never applies, and list(None) raised an unhandled TypeError on every
+    # proposal the pipeline produces.
+    derived_from: list[str] = list(proposal.lineage.get("derived_from") or [])
     peer = _peer_from_derived_from(derived_from)
 
     artifact = proposal.artifact

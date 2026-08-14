@@ -100,10 +100,15 @@ def run_pipeline(rule_yaml: Path, *, queue: ProposalQueue, audit_log: Path) -> P
                 "insufficient_history": sandbox_result.insufficient_history,
                 "skipped_no_input_facts": sandbox_result.skipped_no_input_facts,
                 "skipped_drifted": sandbox_result.skipped_drifted,
+                "top_triggers": list(sandbox_result.top_triggers),
                 "error": sandbox_error,
             },
-            "score": breakdown.total,
-            "breakdown": {
+            # ``confidence`` / ``confidence_breakdown``, not ``score`` /
+            # ``breakdown``: those are the names every reader uses (the REST
+            # proposal detail, ``rkm queue list``, and the ``min_confidence``
+            # filter), and the value's own type is ConfidenceBreakdown.
+            "confidence": breakdown.total,
+            "confidence_breakdown": {
                 "base": breakdown.base,
                 "regression_penalty": breakdown.regression_penalty,
                 "relaxation_penalty": breakdown.relaxation_penalty,

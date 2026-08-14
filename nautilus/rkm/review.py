@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from nautilus.rkm.lineage import LineageRecord, LineageStore
@@ -83,7 +84,11 @@ def approve_proposal(
     5. Transition queue to ``promoted``.
     6. Emit ``proposal_approved`` + ``rule_promoted`` audit events if ``audit_logger`` provided.
 
-    Idempotent: second call raises :class:`AlreadyDecidedError` (AC-35.9.e / 409).
+    Callable from ``pending`` or from ``approved``. Re-approving an already
+    approved proposal retries the promotion, which is the only way out of an
+    approve that transitioned the queue but failed (or never attempted) the
+    promotion. A decided proposal — rejected, promoted, expired, superseded —
+    still raises :class:`AlreadyDecidedError` (AC-35.9.e / 409).
 
     Reviewer identity is accepted as a parameter; callers resolve ``NAUTILUS_REVIEWER``
     env and pass it in (pure function — no env reads here).
@@ -92,19 +97,22 @@ def approve_proposal(
     if proposal is None:
         raise KeyError(f"proposal not found: {proposal_id!r}")
 
-    if proposal.status != "pending":
+    if proposal.status not in ("pending", "approved"):
         raise AlreadyDecidedError(proposal_id, proposal.status)
 
     now = datetime.now(UTC)
 
-    # Transition to approved.
-    queue.transition(
-        proposal_id,
-        to="approved",
-        reviewer=reviewer_identity,
-        reason=None,
-        note=None,
-    )
+    # Already-approved proposals are re-entering only to retry promotion; the
+    # approval decision is already recorded and ``approved -> approved`` is
+    # not a legal transition.
+    if proposal.status == "pending":
+        queue.transition(
+            proposal_id,
+            to="approved",
+            reviewer=reviewer_identity,
+            reason=None,
+            note=None,
+        )
 
     # Promote into CLIPS env.
     promoted = False
@@ -114,12 +122,9 @@ def approve_proposal(
             router.reload_rule(proposal_id, rule_yaml)
             promoted = True
         except Exception as exc:
-            # Mark promotion failure in the queue with a note; do not transition
-            # to promoted — leave as approved so operator can retry.
-            # We don't have a dedicated "promotion_failed" status in the state
-            # machine, so we add a note via a second transition to a valid
-            # terminal state (or simply leave as approved with the note).
-            # Re-raise so caller handles the failure.
+            # Leave the proposal in ``approved`` and re-raise. There is no
+            # ``promotion_failed`` status; the recovery paths out of
+            # ``approved`` are a re-approve (retries promotion) and a reject.
             raise PromotionFailedError(
                 f"FathomRouter.reload_rule failed for proposal {proposal_id!r}: {exc}"
             ) from exc
@@ -174,16 +179,18 @@ def reject_proposal(
     queue: ProposalQueue,
     audit_logger: Any | None = None,
 ) -> RejectionResult:
-    """Reject a pending proposal.
+    """Reject a proposal that has not been promoted.
 
-    Raises :class:`AlreadyDecidedError` if not in ``pending`` status.
+    Accepts ``pending`` and ``approved``: an approval whose promotion failed
+    has to be backed out somehow, and rejection is that path. Raises
+    :class:`AlreadyDecidedError` from any other status.
     Emits ``proposal_rejected`` audit event if ``audit_logger`` provided.
     """
     proposal = queue.get(proposal_id)
     if proposal is None:
         raise KeyError(f"proposal not found: {proposal_id!r}")
 
-    if proposal.status != "pending":
+    if proposal.status not in ("pending", "approved"):
         raise AlreadyDecidedError(proposal_id, proposal.status)
 
     now = datetime.now(UTC)
@@ -265,18 +272,31 @@ def retract_rule(
 
 
 def _extract_rule_yaml(proposal: Proposal) -> str:
-    """Extract YAML text from proposal artifact.
+    """Extract the rule YAML a proposal is asking to promote.
 
-    Proposals with ``artifact_type == "rule"`` carry the YAML under
-    ``artifact["yaml"]`` per design.md. Falls back to serializing the
-    artifact dict for other types.
+    Rule proposals carry it either inline under ``artifact["yaml"]`` or by
+    reference under ``artifact["yaml_path"]``; ``run_pipeline`` writes the
+    latter. The previous fallback serialised the whole artifact dict to JSON
+    and handed *that* to the compiler, which could only ever fail with "YAML
+    file must contain a top-level 'rules' key" -- so an artifact carrying
+    neither key is now a clear error instead.
     """
     artifact = proposal.artifact
-    if isinstance(artifact.get("yaml"), str):
-        return artifact["yaml"]
-    import json
-
-    return json.dumps(artifact, separators=(",", ":"))
+    inline = artifact.get("yaml")
+    if isinstance(inline, str):
+        return inline
+    path = artifact.get("yaml_path")
+    if isinstance(path, str):
+        try:
+            return Path(path).read_text(encoding="utf-8")
+        except OSError as exc:
+            raise PromotionFailedError(
+                f"proposal {proposal.proposal_id!r} references unreadable rule file {path!r}: {exc}"
+            ) from exc
+    raise PromotionFailedError(
+        f"proposal {proposal.proposal_id!r} carries no rule YAML: artifact has neither "
+        f"'yaml' nor 'yaml_path' (keys: {sorted(artifact)})"
+    )
 
 
 def _build_lineage_record(
@@ -285,9 +305,12 @@ def _build_lineage_record(
     promoted_at: datetime,
 ) -> LineageRecord:
     """Build a :class:`LineageRecord` from an approved proposal."""
-    derived_from: tuple[str, ...] = tuple(proposal.lineage.get("derived_from", []))
-    observation_ids: dict[str, Any] = dict(proposal.lineage.get("observation_ids", {}))
-    sandbox_results: dict[str, Any] = dict(proposal.lineage.get("sandbox_results", {}))
+    # ``or`` rather than a dict default: run_pipeline writes
+    # ``lineage={"derived_from": None}``, so the key is present and the
+    # default never applies -- tuple(None) raised TypeError.
+    derived_from: tuple[str, ...] = tuple(proposal.lineage.get("derived_from") or ())
+    observation_ids: dict[str, Any] = dict(proposal.lineage.get("observation_ids") or {})
+    sandbox_results: dict[str, Any] = dict(proposal.lineage.get("sandbox_results") or {})
     rule_name: str = proposal.artifact.get("name", proposal.proposal_id)
     version: int = int(proposal.artifact.get("version", 1))
     return LineageRecord(

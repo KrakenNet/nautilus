@@ -686,7 +686,9 @@ def create_app(
             "confidence": proposal.validation.get("confidence", 0.0),
             "confidence_breakdown": proposal.validation.get("confidence_breakdown", {}),
             "shadow_flags": list(proposal.shadow_flags),
-            "top_replayed": proposal.validation.get("top_replayed", []),
+            # AC-35.9.c calls these the sandbox's top triggers; the key was
+            # ``top_replayed``, which nothing has ever written.
+            "top_triggers": proposal.validation.get("sandbox", {}).get("top_triggers", []),
         }
 
     @app.post(

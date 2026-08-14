@@ -30,7 +30,10 @@ _LOCK_POLL_S = 0.1
 # Valid state-machine transitions: (from_status) -> allowed to_statuses
 _VALID_TRANSITIONS: dict[str, set[str]] = {
     "pending": {"approved", "rejected", "expired"},
-    "approved": {"promoted", "expired"},
+    # ``rejected`` is reachable from ``approved`` so an operator can back out
+    # an approval whose promotion failed. Without it a failed promotion wedged
+    # the proposal in ``approved`` with no retry, no reject and no rollback.
+    "approved": {"promoted", "rejected", "expired"},
     "rejected": set(),
     "expired": set(),
     "promoted": set(),
@@ -165,7 +168,12 @@ class ProposalQueue:
         status: ProposalStatus | None = None,
         min_confidence: float = 0.0,
     ) -> list[Proposal]:
-        """Enumerate proposals; AC-35.9.b filtering by ``--status`` / ``--min-confidence``."""
+        """Enumerate proposals; AC-35.9.b filtering by ``--status`` / ``--min-confidence``.
+
+        A proposal with no recorded confidence scores 0.0, so any non-zero
+        ``min_confidence`` excludes it — an unscored proposal has not cleared
+        the bar, it is just unmeasured.
+        """
         results: list[Proposal] = []
         for path in sorted(self._queue_dir.glob("*.jsonl")):
             proposal_id = path.stem
@@ -173,6 +181,8 @@ class ProposalQueue:
             if proposal is None:
                 continue
             if status is not None and proposal.status != status:
+                continue
+            if float(proposal.validation.get("confidence", 0.0)) < min_confidence:
                 continue
             results.append(proposal)
         return results
@@ -233,7 +243,7 @@ class ProposalQueue:
         if not pending:
             return 0.0
         now = datetime.now(UTC)
-        oldest = min((now - p.proposed_at).total_seconds() for p in pending)
+        oldest = max((now - p.proposed_at).total_seconds() for p in pending)
         return max(0.0, oldest)
 
 
