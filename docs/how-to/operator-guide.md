@@ -228,13 +228,20 @@ restarts, or omit it to auto-generate per process — see
 ```bash
 nautilus adapters list --status quarantined
 nautilus adapters schema <source-id> --json
-nautilus adapters schema-diff <source-id>
-nautilus adapters schema-ack <source-id> --reason "intentional migration" --yes
+nautilus adapters schema-diff <source-id> --config nautilus.yaml
+nautilus adapters schema-ack <source-id> --config nautilus.yaml \
+  --reason "intentional migration" --yes
 ```
 
-The broker fingerprints each adapter's schema; unexpected drift
-quarantines the source (it stops receiving routed requests) until an
+The broker fingerprints each adapter's schema when it first connects;
+unexpected drift quarantines the source (it stops receiving routed
+requests, including the request that discovered the drift) until an
 operator acknowledges the change with `schema-ack`.
+
+Baselines live under `.nautilus/adapters/fingerprints/` next to the
+config file, so they survive a restart. `schema-diff` and `schema-ack`
+take `--config` because they compare against — and rewrite — the same
+baselines the broker reads.
 
 ## 8. Validate rules before deploying
 

@@ -67,6 +67,7 @@ def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> N
     # schema-diff
     p_diff = adapters_sub.add_parser("schema-diff", help="Show drift vs stored fingerprint.")
     p_diff.add_argument("name", help="Adapter name/id.")
+    p_diff.add_argument("--config", required=True, help="Path to nautilus.yaml.")
     p_diff.add_argument("--json", action="store_true", help="Emit JSON to stdout.")
 
     # schema-ack
@@ -74,6 +75,7 @@ def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> N
         "schema-ack", help="Acknowledge drift; update stored fingerprint (AC-21.g)."
     )
     p_ack.add_argument("name", help="Adapter name/id.")
+    p_ack.add_argument("--config", required=True, help="Path to nautilus.yaml.")
     p_ack.add_argument("--reason", required=True, help="Reason for acknowledgement.")
     p_ack.add_argument(
         "--yes",
@@ -117,6 +119,42 @@ def _open_store() -> object:  # pyright: ignore[reportUnusedFunction]
     from nautilus.adapters.schema import SchemaFingerprintStore
 
     return SchemaFingerprintStore(root=None)
+
+
+def _live_adapter_schema(config_path: str, name: str) -> tuple[Any, AdapterSchema | None]:
+    """Return ``(broker, schema)`` for the configured adapter ``name``.
+
+    Baseline operations have to run against the broker's own fingerprint
+    store and the adapter's real schema. Comparing — or acknowledging — the
+    ``AdapterSchema.unknown`` stub would write a baseline the broker can
+    never match, quarantining the adapter permanently.
+
+    ``schema`` is ``None`` when the adapter is unknown, cannot connect, or
+    does not introspect its schema.
+    """
+    import asyncio
+
+    from nautilus.core.broker import Broker
+
+    broker = Broker.from_config(config_path)
+    adapter = broker._adapters.get(name)  # pyright: ignore[reportPrivateUsage]
+    if adapter is None or not hasattr(adapter, "get_schema"):
+        asyncio.run(broker.aclose())
+        return broker, None
+
+    async def _fetch() -> AdapterSchema | None:
+        try:
+            await adapter.connect(
+                broker._registry.get(name)  # pyright: ignore[reportPrivateUsage]
+            )
+            return await adapter.get_schema()  # type: ignore[union-attr]
+        except Exception as exc:  # noqa: BLE001 — reported, not raised
+            warn(f"could not read schema for {name!r}: {exc}")
+            return None
+        finally:
+            await broker.aclose()
+
+    return broker, asyncio.run(_fetch())
 
 
 def _schema_as_dict(schema: AdapterSchema) -> dict[str, Any]:
@@ -261,17 +299,14 @@ def _cmd_schema_fingerprint(args: argparse.Namespace) -> int:
 
 
 def _cmd_schema_diff(args: argparse.Namespace) -> int:
-    from nautilus.adapters.schema import SchemaFingerprintStore
-
-    store = SchemaFingerprintStore(root=None)
-    stored_fp = store.get(args.name)
-    current_schema = _get_adapter_schema(args.name)
+    broker, current_schema = _live_adapter_schema(args.config, args.name)
+    stored_fp = broker.fingerprint_store.get(args.name)
 
     if current_schema is None:
         warn(f"no schema available for adapter {args.name!r}")
         return 0
 
-    current_fp = current_schema.fingerprint()  # type: ignore[attr-defined]
+    current_fp = current_schema.fingerprint()
 
     if stored_fp is None:
         warn(f"no stored fingerprint for {args.name!r}; treating as new")
@@ -316,17 +351,14 @@ def _cmd_schema_ack(args: argparse.Namespace) -> int:
 
     reviewer = require_reviewer()  # exits 1 if NAUTILUS_REVIEWER not set
 
-    from nautilus.adapters.schema import SchemaFingerprintStore
-
-    store = SchemaFingerprintStore(root=None)
-    current_schema = _get_adapter_schema(args.name)
+    broker, current_schema = _live_adapter_schema(args.config, args.name)
 
     if current_schema is None:
         err(f"no schema available for adapter {args.name!r}; cannot ack")
         return 1
 
-    current_fp = current_schema.fingerprint()  # type: ignore[attr-defined]
-    store.record_ack(
+    current_fp = current_schema.fingerprint()
+    broker.fingerprint_store.record_ack(
         args.name,
         current_fp,
         reviewer=reviewer,

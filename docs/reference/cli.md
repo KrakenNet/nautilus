@@ -69,8 +69,8 @@ nautilus adapters list [--status S] [--json]
 nautilus adapters new NAME [--dir PATH]
 nautilus adapters schema NAME [--json]
 nautilus adapters schema-fingerprint NAME
-nautilus adapters schema-diff NAME [--json]
-nautilus adapters schema-ack NAME --reason TEXT --yes
+nautilus adapters schema-diff NAME --config PATH [--json]
+nautilus adapters schema-ack NAME --config PATH --reason TEXT --yes
 ```
 
 ## `nautilus attestation`

@@ -89,8 +89,12 @@ class AdapterSchema:
         # reuse anchor :69
         from nautilus.core.attestation_payload import _sha256  # pyright: ignore[reportPrivateUsage]
 
-        # Convert to a plain dict for stable serialisation.
-        payload = dataclasses.asdict(self)
+        # Convert to a plain dict for stable serialisation. ``fetched_at`` is
+        # excluded: it records WHEN the schema was read, not WHAT it is, and
+        # every adapter stamps it with ``datetime.now(UTC)``. Hashing it makes
+        # an unchanged schema fingerprint differently on every fetch, which
+        # defeats the drift comparison the fingerprint exists for (AC-21.b).
+        payload = {k: v for k, v in dataclasses.asdict(self).items() if k != "fetched_at"}
         return _sha256(payload)
 
 
@@ -296,9 +300,46 @@ class SchemaFingerprintStore:
         self._store: dict[str, str] = {}
         self._root = root
 
+    def _path_for(self, adapter_id: str) -> str | None:
+        """On-disk location of ``adapter_id``'s record, or ``None`` if in-memory."""
+        import os
+
+        if self._root is None:
+            return None
+        return os.path.join(
+            self._root, ".nautilus", "adapters", "fingerprints", f"{adapter_id}.json"
+        )
+
     def get(self, adapter_id: str) -> str | None:
-        """Return the last-recorded fingerprint for ``adapter_id``. AC-21.c."""
-        return self._store.get(adapter_id)
+        """Return the last-recorded fingerprint for ``adapter_id``. AC-21.c.
+
+        Falls back to the on-disk record when the store is rooted: a baseline
+        recorded before a restart has to survive it, or drift detection only
+        ever sees the current process and can never fire.
+        """
+        cached = self._store.get(adapter_id)
+        if cached is not None:
+            return cached
+        fp_path = self._path_for(adapter_id)
+        if fp_path is None:
+            return None
+        import json
+        import os
+
+        if not os.path.exists(fp_path):
+            return None
+        try:
+            with open(fp_path) as fh:
+                stored = json.load(fh)
+        except (OSError, ValueError):
+            # An unreadable baseline is not a matching baseline; the caller
+            # treats "no baseline" as first registration and re-records.
+            return None
+        fingerprint = stored.get("fingerprint") if isinstance(stored, dict) else None
+        if not isinstance(fingerprint, str):
+            return None
+        self._store[adapter_id] = fingerprint
+        return fingerprint
 
     def record(self, adapter_id: str, fingerprint: str) -> None:
         """Persist a fingerprint at adapter-registration time. AC-21.c."""
@@ -306,10 +347,9 @@ class SchemaFingerprintStore:
         import os
 
         self._store[adapter_id] = fingerprint
-        if self._root is not None:
-            fp_dir = os.path.join(self._root, ".nautilus", "adapters", "fingerprints")
-            os.makedirs(fp_dir, exist_ok=True)
-            fp_path = os.path.join(fp_dir, f"{adapter_id}.json")
+        fp_path = self._path_for(adapter_id)
+        if fp_path is not None:
+            os.makedirs(os.path.dirname(fp_path), exist_ok=True)
             with open(fp_path, "w") as fh:
                 json.dump({"adapter_id": adapter_id, "fingerprint": fingerprint}, fh)
 
@@ -327,10 +367,9 @@ class SchemaFingerprintStore:
         from datetime import UTC, datetime
 
         self._store[adapter_id] = fingerprint
-        if self._root is not None:
-            fp_dir = os.path.join(self._root, ".nautilus", "adapters", "fingerprints")
-            os.makedirs(fp_dir, exist_ok=True)
-            fp_path = os.path.join(fp_dir, f"{adapter_id}.json")
+        fp_path = self._path_for(adapter_id)
+        if fp_path is not None:
+            os.makedirs(os.path.dirname(fp_path), exist_ok=True)
             with open(fp_path, "w") as fh:
                 json.dump(
                     {
