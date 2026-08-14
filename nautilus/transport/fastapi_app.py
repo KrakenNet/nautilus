@@ -33,12 +33,19 @@ Endpoints (all under ``/v1`` except health probes):
 - ``GET /v1/audit/{request_id}`` — single audit-entry lookup; 404 when
   absent; auth required (#32).
 
-Write endpoints (``POST /v1/request``, ``POST /v1/query``) are gated on
-:func:`nautilus.transport.auth.require_api_key` when
-``config.api.auth.mode == "api_key"`` (default, D-11) and on
-:func:`proxy_trust_dependency` when the mode is ``"proxy_trust"``.
+Everything except the probes, ``GET /v1/keys/jwks.json`` (a public key by
+definition), ``GET /v1/sources``, ``GET /v1/adapters/{name}/schema`` and
+``GET /metrics`` is gated on :func:`nautilus.transport.auth.require_api_key`
+when ``config.api.auth.mode == "api_key"`` (default, D-11) and on
+:func:`proxy_trust_dependency` when the mode is ``"proxy_trust"``. That
+includes the RKM queue and rule-governance routes: ``X-Nautilus-Reviewer``
+names a reviewer, it does not authenticate one, so it is not a credential.
 Probes are never gated — they must work during unauthenticated rolling
 restarts.
+
+``tests/unit/transport/test_route_auth_coverage.py`` enumerates the route
+table and fails on any new route that is neither gated nor in its explicit
+public allowlist; add routes there deliberately, not by omission.
 """
 
 from __future__ import annotations
@@ -624,7 +631,11 @@ def create_app(
             )
         return reviewer
 
-    @app.get("/v1/rkm/queue", tags=["rkm"])
+    @app.get(
+        "/v1/rkm/queue",
+        dependencies=[Depends(_write_guard)],
+        tags=["rkm"],
+    )
     async def get_rkm_queue(  # pyright: ignore[reportUnusedFunction]
         request: Request,
         status_filter: str | None = Query(default=None, alias="status"),
@@ -644,7 +655,11 @@ def create_app(
             ]
         }
 
-    @app.get("/v1/rkm/queue/{proposal_id}", tags=["rkm"])
+    @app.get(
+        "/v1/rkm/queue/{proposal_id}",
+        dependencies=[Depends(_write_guard)],
+        tags=["rkm"],
+    )
     async def get_rkm_proposal(  # pyright: ignore[reportUnusedFunction]
         proposal_id: str,
         request: Request,
@@ -674,7 +689,11 @@ def create_app(
             "top_replayed": proposal.validation.get("top_replayed", []),
         }
 
-    @app.post("/v1/rkm/queue/{proposal_id}/approve", tags=["rkm"])
+    @app.post(
+        "/v1/rkm/queue/{proposal_id}/approve",
+        dependencies=[Depends(_write_guard)],
+        tags=["rkm"],
+    )
     async def post_rkm_approve(  # pyright: ignore[reportUnusedFunction]
         proposal_id: str,
         request: Request,
@@ -711,7 +730,11 @@ def create_app(
             ) from exc
         return dataclasses.asdict(result)
 
-    @app.post("/v1/rkm/queue/{proposal_id}/reject", tags=["rkm"])
+    @app.post(
+        "/v1/rkm/queue/{proposal_id}/reject",
+        dependencies=[Depends(_write_guard)],
+        tags=["rkm"],
+    )
     async def post_rkm_reject(  # pyright: ignore[reportUnusedFunction]
         proposal_id: str,
         request: Request,
@@ -757,7 +780,11 @@ def create_app(
     # Rules endpoints — AC-35.10.a/b/c/d (lineage DAG + retract + rollback)
     # ------------------------------------------------------------------
 
-    @app.get("/v1/rules/{rule_name}/lineage", tags=["rules"])
+    @app.get(
+        "/v1/rules/{rule_name}/lineage",
+        dependencies=[Depends(_write_guard)],
+        tags=["rules"],
+    )
     async def get_rule_lineage(  # pyright: ignore[reportUnusedFunction]
         rule_name: str,
         request: Request,
@@ -791,7 +818,11 @@ def create_app(
             "versions": serialized_versions,
         }
 
-    @app.post("/v1/rules/{rule_name}/retract", tags=["rules"])
+    @app.post(
+        "/v1/rules/{rule_name}/retract",
+        dependencies=[Depends(_write_guard)],
+        tags=["rules"],
+    )
     async def post_rule_retract(  # pyright: ignore[reportUnusedFunction]
         rule_name: str,
         request: Request,
@@ -855,7 +886,11 @@ def create_app(
             ) from exc
         return {"rule_name": rule_name, "version": version, "affected_descendants": affected}
 
-    @app.post("/v1/rules/{rule_name}/rollback", tags=["rules"])
+    @app.post(
+        "/v1/rules/{rule_name}/rollback",
+        dependencies=[Depends(_write_guard)],
+        tags=["rules"],
+    )
     async def post_rule_rollback(  # pyright: ignore[reportUnusedFunction]
         rule_name: str,
         request: Request,
