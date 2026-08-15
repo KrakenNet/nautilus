@@ -103,6 +103,17 @@ Cumulative exposure — `sources_visited`, `data_types_seen` and
 queried, and is what escalation packs and any rule matching
 `session_exposure` see.
 
+The built-in escalation pack
+(`nautilus/rules/escalation/default.yaml`) declares one entry:
+accumulating `email`, `phone`, `dob` and `ssn` within a session escalates
+the request's effective classification to `confidential`. The built-in
+`session-exposure-escalation-deny` rule denies every source in that request
+when the agent's clearance does not dominate the escalated level; an agent
+who does clear it routes normally. No single request carries four PII data
+types, so the trigger is reachable only through the accumulated session
+state — with `session_store.ttl_seconds` elapsed, or a fresh session id, the
+ledger starts over.
+
 ### Session tokens (optional)
 
 ```yaml

@@ -1,0 +1,76 @@
+# Nautilus escalation rule (design §3.4, FR-7, AC-3.1/AC-3.3).
+#
+# Consumes the ``escalation_rule`` facts that ``_assert_escalation_rules``
+# pushes on every ``route()`` call from the packs under
+# ``nautilus/rules/escalation/``. Until this rule existed those facts, the
+# ``contains-all`` external registered for them, and the whole declarative
+# escalation pack format had no consumer anywhere in the tree: the packs
+# loaded, the facts were asserted, and nothing ever matched them.
+#
+# Semantics per :class:`~nautilus.config.escalation.EscalationRule`: an
+# ``escalate`` entry raises the *effective* classification of the request to
+# ``resulting_level`` once the session's accumulated ``data_types_seen``
+# covers the entry's ``trigger_combination``. Raising the bar is only
+# observable when the agent's clearance fails to clear it, so the rule denies
+# exactly those requests and leaves a cleared agent routing normally — the
+# "rather than denying outright" in the built-in pack's own comment.
+#
+# ``deny`` and ``notify`` entries are deliberately NOT handled here; this rule
+# tests ``action`` so a pack author adding one does not silently inherit
+# escalate semantics.
+#
+# Cumulative exposure is what makes this fire: no single request carries four
+# PII data types, so the trigger is only reachable across requests via the
+# session store.
+#
+# Salience 120 is the documented escalation band (110-120, see
+# docs/reference/rule-packs.md) — below every denial rule, above routing.
+#
+# The rule joins a ``source`` pattern and emits one ``denial_record`` per
+# declared source: escalation applies to the whole request, and
+# ``_run_consistency_checks``'s ``denial_unknown_source`` rejects any record
+# naming something the registry did not declare.
+module: nautilus-routing
+ruleset: nautilus-default-escalation
+version: "1.0"
+rules:
+  - name: session-exposure-escalation-deny
+    description: "Deny when accumulated session exposure escalates the bar above the agent's clearance."
+    salience: 120
+    when:
+      - template: escalation_rule
+        conditions:
+          - slot: id
+            bind: ?eid
+          - slot: trigger_combination
+            bind: ?trigger
+          - slot: resulting_level
+            bind: ?level
+          - slot: action
+            bind: ?action
+          - test: '(eq ?action "escalate")'
+      - template: session
+        conditions:
+          - slot: data_types_seen
+            bind: ?seen
+          - test: "(python-function contains-all ?trigger ?seen)"
+      - template: agent
+        conditions:
+          - slot: clearance
+            bind: ?clearance
+          - slot: compartments
+            bind: ?subj_cmp
+          - test: '(not (fathom-dominates ?clearance ?subj_cmp ?level "" "classification"))'
+      - template: source
+        conditions:
+          - slot: id
+            bind: ?sid
+    then:
+      action: deny
+      reason: "session exposure escalated the required classification above the agent's clearance"
+      assert:
+        - template: denial_record
+          slots:
+            source_id: "?sid"
+            reason: "session exposure escalated the required classification above the agent's clearance"
+            rule_name: "session-exposure-escalation-deny"
