@@ -38,10 +38,8 @@ rules:
           slots:
             source_id: "?sid"
             field: "classification"
-            # ``operator`` is a CLIPS symbol slot — use a CLIPS expression
-            # (``(sym-cat ...)``) so fathom's YAML emitter renders it as a
-            # symbol token rather than a quoted string literal. "=" is in
-            # :class:`ScopeConstraint`'s Literal operator allowlist.
-            operator: "(sym-cat =)"
+            # "=" is in the template's ``allowed_values`` and in
+            # :data:`nautilus.core.models.ScopeOperator`.
+            operator: "="
             value: "cui"
             expires_at: "2030-01-01T00:00:00Z"

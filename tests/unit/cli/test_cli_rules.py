@@ -71,7 +71,7 @@ rules:
           slots:
             source_id: "?sid"
             field: "purpose"
-            operator: '(sym-cat "=")'
+            operator: "="
             value: "?purpose"
 """
 
