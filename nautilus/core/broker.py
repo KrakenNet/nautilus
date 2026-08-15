@@ -94,6 +94,7 @@ from nautilus.core.attestation_sink import (
 )
 from nautilus.core.fathom_router import FathomRouter
 from nautilus.core.models import (
+    AdapterEventType,
     AdapterResult,
     AuditEntry,
     BrokerResponse,
@@ -1749,7 +1750,10 @@ class Broker:
         Quarantined adapters return an ADAPTER_QUARANTINED error record so the
         broker never silently routes to a drifted adapter (AC-21.e, PM Q3).
         """
-        if source_id in self._quarantined_adapters:
+        adapter = self._adapters.get(source_id)
+        if source_id in self._quarantined_adapters and not (
+            adapter is not None and await self._clear_quarantine_if_acked(source_id, adapter)
+        ):
             state.errored.append(
                 _source_error(
                     source_id,
@@ -1761,7 +1765,6 @@ class Broker:
             )
             return None
 
-        adapter = self._adapters.get(source_id)
         if adapter is None:
             state.errored.append(
                 _source_error(
@@ -2229,6 +2232,22 @@ class Broker:
             stored_fp[:16],
             current_fp[:16],
         )
+        self.emit_adapter_event("schema_drift_detected", source_id)
+        self.emit_adapter_event("adapter_quarantined", source_id)
+        self._quarantined_adapters.add(source_id)
+        return True
+
+    def emit_adapter_event(self, event_type: AdapterEventType, adapter_id: str) -> None:
+        """Write one adapter-lifecycle entry to the audit log.
+
+        These events belong to an adapter, not to a request: no intent, no
+        sources, no decisions. ``adapter_id`` is the only thing that
+        distinguishes one from another, which is why the entry carries it.
+
+        Public because ``nautilus adapters schema-ack`` records the operator's
+        override through the same broker and the same log as the drift entry
+        it overrides.
+        """
         self._audit_logger.emit(
             AuditEntry(
                 timestamp=AuditLogger.utcnow(),
@@ -2249,10 +2268,32 @@ class Broker:
                 sources_errored=[],
                 attestation_token=None,
                 duration_ms=0,
-                event_type="schema_drift_detected",
+                event_type=event_type,
+                adapter_id=adapter_id,
             )
         )
-        self._quarantined_adapters.add(source_id)
+
+    async def _clear_quarantine_if_acked(self, source_id: str, adapter: Adapter) -> bool:
+        """Re-check a quarantined adapter against its stored baseline.
+
+        ``nautilus adapters schema-ack`` re-baselines the adapter on disk, and
+        the quarantine set lives in memory: without this the ADAPTER_QUARANTINED
+        message ("acknowledge drift via schema-ack before resuming") was untrue
+        for the running process, which stayed quarantined until restart.
+
+        Returns ``True`` when the quarantine was lifted.
+        """
+        if not hasattr(adapter, "get_schema"):
+            return False
+        try:
+            schema = await adapter.get_schema()  # type: ignore[union-attr]
+        except Exception:  # noqa: BLE001 — an unreachable adapter stays quarantined
+            return False
+        if self._fingerprint_store.get(source_id) != schema.fingerprint():
+            return False
+        self._quarantined_adapters.discard(source_id)
+        log.info("quarantine lifted for adapter '%s'; baseline now matches", source_id)
+        self.emit_adapter_event("adapter_unquarantined", source_id)
         return True
 
     def close(self) -> None:

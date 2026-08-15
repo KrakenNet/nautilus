@@ -215,6 +215,19 @@ class HandoffDecision(BaseModel):
     rule_trace: list[str] = Field(default_factory=list[str])
 
 
+AdapterEventType = Literal[
+    "schema_drift_detected",
+    "adapter_quarantined",
+    "adapter_unquarantined",
+    "schema_drift_severity_overridden",
+]
+"""Audit events about an adapter rather than about a request.
+
+A subset of :attr:`AuditEntry.event_type`; ``tests/unit/test_event_type_drift.py``
+fails if one is added here without being added there.
+"""
+
+
 class AuditEntry(BaseModel):
     """Flat, loss-less audit record for one request (design §4.9).
 
@@ -292,6 +305,13 @@ class AuditEntry(BaseModel):
         ]
         | None
     ) = None
+    # Subject of an adapter-scoped event (``schema_drift_detected``,
+    # ``adapter_quarantined``, ``adapter_unquarantined``,
+    # ``schema_drift_severity_overridden``). Those entries carry no request,
+    # so every source list on them is empty and the adapter they are about
+    # had nowhere to go — the log recorded that drift happened without
+    # recording to whom. Optional, so Phase-1 lines round-trip (NFR-5).
+    adapter_id: str | None = None
     handoff_id: str | None = None
     handoff_decision: HandoffDecision | None = None
     trace_id: str | None = None

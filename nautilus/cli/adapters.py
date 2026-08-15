@@ -364,6 +364,9 @@ def _cmd_schema_ack(args: argparse.Namespace) -> int:
         reviewer=reviewer,
         reason=args.reason,
     )
+    # The ack overrides a fail-closed decision the broker already audited, so
+    # it belongs in the same log next to the drift entry it answers.
+    broker.emit_adapter_event("schema_drift_severity_overridden", args.name)
     ok(f"schema-ack recorded for {args.name!r} by {reviewer}: {args.reason}")
     return 0
 
