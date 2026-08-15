@@ -3,8 +3,8 @@
 Subcommands:
     rkm queue list [--status STATUS] [--min-confidence FLOAT] [--json]
     rkm queue show <proposal_id> [--json]
-    rkm queue approve <proposal_id> [--note TEXT]
-    rkm queue reject <proposal_id> --reason TEXT
+    rkm queue approve <proposal_id> [--note TEXT] [--config PATH]
+    rkm queue reject <proposal_id> --reason TEXT [--config PATH]
     rkm queue diff <proposal_id>
     rkm lineage <proposal_id|rule_name> [--depth N] [--json]
 
@@ -24,7 +24,7 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from nautilus.cli._common import err, ok, require_reviewer, warn
+from nautilus.cli._common import err, ok, open_audit_logger, require_reviewer, warn
 
 if TYPE_CHECKING:
     from nautilus.rkm.queue import ProposalQueue
@@ -71,12 +71,28 @@ def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> N
     p_approve.add_argument("proposal_id", help="Proposal ID.")
     p_approve.add_argument("--note", default=None, help="Optional reviewer note.")
     p_approve.add_argument("--json", action="store_true", help="Emit JSON to stdout.")
+    p_approve.add_argument(
+        "--config",
+        default=None,
+        help=(
+            "Path to nautilus.yaml; its ``audit.path`` receives the decision "
+            "record (default: ./audit.jsonl)."
+        ),
+    )
 
     # queue reject
     p_reject = queue_sub.add_parser("reject", help="Reject a pending proposal.")
     p_reject.add_argument("proposal_id", help="Proposal ID.")
     p_reject.add_argument("--reason", required=True, help="Rejection reason (required).")
     p_reject.add_argument("--json", action="store_true", help="Emit JSON to stdout.")
+    p_reject.add_argument(
+        "--config",
+        default=None,
+        help=(
+            "Path to nautilus.yaml; its ``audit.path`` receives the decision "
+            "record (default: ./audit.jsonl)."
+        ),
+    )
 
     # queue diff
     # Peer heuristic (DQ6): longest-common-prefix of rule names from derived_from.
@@ -212,7 +228,7 @@ def _cmd_queue_approve(args: argparse.Namespace) -> int:
             queue=queue,
             lineage=lineage,
             router=None,
-            audit_logger=None,
+            audit_logger=open_audit_logger(getattr(args, "config", None)),
         )
     except AlreadyDecidedError as exc:
         msg = f"proposal {args.proposal_id} already_approved (status={exc.current_status})"
@@ -257,7 +273,7 @@ def _cmd_queue_reject(args: argparse.Namespace) -> int:
             reviewer,
             args.reason,
             queue=queue,
-            audit_logger=None,
+            audit_logger=open_audit_logger(getattr(args, "config", None)),
         )
     except AlreadyDecidedError as exc:
         err(f"proposal {args.proposal_id} already decided: status={exc.current_status}")

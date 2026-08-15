@@ -12,7 +12,10 @@ from pathlib import Path
 from typing import Any, cast
 
 import yaml
+from fathom.audit import FileSink
 
+from nautilus.audit.logger import AuditLogger
+from nautilus.rkm.audit_emitter import emit_lifecycle_event
 from nautilus.rkm.queue import ProposalQueue
 from nautilus.rkm.types import Proposal
 from nautilus.rkm.validator.sandbox import (
@@ -65,6 +68,8 @@ def run_pipeline(rule_yaml: Path, *, queue: ProposalQueue, audit_log: Path) -> P
     A proposal the engine rejects, or one that regresses the replay corpus, is
     queued as ``rejected`` with the reason recorded rather than raising — the
     caller asked for a validation verdict, and "it does not compile" is one.
+
+    Appends ``proposal_emitted`` + ``proposal_validated`` to ``audit_log``.
     """
     static_result = validate_static(rule_yaml)
     proposed_rules = load_proposed_rules(rule_yaml)
@@ -131,6 +136,35 @@ def run_pipeline(rule_yaml: Path, *, queue: ProposalQueue, audit_log: Path) -> P
         shadow_flags=shadow_flags,
     )
     queue.submit(proposal)
+
+    # The proposal and its verdict are governance facts, and ``audit_log`` is
+    # already the log this pipeline reads to score against, so the record goes
+    # back to the same place. Replay is unaffected: an event line carries no
+    # ``input_facts`` and the sandbox skips it.
+    audit_logger = AuditLogger(sink=FileSink(path=audit_log))
+    emit_lifecycle_event(
+        audit_logger,
+        "proposal_emitted",
+        {
+            "proposal_id": proposal.proposal_id,
+            "proposer": proposal.proposer,
+            "rule_yaml": str(rule_yaml),
+            "timestamp": now.isoformat(),
+        },
+    )
+    emit_lifecycle_event(
+        audit_logger,
+        "proposal_validated",
+        {
+            "proposal_id": proposal.proposal_id,
+            "status": proposal.status,
+            "static_ok": static_result.ok,
+            "confidence": breakdown.total,
+            "sandbox_error": sandbox_error,
+            "shadow_flags": shadow_flags,
+            "timestamp": now.isoformat(),
+        },
+    )
     return proposal
 
 

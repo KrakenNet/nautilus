@@ -7,16 +7,17 @@ Promotion path: queue.approved → review.approve_proposal → fathom_router.rel
                 → lineage.insert → queue.transition("promoted").
 
 Audit events are emitted out-of-band (CLI ops are outside Broker.arequest) via
-:func:`nautilus.rkm.audit_emitter.emit_event_oob`.
+:func:`nautilus.rkm.audit_emitter.emit_lifecycle_event`.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
+from nautilus.rkm.audit_emitter import emit_lifecycle_event
 from nautilus.rkm.lineage import LineageRecord, LineageStore
 from nautilus.rkm.queue import ProposalQueue
 from nautilus.rkm.types import Proposal
@@ -74,6 +75,18 @@ class RejectionResult:
     reason: str
 
 
+@dataclass(frozen=True)
+class RollbackResult:
+    """Outcome of a successful :func:`rollback_rule` call."""
+
+    rule_name: str
+    restored_version: int
+    new_version: int
+    reviewer: str
+    rolled_back_at: datetime
+    reason: str
+
+
 def approve_proposal(
     proposal_id: str,
     reviewer_identity: str,
@@ -92,7 +105,8 @@ def approve_proposal(
        ``promotion_failed`` (via queue transition note) and re-raise.
     4. Insert :class:`LineageRecord` if ``lineage`` provided.
     5. Transition queue to ``promoted``.
-    6. Emit ``proposal_approved`` + ``rule_promoted`` audit events if ``audit_logger`` provided.
+    6. Emit ``proposal_approved``, then ``rule_promoted`` + ``proposal_promoted``
+       on a successful promotion, if ``audit_logger`` provided.
 
     Callable from ``pending`` or from ``approved``. Re-approving an already
     approved proposal retries the promotion, which is the only way out of an
@@ -153,7 +167,7 @@ def approve_proposal(
 
     # Emit audit events out-of-band.
     if audit_logger is not None:
-        _emit(
+        emit_lifecycle_event(
             audit_logger,
             "proposal_approved",
             {
@@ -163,12 +177,27 @@ def approve_proposal(
             },
         )
         if promoted:
-            _emit(
+            # Two events, because they record two steps that can come apart:
+            # ``rule_promoted`` is the engine load, ``proposal_promoted`` is
+            # the queue reaching its terminal state. A crash between them
+            # leaves a rule live with a proposal still marked ``approved``,
+            # and only a log that separates them can show that.
+            emit_lifecycle_event(
                 audit_logger,
                 "rule_promoted",
                 {
                     "proposal_id": proposal_id,
                     "reviewer": reviewer_identity,
+                    "timestamp": now.isoformat(),
+                },
+            )
+            emit_lifecycle_event(
+                audit_logger,
+                "proposal_promoted",
+                {
+                    "proposal_id": proposal_id,
+                    "reviewer": reviewer_identity,
+                    "rule_name": proposal.artifact.get("name", proposal_id),
                     "timestamp": now.isoformat(),
                 },
             )
@@ -214,7 +243,7 @@ def reject_proposal(
     )
 
     if audit_logger is not None:
-        _emit(
+        emit_lifecycle_event(
             audit_logger,
             "proposal_rejected",
             {
@@ -261,7 +290,7 @@ def retract_rule(
         cascade=cascade,  # type: ignore[arg-type]
     )
     if audit_logger is not None:
-        _emit(
+        emit_lifecycle_event(
             audit_logger,
             "rule_retracted",
             {
@@ -274,6 +303,75 @@ def retract_rule(
             },
         )
     return affected
+
+
+def rollback_rule(
+    rule_name: str,
+    *,
+    to_version: int,
+    reason: str,
+    reviewer: str,
+    lineage: LineageStore,
+    audit_logger: Any | None = None,
+) -> RollbackResult:
+    """Re-promote a prior version of a rule as a new lineage version.
+
+    A rollback is append-only: the target record is re-inserted at
+    ``latest + 1`` with a fresh approver and promotion time, so the history
+    of what was live when stays readable.
+
+    Lives here rather than in ``nautilus.cli.rule`` because a rollback is a
+    governance decision, and this module is where those get audited — the CLI
+    performed the lineage rewrite inline and wrote nothing at all.
+
+    Raises :class:`KeyError` when ``to_version`` is not in the rule's lineage.
+
+    The rolled-back rule is *not* reloaded into a running engine: this path
+    has no router (the CLI constructs none), so a live broker keeps serving
+    the newer rule until it is restarted.
+    """
+    target = lineage.get(rule_name, to_version)
+    if target is None:
+        raise KeyError(f"rule {rule_name!r} v{to_version} not found in lineage")
+
+    latest = lineage.get(rule_name)
+    new_version = (latest.version + 1) if latest is not None else to_version + 1
+    now = datetime.now(UTC)
+
+    lineage.insert(
+        replace(
+            target,
+            version=new_version,
+            approver=reviewer,
+            promoted_at=now,
+            retired_at=None,
+            retire_reason=None,
+            retire_reviewer=None,
+        )
+    )
+
+    if audit_logger is not None:
+        emit_lifecycle_event(
+            audit_logger,
+            "rule_rolled_back",
+            {
+                "rule_name": rule_name,
+                "restored_version": to_version,
+                "new_version": new_version,
+                "reason": reason,
+                "reviewer": reviewer,
+                "timestamp": now.isoformat(),
+            },
+        )
+
+    return RollbackResult(
+        rule_name=rule_name,
+        restored_version=to_version,
+        new_version=new_version,
+        reviewer=reviewer,
+        rolled_back_at=now,
+        reason=reason,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -335,33 +433,14 @@ def _build_lineage_record(
     )
 
 
-def _emit(audit_logger: Any, event_type: str, fields: dict[str, Any]) -> None:
-    """Emit an out-of-band audit event (best-effort; swallows errors)."""
-    import sys
-
-    try:
-        from nautilus.rkm.audit_emitter import emit_event_oob
-
-        entry = {
-            "event_type": event_type,
-            "schema_version": 2,
-            "timestamp": datetime.now(UTC).isoformat(),
-            **fields,
-        }
-        emit_event_oob(audit_logger, entry)
-    except Exception as exc:  # noqa: BLE001
-        print(  # noqa: T201
-            f"[review] audit emit swallowed: event_type={event_type!r} err={exc}",
-            file=sys.stderr,
-        )
-
-
 __all__ = [
     "AlreadyDecidedError",
     "ApprovalResult",
     "PromotionFailedError",
     "RejectionResult",
+    "RollbackResult",
     "approve_proposal",
     "reject_proposal",
     "retract_rule",
+    "rollback_rule",
 ]

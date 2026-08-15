@@ -85,4 +85,36 @@ def emit_event_oob(logger: _AuditEventSink, entry: Any) -> None:
     logger.emit_event(entry)
 
 
-__all__ = ["AuditEventEmitter", "emit_event_oob"]
+def emit_lifecycle_event(
+    logger: _AuditEventSink | None,
+    event_type: str,
+    fields: Mapping[str, Any],
+) -> None:
+    """Stamp and write one out-of-band lifecycle event; never raise.
+
+    Used by every governance decision made outside ``Broker.arequest`` —
+    approve, reject, retract, rollback, and the validator pipeline. A failure
+    to log must not undo a decision the operator already made, so errors go to
+    stderr and the caller continues. ``logger`` of ``None`` is a no-op, which
+    is how the pure-library call sites opt out.
+    """
+    if logger is None:
+        return
+    try:
+        emit_event_oob(
+            logger,
+            {
+                "event_type": event_type,
+                "schema_version": 2,
+                "timestamp": datetime.now(tz=UTC).isoformat(),
+                **fields,
+            },
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(  # noqa: T201
+            f"[audit] emit swallowed: event_type={event_type!r} err={exc}",
+            file=sys.stderr,
+        )
+
+
+__all__ = ["AuditEventEmitter", "emit_event_oob", "emit_lifecycle_event"]

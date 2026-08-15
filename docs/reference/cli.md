@@ -93,6 +93,13 @@ nautilus rkm lineage
 nautilus rule list|retract|lineage|history|rollback ...
 ```
 
+`approve`, `reject`, `retract` and `rollback` are decisions, so each one
+appends its record to the audit log: `proposal_approved`,
+`proposal_rejected` / `rule_retracted` / `rule_rolled_back`, plus
+`rule_promoted` + `proposal_promoted` when an approval promotes. Pass
+`--config nautilus.yaml` to write to that file's `audit.path`; without it the
+default `./audit.jsonl` is used.
+
 ## `nautilus events`
 
 ```

@@ -41,7 +41,8 @@ nautilus rkm queue approve <proposal-id>   # or reject
 The same operations exist over REST (`GET /v1/rkm/queue`,
 `POST /v1/rkm/queue/{id}/approve|reject`) — approvals require a
 reviewer identity (`X-Nautilus-Reviewer` header), which lands in the
-audit trail.
+audit trail: the REST routes write to the serving broker's sink, the CLI
+to `--config`'s `audit.path` (default `./audit.jsonl`).
 
 `rkm.auto_promote.enabled` (default **false**) lets high-confidence
 proposals skip the human step; the validation evidence is preserved
@@ -58,6 +59,11 @@ nautilus rule history <rule-name>
 nautilus rule rollback <rule-name> ...   # restore a prior version
 nautilus rule retract <rule-name> ...    # retire a rule (destructive)
 ```
+
+Rollback and retraction are audited the same way, as `rule_rolled_back`
+and `rule_retracted`. A rollback is append-only — the restored version is
+re-inserted as a new one — and it does not reload the rule into a running
+engine, so a live broker keeps serving the newer rule until it restarts.
 
 Because routing decisions cite rule names in the audit `rule_trace`,
 lineage closes the loop: any past decision can be traced to the exact

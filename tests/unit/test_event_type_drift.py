@@ -69,14 +69,6 @@ NOT_YET_EMITTED = {
     # still does not model. Re-enabling the ruleset is what gives this an
     # emitter.
     "relationship_observed",
-    # `nautilus rkm` runs the validator pipeline and `nautilus rule
-    # rollback` rewrites lineage, and neither takes a `--config`, so neither
-    # has an audit sink to write to. Wiring one is the fix; until then these
-    # three name lifecycle steps that happen without a record.
-    "proposal_emitted",
-    "proposal_validated",
-    "proposal_promoted",
-    "rule_rolled_back",
 }
 
 

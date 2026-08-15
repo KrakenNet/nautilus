@@ -619,6 +619,16 @@ def create_app(
             request.app.state.lineage_store = ls
         return ls
 
+    def _get_audit_logger(request: Request) -> Any:
+        """The serving broker's audit sink, or ``None`` when no broker is bound.
+
+        Governance decisions over REST used to pass ``audit_logger=None``, so
+        an approval that the docs said "lands in the audit trail" wrote
+        nothing at all.
+        """
+        broker = getattr(request.app.state, "broker", None)
+        return None if broker is None else broker.audit_logger
+
     def _require_reviewer(request: Request) -> str:
         """Extract X-Nautilus-Reviewer header or raise 400 (AC-35.9.d / DQ4)."""
         from fastapi import HTTPException
@@ -718,7 +728,7 @@ def create_app(
                 queue=queue,
                 lineage=lineage,
                 router=None,
-                audit_logger=None,
+                audit_logger=_get_audit_logger(request),
             )
         except KeyError as exc:
             raise HTTPException(
@@ -764,7 +774,7 @@ def create_app(
                 reviewer,
                 reason,
                 queue=queue,
-                audit_logger=None,
+                audit_logger=_get_audit_logger(request),
             )
         except KeyError as exc:
             raise HTTPException(
@@ -879,7 +889,7 @@ def create_app(
                 reviewer=reviewer,
                 cascade=cascade,  # type: ignore[arg-type]
                 lineage=lineage,
-                audit_logger=None,
+                audit_logger=_get_audit_logger(request),
             )
         except KeyError as exc:
             raise HTTPException(
@@ -918,38 +928,32 @@ def create_app(
             )
         to_version = int(to_version_raw)
         lineage = _get_lineage(request)
-        target = lineage.get(rule_name, version=to_version)
-        if target is None:
+
+        from nautilus.rkm.review import rollback_rule
+
+        try:
+            result = rollback_rule(
+                rule_name,
+                to_version=to_version,
+                reason=str(parsed_body.get("reason", "")),
+                reviewer=reviewer,
+                lineage=lineage,
+                audit_logger=_get_audit_logger(request),
+            )
+        except KeyError as exc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"rule {rule_name!r} version {to_version} not found",
-            )
-        # Re-activate by inserting a new version record copied from the target.
-        # Version = current_latest + 1 to preserve append-only semantics.
-        latest = lineage.get(rule_name)
-        new_version = (latest.version + 1) if latest is not None else to_version
-        from datetime import UTC
-        from datetime import datetime as _datetime
+            ) from exc
 
-        from nautilus.rkm.lineage import LineageRecord
-
-        rolled_back = LineageRecord(
-            rule_name=rule_name,
-            version=new_version,
-            proposer=target.proposer,
-            observation_ids=target.observation_ids,
-            sandbox_results=target.sandbox_results,
-            approver=reviewer,
-            derived_from=target.derived_from,
-            promoted_at=_datetime.now(UTC),
-        )
-        lineage.insert(rolled_back)
-        d = dataclasses.asdict(rolled_back)
-        d["promoted_at"] = rolled_back.promoted_at.isoformat()
+        restored = lineage.get(rule_name, version=result.new_version)
+        d = dataclasses.asdict(restored) if restored is not None else {}
+        if restored is not None:
+            d["promoted_at"] = restored.promoted_at.isoformat()
         return {
             "rule_name": rule_name,
             "rolled_back_from_version": to_version,
-            "new_version": new_version,
+            "new_version": result.new_version,
             "record": d,
         }
 

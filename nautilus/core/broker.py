@@ -872,6 +872,16 @@ class Broker:
         return str(base_dir) if base_dir is not None else None
 
     @property
+    def audit_logger(self) -> AuditLogger:
+        """The sink every decision this broker records goes to.
+
+        Exposed because the governance decisions taken over REST — approve,
+        reject, retract, rollback — are made against this broker and belong in
+        the same log as the routing decisions they change.
+        """
+        return self._audit_logger
+
+    @property
     def fingerprint_store(self) -> SchemaFingerprintStore:
         """Schema baselines this broker compares against (AC-21.c).
 
