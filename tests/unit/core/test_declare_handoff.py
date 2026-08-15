@@ -59,8 +59,9 @@ def _write_yaml_with_agents(
     """Clone the test fixture YAML and inject ``agents`` + audit path overrides."""
     src = FIXTURE_PATH.read_text(encoding="utf-8")
     audit_target = audit_path if audit_path is not None else tmp_path / "audit.jsonl"
-    # Replace the default audit path so test assertions never touch the repo root.
-    src = src.replace("./audit.jsonl", str(audit_target).replace("\\", "/"))
+    # Pin the audit path: the fixture's is env-driven (``isolate_audit_log``)
+    # and these tests assert against a file of their own naming.
+    src = src.replace("${NAUTILUS_AUDIT_PATH}", str(audit_target).replace("\\", "/"))
     agents_block = (
         "\nagents:\n"
         f"  agent-source:\n    id: agent-source\n    clearance: {source_clearance}\n"

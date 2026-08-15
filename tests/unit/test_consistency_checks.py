@@ -338,7 +338,7 @@ def _write_fixture_with_tmp_audit(tmp_path: Path) -> tuple[Path, Path]:
     """Clone the fixture yaml with the audit log pointed under ``tmp_path``."""
     audit_path = tmp_path / "audit.jsonl"
     src = FIXTURE_PATH.read_text(encoding="utf-8")
-    dst_text = src.replace("path: ./audit.jsonl", f"path: {audit_path}")
+    dst_text = src.replace("path: ${NAUTILUS_AUDIT_PATH}", f"path: {audit_path}")
     assert str(audit_path) in dst_text, "audit path replacement must land"
     dst = tmp_path / "nautilus.yaml"
     dst.write_text(dst_text, encoding="utf-8")

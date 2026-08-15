@@ -32,7 +32,11 @@ analysis:
     asset: [asset, system, host, server]
 
 audit:
-  path: ./audit.jsonl
+  # Env-driven, not "./audit.jsonl": this config is shared by ~20 tests and the
+  # path resolves against the CWD, so a plain relative path appended every test
+  # run's decisions to the repo's own audit log. ``isolate_audit_log`` in
+  # tests/conftest.py sets this per test.
+  path: ${NAUTILUS_AUDIT_PATH}
 
 attestation:
   enabled: true
