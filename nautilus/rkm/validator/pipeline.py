@@ -68,7 +68,19 @@ def run_pipeline(
 
     now = datetime.now(UTC)
     decisions: list[dict[str, Any]] = []
-    if resolution.action == "auto_retire":
+    if breakdown.total < 0.6:
+        decisions.append(
+            {
+                "event": "auto_rejected",
+                "to": status,
+                "reviewer": "rkm:score",
+                "at": now.isoformat(),
+                "reason": f"score {breakdown.total:.3f} below 0.6 threshold",
+                "score": breakdown.total,
+                "threshold": 0.6,
+            }
+        )
+    elif resolution.action == "auto_retire":
         decisions.append(
             {
                 "event": "auto_resolved",
