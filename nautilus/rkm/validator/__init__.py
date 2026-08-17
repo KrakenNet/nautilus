@@ -6,6 +6,7 @@ Stages (run by :func:`nautilus.rkm.validator.pipeline.run_pipeline`):
 2. **shadow**  (#35.6)  — :mod:`.shadow`  subsumption + fixture loader.
 3. **sandbox** (#35.7)  — :mod:`.sandbox` replay harness.
 4. **scoring** (#35.8)  — :mod:`.scoring` pure-fn confidence.
+5. **resolve** (#129)   — :mod:`.resolve` deterministic conflict resolution.
 """
 
 from __future__ import annotations
