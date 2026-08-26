@@ -137,6 +137,8 @@ asyncio_mode = "auto"
 # while it sat outside testpaths every one of its cases errored unnoticed.
 testpaths = ["tests", "examples/custom-adapter"]
 markers = [
+    "defect: pins a confirmed 1.0 defect; expected to fail until its fix lands",
+    "journey: end-to-end test against a real backend",
     "unit: unit tests",
     "integration: integration tests",
     "slow: slow tests (e.g. latency harness with 1000 requests)",

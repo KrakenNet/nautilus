@@ -193,7 +193,15 @@ def pytest_collection_modifyitems(items: list[Any]) -> None:
     hand-applied per file, so a new test that pulls ``pg_container`` is covered
     without anyone remembering to tag it.
     """
-    container_fixtures = {"pg_container"}
+    container_fixtures = {
+        "pg_container",
+        # tests/backends.py -- the journey and defect-pin backends.
+        "pg_dsn",
+        "es_url",
+        "neo4j_bolt",
+        "minio_endpoint",
+        "influx",
+    }
     for item in items:
         if container_fixtures & set(getattr(item, "fixturenames", ())):
             item.add_marker(pytest.mark.docker)

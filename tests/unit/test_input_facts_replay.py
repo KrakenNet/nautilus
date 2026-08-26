@@ -119,17 +119,28 @@ class TestInputFactsSufficiency:
             f"from the summary: {result.facts_asserted_summary}"
         )
 
-    @pytest.mark.parametrize(
-        "classification,clearance,purpose,data_types",
-        CORPUS,
-        ids=[f"{c}-{cl}-{p}-{'+'.join(d)}" for c, cl, p, d in CORPUS],
-    )
-    def test_replay_reproduces_decision(
-        self, classification: str, clearance: str, purpose: str, data_types: list[str]
-    ) -> None:
-        live = _route(_router(), clearance, purpose, classification, data_types)
-        replayed = _router().replay(live.input_facts)
-        assert _outcome(replayed) == _outcome(live)
+    def test_replay_reproduces_decision(self) -> None:
+        """Every point of the (classification x clearance x purpose x data_types)
+        space replays to the same decision.
+
+        One test over the whole corpus rather than one test per point: it is a
+        single property, and 144 near-identical test ids are CI time and
+        report noise, not coverage. Every mismatch is collected so a failure
+        names the whole failing region instead of only its first point.
+        """
+        mismatches: list[str] = []
+        for classification, clearance, purpose, data_types in CORPUS:
+            live = _route(_router(), clearance, purpose, classification, data_types)
+            replayed = _router().replay(live.input_facts)
+            if _outcome(replayed) != _outcome(live):
+                mismatches.append(
+                    f"{classification}/{clearance}/{purpose}/{'+'.join(data_types)}: "
+                    f"live={_outcome(live)} replayed={_outcome(replayed)}"
+                )
+        assert not mismatches, (
+            f"{len(mismatches)} of {len(CORPUS)} recorded fact sets did not "
+            "replay to their original decision:\n" + "\n".join(mismatches[:10])
+        )
 
     def test_replay_uses_only_the_record(self) -> None:
         """Dropping a recorded fact changes the outcome.
