@@ -27,14 +27,16 @@ import importlib.metadata
 import importlib.util
 import logging
 import sys
+import threading
 import time
 import uuid
-from collections.abc import Iterable, Mapping
+from collections.abc import Coroutine, Iterable, Mapping
+from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, TypeVar, cast
 
 from fathom.attestation import AttestationService
 from fathom.audit import FileSink
@@ -126,6 +128,8 @@ from nautilus.rules.facts import load_manual_relationships
 from nautilus.synthesis.basic import BasicSynthesizer
 
 _metrics = NautilusMetrics()
+
+_T = TypeVar("_T")
 
 log = logging.getLogger(__name__)
 
@@ -540,6 +544,27 @@ class Broker:
         # (AC-14.4).
         self._attestation_sink: AttestationSink = attestation_sink or NullAttestationSink()
         self._closed: bool = False
+        # 4.1 -- the sync facade owns one long-lived loop on its own thread.
+        # ``asyncio.run`` per call gave every call a fresh loop while adapter
+        # clients stayed cached on the adapter, so call #2 used a pool bound
+        # to a closed loop and every source landed in ``sources_errored``.
+        # Built lazily: an async-only caller never starts a thread.
+        self._sync_loop: asyncio.AbstractEventLoop | None = None
+        self._sync_thread: threading.Thread | None = None
+        # 4.2 -- ``_prepare_adapter`` does check-then-set across an await, so
+        # concurrent first-requests to one source each built their own pool
+        # and every loser was unreachable and survived aclose(). One lock per
+        # source; the set is bounded by the number of configured sources.
+        self._connect_locks: dict[str, asyncio.Lock] = {}
+        # B3 -- the session ledger is read at routing time and written after
+        # adapter fan-out, so concurrent requests on one session all merged
+        # onto the same stale snapshot and the last writer won. The lock
+        # spans the whole pipeline because routing policy reads the ledger
+        # too: merging at write time alone would still route on stale
+        # cumulative exposure.
+        # ponytail: one entry per session id, never evicted. Swap for a TTL
+        # map if session churn becomes a memory problem.
+        self._session_locks: dict[str, asyncio.Lock] = {}
         # Tracks which adapter ids have already been ``connect()``-ed so
         # ``arequest`` can lazy-connect on first use and skip on subsequent
         # calls (design §3.5 — adapter lifecycle is owned by the broker).
@@ -1144,7 +1169,26 @@ class Broker:
                 "Broker.request() called inside a running event loop. "
                 "Use Broker.arequest() (async) from async contexts."
             )
-        return asyncio.run(self.arequest(agent_id, intent, context, fact_set_hash=fact_set_hash))
+        return self._run_sync(self.arequest(agent_id, intent, context, fact_set_hash=fact_set_hash))
+
+    def _run_sync(self, coro: Coroutine[Any, Any, _T]) -> _T:
+        """Run *coro* on the broker's own loop and block until it finishes.
+
+        The loop and the connection pools it owns have to outlive the call:
+        an ``asyncio.run`` per call closes the loop underneath pools that the
+        adapter still holds, and the failure surfaces as an empty result set
+        rather than an error.
+        """
+        loop = self._sync_loop
+        if loop is None:
+            loop = asyncio.new_event_loop()
+            thread = threading.Thread(
+                target=loop.run_forever, name="nautilus-broker-sync", daemon=True
+            )
+            thread.start()
+            self._sync_loop = loop
+            self._sync_thread = thread
+        return asyncio.run_coroutine_threadsafe(coro, loop).result()
 
     async def arequest(
         self,
@@ -1161,6 +1205,7 @@ class Broker:
         `_build_response`, `_emit_audit`). On policy-engine or unexpected
         failure, a single audit entry is still emitted before re-raising.
         """
+        self._refuse_if_closed("arequest")
         context = dict(context) if context else {}
         state = _new_request_state(context, intent)
         state.fact_set_hash = fact_set_hash
@@ -1185,7 +1230,10 @@ class Broker:
                     # canonical entry for this request must not deny it.
                     self._emit_audit(agent_id, state, state.attestation_token)
                 raise
-            except Exception as exc:  # noqa: BLE001 — any unexpected error must still audit
+            except BaseException as exc:
+                # BaseException, not Exception: a cancelled or timed-out
+                # request is exactly the one whose audit entry matters, and
+                # CancelledError inherits from BaseException.
                 state.errored.append(_broker_error(exc, state.request_id))
                 with broker_span(SPAN_AUDIT_EMIT):
                     self._emit_audit(agent_id, state, state.attestation_token)
@@ -1236,6 +1284,7 @@ class Broker:
         aware handoff rules; the default rule pack ignores both (empty
         compartments in the ``fathom-dominates`` calls).
         """
+        self._refuse_if_closed("declare_handoff")
         del rule_trace_refs, data_compartments  # Phase-3 / forensic forward-compat.
         started = time.perf_counter()
         handoff_id = str(uuid.uuid4())
@@ -1520,6 +1569,31 @@ class Broker:
             return
         state.intent_analysis = analyzer.analyze(intent, context)
 
+    def _refuse_if_closed(self, method: str) -> None:
+        """Raise if the broker has been closed.
+
+        Nothing checked ``_closed``, so a post-close request opened a fresh
+        pool and returned real rows with a signed attestation token while the
+        sink was already closed and swallowed every line -- data egress with
+        no receipt. The second ``aclose()`` then returned early and those
+        connections were never released.
+        """
+        if self._closed:
+            raise RuntimeError(
+                f"Broker.{method}() called after close(); the attestation sink "
+                f"and session store are already shut down, so this request "
+                f"could not be receipted. Build a new Broker."
+            )
+
+    def _session_lock(self, session_id: str | None) -> AbstractAsyncContextManager[None]:
+        """Serialise the read-merge-write of one session's exposure ledger.
+
+        A no-op for sessionless requests, which have no ledger to race on.
+        """
+        if not session_id:
+            return contextlib.nullcontext()
+        return self._session_locks.setdefault(session_id, asyncio.Lock())
+
     async def _run_pipeline(
         self,
         agent_id: str,
@@ -1528,38 +1602,39 @@ class Broker:
         state: _RequestState,
     ) -> None:
         """Happy-path pipeline body — mutates ``state`` in place."""
-        with broker_span(SPAN_INTENT_ANALYSIS):
-            await self._analyze_intent(intent, context, state)
-        with broker_span(SPAN_FATHOM_ROUTING):
-            await self._route(agent_id, context, state)
-            _metrics.routing_decisions_total.add(1)
-        self._merge_context_scope_constraints(context, state)
-        self._apply_temporal_filter(state)
-        with broker_span(SPAN_ADAPTER_FAN_OUT):
-            tasks, task_source_ids = await self._build_adapter_jobs(state, context)
-            successful = await self._gather_adapter_results(
-                state,
-                tasks,
-                task_source_ids,
-            )
-        with broker_span(SPAN_SYNTHESIS):
-            state.data = self._synthesizer.merge(successful)
-        if self._attestation is not None:
-            with broker_span(SPAN_ATTESTATION_SIGN):
-                token, scope_hash_version, nautilus_payload = self._sign(
-                    request_id=state.request_id,
-                    agent_id=agent_id,
-                    sources_queried=state.sources_queried,
-                    scope_by_source=state.scope_by_source,
-                    rule_trace=state.rule_trace,
-                    session_id=state.session_id,
-                    response=state.data or None,
-                    source_response_hashes=state.source_response_hashes or None,
+        async with self._session_lock(state.session_id):
+            with broker_span(SPAN_INTENT_ANALYSIS):
+                await self._analyze_intent(intent, context, state)
+            with broker_span(SPAN_FATHOM_ROUTING):
+                await self._route(agent_id, context, state)
+                _metrics.routing_decisions_total.add(1)
+            self._merge_context_scope_constraints(context, state)
+            self._apply_temporal_filter(state)
+            with broker_span(SPAN_ADAPTER_FAN_OUT):
+                tasks, task_source_ids = await self._build_adapter_jobs(state, context)
+                successful = await self._gather_adapter_results(
+                    state,
+                    tasks,
+                    task_source_ids,
                 )
-            state.attestation_token = token
-            state.scope_hash_version = scope_hash_version
-            await self._emit_attestation(token, nautilus_payload, state.request_id)
-        await self._update_session(state, context)
+            with broker_span(SPAN_SYNTHESIS):
+                state.data = self._synthesizer.merge(successful)
+            if self._attestation is not None:
+                with broker_span(SPAN_ATTESTATION_SIGN):
+                    token, scope_hash_version, nautilus_payload = self._sign(
+                        request_id=state.request_id,
+                        agent_id=agent_id,
+                        sources_queried=state.sources_queried,
+                        scope_by_source=state.scope_by_source,
+                        rule_trace=state.rule_trace,
+                        session_id=state.session_id,
+                        response=state.data or None,
+                        source_response_hashes=state.source_response_hashes or None,
+                    )
+                state.attestation_token = token
+                state.scope_hash_version = scope_hash_version
+                await self._emit_attestation(token, nautilus_payload, state.request_id)
+            await self._update_session(state, context)
 
     async def _emit_attestation(
         self,
@@ -1802,26 +1877,38 @@ class Broker:
         effects for a non-idempotent source — and duplicate the id in the
         signed ``sources_queried`` claim.
         """
-        tasks: list[asyncio.Task[AdapterResult]] = []
+        tasks: list[asyncio.Task[AdapterResult | None]] = []
         task_source_ids: list[str] = []
         seen: set[str] = set()
         for rd in state.routing_decisions:
             if rd.source_id in seen:
                 continue
             seen.add(rd.source_id)
-            adapter = await self._prepare_adapter(rd.source_id, state)
-            if adapter is None:
-                continue
-            scope = state.scope_by_source.get(rd.source_id, [])
-            tasks.append(
-                asyncio.create_task(
-                    self._execute_adapter(
-                        adapter, rd.source_id, state.intent_analysis, scope, context
-                    )
-                )
-            )
+            # 4.18 -- connect runs inside the task, not here: awaiting it in
+            # this loop meant one source with a hanging connect() delayed the
+            # fan-out of every source after it in the list.
+            tasks.append(asyncio.create_task(self._run_source(rd.source_id, state, context)))
             task_source_ids.append(rd.source_id)
         return tasks, task_source_ids
+
+    async def _run_source(
+        self, source_id: str, state: _RequestState, context: dict[str, Any]
+    ) -> AdapterResult | None:
+        """Connect and execute one source under its own wall-clock budget.
+
+        Returns ``None`` when :meth:`_prepare_adapter` already recorded a
+        per-source error (unknown, quarantined, or failed to connect).
+        """
+        source = self._registry.get(source_id)
+        timeout = getattr(source, "timeout_s", None)
+        async with asyncio.timeout(timeout):
+            adapter = await self._prepare_adapter(source_id, state)
+            if adapter is None:
+                return None
+            scope = state.scope_by_source.get(source_id, [])
+            return await self._execute_adapter(
+                adapter, source_id, state.intent_analysis, scope, context
+            )
 
     async def _prepare_adapter(self, source_id: str, state: _RequestState) -> Adapter | None:
         """Resolve and lazy-connect the adapter for ``source_id``.
@@ -1859,16 +1946,21 @@ class Broker:
             return None
         if source_id in self._connected_adapters:
             return adapter
-        try:
-            await adapter.connect(self._registry.get(source_id))
-        except Exception as exc:  # noqa: BLE001 — surface as per-source error
-            state.errored.append(
-                _source_error(
-                    source_id, type(exc).__name__, f"connect() failed: {exc}", state.request_id
+        async with self._connect_locks.setdefault(source_id, asyncio.Lock()):
+            # Re-check under the lock: the request that lost the race must
+            # reuse the winner's pool, not build a second one.
+            if source_id in self._connected_adapters:
+                return adapter
+            try:
+                await adapter.connect(self._registry.get(source_id))
+            except Exception as exc:  # noqa: BLE001 — surface as per-source error
+                state.errored.append(
+                    _source_error(
+                        source_id, type(exc).__name__, f"connect() failed: {exc}", state.request_id
+                    )
                 )
-            )
-            return None
-        self._connected_adapters.add(source_id)
+                return None
+            self._connected_adapters.add(source_id)
         # Connect is lazy, so this is where an adapter's schema is first
         # reachable — checking only in setup() left the drift gate dead.
         if await self._check_adapter_schema(source_id, adapter):
@@ -1887,7 +1979,7 @@ class Broker:
     async def _gather_adapter_results(
         self,
         state: _RequestState,
-        tasks: list[asyncio.Task[AdapterResult]],
+        tasks: list[asyncio.Task[AdapterResult | None]],
         task_source_ids: list[str],
     ) -> list[AdapterResult]:
         """Await ``tasks`` and split into successes / errors (into state)."""
@@ -1895,9 +1987,17 @@ class Broker:
         successful: list[AdapterResult] = []
         for source_id, res in zip(task_source_ids, raw, strict=True):
             if isinstance(res, BaseException):
-                state.errored.append(
-                    _source_error(source_id, type(res).__name__, str(res), state.request_id)
+                message = (
+                    f"exceeded the source's timeout_s budget: {res}"
+                    if isinstance(res, TimeoutError)
+                    else str(res)
                 )
+                state.errored.append(
+                    _source_error(source_id, type(res).__name__, message, state.request_id)
+                )
+                continue
+            if res is None:
+                # _prepare_adapter already recorded why this source is out.
                 continue
             if not isinstance(res, AdapterResult):
                 # B5 -- ``res.error`` below is outside any try block, so an
@@ -2403,7 +2503,20 @@ class Broker:
                 "Broker.close() called inside a running event loop. "
                 "Use Broker.aclose() (async) from async contexts."
             )
-        asyncio.run(self.aclose())
+        if self._sync_loop is None:
+            # Nothing ran on the sync facade, so there is no loop to close on.
+            asyncio.run(self.aclose())
+            return
+        loop, thread = self._sync_loop, self._sync_thread
+        try:
+            self._run_sync(self.aclose())
+        finally:
+            loop.call_soon_threadsafe(loop.stop)
+            if thread is not None:
+                thread.join(timeout=30)
+            loop.close()
+            self._sync_loop = None
+            self._sync_thread = None
 
     async def aclose(self) -> None:
         """Idempotent async close. Safe to call multiple times (FR-17).
@@ -2434,7 +2547,10 @@ class Broker:
         for adapter in self._adapters.values():
             try:
                 await adapter.close()
-            except Exception:  # noqa: BLE001 — close is best-effort
+            except Exception:
+                # Best-effort, but not silent: swallowing this is how a pool
+                # that never closed looked like a clean shutdown.
+                log.warning("adapter close failed during aclose()", exc_info=True)
                 continue
         self._router.close()
 

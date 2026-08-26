@@ -117,6 +117,13 @@ class SourceConfig(BaseModel):
     # llm-only (#43): model name sent to the OpenAI-compatible endpoint at
     # ``connection``. Required for ``type: llm`` (enforced by LLMAdapter).
     model: str | None = None
+    # 4.18 -- wall-clock budget for one connect+execute of this source. There
+    # was no deadline anywhere: an unresponsive source held the request, its
+    # session write and its audit entry open forever, and every healthy
+    # co-queried source finished and was held with it. Raise it for sources
+    # that are legitimately slow (a large LLM), or set ``null`` to wait
+    # indefinitely and own that choice explicitly.
+    timeout_s: float | None = 15.0
 
 
 # ---------------------------------------------------------------------------

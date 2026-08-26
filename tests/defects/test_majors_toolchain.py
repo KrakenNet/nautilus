@@ -54,8 +54,10 @@ class FastAdapter(SlowAdapter):
     source_type: ClassVar[str] = "fast"
 
     async def execute(self, *args: Any, **kwargs: Any) -> AdapterResult:
+        # The configured source id, not the adapter's type: the broker keys
+        # the response by it.
         return AdapterResult(
-            source_id="fast", rows=[{"ok": True}], duration_ms=1, error=None
+            source_id=self._config.id, rows=[{"ok": True}], duration_ms=1, error=None
         )
 '''
 
@@ -267,6 +269,11 @@ def test_m418_a_hanging_adapter_does_not_pin_the_request(tmp_path: Path, write_c
     finishes and is held.
     """
     from nautilus import Broker
+    from nautilus.config.models import SourceConfig
+
+    assert SourceConfig.model_fields["timeout_s"].default is not None, (
+        "the default source budget is unbounded, so an unconfigured source can still hang forever"
+    )
 
     module = tmp_path / "slow_adapters.py"
     module.write_text(_SLOW_ADAPTER, encoding="utf-8")
@@ -285,6 +292,10 @@ def test_m418_a_hanging_adapter_does_not_pin_the_request(tmp_path: Path, write_c
                     "data_types": ["docs"],
                     "allowed_purposes": [],
                     "connection": "memory://",
+                    # Explicit and short so the pin costs two seconds rather
+                    # than a full default budget. That the default itself is
+                    # finite is asserted below.
+                    "timeout_s": 2,
                 }
                 for sid, stype in (("hangs", "slow"), ("answers", "fast"))
             ],
@@ -295,12 +306,13 @@ def test_m418_a_hanging_adapter_does_not_pin_the_request(tmp_path: Path, write_c
     async def _run() -> Any:
         broker = Broker.from_config(config)
         try:
-            # 10s is far beyond any reasonable per-adapter default; the
-            # adapter sleeps an hour, so this only expires when there is no
-            # deadline at all.
+            # The adapter sleeps an hour. This bound is deliberately loose:
+            # the pin is that *a* per-source deadline exists and that the
+            # healthy source still answers, not that the default is any
+            # particular number -- that belongs in config, not here.
             return await asyncio.wait_for(
                 broker.arequest("a", "docs", {"purpose": "p", "session_id": "s1"}),
-                timeout=10,
+                timeout=30,
             )
         finally:
             await broker.aclose()
@@ -310,7 +322,7 @@ def test_m418_a_hanging_adapter_does_not_pin_the_request(tmp_path: Path, write_c
     except TimeoutError:
         pytest.fail(
             "a source whose execute() never returns held the whole request for "
-            "10s with no per-adapter deadline. The healthy source finished and "
+            "30s with no per-adapter deadline. The healthy source finished and "
             "was held with it, and no audit entry was written."
         )
     assert response.data.get("answers"), (
@@ -692,4 +704,64 @@ def test_m421_validate_static_inspects_the_then_clause(tmp_path: Path) -> None:
         "denial_record.rule_name slot. It loads, then raises "
         "ConsistencyError: denial_missing_linkage on the first matching "
         "request -- after passing every gate the lifecycle documents."
+    )
+
+
+def test_m422_concurrent_approve_produces_one_decision(tmp_path: Path) -> None:
+    """Two reviewers approving at once must produce one approval, not two.
+
+    ``review.approve`` read ``proposal.status`` and then called
+    ``queue.transition``, so both callers saw ``pending`` and both proceeded.
+    ``fcntl.lockf`` did not stop them: its locks belong to the process, so a
+    second thread asking for ``LOCK_EX`` on its own descriptor is granted it
+    immediately. The proposal ends up with two recorded approvals by two
+    different reviewers, and the governance record no longer says who decided.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+    from datetime import UTC, datetime
+
+    from nautilus.rkm.queue import ProposalQueue
+    from nautilus.rkm.review import AlreadyDecidedError, approve_proposal
+    from nautilus.rkm.types import Proposal
+
+    queue = ProposalQueue(tmp_path / "queue")
+    queue.submit(
+        Proposal(
+            proposal_id="prop_race",
+            schema_version=1,
+            status="pending",
+            proposer="curator",
+            proposed_at=datetime.now(UTC),
+            target_module="nautilus-routing",
+            artifact_type="rule",
+            artifact={},
+            validation={},
+            lineage={},
+            decisions=[],
+        )
+    )
+
+    def _approve(reviewer: str) -> str:
+        try:
+            approve_proposal(
+                "prop_race",
+                reviewer,
+                queue=queue,
+                lineage=None,  # type: ignore[arg-type]  -- unused: no router, so no promotion
+            )
+        except AlreadyDecidedError:
+            return "refused"
+        except Exception as exc:  # noqa: BLE001 -- anything else is a real failure
+            return f"error:{type(exc).__name__}"
+        return "approved"
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        outcomes = list(pool.map(_approve, [f"reviewer-{i}" for i in range(8)]))
+
+    decided = queue.get("prop_race")
+    assert decided is not None
+    approvals = [d for d in decided.decisions if d.get("to") == "approved"]
+    assert len(approvals) == 1, (
+        f"eight concurrent approves recorded {len(approvals)} approvals by "
+        f"{[a.get('reviewer') for a in approvals]}. outcomes={outcomes}"
     )

@@ -16,6 +16,7 @@ import dataclasses
 import fcntl
 import json
 import os
+import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -26,6 +27,13 @@ from nautilus.rkm.types import Proposal, ProposalStatus
 # Lock contention timeout and poll interval per shared.md:795
 _LOCK_TIMEOUT_S = 5.0
 _LOCK_POLL_S = 0.1
+
+# ``fcntl.lockf`` locks belong to the *process*, so a second thread asking for
+# LOCK_EX on its own descriptor is granted it immediately and two writers
+# proceed together. lockf is what makes the queue single-writer across
+# processes; this is what makes it single-writer within one. Module-level so
+# two ProposalQueue objects over the same directory still serialise.
+_PROCESS_LOCK = threading.Lock()
 
 # Valid state-machine transitions: (from_status) -> allowed to_statuses
 _VALID_TRANSITIONS: dict[str, set[str]] = {
@@ -86,26 +94,37 @@ class ProposalQueue:
     # ------------------------------------------------------------------
 
     def _acquire_lock(self) -> Any:
-        """Open .lock file and acquire exclusive lockf within timeout.
+        """Take the in-process lock, then the cross-process lockf.
 
         Returns the open file handle (caller must close/unlock it).
-        Raises :class:`ProposalQueueLocked` on timeout.
+        Raises :class:`ProposalQueueLocked` on timeout of either.
         """
-        fh = self._lock_path.open("a")
-        deadline = time.monotonic() + _LOCK_TIMEOUT_S
-        while True:
-            try:
-                fcntl.lockf(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                return fh
-            except (BlockingIOError, OSError) as exc:
-                if time.monotonic() >= deadline:
-                    fh.close()
-                    raise ProposalQueueLocked("lock contention timeout on proposal queue") from exc
-                time.sleep(_LOCK_POLL_S)
+        if not _PROCESS_LOCK.acquire(timeout=_LOCK_TIMEOUT_S):
+            raise ProposalQueueLocked("lock contention timeout on proposal queue")
+        try:
+            fh = self._lock_path.open("a")
+            deadline = time.monotonic() + _LOCK_TIMEOUT_S
+            while True:
+                try:
+                    fcntl.lockf(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    return fh
+                except (BlockingIOError, OSError) as exc:
+                    if time.monotonic() >= deadline:
+                        fh.close()
+                        raise ProposalQueueLocked(
+                            "lock contention timeout on proposal queue"
+                        ) from exc
+                    time.sleep(_LOCK_POLL_S)
+        except BaseException:
+            _PROCESS_LOCK.release()
+            raise
 
     def _release_lock(self, fh: Any) -> None:
-        fcntl.lockf(fh, fcntl.LOCK_UN)
-        fh.close()
+        try:
+            fcntl.lockf(fh, fcntl.LOCK_UN)
+            fh.close()
+        finally:
+            _PROCESS_LOCK.release()
 
     def _proposal_path(self, proposal_id: str) -> Path:
         return self._queue_dir / f"{proposal_id}.jsonl"

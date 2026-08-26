@@ -19,7 +19,7 @@ from typing import Any, Protocol
 
 from nautilus.rkm.audit_emitter import emit_lifecycle_event
 from nautilus.rkm.lineage import LineageRecord, LineageStore
-from nautilus.rkm.queue import ProposalQueue
+from nautilus.rkm.queue import InvalidTransition, ProposalQueue
 from nautilus.rkm.types import Proposal
 
 
@@ -121,15 +121,15 @@ def approve_proposal(
     if proposal is None:
         raise KeyError(f"proposal not found: {proposal_id!r}")
 
-    if proposal.status not in ("pending", "approved"):
-        raise AlreadyDecidedError(proposal_id, proposal.status)
-
     now = datetime.now(UTC)
 
-    # Already-approved proposals are re-entering only to retry promotion; the
-    # approval decision is already recorded and ``approved -> approved`` is
-    # not a legal transition.
-    if proposal.status == "pending":
+    # The status is checked by ``transition()`` under the queue lock, not
+    # here: reading it first and deciding afterwards let two concurrent
+    # approves both see ``pending`` and both proceed. Already-approved
+    # proposals are re-entering only to retry promotion, and
+    # ``approved -> approved`` is not a legal transition, so a refusal is
+    # only a real conflict when the proposal is not sitting in ``approved``.
+    try:
         queue.transition(
             proposal_id,
             to="approved",
@@ -137,6 +137,13 @@ def approve_proposal(
             reason=None,
             note=None,
         )
+    except InvalidTransition:
+        current = queue.get(proposal_id)
+        if current is None or current.status != "approved":
+            raise AlreadyDecidedError(
+                proposal_id, current.status if current is not None else "missing"
+            ) from None
+        proposal = current
 
     # Promote into CLIPS env.
     promoted = False
@@ -229,18 +236,23 @@ def reject_proposal(
     if proposal is None:
         raise KeyError(f"proposal not found: {proposal_id!r}")
 
-    if proposal.status not in ("pending", "approved"):
-        raise AlreadyDecidedError(proposal_id, proposal.status)
-
     now = datetime.now(UTC)
 
-    queue.transition(
-        proposal_id,
-        to="rejected",
-        reviewer=reviewer_identity,
-        reason=reason,
-        note=None,
-    )
+    # Same single-writer rule as approve: ``transition()`` owns the status
+    # check because it holds the lock.
+    try:
+        queue.transition(
+            proposal_id,
+            to="rejected",
+            reviewer=reviewer_identity,
+            reason=reason,
+            note=None,
+        )
+    except InvalidTransition:
+        current = queue.get(proposal_id)
+        raise AlreadyDecidedError(
+            proposal_id, current.status if current is not None else "missing"
+        ) from None
 
     if audit_logger is not None:
         emit_lifecycle_event(
