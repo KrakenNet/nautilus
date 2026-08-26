@@ -292,7 +292,7 @@ python -m nautilus serve --config nautilus.yaml --transport both --mcp-mode http
 ### Adapter SDK (Copier Template)
 Scaffold a new adapter package:
 ```bash
-copier copy templates/adapter/ my-adapter/
+nautilus adapters new my-adapter
 ```
 See `examples/custom-adapter/` for a complete walkthrough.
 

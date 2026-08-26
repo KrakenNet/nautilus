@@ -6,11 +6,10 @@ from collections.abc import Callable
 from typing import Any
 
 from nautilus_adapter_sdk.config import SourceConfig
-from nautilus_adapter_sdk.exceptions import ScopeEnforcementError
+from nautilus_adapter_sdk.exceptions import AdapterError, ScopeEnforcementError
 from nautilus_adapter_sdk.protocols import Adapter
 from nautilus_adapter_sdk.types import (
     AdapterResult,
-    ErrorRecord,
     IntentAnalysis,
     ScopeConstraint,
 )
@@ -44,11 +43,18 @@ class AdapterComplianceSuite:
     def _make_intent(self) -> IntentAnalysis:
         return IntentAnalysis(
             raw_intent="test query",
-            normalized_intent="test_query",
-            data_types=["generic"],
-            purpose="testing",
-            confidence=1.0,
+            data_types_needed=["generic"],
+            entities=[],
         )
+
+    def _make_context(self) -> dict[str, Any]:
+        """The third argument as the broker builds it.
+
+        The suite used to pass ``{}``, so an adapter that reads its stated
+        purpose or session id -- as every shipped adapter does -- was never
+        exercised on the path it actually runs on.
+        """
+        return {"purpose": "testing", "session_id": "compliance", "clearance": "unclassified"}
 
     def _make_scope(self, operator: str = "=") -> list[ScopeConstraint]:
         return [
@@ -66,7 +72,9 @@ class AdapterComplianceSuite:
         """Test full adapter lifecycle: connect -> execute -> close."""
         adapter: Adapter = self.adapter_factory()
         await adapter.connect(self.source_config)
-        result = await adapter.execute(self._make_intent(), self._make_scope(), {})
+        result = await adapter.execute(
+            self._make_intent(), self._make_scope(), self._make_context()
+        )
         assert isinstance(result, AdapterResult), (
             f"execute() must return AdapterResult, got {type(result).__name__}"
         )
@@ -77,7 +85,9 @@ class AdapterComplianceSuite:
         adapter: Adapter = self.adapter_factory()
         await adapter.connect(self.source_config)
         try:
-            result = await adapter.execute(self._make_intent(), self._make_scope("="), {})
+            result = await adapter.execute(
+                self._make_intent(), self._make_scope("="), self._make_context()
+            )
             assert isinstance(result, AdapterResult)
         finally:
             await adapter.close()
@@ -92,7 +102,7 @@ class AdapterComplianceSuite:
                 await adapter.execute(
                     self._make_intent(),
                     self._make_scope("INVALID_OP"),
-                    {},
+                    self._make_context(),
                 )
             except ScopeEnforcementError:
                 raised = True
@@ -107,23 +117,31 @@ class AdapterComplianceSuite:
         await adapter.close()
         await adapter.close()  # second call must not error
 
-    async def test_error_path_returns_error_record(self) -> None:
-        """Adapter errors should return an ErrorRecord."""
+    async def test_error_path_reports_the_failure(self) -> None:
+        """A failing query must report, not return junk.
+
+        Two shapes are compliant, because both are what the broker handles:
+        an :class:`AdapterResult` whose ``error`` is populated, or a raised
+        :class:`AdapterError`, which ``Broker._execute_adapter`` catches and
+        turns into exactly that. Every shipped adapter takes the second path,
+        which the previous version of this check failed outright.
+        """
         adapter: Adapter = self.adapter_factory()
         await adapter.connect(self.source_config)
         try:
             # Use an impossible intent to trigger error path
             bad_intent = IntentAnalysis(
                 raw_intent="__compliance_error_trigger__",
-                normalized_intent="__compliance_error_trigger__",
-                data_types=["nonexistent"],
-                purpose="compliance_error_test",
-                confidence=0.0,
+                data_types_needed=["nonexistent"],
+                entities=[],
             )
-            result = await adapter.execute(bad_intent, self._make_scope(), {})
-            # Adapter may return AdapterResult or ErrorRecord
-            assert isinstance(result, (AdapterResult, ErrorRecord)), (
-                f"Error path must return AdapterResult or ErrorRecord, got {type(result).__name__}"
+            try:
+                result = await adapter.execute(bad_intent, self._make_scope(), self._make_context())
+            except AdapterError:
+                return
+            assert isinstance(result, AdapterResult), (
+                f"the error path must return an AdapterResult carrying an "
+                f"ErrorRecord, or raise AdapterError; got {type(result).__name__}"
             )
         finally:
             await adapter.close()

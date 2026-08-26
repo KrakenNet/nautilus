@@ -535,6 +535,32 @@ def create_app(
     # Adapter schema endpoint (AC-21.a)
     # ------------------------------------------------------------------
 
+    @app.get("/v1/adapters", tags=["adapters"])
+    async def get_adapters(  # pyright: ignore[reportUnusedFunction]
+        request: Request,
+    ) -> dict[str, list[dict[str, str]]]:
+        """Adapters and their live status in *this* process.
+
+        ``nautilus adapters list --url`` reads this. Quarantine state is
+        in-memory and per-process, so it cannot be answered by rebuilding a
+        broker from the config file -- which is what the CLI used to do, and
+        why ``adapters list --status quarantined`` always reported nothing.
+        """
+        broker: Broker | None = getattr(request.app.state, "broker", None)
+        if broker is None:
+            return {"adapters": []}
+        quarantined: set[str] = getattr(broker, "_quarantined_adapters", set())
+        return {
+            "adapters": [
+                {
+                    "id": source.id,
+                    "type": source.type,
+                    "status": "quarantined" if source.id in quarantined else "active",
+                }
+                for source in broker.sources
+            ],
+        }
+
     @app.get("/v1/adapters/{name}/schema", tags=["adapters"])
     async def get_adapter_schema(  # pyright: ignore[reportUnusedFunction]
         name: str,

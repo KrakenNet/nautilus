@@ -765,3 +765,84 @@ def test_m422_concurrent_approve_produces_one_decision(tmp_path: Path) -> None:
         f"eight concurrent approves recorded {len(approvals)} approvals by "
         f"{[a.get('reviewer') for a in approvals]}. outcomes={outcomes}"
     )
+
+
+def test_m419_scaffolded_adapter_passes_its_own_compliance_suite(tmp_path: Path) -> None:
+    """``nautilus adapters new`` must produce a package that works.
+
+    The scaffold built ``AdapterResult(data=..., metadata=...)`` -- a shape
+    the broker cannot read -- and shipped no ``get_schema()``, so every
+    generated adapter failed its own generated compliance tests and then
+    failed again on its first real request. Both are exactly what an adapter
+    author copies first.
+    """
+    import os
+    import subprocess
+    import sys
+
+    nautilus_bin = str(Path(".venv/bin/nautilus").resolve())
+    result = subprocess.run(
+        [nautilus_bin, "adapters", "new", "my-csv-adapter", "--dir", str(tmp_path)],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert result.returncode == 0, f"scaffold failed: {result.stdout}\n{result.stderr}"
+
+    generated = tmp_path / "my-csv-adapter"
+    run = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "--no-header", "-p", "no:cacheprovider"],
+        cwd=generated,
+        capture_output=True,
+        text=True,
+        timeout=300,
+        env={
+            **os.environ,
+            "PYTHONPATH": str(generated / "src"),
+            # The generated package's own pytest.ini/pyproject drives config;
+            # the repo's coverage plugin must not follow us in.
+            "COVERAGE_CORE": "",
+        },
+    )
+    assert run.returncode == 0, (
+        f"the generated adapter fails the compliance suite it ships with:\n"
+        f"{run.stdout}\n{run.stderr}"
+    )
+    # Control: an empty suite also exits 0 on some configs, and would prove
+    # nothing about the scaffold.
+    assert " passed" in run.stdout, f"the generated suite ran no tests:\n{run.stdout}"
+
+
+def test_m419_status_filter_refuses_to_answer_from_a_config(
+    tmp_path: Path, write_config: Any
+) -> None:
+    """``--status quarantined`` without a server must fail, not report nothing.
+
+    Quarantine lives in the serving process's memory. Answering from a config
+    file can only ever print an empty list, which to an alert reads as
+    "nothing is quarantined" -- the single most dangerous wrong answer this
+    command can give, and the one the Grafana how-to tells operators to alert
+    on.
+    """
+    config = write_config(
+        {
+            "sources": [
+                {
+                    "id": "vulns",
+                    "type": "postgres",
+                    "description": "vulns",
+                    "classification": "unclassified",
+                    "data_types": ["cve"],
+                    "allowed_purposes": [],
+                    "connection": "postgresql://localhost/x",
+                    "table": "public.vulns",
+                }
+            ],
+            "agents": {"a": {"id": "a", "clearance": "unclassified"}},
+        }
+    )
+    result = _nautilus("adapters", "list", "--status", "quarantined", "--config", config)
+    assert result.returncode != 0, (
+        f"`adapters list --status quarantined` answered from a config file and "
+        f"exited 0:\n{result.stdout}"
+    )

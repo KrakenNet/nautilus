@@ -714,3 +714,78 @@ def test_b4_mcp_http_transport_requires_an_api_key(
         f"the configured key was rejected too (HTTP {valid_key.status_code}); the "
         f"transport is closed to everyone, which is not the same as authenticated."
     )
+
+
+def test_b5_sdk_built_adapter_serves_a_request(tmp_path: Path, write_config: Any) -> None:
+    """An adapter written entirely against the SDK must serve a real request.
+
+    This is the claim the SDK exists to make, and the one its own compliance
+    suite cannot check: the suite validates against the SDK's own types, so a
+    mirror that has drifted from ``nautilus.core.models`` passes it and then
+    fails on the first real request.
+    """
+    import asyncio
+
+    from nautilus import Broker
+
+    module = tmp_path / "sdk_adapter.py"
+    module.write_text(_SDK_ADAPTER, encoding="utf-8")
+    config = write_config(
+        {
+            "adapters": [{"module_path": str(module), "class": "SdkAdapter", "source_type": "sdk"}],
+            "sources": [
+                {
+                    "id": "sdk_source",
+                    "type": "sdk",
+                    "description": "built against the SDK only",
+                    "classification": "unclassified",
+                    "data_types": ["docs"],
+                    "allowed_purposes": [],
+                    "connection": "memory://",
+                }
+            ],
+            "agents": {"a": {"id": "a", "clearance": "unclassified"}},
+        }
+    )
+
+    async def _run() -> Any:
+        broker = Broker.from_config(config)
+        try:
+            return await broker.arequest("a", "docs", {"purpose": "p", "session_id": "s1"})
+        finally:
+            await broker.aclose()
+
+    response = asyncio.run(_run())
+    assert response.data.get("sdk_source") == [{"ok": True}], (
+        f"an adapter built the documented way returned nothing. "
+        f"errored={response.sources_errored} data={response.data}"
+    )
+
+
+_SDK_ADAPTER = '''
+"""An adapter that imports only from nautilus_adapter_sdk, as documented."""
+
+from __future__ import annotations
+
+from typing import Any, ClassVar
+
+from nautilus_adapter_sdk.types import AdapterResult
+
+
+class SdkAdapter:
+    source_type: ClassVar[str] = "sdk"
+
+    async def connect(self, config: Any) -> None:
+        self._config = config
+
+    async def execute(self, intent: Any, scope: Any, context: Any) -> AdapterResult:
+        return AdapterResult(
+            source_id=self._config.id, rows=[{"ok": True}], duration_ms=1, error=None
+        )
+
+    async def get_schema(self) -> Any:
+        raise NotImplementedError
+
+    async def close(self) -> None:
+        return None
+'''

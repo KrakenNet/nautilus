@@ -126,7 +126,7 @@ sources:
 For a complete adapter package with CI, use the Copier template:
 
 ```bash
-copier copy templates/adapter/ my-adapter/
+nautilus adapters new my-adapter
 ```
 
 This generates a full Python package with:

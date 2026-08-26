@@ -40,6 +40,7 @@ from typing import TYPE_CHECKING, Any, Literal, TypeVar, cast
 
 from fathom.attestation import AttestationService
 from fathom.audit import FileSink
+from pydantic import ValidationError
 
 from nautilus.adapters.base import Adapter, AdapterError, ScopeEnforcementError
 from nautilus.adapters.elasticsearch import ElasticsearchAdapter
@@ -396,6 +397,25 @@ def _new_request_state(context: dict[str, Any], intent: str) -> _RequestState:
         intent=intent,
         intent_analysis=IntentAnalysis(raw_intent=intent, data_types_needed=[], entities=[]),
     )
+
+
+def _coerce_adapter_result(res: object) -> AdapterResult | None:
+    """Accept a structurally identical result from a foreign class.
+
+    ``nautilus-adapter-sdk`` mirrors ``AdapterResult`` rather than importing
+    it, precisely so an adapter package needs no dependency on the core
+    library. An adapter written the documented way therefore returns a
+    different class with the same fields, and an ``isinstance`` check alone
+    would refuse every SDK-built adapter. Anything that does not validate is
+    a genuine contract break and returns ``None``.
+    """
+    dump = getattr(res, "model_dump", None)
+    if not callable(dump):
+        return None
+    try:
+        return AdapterResult.model_validate(dump())
+    except (ValidationError, TypeError):
+        return None
 
 
 def _validate_classification_labels(config: NautilusConfig, router: FathomRouter) -> None:
@@ -2000,19 +2020,21 @@ class Broker:
                 # _prepare_adapter already recorded why this source is out.
                 continue
             if not isinstance(res, AdapterResult):
-                # B5 -- ``res.error`` below is outside any try block, so an
-                # adapter that *returns* the wrong type (rather than raising)
-                # took down every co-queried source with it. The SDK's
-                # same-named AdapterResult lands here too.
-                state.errored.append(
-                    _source_error(
-                        source_id,
-                        "AdapterContractError",
-                        f"adapter returned {type(res).__name__}, expected AdapterResult",
-                        state.request_id,
+                coerced = _coerce_adapter_result(res)
+                if coerced is None:
+                    # B5 -- ``res.error`` below is outside any try block, so
+                    # an adapter that *returns* the wrong type (rather than
+                    # raising) took down every co-queried source with it.
+                    state.errored.append(
+                        _source_error(
+                            source_id,
+                            "AdapterContractError",
+                            f"adapter returned {type(res).__name__}, expected AdapterResult",
+                            state.request_id,
+                        )
                     )
-                )
-                continue
+                    continue
+                res = coerced
             if res.error is not None:
                 # ``_execute_adapter`` cannot see the request id, so it leaves
                 # trace_id empty for the typed errors and this is the caller

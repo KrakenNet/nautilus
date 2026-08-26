@@ -46,4 +46,4 @@ class Test{{ class_name }}Compliance:
         await self.suite.test_idempotent_close()
 
     async def test_error_path(self) -> None:
-        await self.suite.test_error_path_returns_error_record()
+        await self.suite.test_error_path_reports_the_failure()

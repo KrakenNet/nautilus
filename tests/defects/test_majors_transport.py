@@ -356,3 +356,16 @@ def test_m49_approving_a_proposal_promotes_the_rule(
             "route and no MCP tool, and pattern-tracker.yaml ships with "
             "rules: [] so the system-proposed path is dead too."
         )
+
+
+def test_m419_adapters_route_reports_live_status(client: Any) -> None:
+    """``GET /v1/adapters`` is what ``adapters list --url`` reads.
+
+    Without it the CLI has no way to see quarantine state, which lives only
+    in the serving process's memory.
+    """
+    response = client.get("/v1/adapters")
+    assert response.status_code == 200, f"{response.status_code}: {response.text}"
+    adapters = response.json()["adapters"]
+    assert [a["id"] for a in adapters] == ["src"], adapters
+    assert adapters[0]["status"] == "active", adapters
