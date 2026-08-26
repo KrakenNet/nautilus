@@ -703,16 +703,16 @@ wheels = [
 
 [[package]]
 name = "fathom-rules"
-version = "0.5.0"
+version = "0.11.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "clipspy" },
     { name = "pydantic" },
     { name = "pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/13/07/6189051fd82e42e88ac87a1984e5550c87ce13e12227f9be03f935b91496/fathom_rules-0.5.0.tar.gz", hash = "sha256:823e57087c2a3fdf12192d0313c1aa9870b211bb14cb323809fad6a240277dff", size = 805428, upload-time = "2026-06-05T21:44:59.813Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/6e/f2/c36c58c5ed552fb66bae8a2be769934860c2250a6671d9be28f1bb3bda7c/fathom_rules-0.11.0.tar.gz", hash = "sha256:c3cfe396bb8f6d8870614189a44085c72d23720e5671182e69a96da2dfe19e93", size = 2567108, upload-time = "2026-08-26T18:00:40.942Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2e/6f/761d89398072127f4aa4957aeecddfbea4b49b2d6d7ca35480661a10204e/fathom_rules-0.5.0-py3-none-any.whl", hash = "sha256:001adcd03258543008945814f07152635682cffaae37af93b161906e9db66b64", size = 151897, upload-time = "2026-06-05T21:44:58.077Z" },
+    { url = "https://files.pythonhosted.org/packages/26/ad/8f6ee057d26072f664bab85c6e64dc94c265e56157c275ee191099e6efa1/fathom_rules-0.11.0-py3-none-any.whl", hash = "sha256:3a2d762d9827e6e94859ebd627a5b884af1add76fb7d825f90139a1b8a41e220", size = 1722496, upload-time = "2026-08-26T18:00:39.248Z" },
 ]
 
 [[package]]
@@ -1678,7 +1678,7 @@ requires-dist = [
     { name = "cryptography", specifier = ">=46.0.7" },
     { name = "elasticsearch", specifier = ">=8,<10" },
     { name = "fastapi", specifier = ">=0.115" },
-    { name = "fathom-rules", specifier = ">=0.3.4" },
+    { name = "fathom-rules", specifier = ">=0.11.0" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "influxdb-client", specifier = ">=1.40" },
     { name = "jinja2", specifier = ">=3.1" },
