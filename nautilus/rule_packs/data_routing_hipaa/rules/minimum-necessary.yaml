@@ -30,7 +30,7 @@ rules:
       - template: routing_decision
         conditions:
           - slot: source_id
-            expression: equals(?sid)
+            bind: ?sid
     then:
       action: route
       reason: "HIPAA minimum necessary: PHI scoped to stated purpose"

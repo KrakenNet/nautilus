@@ -7,6 +7,7 @@ Formula (AC-35.8.a):
     -0.10 per shadow flag
     -0.10 if fire_rate < 5%
     -0.05 per cascade warn
+    -0.10 if more entries drifted than replayed
 
 Score interpretation:
 - >0.9: eligible for auto-promotion (gated by ``rkm.auto_promote.enabled``)
@@ -37,6 +38,10 @@ def score(sandbox: SandboxResult, shadow_flags: tuple[ShadowFlag, ...]) -> Confi
 
     cascade_penalty = -0.05 if sandbox.cascade_max > 3 else 0.0
 
+    # Drifted entries are dropped before scoring, so a corpus that is mostly
+    # drift produces a confident-looking score from a handful of requests.
+    drift_penalty = -0.1 if sandbox.skipped_drifted > sandbox.replayed_n_actual else 0.0
+
     raw = (
         base
         + regression_penalty
@@ -44,6 +49,7 @@ def score(sandbox: SandboxResult, shadow_flags: tuple[ShadowFlag, ...]) -> Confi
         + shadow_penalty
         + fire_rate_penalty
         + cascade_penalty
+        + drift_penalty
     )
     total = max(0.0, min(1.0, raw))
 
@@ -54,6 +60,7 @@ def score(sandbox: SandboxResult, shadow_flags: tuple[ShadowFlag, ...]) -> Confi
         shadow_penalty=shadow_penalty,
         fire_rate_penalty=fire_rate_penalty,
         cascade_penalty=cascade_penalty,
+        drift_penalty=drift_penalty,
         total=total,
     )
 

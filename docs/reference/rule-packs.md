@@ -31,11 +31,16 @@ router = FathomRouter(
 )
 ```
 
-Packs load after the built-in rules and after `user_rules_dirs`. Their rules
-join the built-in `nautilus-routing` module: they match against the same working
-memory as the built-in routing rules and interleave with them by salience, using
-the standard bands — denial 170–190, scope constraint 130–150, escalation
-110–120.
+Packs load after the built-in rules and after `user_rules_dirs`. Both shipped
+packs join the built-in `nautilus-routing` module: their rules match against the
+same working memory as the built-in routing rules and interleave with them by
+salience. A pack that declares its own module does **not** interleave — CLIPS
+runs one module's agenda to exhaustion before moving to the next, so salience
+only orders rules within a module.
+
+The shipped pack rules sit at 185 and 180 (denial) and 140 (scope constraint),
+around the built-in saliences listed in
+[Authoring Rules](../how-to/authoring-rules.md#salience-what-the-shipped-rules-use).
 
 ## Pack layout
 

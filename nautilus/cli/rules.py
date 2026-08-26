@@ -2,7 +2,7 @@
 
 Subcommands:
     rules validate <file> [--sandbox] [--replay-n N]
-    rules test --file F [--audit-log L] [--threshold 0.6]
+    rules test --file F [--audit-log L] [--config C] [--threshold 0.6]
     rules history [--module M]
 
 Long-running ``--sandbox`` mode streams ``replaying N/M ...`` progress
@@ -18,6 +18,8 @@ from pathlib import Path
 from typing import Any, cast
 
 from nautilus.cli._common import err, ok, warn
+
+_DEFAULT_LINEAGE_DIR = Path(".nautilus/rkm/lineage")
 
 
 def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:  # pyright: ignore[reportPrivateUsage]
@@ -82,6 +84,14 @@ def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> N
         dest="audit_log",
         default=None,
         help="Audit-log JSONL to replay in the sandbox stage (optional).",
+    )
+    p_test.add_argument(
+        "--config",
+        default=None,
+        help=(
+            "nautilus.yaml whose rules.packs / rules.user_rules_dirs the sandbox "
+            "should replay against (default: ./nautilus.yaml when present)."
+        ),
     )
     p_test.add_argument(
         "--threshold",
@@ -239,6 +249,7 @@ def _cmd_test(args: argparse.Namespace) -> int:
     import yaml
 
     from nautilus.rkm.types import ConfidenceBreakdown
+    from nautilus.rkm.validator.pipeline import _built_in_ruleset
     from nautilus.rkm.validator.sandbox import (
         SandboxRegressionError,
         SandboxResult,
@@ -274,6 +285,8 @@ def _cmd_test(args: argparse.Namespace) -> int:
             )
         return 1
 
+    rule_packs, user_rules_dirs = _deployed_ruleset_sources(getattr(args, "config", None))
+
     # Static validation guarantees a top-level 'rules' list of mappings.
     data = cast("dict[str, Any]", yaml.safe_load(file_path.read_text(encoding="utf-8")))
     rules: list[dict[str, Any]] = [
@@ -285,15 +298,23 @@ def _cmd_test(args: argparse.Namespace) -> int:
     # Stages 2–4 per rule — shadow → sandbox → score.
     results: list[tuple[str, tuple[ShadowFlag, ...], SandboxResult, ConfidenceBreakdown]] = []
     min_total = 1.0
+    # Shadow analysis compares against the rules the engine will actually be
+    # running -- the built-ins plus this file's siblings. Comparing only within
+    # the submitted file cleared a rule that duplicates a shipped LHS at lower
+    # salience (it silently never fires) and one that preempts a shipped deny at
+    # higher salience. The sandbox stage below already loads the built-in dir.
+    built_ins = _built_in_ruleset()
     for rule in rules:
         name = str(rule.get("name", "<unnamed>"))
-        flags = shadow_check(rule, [r for r in rules if r is not rule])
+        flags = shadow_check(rule, [*built_ins, *(r for r in rules if r is not rule)])
         try:
             sandbox_result = sandbox_replay(
                 rule,
                 audit_path,
                 replay_n=int(getattr(args, "replay_n", 1000)),
                 min_entries=int(getattr(args, "min_entries", 100)),
+                rule_packs=rule_packs,
+                user_rules_dirs=user_rules_dirs,
             )
         except SandboxRegressionError as exc:
             err(f"rule '{name}': {exc}")
@@ -321,6 +342,7 @@ def _cmd_test(args: argparse.Namespace) -> int:
                         "shadow_penalty": breakdown.shadow_penalty,
                         "fire_rate_penalty": breakdown.fire_rate_penalty,
                         "cascade_penalty": breakdown.cascade_penalty,
+                        "drift_penalty": breakdown.drift_penalty,
                     },
                     "shadow_flags": [
                         {"existing_rule": f.existing_rule, "relation": f.relation} for f in flags
@@ -332,6 +354,8 @@ def _cmd_test(args: argparse.Namespace) -> int:
                         "relaxations": sandbox_result.relaxations,
                         "cascade_max": sandbox_result.cascade_max,
                         "insufficient_history": sandbox_result.insufficient_history,
+                        "skipped_no_input_facts": sandbox_result.skipped_no_input_facts,
+                        "skipped_drifted": sandbox_result.skipped_drifted,
                     },
                 }
                 for name, flags, sandbox_result, breakdown in results
@@ -351,6 +375,16 @@ def _cmd_test(args: argparse.Namespace) -> int:
                 f"rule '{name}': insufficient audit history"
                 f" (replayed {sandbox_result.replayed_n_actual} entries)"
             )
+        if sandbox_result.skipped_drifted:
+            warn(
+                f"rule '{name}': {sandbox_result.skipped_drifted} audit entries could not be"
+                f" replayed -- the current rules no longer reproduce what they recorded"
+            )
+        if sandbox_result.skipped_no_input_facts:
+            warn(
+                f"rule '{name}': {sandbox_result.skipped_no_input_facts} audit entries carry"
+                f" no engine input and were not replayed"
+            )
         print(
             f"rule '{name}': score={breakdown.total:.2f}"
             f" fired={sandbox_result.fired}/{sandbox_result.replayed_n_actual}"
@@ -365,18 +399,37 @@ def _cmd_test(args: argparse.Namespace) -> int:
     return 0
 
 
+def _deployed_ruleset_sources(config_path: str | None) -> tuple[list[str], list[Path]]:
+    """``rules.packs`` and ``rules.user_rules_dirs`` from the deployment config.
+
+    The sandbox built both engines with neither, so a site running either one
+    replayed against a ruleset it does not deploy: the baseline disagreed with
+    every recorded entry and the whole corpus was dropped as drifted.
+    """
+    from nautilus.config.loader import load_config
+
+    path = config_path or ("nautilus.yaml" if Path("nautilus.yaml").is_file() else None)
+    if path is None:
+        return [], []
+    try:
+        config = load_config(path)
+    except Exception as exc:  # noqa: BLE001 -- a bad config must not read as "no packs"
+        err(f"cannot read rules config from {path}: {exc}")
+        raise SystemExit(1) from exc
+    return list(config.rules.packs), [Path(d) for d in config.rules.user_rules_dirs]
+
+
 def _cmd_history(args: argparse.Namespace) -> int:
     """List rule lineage history filtered by module."""
     from nautilus.rkm.lineage import LineageStore
 
-    store = LineageStore()
-    # Filter: list_by_derived_from uses parent_id; for module filter we
-    # scan all records and match rule_name prefix == module.
+    # The on-disk store, not a fresh in-memory dict: every other reader passes
+    # this directory, so ``rules history`` used to report an empty lineage for
+    # a rule the REST route and ``nautilus rule history`` both listed.
+    store = LineageStore(_DEFAULT_LINEAGE_DIR)
     all_records = store._all_records()  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
     module = args.module
-    matching = [
-        r for r in all_records if r.rule_name.startswith(f"{module}/") or r.rule_name == module
-    ]
+    matching = [r for r in all_records if r.module == module]
 
     if getattr(args, "json", False):
         output: list[dict[str, object]] = []
@@ -384,6 +437,7 @@ def _cmd_history(args: argparse.Namespace) -> int:
             output.append(
                 {
                     "rule_name": rec.rule_name,
+                    "module": rec.module,
                     "version": rec.version,
                     "proposer": rec.proposer,
                     "approver": rec.approver,

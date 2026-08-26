@@ -18,6 +18,28 @@ from pathlib import Path
 from typing import Any, Literal
 
 
+class LineageNameError(ValueError):
+    """Raised when a rule name cannot be used as a lineage record filename."""
+
+
+def _bare_name(rule_name: str) -> str:
+    """Strip the ``module::`` prefix and reject anything unusable as a filename.
+
+    ``rule_trace`` and ``Engine.rule_registry`` both spell a rule
+    ``module::rule-name``; the store spells it bare. A name copied from a trace
+    into ``nautilus rule history`` used to return ``[]`` with exit 0. The name
+    is also interpolated into a path, so a glob character silently matched
+    other rules' records and ``..`` wrote outside the store.
+    """
+    bare = rule_name.split("::")[-1]
+    if not bare or bare in {".", ".."} or set(bare) & set("/\\*?[]"):
+        raise LineageNameError(
+            f"invalid rule name {rule_name!r}: expected a bare rule name, "
+            f"optionally prefixed 'module::'"
+        )
+    return bare
+
+
 class LineageCycleError(Exception):
     """Raised when inserting a lineage record would create a DAG cycle."""
 
@@ -41,6 +63,14 @@ class LineageRecord:
     retired_at: datetime | None = None
     retire_reason: str | None = None
     retire_reviewer: str | None = None
+    # The CLI filters history by module. Module was not recorded at all, so
+    # ``nautilus rules history --module`` could never match anything.
+    module: str = ""
+
+    def __post_init__(self) -> None:
+        """Store the bare rule name, whatever spelling the caller used."""
+        object.__setattr__(self, "rule_name", _bare_name(self.rule_name))
+        object.__setattr__(self, "derived_from", tuple(_bare_name(d) for d in self.derived_from))
 
 
 def _record_to_dict(record: LineageRecord) -> dict[str, Any]:
@@ -91,7 +121,7 @@ class LineageStore:
 
     def _record_path(self, rule_name: str, version: int) -> Path:
         assert self._store_dir is not None  # noqa: S101
-        return self._store_dir / f"{rule_name}.v{version}.json"
+        return self._store_dir / f"{_bare_name(rule_name)}.v{version}.json"
 
     def _write_record(self, record: LineageRecord) -> None:
         if self._store_dir is None:
@@ -105,7 +135,7 @@ class LineageStore:
 
     def _load_record(self, rule_name: str, version: int) -> LineageRecord | None:
         if self._store_dir is None:
-            return self._mem.get((rule_name, version))
+            return self._mem.get((_bare_name(rule_name), version))
         path = self._record_path(rule_name, version)
         if not path.exists():
             return None
@@ -178,22 +208,28 @@ class LineageStore:
         return all_versions[-1] if all_versions else None
 
     def history(self, rule_name: str) -> list[LineageRecord]:
-        """All versions for a rule, oldest first."""
+        """All versions for a rule, oldest first.
+
+        Accepts either spelling of the name -- bare, or the ``module::name``
+        the rule trace prints.
+        """
+        bare = _bare_name(rule_name)
         if self._store_dir is None:
-            records = [r for r in self._mem.values() if r.rule_name == rule_name]
+            records = [r for r in self._mem.values() if r.rule_name == bare]
         else:
             records: list[LineageRecord] = []
-            for path in self._store_dir.glob(f"{rule_name}.v*.json"):
+            for path in self._store_dir.glob(f"{bare}.v*.json"):
                 with contextlib.suppress(Exception):
                     records.append(_record_from_dict(json.loads(path.read_text(encoding="utf-8"))))
         return sorted(records, key=lambda r: r.version)
 
     def descendants(self, rule_name: str) -> list[str]:
         """All active rules listing ``rule_name`` in ``derived_from``. AC-35.10.c."""
+        bare = _bare_name(rule_name)
         seen: set[str] = set()
         result: list[str] = []
         for rec in self._all_records():
-            if rule_name in rec.derived_from and rec.rule_name not in seen:
+            if bare in rec.derived_from and rec.rule_name not in seen:
                 seen.add(rec.rule_name)
                 result.append(rec.rule_name)
         return result
@@ -259,4 +295,4 @@ class LineageStore:
         return tuple(r for r in self._all_records() if parent_id in r.derived_from)
 
 
-__all__ = ["LineageCycleError", "LineageRecord", "LineageStore"]
+__all__ = ["LineageCycleError", "LineageNameError", "LineageRecord", "LineageStore"]

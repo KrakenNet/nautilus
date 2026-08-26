@@ -683,15 +683,17 @@ def test_m421_validate_static_inspects_the_then_clause(tmp_path: Path) -> None:
                         "conditions": [{"slot": "classification", "expression": "equals(secret)"}],
                     }
                 ],
-                "then": [
-                    {
-                        "assert": {
+                "then": {
+                    "action": "deny",
+                    "reason": "too sensitive",
+                    "assert": [
+                        {
                             "template": "denial_record",
                             # rule_name is required: true in the template.
                             "slots": {"source_id": "src", "reason": "too sensitive"},
                         }
-                    }
-                ],
+                    ],
+                },
             }
         ],
     }
@@ -846,3 +848,64 @@ def test_m419_status_filter_refuses_to_answer_from_a_config(
         f"`adapters list --status quarantined` answered from a config file and "
         f"exited 0:\n{result.stdout}"
     )
+
+
+def test_upstream_alias_join_survives_a_bind_on_the_same_slot(tmp_path: Path) -> None:
+    """``equals($alias.field)`` and ``bind:`` on one slot must still join.
+
+    The audit found fathom emitting ``equals($a.id)`` as a bare pattern
+    variable, which the bind-injection pass then overwrote -- erasing the
+    join's only reference and turning the rule into a silent cartesian product
+    in a policy engine. It is reachable by following ``authoring-rules.md``'s
+    mandatory ``source_id: "?sid"`` denial-record binding, so this pins the
+    upstream behaviour rather than trusting it.
+    """
+    import yaml
+    from fathom.compiler import Compiler
+
+    from nautilus.rules import BUILT_IN_RULES_DIR
+
+    compiler = Compiler()
+    templates = {
+        t.name: t
+        for path in sorted((BUILT_IN_RULES_DIR / "templates").glob("*.yaml"))
+        for t in compiler.parse_template_file(path)
+    }
+
+    def _compile(join_condition: dict[str, str]) -> str:
+        ruleset = {
+            "module": "nautilus-routing",
+            "ruleset": "alias-join",
+            "version": "1.0",
+            "rules": [
+                {
+                    "name": "alias-join",
+                    "salience": 100,
+                    "when": [
+                        {
+                            "template": "source",
+                            "alias": "$src",
+                            "conditions": [{"slot": "id", "bind": "?sid"}],
+                        },
+                        {"template": "routing_decision", "conditions": [join_condition]},
+                    ],
+                    "then": {"action": "route", "reason": "joined"},
+                }
+            ],
+        }
+        path = tmp_path / f"{len(join_condition)}.yaml"
+        path.write_text(yaml.safe_dump(ruleset), encoding="utf-8")
+        parsed = compiler.parse_rule_file(path)
+        return compiler.compile_rule(parsed.rules[0], "nautilus-routing", templates)
+
+    joined = _compile({"slot": "source_id", "expression": "equals($src.id)", "bind": "?rid"})
+    assert joined.count("?sid") >= 2, (
+        f"the alias join was dropped: ?sid is referenced once, so the "
+        f"routing_decision pattern matches every source:\n{joined}"
+    )
+
+    # Control: without the alias expression there is genuinely no join, and
+    # ?sid appears exactly once. If this ever reached 2 the assertion above
+    # would pass for a reason that has nothing to do with the join.
+    unjoined = _compile({"slot": "source_id", "bind": "?rid"})
+    assert unjoined.count("?sid") == 1, unjoined

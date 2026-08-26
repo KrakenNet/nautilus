@@ -67,10 +67,11 @@ def test_engine_constructs_from_builtin_tree() -> None:
     # nautilus-routing module registered (plus implicit MAIN).
     assert "nautilus-routing" in engine.module_registry
 
-    # Both default rules registered via load_rules.
-    assert {"match-sources-by-data-type", "deny-purpose-mismatch"} <= set(
-        engine.rule_registry.keys()
-    )
+    # Both default rules registered via load_rules. ``rule_registry`` is keyed
+    # ``module::rule-name``, the same spelling ``rule_trace`` uses.
+    assert {"match-sources-by-data-type", "deny-purpose-mismatch"} <= {
+        name.split("::")[-1] for name in engine.rule_registry
+    }
 
 
 @pytest.mark.integration

@@ -61,7 +61,8 @@ def test_default_classification_deny_has_salience_150() -> None:
     decisions — design §3.1.
     """
     engine = _build_engine()
-    rule = engine.rule_registry["default-classification-deny"]
+    registry = {name.split("::")[-1]: r for name, r in engine.rule_registry.items()}
+    rule = registry["default-classification-deny"]
     assert rule.salience == 150, f"expected salience 150, got {rule.salience!r}"
 
 

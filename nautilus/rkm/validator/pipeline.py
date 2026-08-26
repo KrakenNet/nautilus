@@ -99,7 +99,16 @@ def run_pipeline(rule_yaml: Path, *, queue: ProposalQueue, audit_log: Path) -> P
         proposed_at=now,
         target_module="curator",
         artifact_type="rule",
-        artifact={"yaml_path": str(rule_yaml)},
+        # ``name``/``module`` matter downstream: the lineage record is keyed on
+        # them, and without them every promoted rule was filed under its
+        # proposal id in module "", which no history query can find. The
+        # ruleset's ``version`` is deliberately not copied -- that is a ruleset
+        # version string ("1.0"), not the integer lineage version.
+        artifact={
+            "yaml_path": str(rule_yaml),
+            "name": str(proposed.get("name", "")) or f"prop_rule_{rule_yaml.stem}",
+            "module": str(proposed.get("module", "")),
+        },
         validation={
             "static_ok": static_result.ok,
             "static_errors": [e.message for e in static_result.errors],

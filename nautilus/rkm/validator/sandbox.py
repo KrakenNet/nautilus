@@ -191,12 +191,30 @@ def _load_entries(audit_log_path: Path, replay_n: int) -> list[AuditEntry]:
 
 
 def _build_routers(
-    proposed_rule: dict[str, Any], built_in_rules_dir: Path
+    proposed_rule: dict[str, Any],
+    built_in_rules_dir: Path,
+    rule_packs: list[str],
+    user_rules_dirs: list[Path],
 ) -> tuple[FathomRouter, FathomRouter, str]:
-    """Build the baseline and candidate engines. Returns ``(baseline, candidate, rule_name)``."""
+    """Build the baseline and candidate engines. Returns ``(baseline, candidate, rule_name)``.
+
+    Both engines carry the deployment's ``rules.packs`` and
+    ``rules.user_rules_dirs``. Built with neither, the baseline reproduces a
+    ruleset the site does not run: every pack-gated audit entry fails the drift
+    guard and lands in ``skipped_drifted``, so a proposal that regresses the
+    real ruleset replays clean against a ruleset nobody deployed.
+    """
     rule_name = str(proposed_rule.get("name") or "rkm-proposed-rule")
-    baseline = FathomRouter(built_in_rules_dir=built_in_rules_dir, user_rules_dirs=[])
-    candidate = FathomRouter(built_in_rules_dir=built_in_rules_dir, user_rules_dirs=[])
+    baseline = FathomRouter(
+        built_in_rules_dir=built_in_rules_dir,
+        user_rules_dirs=user_rules_dirs,
+        rule_packs=rule_packs,
+    )
+    candidate = FathomRouter(
+        built_in_rules_dir=built_in_rules_dir,
+        user_rules_dirs=user_rules_dirs,
+        rule_packs=rule_packs,
+    )
     try:
         candidate.reload_rule(rule_name, _ruleset_yaml(proposed_rule))
     except Exception as exc:
@@ -211,6 +229,8 @@ def sandbox_replay(
     replay_n: int = 1000,
     min_entries: int = 100,
     built_in_rules_dir: Path | None = None,
+    rule_packs: list[str] | None = None,
+    user_rules_dirs: list[Path] | None = None,
 ) -> SandboxResult:
     """Replay a proposed rule against the audit log. AC-35.7.a–f.
 
@@ -227,7 +247,10 @@ def sandbox_replay(
     """
     entries = _load_entries(audit_log_path, replay_n)
     baseline, candidate, rule_name = _build_routers(
-        proposed_rule, built_in_rules_dir or BUILT_IN_RULES_DIR
+        proposed_rule,
+        built_in_rules_dir or BUILT_IN_RULES_DIR,
+        rule_packs or [],
+        user_rules_dirs or [],
     )
 
     fired_count = 0

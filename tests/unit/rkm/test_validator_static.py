@@ -12,12 +12,40 @@ pytestmark = pytest.mark.unit
 
 
 def test_ac_35_5_a_valid_rule_returns_ok_true(tmp_path: Path) -> None:
+    """A rule the compiler accepts passes.
+
+    The rule has to be a real one: validation now compiles what it is given,
+    so the previous fixture here -- ``lhs: []``/``rhs: []`` with no module
+    envelope -- is exactly the empty shell that used to be reported ``OK`` and
+    then refused to load.
+    """
     yaml_path = tmp_path / "ok.yaml"
     yaml_path.write_text(
-        "rules:\n  - name: noop\n    module: suggestions\n    lhs: []\n    rhs: []\n"
+        "module: nautilus-routing\n"
+        "ruleset: ok\n"
+        'version: "1.0"\n'
+        "rules:\n"
+        "  - name: deny-secret\n"
+        "    salience: 100\n"
+        "    when:\n"
+        "      - template: source\n"
+        "        conditions:\n"
+        "          - slot: id\n"
+        "            bind: ?sid\n"
+        "          - slot: classification\n"
+        "            expression: equals(secret)\n"
+        "    then:\n"
+        "      action: deny\n"
+        '      reason: "secret sources are denied"\n'
+        "      assert:\n"
+        "        - template: denial_record\n"
+        "          slots:\n"
+        '            source_id: "?sid"\n'
+        '            reason: "secret sources are denied"\n'
+        '            rule_name: "deny-secret"\n'
     )
     result = validate_static(yaml_path)
-    assert result.ok is True
+    assert result.ok is True, [e.message for e in result.errors]
     assert result.errors == ()
 
 

@@ -36,7 +36,7 @@ rules:
       - template: routing_decision
         conditions:
           - slot: source_id
-            expression: equals(?sid)
+            bind: ?sid
     then:
       action: route
       reason: "AC-6 least privilege: scope limited to stated purpose"

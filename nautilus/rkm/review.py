@@ -434,6 +434,7 @@ def _build_lineage_record(
     rule_name: str = proposal.artifact.get("name", proposal.proposal_id)
     version: int = int(proposal.artifact.get("version", 1))
     return LineageRecord(
+        module=str(proposal.artifact.get("module", "")),
         rule_name=rule_name,
         version=version,
         proposer=proposal.proposer,
