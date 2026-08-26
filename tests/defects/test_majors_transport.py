@@ -94,11 +94,18 @@ def test_m412_admin_sse_route_does_not_demand_a_broker_query_param(
 
     Because the ForwardRef never resolves, ``broker`` registers as a required
     *query parameter*: every caller gets 422 and ``get_auth_user`` never runs.
+
+    Read off the schema rather than by calling the route: a working SSE
+    endpoint streams until the client disconnects, so a request that proves
+    the fix would hang the suite.
     """
-    response = client.get("/admin/sources/events")
-    assert response.status_code != 422, (
-        f"GET /admin/sources/events returned 422 {response.text}. The "
-        f"dependency is being read as a query parameter."
+    schema = client.get("/openapi.json").json()
+    route = schema["paths"]["/admin/sources/events"]["get"]
+    params = {p["name"] for p in route.get("parameters", [])}
+    assert "broker" not in params, (
+        f"GET /admin/sources/events declares {sorted(params)} as parameters. "
+        f"``broker`` is a Depends marker trapped in an unresolved ForwardRef, "
+        f"so FastAPI reads it as a required query parameter and 422s everyone."
     )
 
 

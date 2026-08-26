@@ -27,6 +27,16 @@ rules:
           - slot: classification
             bind: ?cls
           - test: '(member$ ?cls (create$ "confidential" "secret" "top-secret"))'
+      # B2 -- without this pattern the rule scopes every matching source,
+      # routed or not, and the default-on ``scope_without_routing``
+      # consistency check turns any request that does not happen to reach
+      # every such source into a PolicyEngineError. Matching the routing
+      # decision also makes the rule fire after routing rather than before
+      # it, which is what the salience comment above was reaching for.
+      - template: routing_decision
+        conditions:
+          - slot: source_id
+            expression: equals(?sid)
     then:
       action: route
       reason: "AC-6 least privilege: scope limited to stated purpose"

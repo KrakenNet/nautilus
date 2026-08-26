@@ -6,18 +6,19 @@ Provides reusable dependency functions that extract common objects from
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from starlette.requests import Request
 
+# Runtime imports, not TYPE_CHECKING: with ``from __future__ import
+# annotations`` FastAPI resolves these names when it registers the routes
+# that depend on them. An unresolvable ``Request`` is treated as a body
+# parameter (422 on every admin call); an unresolvable ``Broker`` 500s
+# /openapi.json.
+from nautilus.core.broker import Broker
 from nautilus.transport.auth import (
     api_key_header,
     proxy_trust_dependency,
     verify_api_key,
 )
-
-if TYPE_CHECKING:
-    from starlette.requests import Request
-
-    from nautilus.core.broker import Broker
 
 
 async def get_broker(request: Request) -> Broker:

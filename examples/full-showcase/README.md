@@ -22,7 +22,7 @@ End-to-end demonstration of every Nautilus subsystem running together.
 ## Features Demonstrated
 
 - **Intent-aware routing** — pattern-matching intent analyzer classifies queries by data type
-- **Classification-based access control** — Fathom rules engine enforces agent clearance vs source classification (unclassified < cui-basic < cui-specified)
+- **Classification-based access control** — Fathom rules engine enforces agent clearance vs source classification (unclassified < cui < confidential)
 - **Five data adapters** — Postgres (SQL), InfluxDB (Flux time-series), S3/MinIO (object store with tag filtering), Elasticsearch (full-text log search), Neo4j (Cypher graph queries)
 - **Audit trail** — every request produces a JSONL audit entry with rule trace, routing decisions, scope constraints, and denial records
 - **Attestation** — Ed25519 JWT signing on every response; attestation payloads written to JSONL sink
@@ -31,7 +31,7 @@ End-to-end demonstration of every Nautilus subsystem running together.
 - **OpenTelemetry** — 8 pipeline spans (broker.request through attestation.sign), 9 metrics (counters + histograms), OTLP export to Tempo
 - **Grafana dashboards** — request rate, decision distribution, error rate, latency histograms (p50/p90/p99), per-adapter breakdown
 - **API key auth** — X-API-Key header required on write endpoints; probes are unauthenticated
-- **Three agent clearance levels** — intern (unclassified), analyst (cui-basic), auditor (cui-specified)
+- **Three agent clearance levels** — intern (unclassified), analyst (cui), auditor (confidential)
 
 ## Prerequisites
 
@@ -76,11 +76,11 @@ curl http://localhost:8000/readyz
 curl http://localhost:8000/v1/sources | python3 -m json.tool
 ```
 
-Returns all five sources: `vuln_db` (postgres/cui-basic), `server_metrics` (influxdb/unclassified), `compliance_docs` (s3/cui-specified), `app_logs` (elasticsearch/cui-basic), and `threat_graph` (neo4j/cui-basic).
+Returns all five sources: `vuln_db` (postgres/cui), `server_metrics` (influxdb/unclassified), `compliance_docs` (s3/confidential), `app_logs` (elasticsearch/cui), and `threat_graph` (neo4j/cui).
 
 ### 3. Broker Requests (Access Control in Action)
 
-**Analyst (cui-basic) queries vulnerabilities — ALLOWED:**
+**Analyst (cui) queries vulnerabilities — ALLOWED:**
 
 ```bash
 curl -X POST http://localhost:8000/v1/request \
@@ -93,7 +93,7 @@ curl -X POST http://localhost:8000/v1/request \
   }'
 ```
 
-The analyst has `cui-basic` clearance and can access `vuln_db` (cui-basic) and `server_metrics` (unclassified). The response includes:
+The analyst has `cui` clearance and can access `vuln_db` (cui) and `server_metrics` (unclassified). The response includes:
 - `sources_queried` — sources that returned data
 - `sources_denied` — sources blocked by classification rules
 - `attestation_token` — Ed25519 JWT proving the routing decision
@@ -112,9 +112,9 @@ curl -X POST http://localhost:8000/v1/request \
   }'
 ```
 
-The intern has `unclassified` clearance — the Fathom rules engine denies access to `vuln_db` (cui-basic) and `compliance_docs` (cui-specified). Check `sources_denied` in the response.
+The intern has `unclassified` clearance — the Fathom rules engine denies access to `vuln_db` (cui) and `compliance_docs` (confidential). Check `sources_denied` in the response.
 
-**Auditor (cui-specified) queries everything — ALLOWED:**
+**Auditor (confidential) queries everything — ALLOWED:**
 
 ```bash
 curl -X POST http://localhost:8000/v1/request \
@@ -127,7 +127,7 @@ curl -X POST http://localhost:8000/v1/request \
   }'
 ```
 
-The auditor has `cui-specified` clearance — all three sources are accessible.
+The auditor has `confidential` clearance — all three sources are accessible.
 
 ### 4. Admin Dashboard
 
@@ -267,7 +267,7 @@ docker compose -f docker-compose.yml -f docker-compose.full.yml up --build -d
 ```
 
 This swaps `nautilus.yaml` for `nautilus.full.yaml`, which adds:
-- A `snow_incidents` source (ServiceNow Table API, cui-basic classification)
+- A `snow_incidents` source (ServiceNow Table API, cui classification)
 - `analysis.mode: llm-first` with Anthropic provider (pattern matching as fallback)
 - An `incident` keyword map entry for routing incident/outage/ticket intents
 

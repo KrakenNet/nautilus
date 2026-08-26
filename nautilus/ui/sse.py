@@ -8,16 +8,18 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncGenerator
-from typing import TYPE_CHECKING, Annotated
+from typing import Annotated
 
 from fastapi import Depends, Request
 from sse_starlette import EventSourceResponse
 
+# Runtime import, not TYPE_CHECKING: ``from __future__ import annotations``
+# makes every annotation a string, and FastAPI resolves them at route-
+# registration time to build the signature and the OpenAPI schema. A
+# type-only Broker leaves an unresolvable name, which 500s /openapi.json.
+from nautilus.core.broker import Broker
 from nautilus.ui.dependencies import get_auth_user, get_broker
 from nautilus.ui.router import router, templates
-
-if TYPE_CHECKING:
-    from nautilus.core.broker import Broker
 
 
 async def _source_event_generator(

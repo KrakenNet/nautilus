@@ -179,6 +179,24 @@ class FathomRouter:
         """Underlying ``fathom.Engine`` (read-only handle for diagnostics)."""
         return self._engine
 
+    @property
+    def escalation_rules(self) -> list[EscalationRule]:
+        """Escalation rules loaded at construction (read-only handle)."""
+        return self._escalation_rules
+
+    def hierarchy_levels(self, name: str = "classification") -> tuple[str, ...]:
+        """Levels of the named hierarchy, lowest first; empty when unknown.
+
+        The registry is populated by ``load_functions`` from the built-in
+        ``hierarchies/`` tree plus any hierarchy a loaded pack ships, so this
+        is the authority on which classification strings mean anything.
+        ``fathom.engine.dominates`` ranks every other string -1, i.e. below
+        ``unclassified``, which makes an unrecognised label readable by every
+        agent -- so callers must reject rather than route.
+        """
+        definition = self._engine._hierarchy_registry.get(name)  # noqa: SLF001
+        return tuple(definition.levels) if definition is not None else ()
+
     def route(
         self,
         agent_id: str,

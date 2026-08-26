@@ -35,9 +35,9 @@ echo "GET /v1/sources"
 curl -s "$API/v1/sources" | python3 -m json.tool
 
 # -----------------------------------------------------------------------
-section "3. Query as 'analyst' (clearance: cui-basic)"
+section "3. Query as 'analyst' (clearance: cui)"
 info "Intent: 'Show me critical vulnerability CVEs'"
-info "Expected: vuln_db (cui-basic) accessible, compliance_docs (cui-specified) denied"
+info "Expected: vuln_db (cui) accessible, compliance_docs (confidential) denied"
 # -----------------------------------------------------------------------
 curl -s -X POST "$API/v1/request" \
   -H "Content-Type: application/json" \
@@ -51,7 +51,7 @@ curl -s -X POST "$API/v1/request" \
 # -----------------------------------------------------------------------
 section "4. Query as 'intern' (clearance: unclassified)"
 info "Intent: 'What is the CPU usage on web-01?'"
-info "Expected: server_metrics (unclassified) accessible, vuln_db (cui-basic) denied"
+info "Expected: server_metrics (unclassified) accessible, vuln_db (cui) denied"
 # -----------------------------------------------------------------------
 curl -s -X POST "$API/v1/request" \
   -H "Content-Type: application/json" \
@@ -63,7 +63,7 @@ curl -s -X POST "$API/v1/request" \
   }' | python3 -m json.tool
 
 # -----------------------------------------------------------------------
-section "5. Query as 'auditor' (clearance: cui-specified)"
+section "5. Query as 'auditor' (clearance: confidential)"
 info "Intent: 'Pull the Q1 security audit compliance report'"
 info "Expected: all sources accessible at auditor clearance level"
 # -----------------------------------------------------------------------
@@ -77,9 +77,9 @@ curl -s -X POST "$API/v1/request" \
   }' | python3 -m json.tool
 
 # -----------------------------------------------------------------------
-section "6. Demonstrate denied access (intern → cui-specified data)"
+section "6. Demonstrate denied access (intern → confidential data)"
 warn "Intent: 'Show me the HIPAA compliance audit report'"
-warn "Expected: compliance_docs DENIED — intern lacks cui-specified clearance"
+warn "Expected: compliance_docs DENIED — intern lacks confidential clearance"
 # -----------------------------------------------------------------------
 curl -s -X POST "$API/v1/request" \
   -H "Content-Type: application/json" \
@@ -123,7 +123,7 @@ info "Loki (logs):          http://localhost:3100"
 # -----------------------------------------------------------------------
 section "10. Query as 'analyst' — threat intelligence (Neo4j)"
 info "Intent: 'Show me threat actors and their TTPs'"
-info "Expected: threat_graph (cui-basic) accessible to analyst"
+info "Expected: threat_graph (cui) accessible to analyst"
 # -----------------------------------------------------------------------
 curl -s -X POST "$API/v1/request" \
   -H "Content-Type: application/json" \
@@ -137,7 +137,7 @@ curl -s -X POST "$API/v1/request" \
 # -----------------------------------------------------------------------
 section "11. Query as 'analyst' — application logs (Elasticsearch)"
 info "Intent: 'Show me recent error logs and exceptions'"
-info "Expected: app_logs (cui-basic) accessible to analyst"
+info "Expected: app_logs (cui) accessible to analyst"
 # -----------------------------------------------------------------------
 curl -s -X POST "$API/v1/request" \
   -H "Content-Type: application/json" \

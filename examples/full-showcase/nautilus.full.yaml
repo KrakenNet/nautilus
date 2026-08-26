@@ -18,7 +18,7 @@ sources:
   - id: vuln_db
     type: postgres
     description: "National Vulnerability Database mirror — CVEs, patches, advisories"
-    classification: cui-basic
+    classification: cui
     data_types: [cve, vulnerability, patch, advisory]
     allowed_purposes: [threat-analysis, incident-response, compliance-audit]
     connection: ${PG_DSN}
@@ -38,7 +38,7 @@ sources:
   - id: compliance_docs
     type: s3
     description: "Compliance reports, policies, and audit artifacts"
-    classification: cui-specified
+    classification: confidential
     data_types: [report, policy, audit-trail, compliance]
     allowed_purposes: [compliance-audit, legal-review]
     connection: ${MINIO_ENDPOINT}
@@ -48,7 +48,7 @@ sources:
   - id: app_logs
     type: elasticsearch
     description: "Application log index — errors, warnings, access events"
-    classification: cui-basic
+    classification: cui
     data_types: [log, event, alert, error]
     allowed_purposes: [incident-response, monitoring, threat-analysis]
     connection: ${ES_URL}
@@ -58,7 +58,7 @@ sources:
   - id: threat_graph
     type: neo4j
     description: "Threat intelligence knowledge graph — actors, TTPs, IOCs"
-    classification: cui-basic
+    classification: cui
     data_types: [threat-actor, indicator, technique, campaign]
     allowed_purposes: [threat-analysis, incident-response]
     connection: ${NEO4J_URL}
@@ -72,7 +72,7 @@ sources:
   - id: snow_incidents
     type: servicenow
     description: "ServiceNow incident table — active incidents, changes, problems"
-    classification: cui-basic
+    classification: cui
     data_types: [incident, change, problem]
     allowed_purposes: [incident-response, monitoring, compliance-audit]
     connection: https://${SNOW_INSTANCE}.service-now.com
@@ -86,13 +86,13 @@ sources:
 agents:
   analyst:
     id: analyst
-    clearance: cui-basic
+    clearance: cui
     compartments: []
     default_purpose: threat-analysis
 
   auditor:
     id: auditor
-    clearance: cui-specified
+    clearance: confidential
     compartments: [compliance]
     default_purpose: compliance-audit
 

@@ -38,17 +38,22 @@ pytestmark = pytest.mark.defect
 def test_b1_unknown_classification_denies_instead_of_routing(
     classification: str, pg_dsn: str, write_config: Any, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """A source whose classification is not on the ladder must not be readable.
+    """A source whose classification is not on the ladder must not load.
 
     ``fathom.engine.dominates`` ranks an unknown *object* level -1, i.e. below
     ``unclassified``, so every clearance dominates it and
     ``default-classification-deny`` never fires. Nothing validates the string
     at load, so a typo in the primary access-control field publishes the source
     to every agent.
+
+    Startup is the only place an operator can still see the typo -- denying at
+    request time instead would look identical to the policy working -- so the
+    contract is a refused config, not a denied request.
     """
     import asyncio
 
     from nautilus import Broker
+    from nautilus.config.loader import ConfigError
 
     monkeypatch.setenv("JOURNEY_PG_DSN", pg_dsn)
     config = write_config(
@@ -79,12 +84,12 @@ def test_b1_unknown_classification_denies_instead_of_routing(
         finally:
             await broker.aclose()
 
-    response = asyncio.run(_run())
-    rows = response.data.get("patients", [])
-    assert "patients" not in response.sources_queried, (
-        f"classification {classification!r} is not a level of the shipped hierarchy, "
-        f"yet an unclassified agent was routed to it and read {len(rows)} rows "
-        f"of PII. An unrecognised label must fail closed."
+    with pytest.raises(ConfigError) as caught:
+        asyncio.run(_run())
+    assert classification.strip() != "" or "classification" in str(caught.value)
+    assert "patients" in str(caught.value), (
+        f"the config was refused, but the message does not name the offending "
+        f"source, so an operator cannot find the typo: {caught.value}"
     )
 
 
@@ -395,25 +400,49 @@ DOC_RULE = {
 
 
 def test_b6_documented_rule_syntax_compiles(tmp_path: Path) -> None:
-    """The rule published in the authoring how-tos must load into an engine.
+    """Every rule file published in the how-tos must load into an engine.
 
     ``fathom.models.ConditionEntry`` forbids extra keys and has exactly
     ``slot``/``expression``/``bind``/``test``. The ``operator:``/``value:``
-    form both how-tos publish has never compiled on any fathom version, and
+    form both how-tos published has never compiled on any fathom version, and
     the broker has no try/except around router construction, so following the
-    documentation takes the broker down at startup.
+    documentation took the broker down at startup.
+
+    The snippets are read out of the docs rather than copied here, so the test
+    cannot drift away from what a reader is told to write.
     """
+    import re
+
     import yaml
 
     from nautilus.core.fathom_router import FathomRouter
     from nautilus.rules import BUILT_IN_RULES_DIR
 
-    rules_dir = tmp_path / "rules"
-    rules_dir.mkdir()
-    (rules_dir / "severity-scope.yaml").write_text(yaml.safe_dump(DOC_RULE), encoding="utf-8")
+    docs = sorted(Path("docs/how-to").glob("*.md"))
+    assert docs, "no how-to docs found; the test is looking in the wrong place"
 
-    router = FathomRouter(built_in_rules_dir=BUILT_IN_RULES_DIR, user_rules_dirs=[rules_dir])
-    router.close()
+    snippets: list[tuple[str, str]] = []
+    for doc in docs:
+        for block in re.findall(r"```yaml\n(.*?)```", doc.read_text(encoding="utf-8"), re.S):
+            parsed = yaml.safe_load(block)
+            # A rule *file* is the shape the loader takes: a top-level module
+            # plus rules. Config fragments also use a ``rules:`` key and are
+            # not rule files.
+            if isinstance(parsed, dict) and "module" in parsed and "rules" in parsed:
+                snippets.append((f"{doc.name}", block))
+    assert snippets, "no rule-file snippets found in docs/how-to; the regex missed them"
+
+    for i, (name, block) in enumerate(snippets):
+        rules_dir = tmp_path / f"snippet-{i}"
+        rules_dir.mkdir()
+        (rules_dir / "rule.yaml").write_text(block, encoding="utf-8")
+        try:
+            router = FathomRouter(
+                built_in_rules_dir=BUILT_IN_RULES_DIR, user_rules_dirs=[rules_dir]
+            )
+        except Exception as exc:  # noqa: BLE001 -- the failure is the finding
+            pytest.fail(f"the rule published in {name} does not compile: {exc}")
+        router.close()
 
 
 def test_b6_validate_rejects_a_rule_the_engine_cannot_load(tmp_path: Path) -> None:
@@ -661,6 +690,14 @@ def test_b4_mcp_http_transport_requires_an_api_key(
             headers={**headers, "X-API-Key": "definitely-not-the-key"},
             timeout=30,
         )
+        # Control: a gate that 401s every caller would satisfy the two
+        # assertions below without being a gate at all.
+        valid_key = httpx.post(
+            f"http://127.0.0.1:{port}/mcp",
+            json=initialize,
+            headers={**headers, "X-API-Key": "the-only-valid-key"},
+            timeout=30,
+        )
     finally:
         proc.terminate()
         proc.wait(timeout=30)
@@ -672,4 +709,8 @@ def test_b4_mcp_http_transport_requires_an_api_key(
     )
     assert wrong_key.status_code == 401, (
         f"a deliberately wrong X-API-Key initialised an MCP session (HTTP {wrong_key.status_code})."
+    )
+    assert valid_key.status_code != 401, (
+        f"the configured key was rejected too (HTTP {valid_key.status_code}); the "
+        f"transport is closed to everyone, which is not the same as authenticated."
     )

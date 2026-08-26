@@ -173,11 +173,21 @@ async def _run_mcp(broker: Broker, mode: str, host: str, port: int) -> None:
 
     if mode == "stdio":
         await mcp.run_stdio_async()
-    else:
-        # The FastMCP settings object carries host/port for streamable-http.
-        mcp.settings.host = host
-        mcp.settings.port = port
-        await mcp.run_streamable_http_async()
+        return
+
+    # B4 -- ``run_streamable_http_async`` serves the raw FastMCP app, which has
+    # no auth at all. ``nautilus_request`` takes ``agent_id`` verbatim by
+    # design, so the transport is the only identity boundary there is: anyone
+    # who can reach the port asserts the highest-clearance agent in the config.
+    # ``http_app`` applies the same X-API-Key gate the REST leg uses, and fails
+    # closed when no keys are configured.
+    import uvicorn
+
+    from nautilus.transport.mcp_server import _mcp_settings, http_app
+
+    app = http_app(mcp, api_keys=_mcp_settings(broker)[2])
+    server = uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level="info"))
+    await server.serve()
 
 
 async def _run_both(

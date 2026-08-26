@@ -394,6 +394,39 @@ def _new_request_state(context: dict[str, Any], intent: str) -> _RequestState:
     )
 
 
+def _validate_classification_labels(config: NautilusConfig, router: FathomRouter) -> None:
+    """Reject any classification/clearance string the loaded hierarchy rejects.
+
+    ``fathom.engine.dominates`` ranks an unknown level -1 -- strictly below
+    ``unclassified`` -- so every clearance dominates it and the
+    default-classification-deny rule never fires. Nothing downstream can
+    recover from that, which makes config load the only place to catch it.
+
+    A no-op when no ``classification`` hierarchy is registered: a deployment
+    that loads no hierarchy has no ladder to check against, and failing
+    startup there would be a different bug.
+    """
+    levels = router.hierarchy_levels()
+    if not levels:
+        return
+    known = ", ".join(levels)
+    errors: list[str] = []
+    for source in config.sources:
+        if source.classification not in levels:
+            errors.append(f"sources[{source.id!r}].classification={source.classification!r}")
+    for agent_id, agent in config.agents.items():
+        if agent.clearance not in levels:
+            errors.append(f"agents[{agent_id!r}].clearance={agent.clearance!r}")
+    for rule in router.escalation_rules:
+        if rule.resulting_level not in levels:
+            errors.append(f"escalation rule {rule.id!r}.resulting_level={rule.resulting_level!r}")
+    if errors:
+        raise ConfigError(
+            "classification labels are not levels of the 'classification' "
+            f"hierarchy ({known}): " + "; ".join(errors)
+        )
+
+
 def _broker_error(exc: BaseException, request_id: str) -> ErrorRecord:
     """Wrap an unexpected broker-level exception as an :class:`ErrorRecord`."""
     return ErrorRecord(
@@ -592,6 +625,13 @@ class Broker:
             check_consistency=config.rules.consistency_checks,
             rule_packs=config.rules.packs,
         )
+
+        # B1 -- an unrecognised level is ranked below ``unclassified`` by
+        # ``fathom.engine.dominates``, so a typo in the primary access-control
+        # field publishes the source to every agent. Reject at startup, where
+        # the operator can still see the typo, rather than denying silently
+        # for the life of the deployment.
+        _validate_classification_labels(config, router)
 
         # AC-35.2.b/d — load manual relationship facts into the engine at
         # startup; re-reading on every broker construction gives restart
@@ -1257,6 +1297,38 @@ class Broker:
             )
             return decision
 
+        # B1 -- the handoff rules need ``fathom-dominates`` to be TRUE before
+        # they can deny, and an unrecognised classification ranks -1, so it is
+        # dominated by every clearance and the handoff is allowed. Caller-
+        # supplied labels cannot be checked at startup, so deny here.
+        levels = self._router.hierarchy_levels()
+        unknown = [c for c in data_classifications if c not in levels]
+        if levels and unknown:
+            decision = HandoffDecision(
+                handoff_id=handoff_id,
+                action="deny",
+                denial_records=[
+                    DenialRecord(
+                        source_id=session_id,
+                        reason=(
+                            f"classification {unknown[0]!r} is not a level of the "
+                            f"'classification' hierarchy ({', '.join(levels)})"
+                        ),
+                        rule_name="unknown-classification",
+                    )
+                ],
+                rule_trace=list(token_trace),
+            )
+            self._emit_handoff_audit(
+                source_agent_id=source_agent_id,
+                receiving_agent_id=receiving_agent_id,
+                session_id=session_id,
+                data_classifications=data_classifications,
+                decision=decision,
+                started=started,
+            )
+            return decision
+
         # Assert one data_handoff per declared classification, run engine,
         # and collect any denial_record facts. The engine is shared with
         # arequest() so we guard it with the same PolicyEngineError shape.
@@ -1825,6 +1897,20 @@ class Broker:
             if isinstance(res, BaseException):
                 state.errored.append(
                     _source_error(source_id, type(res).__name__, str(res), state.request_id)
+                )
+                continue
+            if not isinstance(res, AdapterResult):
+                # B5 -- ``res.error`` below is outside any try block, so an
+                # adapter that *returns* the wrong type (rather than raising)
+                # took down every co-queried source with it. The SDK's
+                # same-named AdapterResult lands here too.
+                state.errored.append(
+                    _source_error(
+                        source_id,
+                        "AdapterContractError",
+                        f"adapter returned {type(res).__name__}, expected AdapterResult",
+                        state.request_id,
+                    )
                 )
                 continue
             if res.error is not None:

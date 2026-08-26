@@ -25,8 +25,7 @@ rules:
           - slot: id
             bind: ?sid
           - slot: classification
-            operator: eq
-            value: confidential
+            expression: equals("confidential")
     then:
       action: deny
       reason: "finance data is unavailable after hours"
@@ -71,7 +70,8 @@ unattributable denial cannot be audited.
 
 Scope constraints are checked too: a `scope_constraint` must reference a
 source that has a routing decision, and its operator must be in the
-adapter allowlist (`=`, `eq`, `!=`, `IN`, `NOT IN`, `LIKE`, `IS NULL`).
+`scope_constraint` template allowlist (`=`, `!=`, `IN`, `NOT IN`, `<`, `>`,
+`<=`, `>=`, `LIKE`, `BETWEEN`, `IS NULL`).
 
 Checks default on; `rules.consistency_checks: false` opts out for
 performance-sensitive deployments.

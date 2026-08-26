@@ -17,7 +17,7 @@ NAUTILUS_URL = "http://nautilus:8000"
 API_KEY = "demo-key-2024"
 
 QUERIES = [
-    # analyst (cui-basic) → vuln_db via threat-analysis
+    # analyst (cui) → vuln_db via threat-analysis
     {
         "agent_id": "analyst",
         "intent": "Show critical CVEs from the last 30 days affecting Linux servers",
@@ -29,31 +29,31 @@ QUERIES = [
         "intent": "What is the CPU utilization trend for production servers?",
         "context": {"purpose": "monitoring"},
     },
-    # auditor (cui-specified) → compliance_docs via compliance-audit
+    # auditor (confidential) → compliance_docs via compliance-audit
     {
         "agent_id": "auditor",
         "intent": "Retrieve the latest FedRAMP compliance assessment report",
         "context": {"purpose": "compliance-audit"},
     },
-    # analyst (cui-basic) → app_logs via incident-response
+    # analyst (cui) → app_logs via incident-response
     {
         "agent_id": "analyst",
         "intent": "Find ERROR level log entries from the authentication service",
         "context": {"purpose": "incident-response"},
     },
-    # analyst (cui-basic) → threat_graph via threat-analysis
+    # analyst (cui) → threat_graph via threat-analysis
     {
         "agent_id": "analyst",
         "intent": "Find threat actors linked to ransomware campaigns",
         "context": {"purpose": "threat-analysis"},
     },
-    # intern (unclassified) requesting cui-specified data → expect denial
+    # intern (unclassified) requesting confidential data → expect denial
     {
         "agent_id": "intern",
         "intent": "Get the FedRAMP audit trail and compliance reports",
         "context": {"purpose": "compliance-audit"},
     },
-    # analyst (cui-basic) → threat_graph via incident-response
+    # analyst (cui) → threat_graph via incident-response
     {
         "agent_id": "analyst",
         "intent": "Correlate network IOCs with known threat actor infrastructure",
