@@ -21,6 +21,7 @@ from nautilus.adapters.base import (
     quote_table,
     render_field,
     validate_operator,
+    wrap_execute,
 )
 from nautilus.adapters.schema import AdapterField, AdapterSchema, AdapterTable
 from nautilus.config.models import SourceConfig
@@ -29,10 +30,12 @@ from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 # Default row cap applied when the intent does not specify a ``LIMIT``.
 _DEFAULT_LIMIT: int = 1000
 
-# Array-cast hints used by the IN / NOT IN templates (design §6.1). ``asyncpg``
-# will coerce to the column's actual type at execution; ``text[]`` is the
-# universal default because scope values arrive as arbitrary Python objects.
-_IN_ARRAY_CAST: str = "text[]"
+# IN / NOT IN render a bare ``= ANY($n)`` (design §6.1). An explicit
+# ``::text[]`` cast does NOT let asyncpg coerce to the column's real type:
+# Postgres resolves the cast before operator lookup, so an integer column
+# raises ``operator does not exist: integer = text``. Without the cast,
+# asyncpg infers the array type from the parameter and both text and
+# non-text columns work.
 
 
 class PostgresAdapter:
@@ -126,7 +129,7 @@ class PostgresAdapter:
                     raise ScopeEnforcementError(
                         f"Operator 'IN' requires a list value, got {type(value).__name__}"
                     )
-                where_clauses.append(f"{field_sql} = ANY(${pidx}::{_IN_ARRAY_CAST})")
+                where_clauses.append(f"{field_sql} = ANY(${pidx})")
                 params.append(value)
                 pidx += 1
             elif op == "NOT IN":
@@ -134,7 +137,7 @@ class PostgresAdapter:
                     raise ScopeEnforcementError(
                         f"Operator 'NOT IN' requires a list value, got {type(value).__name__}"
                     )
-                where_clauses.append(f"{field_sql} <> ALL(${pidx}::{_IN_ARRAY_CAST})")
+                where_clauses.append(f"{field_sql} <> ALL(${pidx})")
                 params.append(value)
                 pidx += 1
             elif op == "LIKE":
@@ -170,6 +173,7 @@ class PostgresAdapter:
     # at the tail of ``_build_sql``. The f-string uses only ``$N`` positional
     # placeholders (hardened in Task 2.8); tag the method line so the guard
     # treats it as a non-call.
+    @wrap_execute
     async def execute(  # sqlgrep: ignore
         self,
         intent: IntentAnalysis,
@@ -196,32 +200,55 @@ class PostgresAdapter:
             source_id=self._config.id,
             rows=rows,
             duration_ms=duration_ms,
+            truncated=len(rows) >= _DEFAULT_LIMIT,
         )
 
+    def _declared_table(self) -> tuple[str, str]:
+        """Split ``SourceConfig.table`` into ``(schema, table)``.
+
+        An unqualified name means the ``public`` schema, matching
+        :func:`nautilus.adapters.base.quote_table` and what ``execute`` runs.
+        """
+        table = (self._config.table if self._config else None) or ""
+        schema, _, name = table.rpartition(".")
+        return (schema or "public", name)
+
     async def get_schema(self) -> AdapterSchema:
-        """Return schema via ``information_schema`` queries. AC-21, OQ3."""
+        """Return schema via ``information_schema`` queries. AC-21, OQ3.
+
+        Scoped to the single declared ``SourceConfig.table``, which is the only
+        table ``execute`` ever reads. Fingerprinting the whole ``public`` schema
+        meant any co-tenant DDL -- another app's migration, a scratch table --
+        quarantined the source, and two Nautilus sources over one DSN
+        cross-quarantined each other.
+        """
         if self._pool is None or self._config is None:
             return AdapterSchema.unknown(
                 self._config.id if self._config else "postgres",
                 self.source_type,
             )
+        schema_name, table_name = self._declared_table()
         try:
             async with self._pool.acquire() as conn:
                 col_rows = await conn.fetch(
                     """
                     SELECT table_name, column_name, data_type, is_nullable
                     FROM information_schema.columns
-                    WHERE table_schema = 'public'
+                    WHERE table_schema = $1 AND table_name = $2
                     ORDER BY table_name, ordinal_position
-                    """
+                    """,
+                    schema_name,
+                    table_name,
                 )
                 idx_rows = await conn.fetch(
                     """
                     SELECT tablename, indexname
                     FROM pg_indexes
-                    WHERE schemaname = 'public'
+                    WHERE schemaname = $1 AND tablename = $2
                     ORDER BY tablename, indexname
-                    """
+                    """,
+                    schema_name,
+                    table_name,
                 )
                 pk_rows = await conn.fetch(
                     """
@@ -231,9 +258,12 @@ class PostgresAdapter:
                       ON tc.constraint_name = kcu.constraint_name
                      AND tc.table_schema = kcu.table_schema
                     WHERE tc.constraint_type = 'PRIMARY KEY'
-                      AND tc.table_schema = 'public'
+                      AND tc.table_schema = $1
+                      AND tc.table_name = $2
                     ORDER BY tc.table_name, kcu.ordinal_position
-                    """
+                    """,
+                    schema_name,
+                    table_name,
                 )
 
             # Group columns by table.

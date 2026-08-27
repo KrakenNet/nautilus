@@ -30,6 +30,7 @@ from nautilus.adapters.base import (
     AdapterError,
     ScopeEnforcementError,
     session_token_headers,
+    wrap_execute,
 )
 from nautilus.adapters.rest import (
     _reject_private_ip_literal,  # pyright: ignore[reportPrivateUsage]
@@ -261,6 +262,7 @@ class ServiceNowAdapter:
         """Compose the ``sysparm_query`` string from ``scope`` (AC-11.2)."""
         return "^".join(cls._render_segment(c) for c in scope)
 
+    @wrap_execute
     async def execute(
         self,
         intent: IntentAnalysis,
@@ -304,6 +306,7 @@ class ServiceNowAdapter:
             source_id=self._config.id,
             rows=rows,
             duration_ms=duration_ms,
+            truncated=len(rows) >= _DEFAULT_LIMIT,
         )
 
     async def _attach_content(
@@ -348,7 +351,17 @@ class ServiceNowAdapter:
             row["content_b64"] = base64.b64encode(content).decode("ascii")
 
     async def get_schema(self) -> AdapterSchema:
-        """Return schema via sys_dictionary table query. AC-21, OQ3."""
+        """Return schema via sys_dictionary table query. AC-21, OQ3.
+
+        Raises on a backend outage rather than returning
+        :meth:`AdapterSchema.unknown`. Swallowing the error made an outage
+        indistinguishable from major schema drift: the broker quarantined the
+        source and wrote ``schema_drift_detected`` describing an event that did
+        not occur, and ``schema-ack`` -- the prescribed remediation -- baselined
+        the ``unknown()`` fingerprint, re-quarantining the source when the
+        backend *recovered*. ``Broker._check_adapter_schema`` already handles a
+        raising ``get_schema`` by skipping the fingerprint check.
+        """
         if self._client is None or self._config is None or self._table is None:
             return AdapterSchema.unknown(
                 self._config.id if self._config else "servicenow",
@@ -386,8 +399,12 @@ class ServiceNowAdapter:
                 capability_flags={"deterministic": True},
                 fetched_at=datetime.now(UTC),
             )
-        except Exception:  # noqa: BLE001
-            return AdapterSchema.unknown(self._config.id, self.source_type)
+        except AdapterError:
+            raise
+        except Exception as exc:
+            raise AdapterError(
+                f"servicenow: get_schema failed for source '{self._config.id}': {exc}"
+            ) from exc
 
 
 def _scope_pins_sys_id(scope: list[ScopeConstraint]) -> bool:

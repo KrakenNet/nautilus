@@ -36,6 +36,7 @@ from nautilus.adapters.base import (
     ScopeEnforcementError,
     session_token_headers,
     validate_field,
+    wrap_execute,
 )
 from nautilus.adapters.schema import AdapterSchema
 from nautilus.config.models import (
@@ -389,6 +390,7 @@ class RestAdapter:
             params.extend(builder(field, value))
         return params
 
+    @wrap_execute
     async def execute(
         self,
         intent: IntentAnalysis,
@@ -438,6 +440,7 @@ class RestAdapter:
             source_id=self._config.id,
             rows=rows,
             duration_ms=duration_ms,
+            truncated=len(rows) >= _DEFAULT_LIMIT,
         )
 
     async def get_schema(self) -> AdapterSchema:

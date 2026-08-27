@@ -8,6 +8,7 @@ user-supplied value is ever concatenated into a raw Flux string (NFR-4).
 from __future__ import annotations
 
 import os
+import re
 import time
 from datetime import UTC, datetime
 from typing import Any, ClassVar
@@ -17,6 +18,7 @@ from nautilus.adapters.base import (
     ScopeEnforcementError,
     validate_field,
     validate_operator,
+    wrap_execute,
 )
 from nautilus.adapters.schema import AdapterField, AdapterSchema, AdapterTable
 from nautilus.config.models import SourceConfig
@@ -40,6 +42,41 @@ def _flux_escape(value: Any) -> str:
     s = str(value)
     s = s.replace("\\", "\\\\").replace('"', '\\"')
     return f'"{s}"'
+
+
+# Flux duration literal (``-30d``, ``1h30m``) and RFC3339 instant. ``range()``
+# takes a time or a duration, never a string, so a bound has to be emitted bare
+# -- which means it has to be validated here instead of being neutralised by
+# quoting (NFR-4).
+_DURATION_RE = re.compile(r"^-?\d+(ns|us|ms|s|m|h|d|w|mo|y)(\d+(ns|us|ms|s|m|h|d|w|mo|y))*$")
+_RFC3339_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$")
+
+
+def _flux_time(value: Any) -> str:
+    """Render a ``_time`` bound as a Flux time/duration literal.
+
+    ``_flux_escape`` quoted every non-numeric bound, and Flux's ``range()``
+    rejects a string: ``range(start: "2023-11-14T00:00:00Z")`` is a type
+    error, so every time-scoped query failed closed with an ``ErrorRecord``
+    and the caller saw an empty result. Bare emission means the value cannot
+    be neutralised by quoting, so the three shapes ``range()`` accepts are
+    matched explicitly and anything else is refused.
+    """
+    if isinstance(value, bool):  # bool is an int subclass; never a time bound.
+        raise ScopeEnforcementError(
+            f"InfluxDBAdapter: '_time' bound {value!r} is not a time, duration or "
+            f"Unix-second integer"
+        )
+    if isinstance(value, int):
+        return str(value)  # Unix seconds -- what range() takes for an integer.
+    s = str(value)
+    if _DURATION_RE.match(s) or _RFC3339_RE.match(s):
+        return s
+    raise ScopeEnforcementError(
+        f"InfluxDBAdapter: '_time' bound {value!r} is not a Flux duration "
+        f"(e.g. '-30d'), an RFC3339 instant (e.g. '2023-11-14T00:00:00Z') or a "
+        f"Unix-second integer"
+    )
 
 
 def _flux_like(field: str, pattern: str) -> str:
@@ -175,16 +212,16 @@ class InfluxDBAdapter:
             # Time-range constraints are lifted into |> range().
             if field == "_time":
                 if op == ">=" or op == ">":
-                    range_start = _flux_escape(value)
+                    range_start = _flux_time(value)
                 elif op == "<=" or op == "<":
-                    range_stop = _flux_escape(value)
+                    range_stop = _flux_time(value)
                 elif op == "BETWEEN":
                     if not isinstance(value, (list, tuple)) or len(value) != 2:  # pyright: ignore[reportUnknownArgumentType]
                         raise ScopeEnforcementError(
                             "Operator 'BETWEEN' requires a 2-tuple/list value"
                         )
-                    range_start = _flux_escape(value[0])
-                    range_stop = _flux_escape(value[1])
+                    range_start = _flux_time(value[0])
+                    range_stop = _flux_time(value[1])
                 else:
                     # Anything the range lift cannot express used to fall
                     # through an unconditional `continue`: the constraint
@@ -240,8 +277,14 @@ class InfluxDBAdapter:
             elif op == "IS NULL":
                 filters.append(f'not exists r["{field}"]')
 
-        # Assemble Flux.
-        lines: list[str] = [
+        # Assemble Flux. ``_flux_like`` reaches for the ``strings`` package,
+        # which Flux does not load implicitly: without the import the server
+        # rejects the whole query as an undefined identifier, so every LIKE-
+        # scoped read failed closed. ``get_schema`` already imports its package.
+        lines: list[str] = []
+        if any("strings." in f for f in filters):
+            lines.append('import "strings"')
+        lines += [
             f'from(bucket: "{bucket}")',
             f"  |> range(start: {range_start}, stop: {range_stop})",
         ]
@@ -251,6 +294,7 @@ class InfluxDBAdapter:
 
         return "\n".join(lines)
 
+    @wrap_execute
     async def execute(
         self,
         intent: IntentAnalysis,
@@ -280,6 +324,7 @@ class InfluxDBAdapter:
             source_id=self._config.id,
             rows=rows,
             duration_ms=duration_ms,
+            truncated=len(rows) >= _DEFAULT_LIMIT,
         )
 
     async def close(self) -> None:
@@ -294,7 +339,17 @@ class InfluxDBAdapter:
             client.close()
 
     async def get_schema(self) -> AdapterSchema:
-        """Return schema via SHOW MEASUREMENTS + SHOW FIELD KEYS. AC-21, OQ3."""
+        """Return schema via SHOW MEASUREMENTS + SHOW FIELD KEYS. AC-21, OQ3.
+
+        Raises on a backend outage rather than returning
+        :meth:`AdapterSchema.unknown`. Swallowing the error made an outage
+        indistinguishable from major schema drift: the broker quarantined the
+        source and wrote ``schema_drift_detected`` describing an event that did
+        not occur, and ``schema-ack`` -- the prescribed remediation -- baselined
+        the ``unknown()`` fingerprint, re-quarantining the source when the
+        backend *recovered*. ``Broker._check_adapter_schema`` already handles a
+        raising ``get_schema`` by skipping the fingerprint check.
+        """
         if self._query_api is None or self._config is None:
             return AdapterSchema.unknown(
                 self._config.id if self._config else "influxdb",
@@ -337,8 +392,12 @@ class InfluxDBAdapter:
                 capability_flags={"deterministic": False},
                 fetched_at=datetime.now(UTC),
             )
-        except Exception:  # noqa: BLE001
-            return AdapterSchema.unknown(self._config.id, self.source_type)
+        except AdapterError:
+            raise
+        except Exception as exc:
+            raise AdapterError(
+                f"influxdb: get_schema failed for source '{self._config.id}': {exc}"
+            ) from exc
 
 
 __all__ = ["InfluxDBAdapter"]

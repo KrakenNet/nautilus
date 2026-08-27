@@ -41,18 +41,11 @@ from fathom.attestation import AttestationService
 from fathom.audit import FileSink
 from pydantic import ValidationError
 
+from nautilus.adapters import ADAPTER_REGISTRY as _ADAPTER_REGISTRY
 from nautilus.adapters.base import Adapter, AdapterError, ScopeEnforcementError
-from nautilus.adapters.elasticsearch import ElasticsearchAdapter
 from nautilus.adapters.embedder import Embedder, NoopEmbedder
-from nautilus.adapters.influxdb import InfluxDBAdapter
-from nautilus.adapters.llm import LLMAdapter
-from nautilus.adapters.neo4j import Neo4jAdapter
 from nautilus.adapters.pgvector import PgVectorAdapter
-from nautilus.adapters.postgres import PostgresAdapter
-from nautilus.adapters.rest import RestAdapter
-from nautilus.adapters.s3 import S3Adapter
 from nautilus.adapters.schema import SchemaFingerprintStore
-from nautilus.adapters.servicenow import ServiceNowAdapter
 from nautilus.analysis.fallback import FallbackIntentAnalyzer
 from nautilus.analysis.llm.base import LLMIntentProvider, LLMProvenance
 from nautilus.analysis.pattern_matching import (
@@ -141,17 +134,10 @@ log = logging.getLogger(__name__)
 # Adapter registry — static built-ins + entry-point discovery (design §3.5)
 # ---------------------------------------------------------------------------
 
-ADAPTER_REGISTRY: dict[str, type[Adapter]] = {
-    "postgres": PostgresAdapter,
-    "pgvector": PgVectorAdapter,
-    "elasticsearch": ElasticsearchAdapter,
-    "rest": RestAdapter,
-    "neo4j": Neo4jAdapter,
-    "servicenow": ServiceNowAdapter,
-    "influxdb": InfluxDBAdapter,
-    "s3": S3Adapter,
-    "llm": LLMAdapter,
-}
+# Re-exported, not redefined: ``nautilus.adapters`` owns the mapping and this
+# module's copy had drifted from it. ``from nautilus.core.broker import
+# ADAPTER_REGISTRY`` keeps working.
+ADAPTER_REGISTRY = _ADAPTER_REGISTRY
 
 
 def _adapter_protocol_gaps(obj: type) -> list[str]:
@@ -321,6 +307,8 @@ class _RequestState:
     rule_trace: list[str] = field(default_factory=list[str])
     facts_summary: dict[str, int] = field(default_factory=dict[str, int])
     sources_queried: list[str] = field(default_factory=list[str])
+    # Sources whose adapter capped the row set (AdapterResult.truncated).
+    truncated_sources: list[str] = field(default_factory=list[str])
     sources_denied: list[str] = field(default_factory=list[str])
     sources_skipped: list[str] = field(default_factory=list[str])
     errored: list[ErrorRecord] = field(default_factory=list[ErrorRecord])
@@ -507,6 +495,7 @@ def _build_audit_entry(
         sources_denied=state.sources_denied,
         sources_skipped=state.sources_skipped,
         sources_errored=[e.source_id for e in state.errored],
+        truncated_sources=sorted(state.truncated_sources) or None,
         attestation_token=attestation_token,
         # Per-source chain-of-custody digests on the canonical request entry so
         # they are verifiable from a single audit record — and are recorded even
@@ -2109,6 +2098,8 @@ class Broker:
                 continue
             successful.append(res)
             state.sources_queried.append(source_id)
+            if res.truncated:
+                state.truncated_sources.append(source_id)
             _metrics.adapter_latency.record(res.duration_ms / 1000.0, {"source_id": source_id})
             # Per-source chain-of-custody hash (issue #19, AC-19), computed
             # centrally by the broker over each source's raw rows at this
@@ -2137,6 +2128,7 @@ class Broker:
             request_id=state.request_id,
             data=state.data,
             sources_queried=sorted(state.sources_queried),
+            truncated_sources=sorted(state.truncated_sources),
             sources_denied=state.sources_denied,
             sources_skipped=state.sources_skipped,
             sources_errored=state.errored,

@@ -44,6 +44,10 @@ sources:
     classification: confidential
     data_types: [report, policy, audit-trail, compliance]
     allowed_purposes: [compliance-audit, legal-review]
+    # An S3-compatible endpoint URL, or `s3://REGION` for real AWS.
+    # `?region=NAME` pins the signing region; omit it to let the boto
+    # chain (AWS_REGION, ~/.aws/config) decide. Per-source credentials
+    # go in `auth:` as {type: basic, username: <key id>, password: <secret>}.
     connection: ${MINIO_ENDPOINT}
     table: compliance-docs  # S3 adapter uses this as the bucket name
 

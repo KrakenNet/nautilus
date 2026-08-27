@@ -166,6 +166,11 @@ class AdapterResult(BaseModel):
     rows: list[dict[str, Any]]
     duration_ms: int
     error: ErrorRecord | None = None
+    # True when ``rows`` was capped by the adapter's row limit, so the caller
+    # (and the signed attestation) can tell a complete answer from a partial
+    # one. Every adapter caps at 1000 rows; before this flag existed a
+    # truncated result was indistinguishable from an exhaustive one.
+    truncated: bool = False
     # NOTE: AdapterResult intentionally carries NO ``response_hash`` field. The
     # per-source chain-of-custody digest (issue #19, design §5.7 Weakness 7) is
     # computed centrally by the broker over ``rows`` at the pre-synthesis
@@ -194,6 +199,9 @@ class BrokerResponse(BaseModel):
     duration_ms: int
     cap_breached: bool | None = None
     fact_set_hash: str | None = None
+    # Sources whose rows hit the adapter row cap. Empty (not ``None``) when
+    # nothing truncated, so a Phase-1 response round-trips unchanged (NFR-5).
+    truncated_sources: list[str] = Field(default_factory=list[str])
     source_session_signatures: dict[str, dict[str, Any]] | None = None
     # Session-provenance JWS (#18, AC-18.a). Populated only when the broker
     # is configured with ``session_tokens.enabled: true``; ``None`` otherwise
@@ -257,6 +265,10 @@ class AuditEntry(BaseModel):
     sources_denied: list[str]
     sources_skipped: list[str] = Field(default_factory=list[str])
     sources_errored: list[str]  # source IDs only; full error detail lives in error_records
+    # Subset of ``sources_queried`` whose rows were capped by the adapter row
+    # limit. ``None`` when nothing truncated, so Phase-1 JSONL round-trips
+    # unchanged (NFR-5).
+    truncated_sources: list[str] | None = None
     attestation_token: str | None = None
     duration_ms: int
     # Phase 2 — all optional, all default None (NFR-5 round-trip guarantee).

@@ -19,14 +19,59 @@ import contextlib
 import time
 from collections.abc import Collection
 from typing import Any, ClassVar, cast
+from urllib.parse import parse_qs, urlsplit, urlunsplit
 
-from nautilus.adapters.base import AdapterError, ScopeEnforcementError
+from nautilus.adapters.base import AdapterError, ScopeEnforcementError, wrap_execute
 from nautilus.adapters.schema import AdapterSchema
-from nautilus.config.models import SourceConfig
+from nautilus.config.models import BasicAuth, NoneAuth, SourceConfig
 from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
 # Default row cap when the intent does not specify a ``LIMIT``.
 _DEFAULT_LIMIT: int = 1000
+
+
+def _client_kwargs(config: SourceConfig) -> dict[str, Any]:
+    """Build the aiobotocore ``create_client`` kwargs for one source.
+
+    ``SourceConfig.connection`` is a post-interpolation *string*, always. Two
+    shapes are accepted:
+
+    - ``s3://[REGION]`` — real AWS; the optional host is the region name.
+    - ``http(s)://HOST[:PORT]`` — an S3-compatible endpoint (MinIO, Ceph, R2).
+
+    Either accepts ``?region=NAME``. When no region is given none is passed,
+    which leaves ``AWS_REGION`` / ``AWS_DEFAULT_REGION`` / ``~/.aws/config`` in
+    charge; the previous unconditional ``us-east-1`` overrode all three and made
+    every bucket outside that region unreachable.
+
+    Credentials come from ``auth:`` like every other adapter — ``basic`` maps
+    to (access key, secret key). The old ``access_key:`` / ``secret_key:``
+    sibling keys never worked: ``SourceConfig`` ignores unknown fields, so they
+    were dropped in silence.
+    """
+    split = urlsplit(config.connection)
+    region = (parse_qs(split.query).get("region") or [""])[0]
+    kwargs: dict[str, Any] = {}
+    if split.scheme == "s3":
+        region = region or split.netloc
+    else:
+        # Strip the query: it is Nautilus configuration, and a query string on
+        # an endpoint URL breaks SigV4 signing.
+        kwargs["endpoint_url"] = urlunsplit((split.scheme, split.netloc, split.path, "", ""))
+    if region:
+        kwargs["region_name"] = region
+
+    auth = config.auth
+    if isinstance(auth, BasicAuth):
+        kwargs["aws_access_key_id"] = auth.username
+        kwargs["aws_secret_access_key"] = auth.password
+    elif auth is not None and not isinstance(auth, NoneAuth):
+        raise AdapterError(
+            f"S3Adapter: source '{config.id}' declares auth type {auth.type!r}, which S3 "
+            f"cannot use. Use 'basic' (username=access key id, password=secret access "
+            f"key), or omit 'auth' to use the ambient credential chain."
+        )
+    return kwargs
 
 
 # One parsed tag predicate: (tag_name, operator, operand). The operand is a
@@ -72,51 +117,23 @@ class S3Adapter:
     async def connect(self, config: SourceConfig) -> None:
         """Create an aiobotocore session and S3 client from ``config``.
 
-        ``config.connection`` is expected to carry a JSON-like or
-        semicolon-delimited connection descriptor. For Phase 1, the adapter
-        reads well-known keys from the config object:
-
-        - ``endpoint_url``: S3-compatible endpoint (MinIO, Ceph, R2)
-        - ``region``: AWS region name (defaults to ``us-east-1``)
-        - ``access_key``: AWS access key ID
-        - ``secret_key``: AWS secret access key
-        - ``bucket``: target bucket name
-
-        These are passed via ``config.connection`` as a Python dict (parsed
-        upstream by the config loader) or directly via named config fields.
+        ``connection`` is either ``s3://[REGION]`` (real AWS) or the URL of an
+        S3-compatible endpoint; ``table`` is the bucket. See
+        :func:`_client_kwargs` for the region and credential rules.
         """
         from aiobotocore.session import AioSession  # pyright: ignore[reportMissingTypeStubs]
 
         self._config = config
-
-        # Connection can be a dict-like object or a string DSN. For Phase 1
-        # we expect the broker to pass a dict via config.connection; if it is
-        # a plain string, treat it as the endpoint URL with env-based auth.
-        conn: Any = config.connection
-        if isinstance(conn, dict):
-            conn_dict: dict[str, Any] = conn  # pyright: ignore[reportUnknownVariableType]
-        else:
-            # Fallback: treat connection string as endpoint_url, rely on
-            # environment variables for auth (standard boto credential chain).
-            conn_dict = {"endpoint_url": str(conn)}
-
-        self._bucket = conn_dict.get("bucket") or config.table or "default"
-
-        session_kwargs: dict[str, Any] = {}
-        self._session = AioSession(**session_kwargs)
-
-        client_kwargs: dict[str, Any] = {
-            "region_name": conn_dict.get("region", "us-east-1"),
-        }
-        endpoint_url = conn_dict.get("endpoint_url")
-        if endpoint_url:
-            client_kwargs["endpoint_url"] = endpoint_url
-
-        access_key = conn_dict.get("access_key")
-        secret_key = conn_dict.get("secret_key")
-        if access_key and secret_key:
-            client_kwargs["aws_access_key_id"] = access_key
-            client_kwargs["aws_secret_access_key"] = secret_key
+        self._bucket = config.table or "default"
+        self._session = AioSession()
+        client_kwargs = _client_kwargs(config)
+        if "endpoint_url" in client_kwargs and not (
+            "region_name" in client_kwargs or self._session.get_config_variable("region")
+        ):
+            # SigV4 needs *a* region even against MinIO/Ceph, which ignore it.
+            # Only filled in when the ambient chain has none, so AWS_REGION and
+            # ~/.aws/config still win (R2, for one, insists on "auto").
+            client_kwargs["region_name"] = "us-east-1"
 
         try:
             ctx = self._session.create_client("s3", **client_kwargs)
@@ -139,6 +156,7 @@ class S3Adapter:
             with contextlib.suppress(Exception):
                 await client_ctx.__aexit__(None, None, None)
 
+    @wrap_execute
     async def execute(
         self,
         intent: IntentAnalysis,
@@ -223,7 +241,15 @@ class S3Adapter:
 
         try:
             if exact_key is not None:
-                rows = await self._get_object(exact_key)
+                # AND with the other constraints. Short-circuiting straight to
+                # the object dropped ``prefix`` and ``tag_filters`` -- both
+                # already parsed -- while they stayed in
+                # ``BrokerResponse.scope_restrictions`` and in the signed
+                # attestation as though applied. Every other adapter ANDs.
+                matches = (not prefix or exact_key.startswith(prefix)) and (
+                    not tag_filters or await self._matches_tags(exact_key, tag_filters)
+                )
+                rows = await self._get_object(exact_key) if matches else []
             else:
                 rows = await self._list_objects(
                     prefix=prefix,
@@ -242,6 +268,7 @@ class S3Adapter:
             source_id=self._config.id,
             rows=rows,
             duration_ms=duration_ms,
+            truncated=len(rows) >= _DEFAULT_LIMIT,
         )
 
     async def get_schema(self) -> AdapterSchema:

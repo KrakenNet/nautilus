@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import time
 from typing import Any
 
 import asyncpg
@@ -428,8 +429,13 @@ def influx_seeded(influx: tuple[str, str, str, str]) -> tuple[str, str, str, str
     import httpx
 
     url, org, bucket, token = influx
+    # Seeded at write time, not at a frozen 2023 instant: the adapter's default
+    # window is ``-30d``, so fixed-epoch points fall outside it and every case
+    # that does not override ``range(start:)`` reads empty for a reason that has
+    # nothing to do with the operator under test.
+    now_ns = time.time_ns()
     lines = "\n".join(
-        f"cpu,host=web-{i},region=us-east usage={i * 10}i {1700000000 + i}000000000"
+        f"cpu,host=web-{i},region=us-east usage={i * 10}i {now_ns - i * 1_000_000_000}"
         for i in range(5)
     )
     httpx.post(
@@ -709,4 +715,68 @@ def test_m48_postgres_fingerprint_covers_only_the_declared_table(
         "creating an unrelated table in the same database changed the "
         f"fingerprint of a source declared over public.declared "
         f"({before[:16]}... -> {after[:16]}...), which quarantines it."
+    )
+
+
+# ---------------------------------------------------------------------------
+# 5 -- a capped row set is indistinguishable from a complete one
+# ---------------------------------------------------------------------------
+
+
+def test_m5_a_capped_row_set_says_so(
+    pg_dsn: str, write_config: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Hitting the 1000-row adapter cap must be visible to the caller.
+
+    Every adapter truncates at ``_DEFAULT_LIMIT = 1000`` and said nothing
+    about it on ``AdapterResult``, ``BrokerResponse`` or the audit entry, so a
+    partial answer read as an exhaustive one -- and the attestation signed it
+    as such. The control (a table with fewer rows than the cap) is what makes
+    this a real check rather than an always-true assertion.
+    """
+    import asyncpg
+
+    from nautilus import Broker
+
+    async def _seed() -> None:
+        conn: Any = await asyncpg.connect(dsn=pg_dsn)
+        try:
+            await conn.execute("DROP TABLE IF EXISTS public.capped, public.uncapped")
+            await conn.execute("CREATE TABLE public.capped (id int)")
+            await conn.execute("CREATE TABLE public.uncapped (id int)")
+            await conn.execute("INSERT INTO public.capped SELECT generate_series(1, 1001)")
+            await conn.execute("INSERT INTO public.uncapped SELECT generate_series(1, 10)")
+        finally:
+            await conn.close()
+
+    asyncio.run(_seed())
+    monkeypatch.setenv("JOURNEY_PG_DSN", pg_dsn)
+
+    def _ask(table: str) -> Any:
+        config = write_config(
+            {
+                "sources": [_one_source(connection="${JOURNEY_PG_DSN}", table=table)],
+                "agents": {"a": {"id": "a", "clearance": "unclassified"}},
+            }
+        )
+
+        async def _run() -> Any:
+            broker = Broker.from_config(config)
+            try:
+                return await broker.arequest("a", "patients", {"purpose": "p", "session_id": "s1"})
+            finally:
+                await broker.aclose()
+
+        return asyncio.run(_run())
+
+    capped = _ask("public.capped")
+    assert not capped.sources_errored, [e.message for e in capped.sources_errored]
+    assert len(capped.data["src"]) == 1000, "the cap itself moved"
+    assert capped.truncated_sources == ["src"], (
+        "1001 rows came back as 1000 with no truncation signal on the response"
+    )
+
+    uncapped = _ask("public.uncapped")
+    assert uncapped.truncated_sources == [], (
+        "a 10-row result was reported as truncated -- the flag is unconditional"
     )

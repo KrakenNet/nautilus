@@ -42,6 +42,7 @@ from nautilus.adapters.base import (
     ScopeEnforcementError,
     validate_field,
     validate_operator,
+    wrap_execute,
 )
 from nautilus.adapters.rest import _auth_for_config  # pyright: ignore[reportPrivateUsage]
 from nautilus.adapters.schema import AdapterSchema
@@ -165,6 +166,7 @@ class LLMAdapter:
                 follow_redirects=False,
             )
 
+    @wrap_execute
     async def execute(
         self,
         intent: IntentAnalysis,

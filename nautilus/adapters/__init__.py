@@ -8,8 +8,6 @@ Protocol + ``NoopEmbedder`` default (design §3.10), and the
 broker-side construction.
 """
 
-from typing import Any
-
 from nautilus.adapters.base import (
     Adapter,
     AdapterError,
@@ -26,23 +24,32 @@ from nautilus.adapters.embedder import (
     EmbeddingUnavailableError,
     NoopEmbedder,
 )
+from nautilus.adapters.influxdb import InfluxDBAdapter
+from nautilus.adapters.llm import LLMAdapter
 from nautilus.adapters.neo4j import Neo4jAdapter
 from nautilus.adapters.pgvector import PgVectorAdapter
 from nautilus.adapters.postgres import PostgresAdapter
 from nautilus.adapters.rest import RestAdapter, SSRFBlockedError
+from nautilus.adapters.s3 import S3Adapter
 from nautilus.adapters.servicenow import ServiceNowAdapter
 
-# ``SourceConfig.type`` literal -> adapter class. The broker uses this map to
-# instantiate the right adapter for each source at startup (design §3.5,
-# §3.11). Phase-2 covers postgres, pgvector, elasticsearch, neo4j, rest, and
-# servicenow (design §3.11, Task 2.12).
-ADAPTER_REGISTRY: dict[str, type[Any]] = {
+# ``SourceConfig.type`` literal -> adapter class, and the single definition of
+# it: ``nautilus.core.broker`` imports this one rather than keeping a second
+# copy. The two drifted -- this module still listed the six Phase-2 types while
+# the broker had grown influxdb, s3 and llm -- so anything reaching for the
+# public ``nautilus.adapters.ADAPTER_REGISTRY`` (the SDK discovery docs tell
+# third parties to) raised ``KeyError`` on three built-in source types the
+# broker itself serves.
+ADAPTER_REGISTRY: dict[str, type[Adapter]] = {
     "postgres": PostgresAdapter,
     "pgvector": PgVectorAdapter,
     "elasticsearch": ElasticsearchAdapter,
     "neo4j": Neo4jAdapter,
     "rest": RestAdapter,
     "servicenow": ServiceNowAdapter,
+    "influxdb": InfluxDBAdapter,
+    "s3": S3Adapter,
+    "llm": LLMAdapter,
 }
 
 __all__ = [
@@ -52,12 +59,15 @@ __all__ = [
     "ElasticsearchAdapter",
     "Embedder",
     "EmbeddingUnavailableError",
+    "InfluxDBAdapter",
+    "LLMAdapter",
     "Neo4jAdapter",
     "NoopEmbedder",
     "PgVectorAdapter",
     "PostgresAdapter",
     "RestAdapter",
     "SSRFBlockedError",
+    "S3Adapter",
     "ScopeEnforcementError",
     "ServiceNowAdapter",
     "quote_identifier",

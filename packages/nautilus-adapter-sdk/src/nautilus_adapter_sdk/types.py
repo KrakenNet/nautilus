@@ -81,6 +81,9 @@ class AdapterResult(BaseModel):
     rows: list[dict[str, Any]]
     duration_ms: int
     error: ErrorRecord | None = None
+    # Set when the adapter capped ``rows`` at its row limit, so the broker can
+    # tell the caller (and the audit entry) that the answer is partial.
+    truncated: bool = False
 
 
 class AuthConfig(BaseModel):

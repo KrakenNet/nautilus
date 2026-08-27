@@ -21,7 +21,7 @@ from pgvector.asyncpg import (  # pyright: ignore[reportMissingTypeStubs]
     register_vector as _register_vector_raw,  # pyright: ignore[reportUnknownVariableType]
 )
 
-from nautilus.adapters.base import AdapterError, quote_identifier, quote_table
+from nautilus.adapters.base import AdapterError, quote_identifier, quote_table, wrap_execute
 from nautilus.adapters.embedder import Embedder, EmbeddingUnavailableError, NoopEmbedder
 from nautilus.adapters.postgres import PostgresAdapter
 from nautilus.adapters.schema import AdapterSchema
@@ -199,6 +199,7 @@ class PgVectorAdapter(PostgresAdapter):
         params: list[Any] = [*scope_params, embedding, top_k]
         return sql, params
 
+    @wrap_execute
     async def execute(
         self,
         intent: IntentAnalysis,

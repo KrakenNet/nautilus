@@ -10,7 +10,9 @@ The ``_OPERATOR_ALLOWLIST`` set here is the runtime counterpart to the
 
 from __future__ import annotations
 
+import functools
 import re
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
 
 from nautilus.config.models import SourceConfig
@@ -255,6 +257,48 @@ class Adapter(Protocol):
         raise NotImplementedError("AC-21.b: this adapter must implement get_schema() (task-006)")
 
 
+_ExecuteFn = Callable[
+    [Any, IntentAnalysis, list[ScopeConstraint], dict[str, Any]], Awaitable[AdapterResult]
+]
+
+
+def wrap_execute(fn: _ExecuteFn) -> _ExecuteFn:
+    """Re-raise a backend driver's own exceptions from ``execute`` as ``AdapterError``.
+
+    :class:`Adapter` documents ``AdapterError`` as the only non-scope failure
+    ``execute`` raises, and third-party adapters are written against that
+    contract. Most in-tree adapters let the raw driver exception escape instead
+    -- ``asyncpg.PostgresSyntaxError``, ``elasticsearch.ApiException`` -- which
+    the broker still records as a per-source error, but under the driver's type
+    name and with no indication of which source produced it.
+
+    ``ScopeEnforcementError`` (and any other ``AdapterError``) passes through
+    untouched: the broker distinguishes a refused constraint from an
+    infrastructure failure.
+    """
+
+    @functools.wraps(fn)
+    async def _wrapped(
+        self: Any,
+        intent: IntentAnalysis,
+        scope: list[ScopeConstraint],
+        context: dict[str, Any],
+    ) -> AdapterResult:
+        try:
+            return await fn(self, intent, scope, context)
+        except AdapterError:
+            raise
+        except Exception as exc:
+            config = getattr(self, "_config", None)
+            source_id = getattr(config, "id", "?")
+            raise AdapterError(
+                f"{type(self).__name__}: execute failed for source '{source_id}': "
+                f"{type(exc).__name__}: {exc}"
+            ) from exc
+
+    return _wrapped
+
+
 __all__ = [
     "SESSION_TOKEN_HEADER",
     "Adapter",
@@ -267,4 +311,5 @@ __all__ = [
     "session_token_headers",
     "validate_field",
     "validate_operator",
+    "wrap_execute",
 ]
