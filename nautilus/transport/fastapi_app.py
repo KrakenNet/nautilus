@@ -51,11 +51,12 @@ public allowlist; add routes there deliberately, not by omission.
 
 from __future__ import annotations
 
+import logging
 import re
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from fastapi import Depends, FastAPI, Query, Request, Response, status
 from fastapi.staticfiles import StaticFiles
@@ -82,6 +83,8 @@ from nautilus.ui.dependencies import get_auth_user
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
+
+log = logging.getLogger(__name__)
 
 _READY_PROBE_KEY = "_ready_probe_"
 
@@ -110,14 +113,16 @@ _AUDIT_MAX_LIMIT = 500
 _AUDIT_DEFAULT_LIMIT = 50
 
 
-def _resolve_auth_config(broker: Broker | None) -> tuple[str, list[str], list[str]]:
+def _resolve_auth_config(broker: Broker | None) -> tuple[str, list[Any], list[str]]:
     """Extract ``(mode, keys, trusted_proxies)`` from the broker's config.
 
-    ``ApiConfig`` is still a minimal shell in Phase 2 (host/port only). The
-    design pins ``mode: "api_key" | "proxy_trust"`` and ``keys: list[str]``
-    but later tasks formalize the pydantic model; until then we look them
-    up defensively via ``getattr`` on both ``config.api`` and any nested
-    ``auth`` object.
+    Looked up defensively via ``getattr`` so a test that injects a mock broker
+    without a full :class:`NautilusConfig` still boots.
+
+    ``keys`` comes back as the operator wrote it — bare strings, structured
+    :class:`~nautilus.config.models.ApiKeyEntry` records, or a mix. Flattening
+    to ``str`` here is what made every key a root key: the ``agent_id`` and
+    ``capabilities`` a structured entry carries never reached the guard.
 
     Returns:
         Tuple of ``(mode, keys, trusted_proxies)``. ``mode`` defaults to
@@ -129,22 +134,54 @@ def _resolve_auth_config(broker: Broker | None) -> tuple[str, list[str], list[st
         return ("api_key", [], [])
     api_cfg = getattr(broker, "_config", None)
     api_cfg = getattr(api_cfg, "api", None) if api_cfg is not None else None
-    # auth.mode — nested discriminated object, still TBD in pydantic.
     auth_obj = getattr(api_cfg, "auth", None)
     mode_raw = getattr(auth_obj, "mode", None) if auth_obj is not None else None
     mode = mode_raw if mode_raw in ("api_key", "proxy_trust") else "api_key"
-    # keys — flat list on api_cfg (design §3.12).
     keys_raw: object = getattr(api_cfg, "keys", None)
-    keys: list[str] = []
-    if isinstance(keys_raw, list):
-        for k in keys_raw:  # pyright: ignore[reportUnknownVariableType]
-            keys.append(str(k))  # pyright: ignore[reportUnknownArgumentType]
+    keys: list[Any] = list(cast("list[Any]", keys_raw)) if isinstance(keys_raw, list) else []
     proxies_raw: object = getattr(auth_obj, "trusted_proxies", None)
     proxies: list[str] = []
     if isinstance(proxies_raw, list):
         for entry in proxies_raw:  # pyright: ignore[reportUnknownVariableType]
             proxies.append(str(entry))  # pyright: ignore[reportUnknownArgumentType]
     return (mode, keys, proxies)
+
+
+def _resolve_agent_subjects(broker: Broker | None) -> dict[str, str]:
+    """Map ``agents.<id>.subject`` to the agent id, for ``proxy_trust``.
+
+    Empty when no agent declares a subject, which leaves the forwarded identity
+    bound to nothing and the request routed on its own ``agent_id`` — the
+    behaviour every existing deployment has.
+    """
+    config = getattr(broker, "_config", None) if broker is not None else None
+    agents: object = getattr(config, "agents", None)
+    if not isinstance(agents, dict):
+        return {}
+    subjects: dict[str, str] = {}
+    for agent_id, record in cast("dict[str, object]", agents).items():
+        subject = getattr(record, "subject", None)
+        if isinstance(subject, str) and subject:
+            subjects[subject] = str(agent_id)
+    return subjects
+
+
+def _warn_about_unbound_keys(keys: list[Any]) -> None:
+    """Say once, at startup, which keys are bound to nothing.
+
+    A bare-string key is root: it may ask as any agent and call every
+    governance route. That is the historical behaviour and it keeps working —
+    silence about it is the part that does not.
+    """
+    bare = [i for i, entry in enumerate(keys) if isinstance(entry, str)]
+    if bare:
+        log.warning(
+            "api.keys%s %s a bare string: bound to no agent_id, so it can ask as "
+            "any agent and call every governance route. Use the "
+            "{key, agent_id, capabilities} form to scope it.",
+            f"[{bare[0]}]" if len(bare) == 1 else str(bare),
+            "is" if len(bare) == 1 else "are",
+        )
 
 
 def _find_audit_entry(reader: AuditReader, request_id: str) -> Any:
@@ -208,6 +245,8 @@ def create_app(
         app.state.auth_mode = mode
         app.state.api_keys = keys
         app.state.trusted_proxies = trusted_proxies
+        app.state.agent_subjects = _resolve_agent_subjects(broker)
+        _warn_about_unbound_keys(keys)
         # Key ring for session-token endpoints (AC-18.a–g). Reuse the
         # broker's ring when session tokens are enabled — the ring is
         # in-memory, so a separate transport-level instance could never
@@ -245,6 +284,7 @@ def create_app(
     app.state.auth_mode = "api_key"
     app.state.api_keys = []
     app.state.trusted_proxies = []
+    app.state.agent_subjects = {}
     app.state.ready = False
 
     # ------------------------------------------------------------------
@@ -252,11 +292,39 @@ def create_app(
     # ``app.state.auth_mode`` between requests get the new behaviour.
     # ------------------------------------------------------------------
 
-    def _caller_identity(request: Request) -> dict[str, str]:
-        """This app's auth mode, then the shared derivation in ``auth``."""
+    def _caller_identity(request: Request) -> dict[str, Any]:
+        """This app's auth mode and key registry, then the shared derivation."""
+        state = request.app.state
         return caller_identity(
-            request, auth_mode=getattr(request.app.state, "auth_mode", "api_key")
+            request,
+            auth_mode=getattr(state, "auth_mode", "api_key"),
+            keys=list(getattr(state, "api_keys", []) or []),
+            agent_subjects=dict(getattr(state, "agent_subjects", {}) or {}),
         )
+
+    def _require_capability(capability: str) -> Any:
+        """Dependency: refuse a credential that does not hold ``capability``.
+
+        Listed *after* the auth guard on every route that uses it, so an
+        unauthenticated caller still gets 401 rather than 403. A bare-string key
+        holds everything, which is why this changes nothing for the configs that
+        do not opt in.
+        """
+
+        async def dependency(request: Request) -> None:
+            from fastapi import HTTPException
+
+            caller = _caller_identity(request)
+            if capability not in caller["capabilities"]:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=(
+                        f"This credential does not hold the {capability!r} capability "
+                        f"(it holds {sorted(caller['capabilities'])})"
+                    ),
+                )
+
+        return dependency
 
     async def _write_guard(request: Request) -> str:
         """Delegate to api_key or proxy_trust based on current ``auth_mode``."""
@@ -302,6 +370,19 @@ def create_app(
         # body-borne one, so the session binding it carries actually applies
         # (the broker re-verifies and lets the token's ``session_id`` override
         # the declared one). The body wins if a caller sends both.
+        caller = _caller_identity(request)
+        bound: str | None = caller["agent_id"]
+        if bound is not None and bound != body.agent_id:
+            # The key proved which agent is calling; the body asked as another.
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    f"This credential is bound to agent_id={bound!r}, "
+                    f"so it cannot ask as {body.agent_id!r}"
+                ),
+            )
         context = dict(body.context)
         header_token = request.headers.get(SESSION_TOKEN_HEADER)
         if header_token and "session_token" not in context:
@@ -310,7 +391,7 @@ def create_app(
             body.agent_id,
             body.intent,
             context,
-            caller=_caller_identity(request),
+            caller=caller,
             # Declared on ``BrokerRequest`` and therefore in the OpenAPI schema.
             # Dropping it here made REST return ``null`` where the library
             # echoes the caller's value back (US-6 / FR-62).
@@ -324,7 +405,11 @@ def create_app(
     @app.post(
         "/v1/request",
         response_model=BrokerResponse,
-        dependencies=[Depends(_write_guard), Depends(verify_session_token)],
+        dependencies=[
+            Depends(_write_guard),
+            Depends(_require_capability("query")),
+            Depends(verify_session_token),
+        ],
         tags=["broker"],
     )
     async def post_request(  # pyright: ignore[reportUnusedFunction]
@@ -337,7 +422,11 @@ def create_app(
     @app.post(
         "/v1/query",
         response_model=BrokerResponse,
-        dependencies=[Depends(_write_guard), Depends(verify_session_token)],
+        dependencies=[
+            Depends(_write_guard),
+            Depends(_require_capability("query")),
+            Depends(verify_session_token),
+        ],
         tags=["broker"],
     )
     async def post_query(  # pyright: ignore[reportUnusedFunction]
@@ -347,7 +436,11 @@ def create_app(
         """Literal alias of ``/v1/request`` (D-9 / UQ-3)."""
         return await _handle_request(body, request)
 
-    @app.get("/v1/sources", tags=["broker"])
+    @app.get(
+        "/v1/sources",
+        dependencies=[Depends(_write_guard), Depends(_require_capability("query"))],
+        tags=["broker"],
+    )
     async def get_sources(  # pyright: ignore[reportUnusedFunction]
         request: Request,
     ) -> dict[str, list[dict[str, Any]]]:
@@ -422,7 +515,7 @@ def create_app(
     @app.post(
         "/v1/sessions",
         tags=["attestation"],
-        dependencies=[Depends(_write_guard)],
+        dependencies=[Depends(_write_guard), Depends(_require_capability("query"))],
     )
     async def post_sessions(  # pyright: ignore[reportUnusedFunction]
         body: dict[str, Any],
@@ -481,7 +574,7 @@ def create_app(
     @app.post(
         "/v1/keys/rotate",
         tags=["attestation"],
-        dependencies=[Depends(_write_guard)],
+        dependencies=[Depends(_write_guard), Depends(_require_capability("keys"))],
     )
     async def post_keys_rotate(  # pyright: ignore[reportUnusedFunction]
         body: dict[str, Any],
@@ -520,7 +613,7 @@ def create_app(
     @app.post(
         "/v1/keys/{kid}/revoke",
         tags=["attestation"],
-        dependencies=[Depends(_write_guard)],
+        dependencies=[Depends(_write_guard), Depends(_require_capability("keys"))],
     )
     async def post_keys_revoke(  # pyright: ignore[reportUnusedFunction]
         kid: str,
@@ -578,7 +671,11 @@ def create_app(
     # Adapter schema endpoint (AC-21.a)
     # ------------------------------------------------------------------
 
-    @app.get("/v1/adapters", tags=["adapters"])
+    @app.get(
+        "/v1/adapters",
+        dependencies=[Depends(_write_guard), Depends(_require_capability("query"))],
+        tags=["adapters"],
+    )
     async def get_adapters(  # pyright: ignore[reportUnusedFunction]
         request: Request,
     ) -> dict[str, list[dict[str, str]]]:
@@ -604,7 +701,11 @@ def create_app(
             ],
         }
 
-    @app.get("/v1/adapters/{name}/schema", tags=["adapters"])
+    @app.get(
+        "/v1/adapters/{name}/schema",
+        dependencies=[Depends(_write_guard), Depends(_require_capability("query"))],
+        tags=["adapters"],
+    )
     async def get_adapter_schema(  # pyright: ignore[reportUnusedFunction]
         name: str,
         request: Request,
@@ -710,9 +811,19 @@ def create_app(
         return None if broker is None else broker._router  # noqa: SLF001
 
     def _require_reviewer(request: Request) -> str:
-        """Extract X-Nautilus-Reviewer header or raise 400 (AC-35.9.d / DQ4)."""
+        """Who is recorded as having decided this proposal (AC-35.9.d / DQ4).
+
+        A credential bound to an agent *is* the reviewer: ``X-Nautilus-Reviewer``
+        names a reviewer, it does not authenticate one (its own module docstring
+        says so), so it cannot be the identity written into a lineage record
+        when a better one is available. It stays required for the unbound
+        bare-key path, where there is nothing else to derive.
+        """
         from fastapi import HTTPException
 
+        bound: str | None = _caller_identity(request)["agent_id"]
+        if bound:
+            return bound
         reviewer = request.headers.get("X-Nautilus-Reviewer") or request.headers.get("X-Reviewer")
         if not reviewer:
             raise HTTPException(
@@ -723,7 +834,7 @@ def create_app(
 
     @app.post(
         "/v1/rkm/queue",
-        dependencies=[Depends(_write_guard)],
+        dependencies=[Depends(_write_guard), Depends(_require_capability("govern"))],
         tags=["rkm"],
         status_code=status.HTTP_201_CREATED,
     )
@@ -785,7 +896,7 @@ def create_app(
 
     @app.get(
         "/v1/rkm/queue",
-        dependencies=[Depends(_write_guard)],
+        dependencies=[Depends(_write_guard), Depends(_require_capability("govern"))],
         tags=["rkm"],
     )
     async def get_rkm_queue(  # pyright: ignore[reportUnusedFunction]
@@ -809,7 +920,7 @@ def create_app(
 
     @app.get(
         "/v1/rkm/queue/{proposal_id}",
-        dependencies=[Depends(_write_guard)],
+        dependencies=[Depends(_write_guard), Depends(_require_capability("govern"))],
         tags=["rkm"],
     )
     async def get_rkm_proposal(  # pyright: ignore[reportUnusedFunction]
@@ -845,7 +956,7 @@ def create_app(
 
     @app.post(
         "/v1/rkm/queue/{proposal_id}/approve",
-        dependencies=[Depends(_write_guard)],
+        dependencies=[Depends(_write_guard), Depends(_require_capability("govern"))],
         tags=["rkm"],
     )
     async def post_rkm_approve(  # pyright: ignore[reportUnusedFunction]
@@ -886,7 +997,7 @@ def create_app(
 
     @app.post(
         "/v1/rkm/queue/{proposal_id}/reject",
-        dependencies=[Depends(_write_guard)],
+        dependencies=[Depends(_write_guard), Depends(_require_capability("govern"))],
         tags=["rkm"],
     )
     async def post_rkm_reject(  # pyright: ignore[reportUnusedFunction]
@@ -936,7 +1047,7 @@ def create_app(
 
     @app.get(
         "/v1/rules/{rule_name}/lineage",
-        dependencies=[Depends(_write_guard)],
+        dependencies=[Depends(_write_guard), Depends(_require_capability("govern"))],
         tags=["rules"],
     )
     async def get_rule_lineage(  # pyright: ignore[reportUnusedFunction]
@@ -974,7 +1085,7 @@ def create_app(
 
     @app.post(
         "/v1/rules/{rule_name}/retract",
-        dependencies=[Depends(_write_guard)],
+        dependencies=[Depends(_write_guard), Depends(_require_capability("govern"))],
         tags=["rules"],
     )
     async def post_rule_retract(  # pyright: ignore[reportUnusedFunction]
@@ -1042,7 +1153,7 @@ def create_app(
 
     @app.post(
         "/v1/rules/{rule_name}/rollback",
-        dependencies=[Depends(_write_guard)],
+        dependencies=[Depends(_write_guard), Depends(_require_capability("govern"))],
         tags=["rules"],
     )
     async def post_rule_rollback(  # pyright: ignore[reportUnusedFunction]
@@ -1145,7 +1256,7 @@ def create_app(
 
     @app.get(
         "/v1/audit",
-        dependencies=[Depends(_read_guard)],
+        dependencies=[Depends(_read_guard), Depends(_require_capability("audit_read"))],
         tags=["audit"],
     )
     async def get_audit(  # pyright: ignore[reportUnusedFunction]
@@ -1185,7 +1296,7 @@ def create_app(
 
     @app.get(
         "/v1/audit/{request_id}",
-        dependencies=[Depends(_read_guard)],
+        dependencies=[Depends(_read_guard), Depends(_require_capability("audit_read"))],
         tags=["audit"],
     )
     async def get_audit_entry(  # pyright: ignore[reportUnusedFunction]

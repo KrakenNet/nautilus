@@ -247,18 +247,38 @@ class FathomRouter:
             # can name its own clearance can read anything, and until this
             # change `context["clearance"]` was taken verbatim, so declaring
             # "top-secret" was sufficient to read a secret source.
+            # A registered agent's ``default_purpose`` is what the config says
+            # it is. It was parsed, shipped in three example configs, and read
+            # only by the session-token minter, so an agent that declared one
+            # and omitted ``purpose`` was still denied by
+            # ``deny-purpose-mismatch``.
+            purpose = str(context.get("purpose") or "") or (
+                record.default_purpose or "" if record is not None else ""
+            )
+            # ``purpose`` is a live authorization input that the caller types.
+            # An operator who has written down what an agent is for gets to
+            # bound it; an agent that declares none is unrestricted, which is
+            # what every config written before this had.
+            if (
+                record is not None
+                and record.allowed_purposes
+                and purpose not in record.allowed_purposes
+            ):
+                return self._deny_all(
+                    sources,
+                    reason=(
+                        f"purpose {purpose!r} is not one of the purposes agent "
+                        f"{agent_id!r} may claim ({sorted(record.allowed_purposes)})"
+                    ),
+                    rule_name="purpose-not-permitted",
+                )
+
             agent_fact = {
                 "id": agent_id,
                 "clearance": (
                     record.clearance if record is not None else str(context.get("clearance", ""))
                 ),
-                # A registered agent's ``default_purpose`` is what the config
-                # says it is. It was parsed, shipped in three example configs,
-                # and read only by the session-token minter, so an agent that
-                # declared one and omitted ``purpose`` was still denied by
-                # ``deny-purpose-mismatch``.
-                "purpose": str(context.get("purpose") or "")
-                or (record.default_purpose or "" if record is not None else ""),
+                "purpose": purpose,
                 "compartments": _encode_compartments(
                     record.compartments
                     if record is not None

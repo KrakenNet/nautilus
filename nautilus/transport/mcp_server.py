@@ -44,7 +44,7 @@ from __future__ import annotations
 
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from mcp.server.fastmcp import Context, FastMCP
 
@@ -109,7 +109,12 @@ def _transport_session(ctx: Context[Any, Any, Any]) -> str | None:
     return f"mcp:{session_id}" if session_id else None
 
 
-def _caller(ctx: Context[Any, Any, Any] | None, auth_mode: str) -> dict[str, str] | None:
+def _caller(
+    ctx: Context[Any, Any, Any] | None,
+    auth_mode: str,
+    keys: list[Any] | None = None,
+    agent_subjects: dict[str, str] | None = None,
+) -> dict[str, Any] | None:
     """The caller identity to key the exposure ledger with, or ``None``.
 
     Only the HTTP transport has one: it carries the same ``X-API-Key`` /
@@ -123,10 +128,10 @@ def _caller(ctx: Context[Any, Any, Any] | None, auth_mode: str) -> dict[str, str
     request = getattr(getattr(ctx, "request_context", None), "request", None)
     if request is None or not hasattr(request, "headers"):
         return None
-    return caller_identity(request, auth_mode=auth_mode)
+    return caller_identity(request, auth_mode=auth_mode, keys=keys, agent_subjects=agent_subjects)
 
 
-def _mcp_settings(broker: Broker | None) -> tuple[bool, str, list[str]]:
+def _mcp_settings(broker: Broker | None) -> tuple[bool, str, list[Any]]:
     """Extract ``(expose_declare_handoff, auth_mode, api_keys)`` defensively.
 
     Mirrors :func:`nautilus.transport.fastapi_app._resolve_auth_config` —
@@ -145,14 +150,27 @@ def _mcp_settings(broker: Broker | None) -> tuple[bool, str, list[str]]:
     mode_raw = getattr(auth_obj, "mode", None) if auth_obj is not None else None
     mode = mode_raw if mode_raw in ("api_key", "proxy_trust") else "api_key"
     keys_raw: object = getattr(api_cfg, "keys", None)
-    keys: list[str] = []
+    keys: list[Any] = []
     if isinstance(keys_raw, list):
-        for k in keys_raw:  # pyright: ignore[reportUnknownVariableType]
-            keys.append(str(k))  # pyright: ignore[reportUnknownArgumentType]
+        keys = list(cast("list[Any]", keys_raw))
     return (expose_handoff, mode, keys)
 
 
-def wrap_http_with_api_key(app: Starlette, keys: list[str]) -> ASGIApp:
+def _agent_subjects(broker: Broker | None) -> dict[str, str]:
+    """``agents.<id>.subject`` → agent id, for ``proxy_trust`` (see REST twin)."""
+    config = getattr(broker, "_config", None) if broker is not None else None
+    agents: object = getattr(config, "agents", None)
+    if not isinstance(agents, dict):
+        return {}
+    subjects: dict[str, str] = {}
+    for agent_id, record in cast("dict[str, object]", agents).items():
+        subject = getattr(record, "subject", None)
+        if isinstance(subject, str) and subject:
+            subjects[subject] = str(agent_id)
+    return subjects
+
+
+def wrap_http_with_api_key(app: Starlette, keys: list[Any]) -> ASGIApp:
     """Wrap the FastMCP streamable-HTTP sub-app with the shared API-key gate.
 
     The official MCP Python SDK exposes :meth:`FastMCP.streamable_http_app`
@@ -255,7 +273,25 @@ def create_server(
         json_response=True,
     )
 
-    expose_handoff, auth_mode, _api_keys = _mcp_settings(broker)
+    expose_handoff, auth_mode, api_keys = _mcp_settings(broker)
+    agent_subjects = _agent_subjects(broker)
+
+    def _resolve_caller(ctx: Context[Any, Any, Any] | None) -> dict[str, Any] | None:
+        return _caller(ctx, auth_mode, api_keys, agent_subjects)
+
+    def _refuse_impersonation(caller: dict[str, Any] | None, agent_id: str) -> None:
+        """The credential names one agent; the tool argument must match it.
+
+        ``agent_id`` is taken verbatim from the tool argument (AC-13.3) and that
+        does not change — what changes is that a *bound* credential may only
+        pass its own. Without this the whole binding is bypassed by sending the
+        same key to the MCP port instead of the REST one.
+        """
+        bound = (caller or {}).get("agent_id")
+        if bound is not None and bound != agent_id:
+            raise ValueError(
+                f"This credential is bound to agent_id={bound!r}, so it cannot ask as {agent_id!r}"
+            )
 
     # ------------------------------------------------------------------
     # Tool: nautilus_request — primary query entrypoint (AC-13.1, FR-27).
@@ -277,11 +313,13 @@ def create_server(
         attestation logic live inside the broker. See :func:`_resolve_session`
         for the D-10 fallback chain.
         """
+        caller = _resolve_caller(ctx)
+        _refuse_impersonation(caller, agent_id)
         ctx_dict: dict[str, Any] = dict(context) if context else {}
         session_id, source = _resolve_session(ctx_dict, ctx)
         ctx_dict["session_id"] = session_id
         ctx_dict["session_id_source"] = source
-        return await broker.arequest(agent_id, intent, ctx_dict, caller=_caller(ctx, auth_mode))
+        return await broker.arequest(agent_id, intent, ctx_dict, caller=caller)
 
     # ------------------------------------------------------------------
     # Optional tool: nautilus_declare_handoff — gated on
@@ -306,6 +344,7 @@ def create_server(
             ``nautilus_request``: caller-supplied → transport-supplied →
             stdio ``request_id`` → generated UUID.
             """
+            _refuse_impersonation(_resolve_caller(ctx), source_agent_id)
             resolved_session, _source = _resolve_session(
                 {"session_id": session_id} if session_id else {},
                 ctx,
@@ -324,7 +363,7 @@ def create_server(
 def http_app(
     mcp: FastMCP[Any],
     *,
-    api_keys: list[str] | None = None,
+    api_keys: list[Any] | None = None,
 ) -> ASGIApp:
     """Return the streamable-HTTP sub-app wrapped with the shared API-key gate.
 

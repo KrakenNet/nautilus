@@ -252,6 +252,12 @@ class AuditEntry(BaseModel):
     timestamp: datetime  # UTC ISO8601
     request_id: str
     agent_id: str
+    # Who the transport authenticated, as the same ``principal:<sha256 prefix>``
+    # the exposure ledger keys on — never the credential itself. ``agent_id`` is
+    # a name the caller asserts; without this an operator holding one shared key
+    # cannot tell whose request a receipt describes, or which key to revoke.
+    # Optional so Phase-1 lines and library callers round-trip unchanged (NFR-5).
+    principal_id: str | None = None
     session_id: str | None = None
     raw_intent: str = ""
     intent_analysis: IntentAnalysis | None = None

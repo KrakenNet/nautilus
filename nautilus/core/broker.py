@@ -509,6 +509,7 @@ def _build_audit_entry(
         timestamp=AuditLogger.utcnow(),
         request_id=state.request_id,
         agent_id=agent_id,
+        principal_id=state.principal_id or None,
         session_id=state.session_id or None,
         raw_intent=state.intent,
         intent_analysis=state.intent_analysis,
@@ -1787,6 +1788,7 @@ class Broker:
                         scope_by_source=state.scope_by_source,
                         rule_trace=state.rule_trace,
                         session_id=state.session_id,
+                        principal_id=state.principal_id,
                         response=state.data or None,
                         source_response_hashes=state.source_response_hashes or None,
                     )
@@ -2302,6 +2304,17 @@ class Broker:
                 if not isinstance(presented, str):
                     raise SessionTokenError("missing", "session_token must be a string")
                 claims = self._session_tokens.verify(presented)
+                # A token is minted for one agent. Verifying the signature and
+                # then taking only its ``session_id`` let any agent replay
+                # another's token and inherit that session's exposure ledger —
+                # the same substitution ``_verify_handoff_token`` already
+                # refuses on the handoff path.
+                if claims.agent_id != agent_id:
+                    raise SessionTokenError(
+                        "agent_mismatch",
+                        f"session token was minted for agent {claims.agent_id!r}, "
+                        f"presented by {agent_id!r}",
+                    )
             except SessionTokenError as exc:
                 state.errored.append(
                     ErrorRecord(
@@ -2495,6 +2508,7 @@ class Broker:
         scope_by_source: dict[str, list[ScopeConstraint]],
         rule_trace: list[str],
         session_id: str,
+        principal_id: str = "",
         response: dict[str, Any] | None = None,
         source_response_hashes: dict[str, str] | None = None,
     ) -> tuple[str, Literal["v1", "v2"], dict[str, Any]]:
@@ -2554,7 +2568,11 @@ class Broker:
         # Nautilus-specific decision marker; the Fathom JWT carries this as
         # the ``decision`` claim. The request_id and agent_id are embedded
         # so downstream verifiers don't need a separate Nautilus payload.
-        decision = f"nautilus:{request_id}:agent={agent_id}"
+        # ``principal`` joins them because ``agent_id`` is a name the caller
+        # asserts: signing it alone proves a decision was made about a string
+        # someone typed, and two credentials asserting the same name produce
+        # the identical claim.
+        decision = f"nautilus:{request_id}:agent={agent_id}:principal={principal_id}"
 
         # Pass the full Nautilus payload as a single synthetic fact so the
         # JWT's ``input_hash`` binds both ``scope_hash`` and

@@ -6,9 +6,15 @@ Two modes, selected by ``config.api.auth.mode``:
   is compared against every configured key via :func:`secrets.compare_digest`
   (constant-time, resistant to timing oracles).
 - ``"proxy_trust"`` — upstream proxy has already authenticated the caller
-  and forwards its identity in ``X-Forwarded-User``. Nautilus trusts the
-  header verbatim; the value is exposed as the request principal but no
-  cryptographic check is performed (FR-26, D-11).
+  (mTLS, SPIFFE, OIDC) and forwards its identity in ``X-Forwarded-User``.
+  Nautilus accepts the header only from a peer inside
+  ``api.auth.trusted_proxies``, and resolves it to an agent through
+  ``agents.<id>.subject`` (FR-26, D-11).
+
+Either mode resolves a *caller*: who the transport authenticated, which agent
+that credential may speak for, and what it may do. :func:`caller_identity` is
+that resolution, and it is shared by REST, MCP and the admin UI so a client
+cannot get a different answer by changing ports.
 
 Both FastAPI REST (``fastapi_app``) and the MCP HTTP transport wrap their
 write endpoints with the dependency returned by :func:`require_api_key`
@@ -32,6 +38,8 @@ from fastapi.security import APIKeyHeader
 # The same trap is documented in ``ui/router.py`` and ``fastapi_app.py``.
 from starlette.requests import Request
 
+from nautilus.config.models import CAPABILITIES
+
 if TYPE_CHECKING:
     from nautilus.attestation.session_token import SessionTokenClaims
 
@@ -49,29 +57,87 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
 """FastAPI security scheme for the ``X-API-Key`` header (auto_error=True)."""
 
 
-def caller_identity(request: Request, *, auth_mode: str = "api_key") -> dict[str, str]:
-    """Who the transport authenticated this request as (§4.15).
+ALL_CAPABILITIES: frozenset[str] = frozenset(CAPABILITIES)
+"""What an unbound credential holds — the bare-key and no-registry behaviour."""
 
-    This keys the cumulative-exposure ledger, so it must carry nothing the
-    caller's own payload can set. ``auth`` is the API key the request presented
-    or, under ``proxy_trust``, the upstream's ``X-Forwarded-User``; ``peer`` is
-    the socket address, recorded for provenance and used as the key's fallback
-    only when the deployment authenticates nobody.
+
+def key_value(entry: object) -> str:
+    """The secret in a configured key, whichever form the operator wrote."""
+    return entry if isinstance(entry, str) else str(getattr(entry, "key", ""))
+
+
+def _match_key(header_value: str, keys: list[Any]) -> Any | None:
+    """The configured entry whose secret is ``header_value``, or ``None``.
+
+    Compares every entry with :func:`secrets.compare_digest` — a plain ``in`` /
+    ``==`` would leak per-byte timing and let an attacker derive the secret
+    (D-11).
+    """
+    header_bytes = header_value.encode("utf-8") if header_value else b""
+    for entry in keys:
+        if secrets.compare_digest(header_bytes, key_value(entry).encode("utf-8")):
+            return entry
+    return None
+
+
+def _capabilities_of(entry: object) -> frozenset[str]:
+    """What a matched key entry may do; a bare string may do everything."""
+    if isinstance(entry, str):
+        return ALL_CAPABILITIES
+    declared = getattr(entry, "capabilities", None)
+    if declared is None:
+        return ALL_CAPABILITIES
+    return frozenset(str(c) for c in declared)
+
+
+def caller_identity(
+    request: Request,
+    *,
+    auth_mode: str = "api_key",
+    keys: list[Any] | None = None,
+    agent_subjects: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Who the transport authenticated this request as (§4.15, readiness §2).
+
+    Four fields:
+
+    - ``auth`` — the authenticated principal: the API key the request presented
+      or, under ``proxy_trust``, the upstream's ``X-Forwarded-User``. This keys
+      the cumulative-exposure ledger, so it must carry nothing the caller's own
+      payload can set.
+    - ``peer`` — the socket address, recorded for provenance and used as the
+      ledger key's fallback only when the deployment authenticates nobody.
+    - ``agent_id`` — the *only* agent this credential may speak for, or ``None``
+      when nothing binds it (a bare-string key, or an unregistered subject).
+      ``None`` is the historical behaviour: the caller names its own agent.
+    - ``capabilities`` — what this credential may do. Everything, unless a
+      structured key entry says otherwise.
 
     Shared rather than per-transport on purpose: it lived inside ``create_app``
     and only REST ever called it, so the same client presenting the same key to
     the MCP port accumulated into a different ledger and escaped escalation by
     switching transport.
     """
+    agent_id: str | None = None
+    capabilities = ALL_CAPABILITIES
     if auth_mode == "proxy_trust":
         auth = request.headers.get("X-Forwarded-User") or ""
+        # The ingress authenticated the subject; ``agents.<id>.subject`` is what
+        # says which agent it is. An unmapped subject stays unbound rather than
+        # being refused here — ``proxy_trust_dependency`` owns the 401.
+        if auth and agent_subjects:
+            agent_id = agent_subjects.get(auth)
     else:
         auth = request.headers.get("X-API-Key") or ""
+        entry = _match_key(auth, keys) if keys else None
+        if entry is not None:
+            agent_id = getattr(entry, "agent_id", None)
+            capabilities = _capabilities_of(entry)
     peer = request.client.host if request.client else ""
-    return {"auth": auth, "peer": peer}
+    return {"auth": auth, "peer": peer, "agent_id": agent_id, "capabilities": capabilities}
 
 
-def verify_api_key(header_value: str, keys: list[str]) -> None:
+def verify_api_key(header_value: str, keys: list[Any]) -> None:
     """Verify ``header_value`` against every key in ``keys`` in constant time.
 
     Uses :func:`secrets.compare_digest` per key — a plain ``in`` / ``==``
@@ -80,7 +146,9 @@ def verify_api_key(header_value: str, keys: list[str]) -> None:
 
     Args:
         header_value: Raw ``X-API-Key`` header value supplied by the caller.
-        keys: Operator-configured allow-list (from ``config.api.keys``).
+        keys: Operator-configured allow-list (from ``config.api.keys``) —
+            bare strings, structured :class:`~nautilus.config.models.ApiKeyEntry`
+            records, or a mix.
 
     Raises:
         HTTPException: 401 if ``header_value`` does not match any key, or
@@ -94,10 +162,8 @@ def verify_api_key(header_value: str, keys: list[str]) -> None:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="API key required",
         )
-    header_bytes = header_value.encode("utf-8") if header_value else b""
-    for key in keys:
-        if secrets.compare_digest(header_bytes, key.encode("utf-8")):
-            return
+    if _match_key(header_value, list(keys)) is not None:
+        return
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid API key",
@@ -225,9 +291,11 @@ async def verify_session_token(
 
 
 __all__ = [
+    "ALL_CAPABILITIES",
     "SESSION_TOKEN_HEADER",
     "api_key_header",
     "caller_identity",
+    "key_value",
     "proxy_trust_dependency",
     "require_api_key",
     "verify_api_key",

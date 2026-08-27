@@ -191,6 +191,16 @@ class AgentRecord(_Strict):
     clearance: str
     compartments: list[str] = Field(default_factory=list)
     default_purpose: str | None = None
+    # The identity an authenticating proxy forwards for this agent — an SPIFFE
+    # id, an OIDC subject, a certificate CN. Matched against ``X-Forwarded-User``
+    # under ``api.auth.mode: proxy_trust``; without it the header names an agent
+    # nothing has bound, and any caller past the proxy can ask as anyone.
+    subject: str | None = None
+    # What this agent may claim as its ``purpose``. Empty means unrestricted,
+    # which is the shape every existing config has. ``purpose`` is a live
+    # authorization input (``deny-purpose-mismatch``, the HIPAA pack) that the
+    # caller types, so an operator needs somewhere to bound it.
+    allowed_purposes: list[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -347,6 +357,39 @@ class AnalysisConfig(_Strict):
     timeout_s: float = 2.0
 
 
+# What a credential is allowed to do. ``query`` is the broker itself; the other
+# three are the surfaces that change what the broker will do or attest to.
+CAPABILITIES = ("query", "audit_read", "govern", "keys")
+
+
+class ApiKeyEntry(_Strict):
+    """One API key, bound to an agent and scoped to a set of capabilities.
+
+    The bare-string form (``keys: ["s3cret"]``) still loads and still means
+    "root": bound to no agent, holding every capability. It is what every
+    shipped example uses, so it keeps working — and warns at startup, because a
+    key that can rotate the signing key merely by existing is worth saying out
+    loud once.
+    """
+
+    key: str
+    # The only ``agent_id`` this key may ask as. ``None`` is the bare-key
+    # behaviour: the caller names its own agent and the registry hands that
+    # name its clearance.
+    agent_id: str | None = None
+    capabilities: list[str] = Field(default_factory=lambda: ["query"])
+
+    @model_validator(mode="after")
+    def _known_capabilities(self) -> ApiKeyEntry:
+        unknown = [c for c in self.capabilities if c not in CAPABILITIES]
+        if unknown:
+            raise ValueError(
+                f"api.keys entry declares unknown capabilities {unknown}. "
+                f"Known capabilities: {list(CAPABILITIES)}"
+            )
+        return self
+
+
 class ApiAuthConfig(_Strict):
     """``api.auth`` — how the HTTP surfaces identify a caller (design §3.12, D-11).
 
@@ -397,7 +440,7 @@ class ApiConfig(_Strict):
     # the CLI itself say 8000.
     host: str = "127.0.0.1"
     port: int = 8000
-    keys: list[str] = Field(default_factory=list)
+    keys: list[str | ApiKeyEntry] = Field(default_factory=list["str | ApiKeyEntry"])
     auth: ApiAuthConfig = Field(default_factory=ApiAuthConfig)
 
 

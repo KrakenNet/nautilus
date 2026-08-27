@@ -176,11 +176,13 @@ async def _run_mcp(broker: Broker, mode: str, host: str, port: int) -> None:
         return
 
     # B4 -- ``run_streamable_http_async`` serves the raw FastMCP app, which has
-    # no auth at all. ``nautilus_request`` takes ``agent_id`` verbatim by
-    # design, so the transport is the only identity boundary there is: anyone
-    # who can reach the port asserts the highest-clearance agent in the config.
-    # ``http_app`` applies the same X-API-Key gate the REST leg uses, and fails
-    # closed when no keys are configured.
+    # no auth at all. ``http_app`` applies the same X-API-Key gate the REST leg
+    # uses, and fails closed when no keys are configured. ``agent_id`` is still
+    # taken verbatim from the tool argument (AC-13.3), but a key configured in
+    # the ``{key, agent_id, capabilities}`` form may only pass its own agent —
+    # with bare-string keys the transport remains the only identity boundary
+    # there is, and anyone holding one asserts the highest-clearance agent in
+    # the config.
     import uvicorn
 
     from nautilus.transport.mcp_server import _mcp_settings, http_app

@@ -53,6 +53,65 @@ api:
   keys: ["${NAUTILUS_API_KEY}"]   # enables X-API-Key auth on the REST surface
 ```
 
+### Bind a credential to an agent
+
+The bare form above authenticates the *port*: the key proves the caller may
+talk to Nautilus, and the `agent_id` in the request body decides what it may
+read. Nothing connects the two, so on a config with three agents at three
+clearances, one shared key is a key to the highest of them. `nautilus serve`
+says so at startup, and so does the log line every bare key produces.
+
+The bound form connects them:
+
+```yaml
+api:
+  keys:
+    - ${DEV_KEY}                    # bare: still root, still warns
+    - key: ${ANALYST_KEY}
+      agent_id: analyst             # may only ask as 'analyst'
+      capabilities: [query]
+    - key: ${OPS_KEY}
+      agent_id: ops
+      capabilities: [query, audit_read, govern, keys]
+```
+
+A bound key asking as another agent gets `403` on REST and MCP alike — the two
+surfaces resolve the caller through the same function, so switching ports is
+not a way around it. Capabilities gate the surfaces that change what the broker
+will do: `govern` for the rule queue and rule retract/rollback, `keys` for
+signing-key rotation and revocation, `audit_read` for the audit log, `query`
+for everything else. A bare key holds all four.
+
+### Bind an identity your ingress already authenticated
+
+Under `proxy_trust` an ingress terminates mTLS, SPIFFE or OIDC and forwards the
+resolved identity. `agents.<id>.subject` is what turns that string into an
+agent:
+
+```yaml
+api:
+  auth:
+    mode: proxy_trust
+    trusted_proxies: ["10.0.0.0/8"]   # required: the peer the header is believed from
+
+agents:
+  analyst:
+    clearance: cui
+    subject: "spiffe://corp/ns/agents/sa/analyst"
+    allowed_purposes: [treatment, operations]
+```
+
+`X-Forwarded-User` is a credential only while nobody but the proxy can set it,
+which is why `trusted_proxies` is not optional — the config refuses to load
+`proxy_trust` without it. A forwarded subject that maps to an agent may only
+ask as that agent.
+
+`allowed_purposes` on an agent bounds what it may claim as its `purpose`.
+`purpose` is a live authorization input (`deny-purpose-mismatch`, the HIPAA
+pack's `deny-phi-outside-tpo`) that the caller types; an agent that declares no
+`allowed_purposes` is unrestricted, which is what every config written before
+this is.
+
 `nautilus serve` binds to `api.host:api.port`; an explicit `--bind HOST:PORT`
 overrides them.
 
