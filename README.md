@@ -40,6 +40,16 @@ Nautilus provides **deterministic, policy-first data brokering** using Fathom â€
 uv add nautilus-rkm
 ```
 
+Database and object-store drivers are extras â€” install the ones your sources
+need, or `[all]` for every built-in adapter:
+
+```bash
+uv add "nautilus-rkm[postgres]"        # pgvector, elasticsearch, neo4j, influxdb, s3
+uv add "nautilus-rkm[all]"
+```
+
+A source whose driver is missing fails at startup naming the extra to install.
+
 ## Quick Start
 
 ```bash

@@ -1,0 +1,51 @@
+# The broker's config. Everything in here is non-secret by construction:
+# credentials are ${ENV} references resolved at load time from the Secret.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nautilus-config
+  labels:
+    app.kubernetes.io/name: nautilus
+data:
+  nautilus.yaml: |
+    sources:
+      - id: orders
+        type: postgres
+        description: Order records
+        classification: confidential
+        data_types: [orders]
+        allowed_purposes: [support]
+        connection: ${ORDERS_DSN}
+        table: public.orders
+
+    agents:
+      support-bot:
+        id: support-bot
+        clearance: confidential
+        allowed_purposes: [support]
+
+    api:
+      host: 0.0.0.0
+      port: 8000
+      auth:
+        mode: api_key
+      keys: ["${NAUTILUS_API_KEY}"]
+
+    # One deployment is one tenant: the agent registry, the exposure ledger and
+    # the signing ring are deployment-wide. A second tenant is a second
+    # deployment. See docs/concepts/trust-boundary.md.
+    session_store:
+      backend: postgres
+      dsn: ${SESSION_DSN}
+      on_failure: fail_closed
+
+    session_tokens:
+      enabled: true
+      key_ring_path: /var/lib/nautilus/keyring.json
+
+    attestation:
+      enabled: true
+      private_key_path: /etc/nautilus/keys/attestation.pem
+
+    audit:
+      path: /var/log/nautilus/audit.jsonl

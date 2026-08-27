@@ -23,24 +23,22 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
+# The broker, its transports and the adapters that need no driver (rest,
+# servicenow, llm, static). Database and object-store drivers are extras: six
+# of them accounted for roughly 60 MB of a 133 MB install, and a deployment
+# brokering one REST source imported none of them.
 dependencies = [
     "fathom-rules>=0.11.0",
-    "asyncpg>=0.30.0",
-    "pgvector>=0.3.0",
     "pyyaml>=6.0",
     "pyjwt>=2.12.1",
     "cryptography>=46.0.7",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "httpx>=0.27",
-    "elasticsearch>=8,<10",
-    "neo4j>=5",
     "mcp>=1.12",
     "sse-starlette>=2.0",
     "python-multipart>=0.0.9",
     "jinja2>=3.1",
-    "influxdb-client>=1.40",
-    "aiobotocore>=2.12",
 ]
 
 [project.urls]
@@ -54,7 +52,29 @@ Issues = "https://github.com/KrakenNet/nautilus/issues"
 nautilus = "nautilus.cli:main"
 
 [project.optional-dependencies]
+# One extra per adapter that needs a driver. ``nautilus serve`` names the extra
+# in its error when a configured source's driver is missing.
+postgres = ["asyncpg>=0.30.0"]
+pgvector = ["asyncpg>=0.30.0", "pgvector>=0.3.0"]
+elasticsearch = ["elasticsearch>=8,<10"]
+neo4j = ["neo4j>=5"]
+influxdb = ["influxdb-client>=1.40"]
+s3 = ["aiobotocore>=2.12"]
+all = [
+    "asyncpg>=0.30.0",
+    "pgvector>=0.3.0",
+    "elasticsearch>=8,<10",
+    "neo4j>=5",
+    "influxdb-client>=1.40",
+    "aiobotocore>=2.12",
+]
 dev = [
+    "asyncpg>=0.30.0",
+    "pgvector>=0.3.0",
+    "elasticsearch>=8,<10",
+    "neo4j>=5",
+    "influxdb-client>=1.40",
+    "aiobotocore>=2.12",
     "nautilus-adapter-sdk",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",

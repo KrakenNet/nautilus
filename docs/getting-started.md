@@ -12,6 +12,18 @@ Requires Python 3.13 or later.
 uv add nautilus-rkm
 ```
 
+The broker, both transports and the adapters that need no driver (`rest`,
+`servicenow`, `llm`, `static`) come with that. Database and object-store
+drivers are extras:
+
+```bash
+uv add "nautilus-rkm[postgres]"   # also: pgvector, elasticsearch, neo4j, influxdb, s3
+uv add "nautilus-rkm[all]"        # every built-in adapter
+```
+
+A configured source whose driver is not installed fails at startup, naming the
+extra — it never fails later, mid-request.
+
 ## First run
 
 Nothing to configure, nothing to install beyond the package:

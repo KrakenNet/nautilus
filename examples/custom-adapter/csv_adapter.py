@@ -16,9 +16,9 @@ import time
 from pathlib import Path
 from typing import Any, ClassVar
 
-from nautilus_adapter_sdk.config import SourceConfig
-from nautilus_adapter_sdk.exceptions import AdapterError, ScopeEnforcementError
-from nautilus_adapter_sdk.types import AdapterResult, IntentAnalysis, ScopeConstraint
+from nautilus.adapters.base import AdapterError, ScopeEnforcementError
+from nautilus.config.models import SourceConfig
+from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
 # Operators supported by this adapter.
 _VALID_OPERATORS = {"=", "!=", "IN", "NOT IN", "LIKE", "IS NULL"}

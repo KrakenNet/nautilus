@@ -14,10 +14,10 @@ from __future__ import annotations
 import time
 from typing import Any, ClassVar
 
-from nautilus_adapter_sdk.config import SourceConfig
-from nautilus_adapter_sdk.exceptions import AdapterError, ScopeEnforcementError
-from nautilus_adapter_sdk.schema import AdapterSchema
-from nautilus_adapter_sdk.types import AdapterResult, IntentAnalysis, ScopeConstraint
+from nautilus.adapters.base import AdapterError, ScopeEnforcementError
+from nautilus.adapters.schema import AdapterSchema
+from nautilus.config.models import SourceConfig
+from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
 # Operators this adapter knows how to enforce. Anything else must raise
 # ScopeEnforcementError (fail closed) — the SDK compliance suite checks this.

@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nautilus
+  labels:
+    app.kubernetes.io/name: nautilus
+spec:
+  # More than one replica needs shared state: the postgres session store above,
+  # a shared session_tokens.key_ring_path, and one writer for a chained
+  # attestation sink. See docs/how-to/operator-guide.md#running-more-than-one-replica.
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nautilus
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nautilus
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        fsGroup: 65532
+      containers:
+        - name: nautilus
+          # Built from the repository Dockerfile: docker build -t nautilus:latest .
+          # The published image carries no database drivers; add the extras your
+          # sources need (pip install 'nautilus-rkm[postgres]').
+          image: nautilus:latest
+          imagePullPolicy: IfNotPresent
+          args: ["serve", "--config", "/config/nautilus.yaml", "--bind", "0.0.0.0:8000", "--log-format", "json"]
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: nautilus-secrets
+          # /healthz is static: the process is up. /readyz also probes the
+          # session store and the audit sink, so a broker that cannot write its
+          # audit log leaves the rotation instead of serving unrecorded requests.
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: config
+              mountPath: /config
+              readOnly: true
+            - name: attestation-key
+              mountPath: /etc/nautilus/keys
+              readOnly: true
+            - name: state
+              mountPath: /var/lib/nautilus
+            - name: audit
+              mountPath: /var/log/nautilus
+      volumes:
+        - name: config
+          configMap:
+            name: nautilus-config
+        - name: attestation-key
+          secret:
+            secretName: nautilus-attestation-key
+        - name: state
+          emptyDir: {}
+        # The audit log is the record of every decision. emptyDir keeps this
+        # example self-contained; point it at a PersistentVolumeClaim or ship
+        # the lines to a collector before you rely on it.
+        - name: audit
+          emptyDir: {}

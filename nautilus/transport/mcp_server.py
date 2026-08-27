@@ -44,9 +44,10 @@ from __future__ import annotations
 
 import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Annotated, Any, cast
 
 from mcp.server.fastmcp import Context, FastMCP
+from pydantic import Field
 
 from nautilus.core.broker import Broker
 from nautilus.core.models import BrokerResponse, HandoffDecision
@@ -300,18 +301,46 @@ def create_server(
     # (AC-13.3).
     # ------------------------------------------------------------------
 
-    @mcp.tool()
+    @mcp.tool(
+        description=(
+            "Ask Nautilus for data. Nautilus decides which of its configured "
+            "sources may answer, scopes the query, runs it, and returns the "
+            "rows with a signed attestation of the decision.\n\n"
+            "Arguments:\n"
+            "  agent_id: which agent is asking. Its clearance and permitted "
+            "purposes come from the broker's config, not from this call.\n"
+            "  intent: what you want, in plain language "
+            '("recent orders for user 42").\n'
+            "  context: why you want it. 'purpose' is the field policy is "
+            "written against and should always be set (e.g. 'support', "
+            "'care', 'threat-analysis'); 'session_id' ties several requests "
+            "into one session so cumulative exposure accrues to it.\n\n"
+            "The response says what happened: 'outcome' is allowed / denied / "
+            "errored / skipped, 'data' maps source id to rows, and "
+            "'denial_records' names the rule that refused a source and why."
+        )
+    )
     async def nautilus_request(  # pyright: ignore[reportUnusedFunction]
         agent_id: str,
         intent: str,
-        context: dict[str, Any] | None = None,
+        context: Annotated[
+            dict[str, Any] | None,
+            Field(
+                description=(
+                    "Request context. 'purpose' is what policy is written "
+                    "against; 'session_id' groups requests into one session."
+                )
+            ),
+        ] = None,
         ctx: Context[Any, Any, Any] | None = None,
     ) -> BrokerResponse:
         """Invoke :meth:`Broker.arequest` from an MCP client.
 
         The tool is intentionally thin — all policy, routing, and
         attestation logic live inside the broker. See :func:`_resolve_session`
-        for the D-10 fallback chain.
+        for the D-10 fallback chain. The client-facing description is the
+        ``description=`` argument above: a model reads that, not this
+        docstring, and a Sphinx cross-reference tells it nothing.
         """
         caller = _resolve_caller(ctx)
         _refuse_impersonation(caller, agent_id)
@@ -327,9 +356,43 @@ def create_server(
     # the operator has opted in.
     # ------------------------------------------------------------------
 
+    # ------------------------------------------------------------------
+    # Tool: nautilus_sources — what a client may ask for. The REST surface
+    # has answered this at ``GET /v1/sources`` since AC-12.3; an MCP client
+    # had to guess.
+    # ------------------------------------------------------------------
+
+    @mcp.tool(
+        description=(
+            "List the data sources this broker can route to: id, type, "
+            "description, classification and the data types each one holds. "
+            "Metadata only — never connection strings or credentials. Use it "
+            "to phrase an intent that some source can actually answer."
+        )
+    )
+    async def nautilus_sources() -> list[dict[str, Any]]:  # pyright: ignore[reportUnusedFunction]
+        """Metadata-only source listing, the same shape as ``GET /v1/sources``."""
+        return [
+            {
+                "id": source.id,
+                "type": source.type,
+                "description": source.description,
+                "classification": source.classification,
+                "data_types": list(source.data_types),
+            }
+            for source in broker.sources
+        ]
+
     if expose_handoff:
 
-        @mcp.tool()
+        @mcp.tool(
+            description=(
+                "Declare that one agent is handing data to another, and get "
+                "the broker's decision before you do it. Reasoning only: no "
+                "source is queried. Returns action 'allow' or 'deny', and on "
+                "a denial the rule that refused it and why."
+            )
+        )
         async def nautilus_declare_handoff(  # pyright: ignore[reportUnusedFunction]
             source_agent_id: str,
             receiving_agent_id: str,

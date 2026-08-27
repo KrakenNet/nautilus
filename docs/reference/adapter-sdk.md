@@ -1,27 +1,26 @@
 # Adapter SDK
 
-The Nautilus Adapter SDK (`nautilus-adapter-sdk`) enables third-party adapter
-development. Full SDK documentation is available in the
-[Adapter SDK docs](../sdk/docs/index.md).
+Third-party adapters are written against the `nautilus-rkm` package itself —
+the protocol, the types, the scope validators and the compliance suite all
+ship with the broker, so an adapter package needs one dependency.
 
 ## Install
 
 ```bash
-uv add nautilus-adapter-sdk
+uv add nautilus-rkm
 ```
+
+`nautilus adapters new my-csv-adapter` scaffolds a working package with this
+already wired up.
 
 ## Quick start
 
 ```python
 from typing import Any
 
-from nautilus_adapter_sdk import (
-    Adapter,
-    AdapterResult,
-    IntentAnalysis,
-    ScopeConstraint,
-    SourceConfig,
-)
+from nautilus.adapters.base import Adapter
+from nautilus.config.models import SourceConfig
+from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
 class MyAdapter(Adapter):
     async def connect(self, config: SourceConfig) -> None: ...
@@ -54,5 +53,19 @@ never registers and every source declaring it fails config load.
 
 ## Compliance testing
 
-The SDK includes `AdapterComplianceSuite` for validating adapter implementations.
-See the [SDK testing docs](../sdk/docs/reference/testing.md) for details.
+`nautilus.adapters.testing.AdapterComplianceSuite` runs the five checks every
+adapter has to pass — lifecycle, scope enforcement in both directions,
+idempotent close, and the error path. The scaffolded package wires it up:
+
+```python
+from nautilus.adapters.testing import AdapterComplianceSuite
+from nautilus.config.models import SourceConfig
+
+suite = AdapterComplianceSuite(
+    adapter_factory=MyAdapter,
+    source_config=SourceConfig(
+        id="s1", type="mytype", classification="unclassified", data_types=["generic"]
+    ),
+)
+await suite.test_connect_execute_close_lifecycle()
+```

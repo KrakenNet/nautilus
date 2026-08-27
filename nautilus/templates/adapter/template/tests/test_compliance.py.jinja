@@ -6,8 +6,8 @@ Run: pytest -v
 from __future__ import annotations
 
 import pytest
-from nautilus_adapter_sdk.config import SourceConfig
-from nautilus_adapter_sdk.testing.compliance import AdapterComplianceSuite
+from nautilus.adapters.testing import AdapterComplianceSuite
+from nautilus.config.models import SourceConfig
 
 from {{ package_name }} import {{ class_name }}
 

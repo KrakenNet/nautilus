@@ -19,6 +19,13 @@ Verify:
 nautilus version
 ```
 
+Install the extras for the source types you configure — the base package
+carries no database drivers:
+
+```bash
+pip install "nautilus-rkm[postgres,s3]"   # or [all]
+```
+
 ## 2. Configure `nautilus.yaml`
 
 A minimal production config:
@@ -312,6 +319,18 @@ issues an `mcp-session-id` at `initialize` and every later call must present
 it. That id is what keys a caller's session state, so two clients never share
 one working memory. Sessions live in the serving process — see
 [Running more than one replica](#running-more-than-one-replica).
+
+MCP clients see three tools: `nautilus_request` (ask for data),
+`nautilus_sources` (what may be asked for — metadata only, never a connection
+string), and `nautilus_declare_handoff` when `mcp.expose_declare_handoff` is
+on.
+
+### On Kubernetes
+
+`deploy/` in the repository is a complete manifest set — Deployment, Service,
+ConfigMap and Secrets — with the probes wired to `/healthz` and `/readyz` and
+every credential resolved from a Secret at config load. `deploy/README.md`
+says what to change before applying it.
 
 ### Air-gapped mode
 

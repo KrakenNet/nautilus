@@ -92,7 +92,7 @@ once: built-ins < entry points < local paths.
 ## Implementing `execute()` safely
 
 ```python
-from nautilus_adapter_sdk import validate_operator, validate_field
+from nautilus.adapters.base import validate_field, validate_operator
 
 async def execute(self, intent, scope, context):
     for constraint in scope:

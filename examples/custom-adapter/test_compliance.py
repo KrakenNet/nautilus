@@ -10,8 +10,9 @@ from pathlib import Path
 
 import pytest
 from csv_adapter import CsvAdapter
-from nautilus_adapter_sdk.config import SourceConfig
-from nautilus_adapter_sdk.testing.compliance import AdapterComplianceSuite
+
+from nautilus.adapters.testing import AdapterComplianceSuite
+from nautilus.config.models import SourceConfig
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -86,7 +87,7 @@ class TestCsvAdapter:
 
     @pytest.mark.asyncio
     async def test_filter_by_department(self, source_config: SourceConfig) -> None:
-        from nautilus_adapter_sdk.types import IntentAnalysis, ScopeConstraint
+        from nautilus.core.models import IntentAnalysis, ScopeConstraint
 
         adapter = CsvAdapter()
         await adapter.connect(source_config)
@@ -114,7 +115,7 @@ class TestCsvAdapter:
 
     @pytest.mark.asyncio
     async def test_filter_like(self, source_config: SourceConfig) -> None:
-        from nautilus_adapter_sdk.types import IntentAnalysis, ScopeConstraint
+        from nautilus.core.models import IntentAnalysis, ScopeConstraint
 
         adapter = CsvAdapter()
         await adapter.connect(source_config)
@@ -142,7 +143,7 @@ class TestCsvAdapter:
 
     @pytest.mark.asyncio
     async def test_no_scope_returns_all(self, source_config: SourceConfig) -> None:
-        from nautilus_adapter_sdk.types import IntentAnalysis
+        from nautilus.core.models import IntentAnalysis
 
         adapter = CsvAdapter()
         await adapter.connect(source_config)

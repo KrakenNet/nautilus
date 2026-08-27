@@ -1058,13 +1058,25 @@ class Broker:
         """
         registry = adapter_registry if adapter_registry is not None else ADAPTER_REGISTRY
 
-        # pgvector needs the embedder kwarg — special-case it.
-        if source.type == "pgvector":
-            return PgVectorAdapter(broker_default_embedder=broker_default_embedder)
-
         adapter_cls = registry.get(source.type)
         if adapter_cls is None:
             raise ConfigError(f"Unsupported source type '{source.type}' for id='{source.id}'")
+
+        # The driver-backed adapters are optional extras, and the registry
+        # holds a stand-in for any whose driver is not installed. Fail here,
+        # at startup, naming the extra -- not at first request with a
+        # ModuleNotFoundError from three frames inside the adapter.
+        extra = getattr(adapter_cls, "missing_extra", None)
+        if extra is not None:
+            raise ConfigError(
+                f"source id='{source.id}' has type '{source.type}', whose driver is not "
+                f"installed: pip install 'nautilus-rkm[{extra}]' "
+                f"(import failed: {getattr(adapter_cls, 'import_error', '?')})"
+            )
+
+        # pgvector needs the embedder kwarg — special-case it.
+        if source.type == "pgvector":
+            return PgVectorAdapter(broker_default_embedder=broker_default_embedder)
         return adapter_cls()
 
     # ------------------------------------------------------------------
