@@ -61,6 +61,19 @@ def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> N
     )
     p_list.add_argument("--json", action="store_true", help="Emit JSON to stdout.")
 
+    # queue submit
+    p_submit = queue_sub.add_parser(
+        "submit",
+        help="Validate a rule file and queue the resulting proposal.",
+    )
+    p_submit.add_argument("--file", required=True, help="Path to the rule YAML to propose.")
+    p_submit.add_argument(
+        "--config",
+        default=None,
+        help="nautilus.yaml naming the audit log the sandbox stage replays.",
+    )
+    p_submit.add_argument("--json", action="store_true", help="Emit JSON to stdout.")
+
     # queue show
     p_show = queue_sub.add_parser("show", help="Show details of a specific proposal.")
     p_show.add_argument("proposal_id", help="Proposal ID (prop_<hex>).")
@@ -143,6 +156,8 @@ def _dispatch_queue(args: argparse.Namespace) -> int:
     op = getattr(args, "queue_subcommand", None)
     if op == "list":
         return _cmd_queue_list(args)
+    if op == "submit":
+        return _cmd_queue_submit(args)
     if op == "show":
         return _cmd_queue_show(args)
     if op == "approve":
@@ -151,8 +166,82 @@ def _dispatch_queue(args: argparse.Namespace) -> int:
         return _cmd_queue_reject(args)
     if op == "diff":
         return _cmd_queue_diff(args)
-    err("rkm queue: no op given (try: list, show, approve, reject, diff)")
+    err("rkm queue: no op given (try: submit, list, show, approve, reject, diff)")
     return 2
+
+
+def _cmd_queue_submit(args: argparse.Namespace) -> int:
+    """Validate a rule file and append the resulting proposal to the queue.
+
+    The queue had no producer: ``run_pipeline`` was reachable only from tests,
+    so ``rkm queue list`` answered "no proposals" and nothing shipped could
+    change that. A rejected proposal is a verdict, not a failure of the
+    command, so it is queued and reported with exit 1.
+    """
+    from nautilus.cli._common import audit_path_for
+    from nautilus.rkm.validator.pipeline import run_pipeline
+
+    rule_path = Path(args.file)
+    if not rule_path.is_file():
+        err(f"rule file not found: {rule_path}")
+        return 1
+
+    config_path = getattr(args, "config", None)
+    settings = _sandbox_settings(config_path)
+    proposal = run_pipeline(
+        rule_path,
+        queue=_open_queue(),
+        audit_log=audit_path_for(config_path),
+        **settings,
+    )
+    confidence = proposal.validation.get("confidence", 0.0)
+    if getattr(args, "json", False):
+        print(
+            json.dumps(
+                {
+                    "proposal_id": proposal.proposal_id,
+                    "status": proposal.status,
+                    "confidence": confidence,
+                    "static_ok": proposal.validation.get("static_ok"),
+                    "static_errors": proposal.validation.get("static_errors", []),
+                    "shadow_flags": list(proposal.shadow_flags),
+                }
+            )
+        )
+    else:
+        ok(
+            f"proposal {proposal.proposal_id} queued {proposal.status} "
+            f"(confidence {confidence:.2f})"
+        )
+        for message in proposal.validation.get("static_errors", []):
+            warn(message)
+    return 1 if proposal.status == "rejected" else 0
+
+
+def _sandbox_settings(config_path: str | None) -> dict[str, Any]:
+    """``rkm.sandbox`` and ``rules`` settings the sandbox stage needs.
+
+    ``rkm.sandbox.min_entries`` had no production reader at all; the only code
+    touching ``config.rkm`` was a test asserting the default.
+    """
+    if not config_path:
+        return {}
+    from nautilus.config.loader import load_config
+
+    try:
+        config = load_config(config_path)
+    except Exception as exc:  # noqa: BLE001 -- the proposal is still worth queueing
+        warn(f"could not read rkm settings from {config_path!r} ({exc}); using defaults")
+        return {}
+    base = Path(config_path).parent
+    return {
+        "min_entries": config.rkm.sandbox.min_entries,
+        "rule_packs": list(config.rules.packs),
+        "user_rules_dirs": [
+            d if (d := Path(raw)).is_absolute() else base / d
+            for raw in config.rules.user_rules_dirs
+        ],
+    }
 
 
 def _open_queue() -> ProposalQueue:

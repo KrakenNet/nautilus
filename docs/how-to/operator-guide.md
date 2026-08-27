@@ -128,6 +128,16 @@ the broker instance; subsequent requests present it via
 the caller-declared session id, so the exposure ledger cannot be reset by
 declaring a fresh session. Verification is fail-closed.
 
+### Relative paths
+
+Every path in `nautilus.yaml` — `audit.path`, `attestation.private_key_path`
+and its sink paths, `rules.user_rules_dirs` — resolves **relative to the
+config file's own directory**, not to the process working directory. So
+`/etc/nautilus/nautilus.yaml` with `audit: {path: audit.jsonl}` writes
+`/etc/nautilus/audit.jsonl` no matter where the unit file starts the
+broker. Absolute paths are used as given. Parent directories are created
+on demand.
+
 ## 3. Serve
 
 ```bash
@@ -209,25 +219,35 @@ with a follower like `filebeat`).
 ## 6. Rotate signing keys
 
 Session-token signing keys live in an in-process `KeyRing`, published at
-`GET /v1/keys/jwks.json`. Rotation is zero-downtime:
+`GET /v1/keys/jwks.json`. Nothing is persisted: the ring is broker state,
+so every `nautilus key` subcommand needs `--url` pointed at the running
+broker and exits 2 without one. Rotation is zero-downtime:
 
 ```bash
+export NAUTILUS_URL=http://localhost:8000
+export NAUTILUS_REVIEWER=ops@example.com   # stamped on the audit event
+
 # Mint a new primary; the old key enters a grace window
-nautilus key rotate --yes
+nautilus key rotate --yes --url "$NAUTILUS_URL" --api-key "$NAUTILUS_API_KEY"
+
+nautilus key list --url "$NAUTILUS_URL" --api-key "$NAUTILUS_API_KEY" --json
 
 # In-flight tokens keep verifying during grace and are lazily re-signed
 # under the new kid (original expiry preserved — rotation never extends
 # a session). When ready, end the grace window:
-nautilus key revoke <old-kid> --reason "scheduled rotation" --yes
-
-nautilus key list --json
+nautilus key revoke <old-kid> --reason "scheduled rotation" --yes \
+  --url "$NAUTILUS_URL" --api-key "$NAUTILUS_API_KEY"
 ```
 
-Against a live broker, `POST /v1/keys/rotate` and
-`POST /v1/keys/{kid}/revoke` do the same over REST (auth-gated; reviewer
-identity via the `X-Nautilus-Reviewer` header). Revoking the current
-primary is refused — rotate first, then revoke. Every rotation/revocation
-emits a `signing_key_rotated`/`signing_key_revoked` audit event.
+These drive `GET /v1/keys/jwks.json`, `POST /v1/keys/rotate` and
+`POST /v1/keys/{kid}/revoke` (the two writes are auth-gated; reviewer
+identity comes from `NAUTILUS_REVIEWER`). Revoking the current primary is
+refused — rotate first, then revoke. Every rotation/revocation emits a
+`signing_key_rotated`/`signing_key_revoked` audit event.
+
+Restarting the broker mints a fresh ring, which invalidates every
+outstanding session token. Treat a restart as an unplanned rotation with
+no grace window.
 
 The *attestation* key (which signs per-request attestation tokens) is
 separate: set `attestation.private_key_path` to persist it across

@@ -5,9 +5,10 @@ a single Ed25519 keypair when no ``attestation.private_key_path`` is set.
 This file generalizes that to ≥2 active keys with explicit rotation-out
 state, so old-tokens-during-overlap (AC-18.e) is testable.
 
-Persistence: PEM files under a configurable directory (default
-``.nautilus/keys/*.pem``); reloaded at broker startup. Rotation is
-idempotent across processes via ``fcntl.lockf()`` on the keys directory.
+The ring is in-process only. Nothing is persisted, so a restarted broker
+mints a fresh ring and every token signed by the old one stops verifying —
+plan rotations around that. ``nautilus key`` therefore requires ``--url``:
+there is no on-disk ring for a second process to read or mutate.
 """
 
 from __future__ import annotations
@@ -116,8 +117,10 @@ class KeyRing:
     def rotate(self) -> KeyEntry:
         """Mint a new primary; mark previous primary ``rotating-out``.
 
-        Emits ``signing_key_rotated`` audit event. Idempotent across
-        processes via ``fcntl.lockf()``.
+        The caller emits the ``signing_key_rotated`` audit event — see
+        :meth:`nautilus.core.broker.Broker.rotate_signing_key`, which is the
+        only path that does. The ring holds no lock: it is per-process state
+        and two brokers never share one.
         """
         # Demote current primary to rotating-out.
         updated: list[KeyEntry] = []
@@ -133,7 +136,7 @@ class KeyRing:
         return new_entry
 
     def revoke(self, kid: str, *, reason: str, reviewer: str) -> None:
-        """Mark a key revoked. Emits ``signing_key_revoked`` audit event.
+        """Mark a key revoked. The caller emits ``signing_key_revoked``.
 
         The private key material is dropped immediately (the
         :class:`KeyEntry` docstring contract) — a revoked key must never

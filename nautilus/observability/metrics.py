@@ -25,6 +25,9 @@ class _NoOpInstrument:
 
 _NOOP = _NoOpInstrument()
 
+# Seconds, spanning a sub-millisecond rule evaluation up to a timed-out adapter.
+_SECONDS_BUCKETS = (0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0)
+
 
 class NautilusMetrics:
     """Six counters and three histograms for core Nautilus operations.
@@ -63,20 +66,27 @@ class NautilusMetrics:
             )
 
             # -- Histograms --
+            # The SDK default boundaries run 0, 5, 10, 25 ... 10000, which are
+            # milliseconds-shaped; every one of these records *seconds*, so
+            # without an advisory the whole distribution lands in the first
+            # bucket and no quantile panel means anything.
             self.request_duration = _meter.create_histogram(
                 "nautilus.request.duration",
                 description="End-to-end request duration",
                 unit="s",
+                explicit_bucket_boundaries_advisory=_SECONDS_BUCKETS,
             )
             self.adapter_latency = _meter.create_histogram(
                 "nautilus.adapter.latency",
                 description="Adapter call latency",
                 unit="s",
+                explicit_bucket_boundaries_advisory=_SECONDS_BUCKETS,
             )
             self.fathom_evaluation_duration = _meter.create_histogram(
                 "nautilus.fathom.evaluation.duration",
                 description="Fathom evaluation duration",
                 unit="s",
+                explicit_bucket_boundaries_advisory=_SECONDS_BUCKETS,
             )
         else:
             # No-op fallback — safe to call .add() / .record() on every attr

@@ -316,6 +316,11 @@ class AuditEntry(BaseModel):
     handoff_decision: HandoffDecision | None = None
     trace_id: str | None = None
     schema_version: int | None = None
+    # Fields belonging to a governance event rather than to a request --
+    # ``proposal_id``, ``reviewer``, ``rule_name``, ``confidence`` and the
+    # like. They have no typed home on a request-shaped entry, and dropping
+    # them would make "who approved this rule" unanswerable from the log.
+    event_fields: dict[str, Any] | None = None
 
 
 class InferredHandoff(BaseModel):

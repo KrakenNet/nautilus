@@ -12,8 +12,10 @@
 # `session_store.backend: postgres` exercises PostgresSessionStore — the DSN
 # resolves from `TEST_PG_DSN` (exported by the pg_container fixture).
 #
-# Audit path is plain `./audit.jsonl` — the test monkeypatches CWD onto
-# `tmp_path` so the audit file stays scoped to the test run.
+# The audit path is env-interpolated for the same reason as the attestation
+# path: relative paths in a config resolve against the *config file's* own
+# directory, so a plain `./audit.jsonl` here would append to this fixture
+# directory inside the repo on every test run, no matter the CWD.
 sources:
   - id: cui_embeddings
     type: pgvector
@@ -44,7 +46,7 @@ analysis:
     threat: [threat, hunt, ioc]
 
 audit:
-  path: ./audit.jsonl
+  path: ${POC_AUDIT_PATH}
 
 attestation:
   enabled: true

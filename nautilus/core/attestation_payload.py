@@ -259,4 +259,24 @@ def compute_response_hash(adapter_result: Any) -> str:
 compute_raw_response_hash = compute_response_hash
 
 
-__all__ = ["build_payload", "compute_raw_response_hash", "compute_response_hash"]
+def canonical_input_hash(input_facts: list[dict[str, Any]]) -> str:
+    """Reproduce ``AttestationService.sign``'s ``input_hash`` derivation.
+
+    :meth:`fathom.attestation.AttestationService.sign_claims` signs a claim set
+    verbatim and injects nothing, so a caller that wants ``sign``'s claims plus
+    its own must derive ``input_hash`` itself. Kept identical to fathom's
+    ``sha256(json.dumps(input_facts, sort_keys=True))``; a divergence would
+    silently issue tokens whose ``input_hash`` binds nothing an existing
+    verifier can reproduce, so
+    ``tests/unit/test_attestation_payload.py`` pins it against a token fathom
+    actually signed.
+    """
+    return hashlib.sha256(json.dumps(input_facts, sort_keys=True).encode()).hexdigest()
+
+
+__all__ = [
+    "build_payload",
+    "canonical_input_hash",
+    "compute_raw_response_hash",
+    "compute_response_hash",
+]

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -114,7 +115,37 @@ def test_m412_admin_sse_route_does_not_demand_a_broker_query_param(
 # ---------------------------------------------------------------------------
 
 
-def test_m413_metrics_endpoint_exports_nautilus_series(client: Any) -> None:
+@pytest.fixture
+def metrics_client(
+    pg_dsn: str, write_config: Any, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> Any:
+    """Like ``client``, plus a source whose adapter always fails.
+
+    A counter with zero recordings is not exported at all, so a happy-path-only
+    fixture cannot tell a wired ``adapter_errors_total`` from an unwired one.
+    """
+    from fastapi.testclient import TestClient
+
+    from nautilus.transport.fastapi_app import create_app
+
+    monkeypatch.setenv("JOURNEY_PG_DSN", pg_dsn)
+    broken = _pg_source()
+    broken["id"] = "broken"
+    # Port 1 is reserved and never listening, so ``execute`` raises.
+    broken["connection"] = "postgresql://nobody:nobody@127.0.0.1:1/nowhere"
+    config = write_config(
+        {
+            "sources": [_pg_source(), broken],
+            "agents": {"a": {"id": "a", "clearance": "unclassified"}},
+            "audit": {"path": str(tmp_path / "audit.jsonl")},
+            "api": {"keys": [API_KEY]},
+        }
+    )
+    with TestClient(create_app(config), headers={"X-API-Key": API_KEY}) as c:
+        yield c
+
+
+def test_m413_metrics_endpoint_exports_nautilus_series(metrics_client: Any) -> None:
     """The shipped Grafana dashboards must have series to query.
 
     ``instrumentation.py:44`` builds a ``MeterProvider`` with **no metric
@@ -124,7 +155,7 @@ def test_m413_metrics_endpoint_exports_nautilus_series(client: Any) -> None:
     exist.
     """
     for i in range(5):
-        client.post(
+        metrics_client.post(
             "/v1/request",
             json={
                 "agent_id": "a",
@@ -133,14 +164,38 @@ def test_m413_metrics_endpoint_exports_nautilus_series(client: Any) -> None:
             },
         )
 
-    body = client.get("/metrics").text
-    # The three the broker actually records, per the report.
-    wanted = ["nautilus_requests_total", "nautilus_request_duration"]
+    body = metrics_client.get("/metrics").text
+    # Every instrument this traffic exercises. ``scope_denials_total`` and
+    # ``session_exposure_flags_total`` need a denied / repeat-session request
+    # and are pinned elsewhere.
+    wanted = [
+        "nautilus_requests_total",
+        "nautilus_request_duration_seconds_count",
+        "nautilus_routing_decisions_total",
+        "nautilus_fathom_evaluation_duration_seconds_count",
+        "nautilus_adapter_latency_seconds_count",
+        "nautilus_adapter_errors_total",
+        "nautilus_attestation_total",
+    ]
     missing = [name for name in wanted if name not in body]
     assert not missing, (
         f"after 5 real requests /metrics exports none of {missing}. It "
         f"contains only process_* and python_gc_* series, so every shipped "
         f"Grafana dashboard panel is empty."
+    )
+
+    # The dashboards are the consumer; a series the panels do not query is a
+    # series nobody sees. Assert the names the shipped JSON actually asks for.
+    dashboards = Path(__file__).resolve().parents[2] / "observability/grafana/dashboards"
+    queried = {
+        name
+        for path in dashboards.glob("*.json")
+        for name in re.findall(r"nautilus_[a-z_]+", path.read_text(encoding="utf-8"))
+    }
+    unbacked = sorted(name for name in queried if name not in body)
+    assert not unbacked, (
+        f"the shipped Grafana dashboards query {unbacked}, which /metrics does "
+        f"not export after real traffic. Those panels render empty."
     )
 
 
@@ -292,34 +347,55 @@ def test_m410_governance_events_are_readable_through_the_audit_api(
 # ---------------------------------------------------------------------------
 
 
+def _nautilus(tmp_path: Path, *argv: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [str(Path(".venv/bin/nautilus").resolve()), *argv],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        timeout=120,
+    )
+
+
 def test_m411_local_key_rotate_is_not_a_silent_no_op(tmp_path: Path) -> None:
     """The documented rotation runbook must change something, or fail loudly.
 
-    ``cli/key.py`` constructs a fresh ``KeyRing()`` per invocation, and
+    ``cli/key.py`` constructed a fresh ``KeyRing()`` per invocation, and
     ``KeyRing.__init__`` auto-mints a primary. So the no-``--url`` form
-    published at ``docs/how-to/operator-guide.md:214-230`` prints
+    published at ``docs/how-to/operator-guide.md:214-230`` printed
     ``OK: rotated: new primary kid=<random uuid>`` with exit 0 having changed
-    nothing on any broker and emitted no audit event. ``key list`` mints a new
-    keypair per invocation and has no ``--url`` flag at all.
+    nothing on any broker and emitted no audit event. ``key list`` minted a new
+    keypair per invocation and had no ``--url`` flag at all.
+
+    The ring is in-broker state with no on-disk form, so the fix is that every
+    subcommand demands ``--url``. Assert the failure is *loud* (non-zero, names
+    the flag) and not merely silent-and-different, which is what the original
+    stdout-equality check would also have accepted.
     """
-    first = subprocess.run(
-        [str(Path(".venv/bin/nautilus").resolve()), "key", "list"],
-        capture_output=True,
-        text=True,
-        cwd=tmp_path,
-        timeout=120,
-    )
-    second = subprocess.run(
-        [str(Path(".venv/bin/nautilus").resolve()), "key", "list"],
-        capture_output=True,
-        text=True,
-        cwd=tmp_path,
-        timeout=120,
-    )
-    assert first.stdout == second.stdout, (
-        "two consecutive `nautilus key list` runs reported different keys "
-        "with no rotation between them; each invocation mints a throwaway "
-        f"ring.\nfirst:  {first.stdout!r}\nsecond: {second.stdout!r}"
+    for argv in (
+        ("key", "list"),
+        ("key", "rotate", "--yes"),
+        ("key", "revoke", "some-kid", "--reason", "r", "--yes"),
+    ):
+        run = _nautilus(tmp_path, *argv)
+        assert run.returncode != 0, (
+            f"`nautilus {' '.join(argv)}` exited 0 with no broker to act on. stdout={run.stdout!r}"
+        )
+        assert "--url" in run.stderr, (
+            f"`nautilus {' '.join(argv)}` failed without telling the operator "
+            f"that --url is what is missing.\nstderr: {run.stderr!r}"
+        )
+        assert "OK:" not in run.stdout, (
+            f"`nautilus {' '.join(argv)}` reported success on stdout while "
+            f"failing.\nstdout: {run.stdout!r}"
+        )
+
+    # Control: the flag is genuinely wired, not just a hardcoded refusal.
+    # Nothing is listening on port 1, so this must be a *connection* failure.
+    unreachable = _nautilus(tmp_path, "key", "list", "--url", "http://127.0.0.1:1")
+    assert unreachable.returncode != 0
+    assert "cannot reach" in unreachable.stderr, (
+        f"`key list --url` did not attempt a connection.\nstderr: {unreachable.stderr!r}"
     )
 
 
@@ -343,19 +419,70 @@ def test_m49_approving_a_proposal_promotes_the_rule(
     """
     from fastapi.testclient import TestClient
 
+    from nautilus.rkm.lineage import LineageStore
+    from nautilus.rkm.queue import ProposalQueue
     from nautilus.transport.fastapi_app import create_app
 
     config, _ = app_config
-    with TestClient(create_app(config), headers={"X-API-Key": API_KEY}) as client:
+    app = create_app(config)
+    # The queue and lineage store default to ``$CWD/.nautilus``; point them at
+    # the test's own directory so the run neither reads nor writes the repo.
+    app.state.proposal_queue = ProposalQueue(tmp_path / "queue")
+    app.state.lineage_store = LineageStore(tmp_path / "lineage")
+    with TestClient(app, headers={"X-API-Key": API_KEY}) as client:
+        submitted = client.post("/v1/rkm/queue", json={"rule_yaml": _PROPOSED_RULE})
+        assert submitted.status_code == 201, (
+            f"nothing shipped can fill the review queue: run_pipeline was "
+            f"called only from tests, there was no REST create route and no "
+            f"MCP tool, and pattern-tracker.yaml ships with rules: [] so the "
+            f"system-proposed path is dead too.\n{submitted.status_code}: "
+            f"{submitted.text}"
+        )
+        proposal_id = submitted.json()["proposal_id"]
+
         listing = client.get("/v1/rkm/queue")
         assert listing.status_code == 200, listing.text
-        proposals = listing.json().get("proposals", listing.json())
-        assert proposals, (
-            "the review queue is empty and nothing shipped can fill it: "
-            "run_pipeline is called only from tests, there is no REST create "
-            "route and no MCP tool, and pattern-tracker.yaml ships with "
-            "rules: [] so the system-proposed path is dead too."
+        assert [p["proposal_id"] for p in listing.json()["proposals"]] == [proposal_id]
+
+        approved = client.post(
+            f"/v1/rkm/queue/{proposal_id}/approve",
+            headers={"X-Nautilus-Reviewer": "rev-1"},
         )
+        assert approved.status_code == 200, approved.text
+        assert approved.json()["promoted"] is True, (
+            f"approval did not promote: the app has a live FathomRouter on "
+            f"app.state.broker._router and passed router=None, so the rule "
+            f"never reached the engine.\n{approved.json()}"
+        )
+
+        shown = client.get(f"/v1/rkm/queue/{proposal_id}")
+        assert shown.json()["status"] == "promoted", shown.json()["status"]
+
+
+_PROPOSED_RULE = """
+module: nautilus-routing
+ruleset: rest-proposal
+version: "1.0"
+rules:
+  - name: deny-secret-over-rest
+    salience: 160
+    when:
+      - template: source
+        conditions:
+          - slot: id
+            bind: ?sid
+          - slot: classification
+            expression: equals(secret)
+    then:
+      action: deny
+      reason: "secret sources are denied"
+      assert:
+        - template: denial_record
+          slots:
+            source_id: "?sid"
+            reason: "secret sources are denied"
+            rule_name: "deny-secret-over-rest"
+"""
 
 
 def test_m419_adapters_route_reports_live_status(client: Any) -> None:

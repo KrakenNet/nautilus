@@ -9,6 +9,7 @@ from opentelemetry import metrics, trace
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import (
     OTLPSpanExporter,
 )
+from opentelemetry.exporter.prometheus import PrometheusMetricReader
 from opentelemetry.instrumentation.fastapi import (  # pyright: ignore[reportMissingTypeStubs]
     FastAPIInstrumentor,
 )
@@ -16,7 +17,6 @@ from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from prometheus_client import start_http_server  # noqa: F401  # pyright: ignore[reportUnusedImport]
 
 
 def setup(app: Any, service_name: str = "nautilus") -> None:
@@ -42,7 +42,13 @@ def setup(app: Any, service_name: str = "nautilus") -> None:
     trace.set_tracer_provider(tracer_provider)
 
     # --- Metrics (Prometheus) ---
-    meter_provider = MeterProvider(resource=resource)
+    # The reader registers a collector on ``prometheus_client``'s default
+    # REGISTRY, which is the same registry ``GET /metrics`` serves via
+    # ``generate_latest()``. Without it the MeterProvider has no reader, every
+    # ``NautilusMetrics`` recording is discarded and /metrics exports only the
+    # process_* series — which is what every shipped dashboard was querying
+    # against.
+    meter_provider = MeterProvider(resource=resource, metric_readers=[PrometheusMetricReader()])
     metrics.set_meter_provider(meter_provider)
 
     # --- FastAPI auto-instrumentation ---

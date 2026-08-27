@@ -51,11 +51,12 @@ async def test_classification_e2e_poc_gate(
     del pg_container  # side-effect: container booted, TEST_PG_DSN / TEST_PGV_DSN exported
 
     # Redirect the attestation sink + audit file into the test's tmp_path so no
-    # repo-root side effects leak between runs. The YAML references
-    # ``${POC_ATTESTATION_PATH}`` which the loader interpolates at config-load time.
+    # repo side effects leak between runs. Both are env-interpolated by the
+    # loader: a *relative* path in the YAML would resolve against the fixture's
+    # own directory (config-relative resolution), not the CWD.
     attestation_path = tmp_path / "poc-attestation.jsonl"
     monkeypatch.setenv("POC_ATTESTATION_PATH", str(attestation_path))
-    monkeypatch.chdir(tmp_path)  # ./audit.jsonl now lives under tmp_path
+    monkeypatch.setenv("POC_AUDIT_PATH", str(tmp_path / "audit.jsonl"))
 
     broker = Broker.from_config(_POC_YAML)
     try:

@@ -56,7 +56,15 @@ def _built_in_ruleset() -> list[dict[str, Any]]:
     return bodies
 
 
-def run_pipeline(rule_yaml: Path, *, queue: ProposalQueue, audit_log: Path) -> Proposal:
+def run_pipeline(
+    rule_yaml: Path,
+    *,
+    queue: ProposalQueue,
+    audit_log: Path,
+    min_entries: int = 100,
+    rule_packs: list[str] | None = None,
+    user_rules_dirs: list[Path] | None = None,
+) -> Proposal:
     """Run static → shadow → sandbox → score, append a Proposal to the queue.
 
     Every stage receives the actual proposed rule. Previously ``shadow_check``
@@ -69,6 +77,11 @@ def run_pipeline(rule_yaml: Path, *, queue: ProposalQueue, audit_log: Path) -> P
     queued as ``rejected`` with the reason recorded rather than raising — the
     caller asked for a validation verdict, and "it does not compile" is one.
 
+    ``min_entries``, ``rule_packs`` and ``user_rules_dirs`` come from the
+    deployment's ``rkm.sandbox`` / ``rules`` config. Replaying against a
+    ruleset the site does not run makes every pack-gated entry fail the drift
+    guard, so a proposal scores clean against a ruleset nobody deployed.
+
     Appends ``proposal_emitted`` + ``proposal_validated`` to ``audit_log``.
     """
     static_result = validate_static(rule_yaml)
@@ -79,7 +92,13 @@ def run_pipeline(rule_yaml: Path, *, queue: ProposalQueue, audit_log: Path) -> P
 
     sandbox_error: str | None = None
     try:
-        sandbox_result = sandbox_replay(proposed, audit_log)
+        sandbox_result = sandbox_replay(
+            proposed,
+            audit_log,
+            min_entries=min_entries,
+            rule_packs=rule_packs,
+            user_rules_dirs=user_rules_dirs,
+        )
     except SandboxRegressionError as exc:
         sandbox_error = str(exc)
         sandbox_result = exc.result or _empty_sandbox_result()
@@ -137,6 +156,7 @@ def run_pipeline(rule_yaml: Path, *, queue: ProposalQueue, audit_log: Path) -> P
                 "shadow_penalty": breakdown.shadow_penalty,
                 "fire_rate_penalty": breakdown.fire_rate_penalty,
                 "cascade_penalty": breakdown.cascade_penalty,
+                "drift_penalty": breakdown.drift_penalty,
                 "total": breakdown.total,
             },
         },

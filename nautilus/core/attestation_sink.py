@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import fcntl
 import logging
 import os
 from datetime import datetime
@@ -76,6 +77,10 @@ class AttestationSink(Protocol):
     async def close(self) -> None:
         """Release any held resources. Must be idempotent."""
         ...
+
+
+class SinkAlreadyLockedError(RuntimeError):
+    """Raised when a chained attestation log already has a live writer."""
 
 
 class NullAttestationSink:
@@ -158,6 +163,15 @@ class ChainedFileAttestationSink:
     ``emit`` raises. Per AC-14.5 the broker logs that at WARNING and
     continues — the corruption is surfaced by the verify CLI and the
     admin audit viewer's chain badge rather than by breaking the hot path.
+
+    **Single writer, enforced.** A chain is a total order, so two writers
+    interleaving into one file produce permanently unrecoverable corruption
+    whose ``verify_chain`` failure is indistinguishable from tampering. The
+    constructor therefore takes an exclusive ``flock`` on a ``<path>.lock``
+    sidecar and raises :class:`SinkAlreadyLockedError` if another process
+    holds it — a refused start, not a silently corrupted log. Unlike
+    :class:`FileAttestationSink`, whose atomic ``O_APPEND`` writes survive
+    concurrency, this sink has no safe concurrent mode.
     """
 
     def __init__(
@@ -167,6 +181,25 @@ class ChainedFileAttestationSink:
         *,
         checkpoint_interval: int = 0,
     ) -> None:
+        self._lock_path = Path(path).with_name(Path(path).name + ".lock")
+        self._lock_path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock_fh = self._lock_path.open("a+", encoding="utf-8")
+        try:
+            fcntl.flock(self._lock_fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            self._lock_fh.seek(0)
+            holder = self._lock_fh.read().strip() or "an unidentified process"
+            self._lock_fh.close()
+            raise SinkAlreadyLockedError(
+                f"chained attestation log {Path(path)} is already open for writing by "
+                f"{holder}. A hash chain admits exactly one writer: a second one "
+                f"interleaves into corruption that verify_chain cannot distinguish "
+                f"from tampering. Give this broker its own path, or use "
+                f"chained: false (plain FileAttestationSink appends are atomic)."
+            ) from exc
+        self._lock_fh.truncate(0)
+        self._lock_fh.write(f"pid {os.getpid()}\n")
+        self._lock_fh.flush()
         self._log = ChainedAttestationLog(path, service, checkpoint_interval=checkpoint_interval)
         self._closed = False
 
@@ -181,12 +214,17 @@ class ChainedFileAttestationSink:
         self._log.append(payload.model_dump(mode="json"))
 
     async def close(self) -> None:
-        """Idempotent close."""
+        """Idempotent close; releases the single-writer lock."""
         if self._closed:
             return
         self._closed = True
         with contextlib.suppress(Exception):
             self._log.close()
+        # Closing the handle drops the flock. The sidecar file is left behind
+        # deliberately: an unlocked lock file is not a lock, and removing it
+        # would race a process that has just opened it.
+        with contextlib.suppress(Exception):
+            self._lock_fh.close()
 
 
 class RetryPolicy(BaseModel):
@@ -313,4 +351,5 @@ __all__ = [
     "HttpAttestationSink",
     "NullAttestationSink",
     "RetryPolicy",
+    "SinkAlreadyLockedError",
 ]

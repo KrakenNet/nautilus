@@ -20,6 +20,7 @@ Endpoints (all under ``/v1`` except health probes):
   (AC-12.4).
 - ``GET /readyz`` — 200 iff startup finished AND the session store's
   ``aget('_ready_probe_')`` succeeds; else 503 (AC-12.5).
+- ``POST /v1/rkm/queue`` — submit a rule; validates and queues a proposal.
 - ``GET /v1/rkm/queue`` — list proposals (AC-35.9.b).
 - ``GET /v1/rkm/queue/{proposal_id}`` — show single proposal (AC-35.9.c).
 - ``POST /v1/rkm/queue/{proposal_id}/approve`` — approve (AC-35.9.d).
@@ -655,6 +656,17 @@ def create_app(
         broker = getattr(request.app.state, "broker", None)
         return None if broker is None else broker.audit_logger
 
+    def _get_router(request: Request) -> Any:
+        """The serving broker's live ``FathomRouter``, or ``None``.
+
+        Approval used to pass ``router=None`` here, so nothing was ever
+        promoted: the response said ``promoted: false``, the proposal stayed
+        ``approved`` and the rule never reached the engine -- with a live
+        router sitting on ``app.state.broker`` the whole time.
+        """
+        broker = getattr(request.app.state, "broker", None)
+        return None if broker is None else broker._router  # noqa: SLF001
+
     def _require_reviewer(request: Request) -> str:
         """Extract X-Nautilus-Reviewer header or raise 400 (AC-35.9.d / DQ4)."""
         from fastapi import HTTPException
@@ -666,6 +678,68 @@ def create_app(
                 detail="X-Nautilus-Reviewer header required",
             )
         return reviewer
+
+    @app.post(
+        "/v1/rkm/queue",
+        dependencies=[Depends(_write_guard)],
+        tags=["rkm"],
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def post_rkm_queue(  # pyright: ignore[reportUnusedFunction]
+        request: Request,
+        body: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Submit a rule for validation and queue the resulting proposal.
+
+        The review queue had no producer anywhere in shipped code:
+        ``run_pipeline`` was called only from tests, there was no route and no
+        CLI subcommand, and the system-proposed path ships disabled. Every
+        queue subcommand, every REST route below, lineage, rollback and the
+        queue metrics collector were therefore dead in practice.
+
+        Body: ``{"rule_yaml": "<contents of the rule file>"}``.
+        """
+        import uuid as _uuid
+        from pathlib import Path as _Path
+
+        from fastapi import HTTPException
+
+        from nautilus.rkm.validator.pipeline import run_pipeline
+
+        rule_yaml = body.get("rule_yaml")
+        if not isinstance(rule_yaml, str) or not rule_yaml.strip():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="body must carry 'rule_yaml': the contents of the rule file",
+            )
+
+        queue = _get_queue(request)
+        # The proposal artifact references the rule by path, so the submitted
+        # YAML has to outlive the request that carried it.
+        rules_dir = _Path(queue._queue_dir) / "rules"  # noqa: SLF001
+        rules_dir.mkdir(parents=True, exist_ok=True)
+        rule_path = rules_dir / f"{_uuid.uuid4().hex}.yaml"
+        rule_path.write_text(rule_yaml, encoding="utf-8")
+
+        broker = getattr(request.app.state, "broker", None)
+        audit_log = getattr(broker, "audit_path", None) or _Path("audit.jsonl")
+        config = getattr(broker, "config", None)
+        settings: dict[str, Any] = {}
+        if config is not None:
+            settings = {
+                "min_entries": config.rkm.sandbox.min_entries,
+                "rule_packs": list(config.rules.packs),
+            }
+        proposal = run_pipeline(rule_path, queue=queue, audit_log=audit_log, **settings)
+        return {
+            "proposal_id": proposal.proposal_id,
+            "status": proposal.status,
+            "confidence": proposal.validation.get("confidence", 0.0),
+            "static_ok": proposal.validation.get("static_ok"),
+            "static_errors": proposal.validation.get("static_errors", []),
+            "shadow_flags": list(proposal.shadow_flags),
+            "sandbox": proposal.validation.get("sandbox", {}),
+        }
 
     @app.get(
         "/v1/rkm/queue",
@@ -753,7 +827,7 @@ def create_app(
                 reviewer,
                 queue=queue,
                 lineage=lineage,
-                router=None,
+                router=_get_router(request),
                 audit_logger=_get_audit_logger(request),
             )
         except KeyError as exc:

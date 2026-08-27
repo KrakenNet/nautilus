@@ -41,10 +41,13 @@ Session-token signing-key management — see
 [key rotation in the operator guide](../how-to/operator-guide.md#6-rotate-signing-keys).
 
 ```
-nautilus key list [--json]
-nautilus key rotate [--remove-old] --yes [--json]
-nautilus key revoke <kid> --reason TEXT --yes [--json]
+nautilus key list --url URL [--api-key KEY] [--json]
+nautilus key rotate --yes --url URL [--api-key KEY] [--json]
+nautilus key revoke <kid> --reason TEXT --yes --url URL [--api-key KEY] [--json]
 ```
+
+`--url` is required: the ring is in-broker state, so there is nothing for
+the CLI to act on locally. Without it each command exits 2.
 
 ## `nautilus rules`
 

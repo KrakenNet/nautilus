@@ -12,6 +12,7 @@ import asyncio
 import contextlib
 import json
 import subprocess
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -909,3 +910,244 @@ def test_upstream_alias_join_survives_a_bind_on_the_same_slot(tmp_path: Path) ->
     # would pass for a reason that has nothing to do with the join.
     unjoined = _compile({"slot": "source_id", "bind": "?rid"})
     assert unjoined.count("?sid") == 1, unjoined
+
+
+# ---------------------------------------------------------------------------
+# 4.22 -- `chained: true` attestation sinks have no single-writer enforcement
+# ---------------------------------------------------------------------------
+
+
+_CHAIN_WRITER = """
+import sys
+from datetime import UTC, datetime
+from fathom.attestation import AttestationService
+from nautilus.core.attestation_sink import AttestationPayload, ChainedFileAttestationSink
+
+path, seed, tag = sys.argv[1], sys.argv[2], sys.argv[3]
+service = AttestationService.generate_keypair()
+sink = ChainedFileAttestationSink(path, service)
+print("OPENED", flush=True)
+import asyncio
+for i in range(3):
+    asyncio.run(
+        sink.emit(
+            AttestationPayload(
+                token=tag + "-" + str(i),
+                nautilus_payload={"decision": seed},
+                emitted_at=datetime.now(UTC),
+            )
+        )
+    )
+sys.stdin.readline()
+asyncio.run(sink.close())
+"""
+
+
+def _chain_writer(log_path: Path, tag: str) -> subprocess.Popen[str]:
+    return subprocess.Popen(
+        # ``sys.executable``, not ``.venv/bin/python``: that path is a symlink
+        # to the system interpreter and resolving it drops the venv.
+        [sys.executable, "-c", _CHAIN_WRITER, str(log_path), tag, tag],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+
+def test_m422_a_chained_log_refuses_a_second_writer(tmp_path: Path) -> None:
+    """Two brokers on one chained log must not both start.
+
+    Before the fix neither process warned: they interleaved into a chain whose
+    ``verify_chain`` failure is indistinguishable from deliberate tampering,
+    making ``chained: true`` strictly worse than the plain
+    ``FileAttestationSink``, whose atomic ``O_APPEND`` survives concurrency.
+    """
+    log_path = tmp_path / "att.jsonl"
+    first = _chain_writer(log_path, "first")
+    try:
+        assert first.stdout is not None
+        assert first.stdout.readline().strip() == "OPENED", "first writer never opened the log"
+
+        second = _chain_writer(log_path, "second")
+        _, err = second.communicate(input="\n", timeout=120)
+        assert second.returncode != 0, (
+            "a second process opened the same chained attestation log while the "
+            "first still held it. Both will append and the chain is unrecoverable."
+        )
+        assert "single" in err or "one writer" in err, (
+            f"the second writer failed without naming single-writer as the "
+            f"reason, so an operator cannot tell this from a corrupt log.\n{err}"
+        )
+
+        # Control: the guard is per-path, not a blanket refusal of any second
+        # chained sink. Without this, an unconditional raise would also pass.
+        other = _chain_writer(tmp_path / "other.jsonl", "other")
+        assert other.stdout is not None
+        assert other.stdout.readline().strip() == "OPENED", (
+            f"a second chained sink on a DIFFERENT path was also refused; the "
+            f"guard is unconditional, not a lock.\n{other.communicate()[1]}"
+        )
+        other.communicate(input="\n", timeout=120)
+    finally:
+        with contextlib.suppress(Exception):
+            first.communicate(input="\n", timeout=120)
+
+    # The surviving chain is the first writer's alone (plus the log's own
+    # genesis line) — no interleaving from the process that was refused.
+    text = log_path.read_text(encoding="utf-8")
+    assert text.count('"first-') == 3, f"expected the first writer's 3 entries:\n{text}"
+    assert "second-" not in text, f"the refused writer still appended:\n{text}"
+
+
+# ---------------------------------------------------------------------------
+# 4.22 -- the documented offline token-verification recipe is unrunnable
+# ---------------------------------------------------------------------------
+
+
+def _claims(token: str) -> dict[str, Any]:
+    """Decode a JWS payload the way ``docs/how-to/verify-a-token.md`` tells a
+    verifier to — base64url, no signature check (that is a separate step)."""
+    import base64
+
+    payload_b64 = token.split(".")[1]
+    return json.loads(base64.urlsafe_b64decode(payload_b64 + "=" * (-len(payload_b64) % 4)))
+
+
+@pytest.mark.docker
+def test_m422_the_documented_token_claims_are_actually_in_the_token(
+    pg_dsn: str, write_config: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Every check ``verify-a-token.md:25-42`` names must run, not KeyError.
+
+    ``broker.py`` used to pass the whole Nautilus payload to
+    ``AttestationService.sign`` as ``input_facts``, which fathom reduces to an
+    opaque ``input_hash``. The token's claim set was
+    ``{iss, iat, decision, rule_trace, input_hash, session_id}`` — so
+    ``request_id``, ``response_hash``, ``hash_skipped`` and
+    ``source_response_hashes`` all raised ``KeyError``, or were silently
+    vacuous under ``.get()``.
+    """
+    from fastapi.testclient import TestClient
+
+    from nautilus.core.attestation_payload import compute_response_hash
+    from nautilus.transport.fastapi_app import create_app
+
+    monkeypatch.setenv("JOURNEY_PG_DSN", pg_dsn)
+    key = "journey-key"
+    config = write_config(
+        {
+            "sources": [
+                {
+                    "id": "patients",
+                    "type": "postgres",
+                    "description": "patient records",
+                    "classification": "unclassified",
+                    "data_types": ["patients"],
+                    "allowed_purposes": [],
+                    "connection": "${JOURNEY_PG_DSN}",
+                    "table": "journey.patients",
+                }
+            ],
+            "agents": {"a": {"id": "a", "clearance": "unclassified"}},
+            "api": {"keys": [key]},
+        }
+    )
+
+    with TestClient(create_app(config), headers={"X-API-Key": key}) as client:
+        body = client.post(
+            "/v1/request",
+            json={
+                "agent_id": "a",
+                "intent": "patients",
+                "context": {"purpose": "p", "session_id": "s1"},
+            },
+        ).json()
+
+    token = body["attestation_token"]
+    assert token, "no attestation token to verify"
+    claims = _claims(token)
+
+    # 1. request_id joins the token to its audit entry.
+    assert claims.get("request_id") == body["request_id"], (
+        f"token carries request_id={claims.get('request_id')!r}, response says "
+        f"{body['request_id']!r}. GET /v1/audit/{{request_id}} cannot be joined."
+    )
+
+    # 2. response_hash must recompute over the data the caller holds — the
+    #    whole point of the claim.
+    assert compute_response_hash(body["data"]) == claims.get("response_hash"), (
+        f"recomputing response_hash over the returned data does not match the "
+        f"claim ({claims.get('response_hash')!r}); the documented integrity "
+        f"check cannot be performed."
+    )
+
+    # 3. source_response_hashes enumerates exactly the covered sources.
+    assert set(claims.get("source_response_hashes", {})) == set(body["sources_queried"]), (
+        f"source_response_hashes covers {sorted(claims.get('source_response_hashes', {}))} "
+        f"but {body['sources_queried']} were queried."
+    )
+
+    # 4. hash_skipped is absent when every source is deterministic. Asserting
+    #    absence here is what stops the presence check below from passing for
+    #    a sink that stamps it unconditionally.
+    assert "hash_skipped" not in claims, (
+        f"hash_skipped={claims['hash_skipped']!r} on an all-deterministic "
+        f"request; the disclosure means nothing if it is always set."
+    )
+
+    # The six claims fathom's own ``sign`` emitted must survive — existing
+    # verifiers read them.
+    for legacy in ("iss", "iat", "decision", "rule_trace", "input_hash", "session_id"):
+        assert legacy in claims, f"switching to sign_claims dropped {legacy!r}"
+
+
+def test_m422_hash_skipped_reaches_the_caller(write_config: Any) -> None:
+    """The honest-disclosure claim must actually be in the token.
+
+    ``hash_skipped`` is sold in three docs as the signal that a
+    non-deterministic source makes a response unverifiable by re-execution.
+    Driven at ``_sign`` so it needs no live model.
+    """
+    from types import SimpleNamespace
+
+    from nautilus import Broker
+
+    config = write_config(
+        {
+            "sources": [],
+            "agents": {"a": {"id": "a", "clearance": "unclassified"}},
+            "attestation": {"enabled": True},
+        }
+    )
+    broker = Broker.from_config(config)
+    broker._adapters["oracle"] = SimpleNamespace(  # type: ignore[assignment]
+        capabilities=frozenset({"non_deterministic"})
+    )
+
+    token, _, _ = broker._sign(
+        request_id="r1",
+        agent_id="a",
+        sources_queried=["oracle"],
+        scope_by_source={},
+        rule_trace=[],
+        session_id="s1",
+        response={"oracle": [{"answer": "42"}]},
+    )
+    assert _claims(token).get("hash_skipped") is True, (
+        "a non-deterministic source was queried and the token does not say so; "
+        "a verifier cannot tell an unverifiable response from a verifiable one."
+    )
+
+    # Control: a deterministic source must NOT carry the claim.
+    broker._adapters["ledger"] = SimpleNamespace(capabilities=frozenset())  # type: ignore[assignment]
+    clean, _, _ = broker._sign(
+        request_id="r2",
+        agent_id="a",
+        sources_queried=["ledger"],
+        scope_by_source={},
+        rule_trace=[],
+        session_id="s1",
+        response={"ledger": [{"n": 1}]},
+    )
+    assert "hash_skipped" not in _claims(clean)

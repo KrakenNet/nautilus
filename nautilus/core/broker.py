@@ -35,7 +35,6 @@ from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any, Literal, TypeVar, cast
 
 from fathom.attestation import AttestationService
@@ -85,7 +84,11 @@ from nautilus.config.models import (
 )
 from nautilus.config.registry import SourceRegistry
 from nautilus.core import PolicyEngineError
-from nautilus.core.attestation_payload import build_payload, compute_response_hash
+from nautilus.core.attestation_payload import (
+    build_payload,
+    canonical_input_hash,
+    compute_response_hash,
+)
 from nautilus.core.attestation_sink import (
     AttestationPayload,
     AttestationSink,
@@ -462,7 +465,14 @@ def _broker_error(exc: BaseException, request_id: str) -> ErrorRecord:
 
 
 def _source_error(source_id: str, error_type: str, message: str, request_id: str) -> ErrorRecord:
-    """Build a per-source :class:`ErrorRecord` tagged with the request trace id."""
+    """Build a per-source :class:`ErrorRecord` tagged with the request trace id.
+
+    Every per-source failure the broker raises itself is constructed here, so
+    this is also where ``adapter_errors_total`` is incremented — counting at
+    the call sites instead would miss the connect-time path, which never
+    reaches ``_gather_adapter_results``.
+    """
+    _metrics.adapter_errors_total.add(1, {"source_id": source_id, "error_type": error_type})
     return ErrorRecord(
         source_id=source_id,
         error_type=error_type,
@@ -659,10 +669,11 @@ class Broker:
         )
         intent_analyzer = cls._build_intent_analyzer(config, pattern_analyzer)
 
-        attestation = cls._build_attestation(config)
-        attestation_sink = cls._build_attestation_sink(config, attestation)
+        base_dir = Path(path).parent
+        attestation = cls._build_attestation(config, base_dir)
+        attestation_sink = cls._build_attestation_sink(config, attestation, base_dir)
 
-        user_rules_dirs = [Path(d) for d in config.rules.user_rules_dirs]
+        user_rules_dirs = [cls._resolve(base_dir, d) for d in config.rules.user_rules_dirs]
         router = FathomRouter(
             built_in_rules_dir=BUILT_IN_RULES_DIR,
             user_rules_dirs=user_rules_dirs,
@@ -703,10 +714,11 @@ class Broker:
                 source, broker_default_embedder, adapter_registry
             )
 
-        audit_path = Path(config.audit.path)
+        audit_path = cls._resolve(base_dir, config.audit.path)
+        audit_path.parent.mkdir(parents=True, exist_ok=True)
         audit_logger = AuditLogger(sink=FileSink(path=audit_path))
 
-        session_store = cls._build_session_store(config, base_dir=Path(path).parent)
+        session_store = cls._build_session_store(config, base_dir=base_dir)
 
         synthesizer = BasicSynthesizer()
 
@@ -852,8 +864,21 @@ class Broker:
         return InMemorySessionStore(sess_cfg.ttl_seconds)
 
     @staticmethod
+    def _resolve(base_dir: Path, value: str | Path) -> Path:
+        """Resolve a config-declared path against the config file's directory.
+
+        Relative paths in ``nautilus.yaml`` used to resolve against the
+        process's working directory, so the same config produced a different
+        audit log, a different attestation log and a different set of rule
+        directories depending on where the operator happened to run
+        ``nautilus serve`` from. Absolute paths are returned unchanged.
+        """
+        path = Path(value)
+        return path if path.is_absolute() else base_dir / path
+
+    @staticmethod
     def _build_attestation_sink(
-        config: NautilusConfig, attestation: AttestationService | None
+        config: NautilusConfig, attestation: AttestationService | None, base_dir: Path
     ) -> AttestationSink:
         """Construct the attestation sink per design §3.14 / FR-28.
 
@@ -876,11 +901,11 @@ class Broker:
                     msg = "attestation.sink.chained requires attestation.enabled with a signing key"
                     raise ValueError(msg)
                 return ChainedFileAttestationSink(
-                    Path(sink_spec.path),
+                    Broker._resolve(base_dir, sink_spec.path),
                     attestation,
                     checkpoint_interval=sink_spec.checkpoint_interval,
                 )
-            return FileAttestationSink(Path(sink_spec.path))
+            return FileAttestationSink(Broker._resolve(base_dir, sink_spec.path))
         if isinstance(sink_spec, HttpSinkSpec):
             rp_spec = sink_spec.retry_policy
             retry_policy = RetryPolicy(
@@ -888,7 +913,11 @@ class Broker:
                 initial_backoff_s=rp_spec.initial_backoff_s,
                 max_backoff_s=rp_spec.max_backoff_s,
             )
-            dead_letter = Path(sink_spec.dead_letter_path) if sink_spec.dead_letter_path else None
+            dead_letter = (
+                Broker._resolve(base_dir, sink_spec.dead_letter_path)
+                if sink_spec.dead_letter_path
+                else None
+            )
             return HttpAttestationSink(
                 url=sink_spec.url,
                 retry_policy=retry_policy,
@@ -899,7 +928,7 @@ class Broker:
         return NullAttestationSink()
 
     @staticmethod
-    def _build_attestation(config: NautilusConfig) -> AttestationService | None:
+    def _build_attestation(config: NautilusConfig, base_dir: Path) -> AttestationService | None:
         """Construct the attestation service per design §9.4.
 
         - ``enabled: false`` → ``None`` (token omitted on every response).
@@ -910,7 +939,7 @@ class Broker:
             return None
         key_path = config.attestation.private_key_path
         if key_path:
-            key_bytes = Path(key_path).read_bytes()
+            key_bytes = Broker._resolve(base_dir, key_path).read_bytes()
             return AttestationService.from_private_key_bytes(key_bytes)
         return AttestationService.generate_keypair()
 
@@ -945,6 +974,26 @@ class Broker:
     def sources(self) -> list[SourceConfig]:
         """Registered source configs (identifier + metadata) — design §3.1."""
         return self._registry.sources
+
+    @property
+    def config(self) -> NautilusConfig:
+        """The validated config this broker was built from.
+
+        Exposed so a governance surface served by this broker uses the same
+        ``rkm.sandbox`` and ``rules`` settings the broker itself runs under.
+        """
+        return self._config
+
+    @property
+    def audit_path(self) -> Path | None:
+        """The JSONL file this broker's decisions are written to.
+
+        The sandbox replays this log, so a governance surface that queues a
+        proposal has to be able to find it rather than guessing
+        ``./audit.jsonl`` relative to wherever the server was started.
+        ``None`` when the sink is not a file.
+        """
+        return self._audit_logger.path
 
     @staticmethod
     def _fingerprint_root(base_dir: Path | None) -> str | None:
@@ -1683,6 +1732,9 @@ class Broker:
             await self._attestation_sink.emit(payload)
         except Exception as exc:  # noqa: BLE001 — audit-first invariant (AC-14.5)
             log.warning("attestation_sink.emit failed: %s", exc)
+            _metrics.attestation_total.add(1, {"outcome": "sink_error"})
+        else:
+            _metrics.attestation_total.add(1, {"outcome": "emitted"})
         # AC-19.b — emit attestation_emitted audit event regardless of sink outcome.
         response_hash: str | None = nautilus_payload.get("response_hash")
         hash_skipped: bool = bool(nautilus_payload.get("hash_skipped", False))
@@ -1800,6 +1852,12 @@ class Broker:
             agent_registry=self._agent_registry,
         )
         state.apply_route_result(route_result)
+        _metrics.fathom_evaluation_duration.record(route_result.duration_us / 1_000_000)
+        for denial in route_result.denial_records:
+            _metrics.scope_denials_total.add(1, {"rule_name": denial.rule_name})
+        exposure_facts = route_result.facts_asserted_summary.get("session_exposure", 0)
+        if exposure_facts:
+            _metrics.session_exposure_flags_total.add(exposure_facts)
         state.sources_denied = sorted({d.source_id for d in state.denial_records})
         selected_ids = {rd.source_id for rd in state.routing_decisions}
         denied_ids = set(state.sources_denied)
@@ -2045,9 +2103,13 @@ class Broker:
                     if res.error.trace_id
                     else res.error.model_copy(update={"trace_id": state.request_id})
                 )
+                _metrics.adapter_errors_total.add(
+                    1, {"source_id": source_id, "error_type": res.error.error_type}
+                )
                 continue
             successful.append(res)
             state.sources_queried.append(source_id)
+            _metrics.adapter_latency.record(res.duration_ms / 1000.0, {"source_id": source_id})
             # Per-source chain-of-custody hash (issue #19, AC-19), computed
             # centrally by the broker over each source's raw rows at this
             # pre-synthesis boundary. The digest is ALWAYS derived from the rows
@@ -2312,11 +2374,13 @@ class Broker:
         ``scope_hash`` / ``rule_trace_hash`` derivation is deterministic
         (NFR-14) and unit-testable in isolation.
 
-        ``AttestationService.sign()`` expects a Fathom ``EvaluationResult``;
-        we shim one together (duck-typed via ``SimpleNamespace``) whose
-        ``decision`` field carries a Nautilus marker. The Nautilus payload
-        itself is passed via ``input_facts`` so the JWT's ``input_hash``
-        covers the full (``scope_hash``, ``rule_trace_hash``, …) claim set.
+        Signs via ``AttestationService.sign_claims``, which takes a claim set
+        verbatim. The six claims ``AttestationService.sign`` would have
+        emitted are reproduced exactly, plus the four ``verify-a-token.md``
+        documents (``request_id``, ``response_hash``, ``hash_skipped``,
+        ``source_response_hashes``). The Nautilus payload is still what the
+        ``input_hash`` covers, so that binding — and every verifier reading
+        it — is unchanged.
 
         Returns ``(token, scope_hash_version, nautilus_payload)`` so callers
         can (1) stamp the version into :attr:`AuditEntry.scope_hash_version`
@@ -2362,20 +2426,32 @@ class Broker:
         # so downstream verifiers don't need a separate Nautilus payload.
         decision = f"nautilus:{request_id}:agent={agent_id}"
 
-        result = SimpleNamespace(
-            decision=decision,
-            rule_trace=list(rule_trace),
-        )
         # Pass the full Nautilus payload as a single synthetic fact so the
         # JWT's ``input_hash`` binds both ``scope_hash`` and
         # ``rule_trace_hash`` (plus request_id / agent_id / sources_queried).
         input_facts: list[dict[str, Any]] = [nautilus_payload]
         session_ref = session_id or request_id
-        token = self._attestation.sign(
-            result=result,  # type: ignore[arg-type]
-            session_id=session_ref,
-            input_facts=input_facts,
-        )
+        # ``sign_claims`` rather than ``sign``: the latter reduces the whole
+        # Nautilus payload to an opaque ``input_hash``, so every check
+        # ``docs/how-to/verify-a-token.md`` tells an offline verifier to make
+        # raised KeyError. The six claims ``sign`` would have produced are
+        # reproduced verbatim (existing verifiers keep working) and the four
+        # documented ones are promoted alongside them. ``hash_skipped`` most of
+        # all: it is sold in three docs as the honest disclosure that a
+        # non-deterministic source makes a response unverifiable, and it never
+        # reached the caller in any form.
+        claims: dict[str, Any] = {
+            "iss": "fathom",
+            "iat": int(time.time()),
+            "decision": decision,
+            "rule_trace": list(rule_trace),
+            "input_hash": canonical_input_hash(input_facts),
+            "session_id": session_ref,
+        }
+        for documented in ("request_id", "response_hash", "hash_skipped", "source_response_hashes"):
+            if documented in nautilus_payload:
+                claims[documented] = nautilus_payload[documented]
+        token = self._attestation.sign_claims(claims)
         return token, scope_hash_version, nautilus_payload
 
     # ------------------------------------------------------------------

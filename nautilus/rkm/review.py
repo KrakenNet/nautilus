@@ -103,8 +103,8 @@ def approve_proposal(
     2. Transition queue to ``approved``.
     3. If ``router`` provided: call :meth:`RulePromoter.reload_rule`; on failure mark
        ``promotion_failed`` (via queue transition note) and re-raise.
-    4. Insert :class:`LineageRecord` if ``lineage`` provided.
-    5. Transition queue to ``promoted``.
+    4. Insert a :class:`LineageRecord` for the approval.
+    5. Transition queue to ``promoted`` when the rule actually loaded.
     6. Emit ``proposal_approved``, then ``rule_promoted`` + ``proposal_promoted``
        on a successful promotion, if ``audit_logger`` provided.
 
@@ -160,9 +160,13 @@ def approve_proposal(
                 f"FathomRouter.reload_rule failed for proposal {proposal_id!r}: {exc}"
             ) from exc
 
-    # Insert lineage record if promotion succeeded.
+    # Lineage records the decision, not the engine load. Gating it on
+    # ``promoted`` meant the CLI path -- which has no live router -- recorded
+    # no lineage at all, so ``nautilus rule lineage`` returned an empty version
+    # list for a rule an operator had approved.
+    lineage.insert(_build_lineage_record(proposal, reviewer_identity, now))
+
     if promoted:
-        lineage.insert(_build_lineage_record(proposal, reviewer_identity, now))
         # Transition to promoted.
         queue.transition(
             proposal_id,

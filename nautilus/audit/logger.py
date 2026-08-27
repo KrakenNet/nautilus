@@ -29,9 +29,10 @@ from __future__ import annotations
 
 import json
 import os
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, get_args, runtime_checkable
 
 from fathom.models import AuditRecord
 
@@ -183,42 +184,98 @@ class AuditLogger:
         self._sink.write(record)
         _flush_sink(self._sink)
 
-    def emit_event(self, entry: Any) -> None:
-        """Emit a sparse audit event dict (OQ1 stage-4 resolution).
+    @property
+    def path(self) -> Path | None:
+        """File this logger writes to, or ``None`` for a non-file sink."""
+        raw = getattr(self._sink, "path", None) or getattr(self._sink, "_path", None)
+        return Path(raw) if raw is not None else None
 
-        Accepts a plain ``dict`` produced by :class:`~nautilus.rkm.audit_emitter.AuditEventEmitter`
-        and persists it as a Fathom ``AuditRecord`` in the same JSONL sink.
-        Calls the existing :meth:`emit` path when ``entry`` is an
-        :class:`~nautilus.core.models.AuditEntry`; otherwise writes the dict
-        as-is under ``metadata[NAUTILUS_METADATA_KEY]`` so downstream readers
-        can still round-trip it.
+    def emit_event(self, entry: Any) -> None:
+        """Emit a governance / meta-rule audit event.
+
+        Accepts a plain ``dict`` produced by
+        :class:`~nautilus.rkm.audit_emitter.AuditEventEmitter` and writes it
+        through the same :meth:`emit` path every other entry takes, so the
+        audit API can read it back.
+
+        This used to write the sparse dict as-is. ``decode_nautilus_entry``
+        and ``AuditReader._parse_line`` both validate a full ``AuditEntry``,
+        so every governance event -- ``proposal_approved``, ``rule_promoted``,
+        all eight of them -- was reported to the operator as a *corrupt* audit
+        line, and "who approved this rule" came back empty from an intact log.
+        ``Broker.emit_adapter_event`` already solved this by filling the
+        request-shaped fields with placeholders; this does the same.
         """
         if isinstance(entry, AuditEntry):
             self.emit(entry)
             return
-        # Sparse dict path — write as raw JSON under the metadata key.
-        import json as _json
-
-        from fathom.models import AuditRecord as _AuditRecord
-
-        ts = entry.get("timestamp") or _iso8601_utc_z(datetime.now(tz=UTC))
-        record = _AuditRecord(
-            timestamp=ts if isinstance(ts, str) else _iso8601_utc_z(ts),
-            session_id=str(entry.get("session_id") or entry.get("trace_id") or ""),
-            modules_traversed=[],
-            rules_fired=[],
-            decision="event",
-            reason=str(entry.get("event_type", "unknown")),
-            duration_us=0,
-            metadata={NAUTILUS_METADATA_KEY: _json.dumps(entry, default=str)},
-        )
-        self._sink.write(record)
-        _flush_sink(self._sink)
+        self.emit(_event_entry(entry))
 
     @classmethod
     def utcnow(cls) -> datetime:
         """UTC timestamp helper so broker callers don't import datetime directly."""
         return datetime.now(tz=UTC)
+
+
+_EVENT_TYPES: frozenset[str] = frozenset(
+    get_args(AuditEntry.model_fields["event_type"].annotation.__args__[0])  # pyright: ignore[reportOptionalMemberAccess]
+)
+
+# Keys the dict shares with ``AuditEntry``; everything else is an event field.
+_EVENT_ENTRY_KEYS: frozenset[str] = frozenset(
+    {
+        "event_type",
+        "timestamp",
+        "session_id",
+        "trace_id",
+        "schema_version",
+        "request_id",
+        "agent_id",
+    }
+)
+
+
+def _event_entry(event: dict[str, Any]) -> AuditEntry:
+    """Build a request-shaped ``AuditEntry`` around a governance event dict."""
+    raw_ts = event.get("timestamp")
+    if isinstance(raw_ts, datetime):
+        timestamp = raw_ts
+    elif isinstance(raw_ts, str):
+        timestamp = datetime.fromisoformat(raw_ts)
+    else:
+        timestamp = datetime.now(tz=UTC)
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=UTC)
+
+    trace_id = event.get("trace_id")
+    event_type = event.get("event_type")
+    fields = {k: v for k, v in event.items() if k not in _EVENT_ENTRY_KEYS}
+    if event_type is not None and event_type not in _EVENT_TYPES:
+        # An unrecognised type would fail validation and lose the whole
+        # record; keep it readable rather than dropping it.
+        fields["unrecognised_event_type"] = event_type
+        event_type = None
+
+    return AuditEntry(
+        timestamp=timestamp,
+        # The event is not a request. ``request_id`` is required and is what
+        # the reader keys on, so the trace id stands in when there is one.
+        request_id=str(event.get("request_id") or trace_id or uuid.uuid4()),
+        agent_id=str(event.get("agent_id") or "<broker>"),
+        session_id=event.get("session_id"),
+        facts_asserted_summary={},
+        denial_records=[],
+        error_records=[],
+        rule_trace=[],
+        sources_queried=[],
+        sources_denied=[],
+        sources_errored=[],
+        duration_ms=0,
+        event_type=event_type,  # pyright: ignore[reportArgumentType]
+        trace_id=trace_id,
+        schema_version=event.get("schema_version"),
+        event_fields=fields or None,
+    )
 
 
 def decode_nautilus_entry(record: AuditRecord) -> AuditEntry:

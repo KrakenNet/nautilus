@@ -1664,6 +1664,7 @@ llm-openai = [
 otel = [
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
+    { name = "opentelemetry-exporter-prometheus" },
     { name = "opentelemetry-instrumentation-fastapi" },
     { name = "opentelemetry-sdk" },
     { name = "prometheus-client" },
@@ -1695,6 +1696,7 @@ requires-dist = [
     { name = "openai", marker = "extra == 'llm-openai'", specifier = ">=1.50" },
     { name = "opentelemetry-api", marker = "extra == 'otel'", specifier = ">=1.20" },
     { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'otel'", specifier = ">=1.20" },
+    { name = "opentelemetry-exporter-prometheus", marker = "extra == 'otel'", specifier = ">=0.50b0" },
     { name = "opentelemetry-instrumentation-fastapi", marker = "extra == 'otel'", specifier = ">=0.41b0" },
     { name = "opentelemetry-sdk", marker = "extra == 'otel'", specifier = ">=1.20" },
     { name = "pgvector", specifier = ">=0.3.0" },
@@ -1848,6 +1850,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/19/63/d9f43cd75f3fabb7e01148c89cfa9491fc18f6580a6764c554ff7c953c46/opentelemetry_exporter_otlp_proto_http-1.41.0.tar.gz", hash = "sha256:dcd6e0686f56277db4eecbadd5262124e8f2cc739cadbc3fae3d08a12c976cf5", size = 24139, upload-time = "2026-04-09T14:38:38.128Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/64/b5/a214cd907eedc17699d1c2d602288ae17cb775526df04db3a3b3585329d2/opentelemetry_exporter_otlp_proto_http-1.41.0-py3-none-any.whl", hash = "sha256:a9c4ee69cce9c3f4d7ee736ad1b44e3c9654002c0816900abbafd9f3cf289751", size = 22673, upload-time = "2026-04-09T14:38:18.349Z" },
+]
+
+[[package]]
+name = "opentelemetry-exporter-prometheus"
+version = "0.62b0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "opentelemetry-api" },
+    { name = "opentelemetry-sdk" },
+    { name = "prometheus-client" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0f/ec/fa8a722199dc2e75dc582779d62207b00b0bdb014b5635594afa0cf3ee43/opentelemetry_exporter_prometheus-0.62b0.tar.gz", hash = "sha256:4d1106566a9b3e8dff028e69e9f2dc90723e6b431c900ff8c72982fcf11dbae5", size = 15441, upload-time = "2026-04-09T14:38:38.934Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d1/1e/43645fadd561471af2aec95906a3dd54af1a8e7782322310e802a810ad3a/opentelemetry_exporter_prometheus-0.62b0-py3-none-any.whl", hash = "sha256:cd7e8acae3be5f425ffa2e0864eea474fa7a40706f786de7a2d23846573d8f75", size = 13278, upload-time = "2026-04-09T14:38:19.367Z" },
 ]
 
 [[package]]

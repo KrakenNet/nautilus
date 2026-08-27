@@ -53,17 +53,32 @@ def open_audit_logger(config_path: str | None = None) -> AuditLogger:
     from fathom.audit import FileSink
 
     from nautilus.audit.logger import AuditLogger
+
+    return AuditLogger(sink=FileSink(path=audit_path_for(config_path)))
+
+
+def audit_path_for(config_path: str | None = None) -> Path:
+    """The audit log a config names, resolved the way the broker resolves it.
+
+    A relative ``audit.path`` is relative to the config file's directory, not
+    to the process's working directory — see
+    :meth:`nautilus.core.Broker._resolve`. Without a config the default
+    ``./audit.jsonl`` is used, which is what ``rules validate --sandbox``
+    already reads by default.
+    """
     from nautilus.config.models import AuditConfig
 
-    path = AuditConfig().path
-    if config_path:
-        from nautilus.config.loader import load_config
+    path = Path(AuditConfig().path)
+    if not config_path:
+        return path
+    from nautilus.config.loader import load_config
 
-        try:
-            path = load_config(config_path).audit.path
-        except Exception as exc:  # noqa: BLE001 — the decision still gets logged
-            warn(f"could not read audit path from {config_path!r} ({exc}); using {path}")
-    return AuditLogger(sink=FileSink(path=Path(path)))
+    try:
+        declared = Path(load_config(config_path).audit.path)
+    except Exception as exc:  # noqa: BLE001 — the decision still gets logged
+        warn(f"could not read audit path from {config_path!r} ({exc}); using {path}")
+        return path
+    return declared if declared.is_absolute() else Path(config_path).parent / declared
 
 
 def ok(message: str) -> None:
@@ -86,4 +101,12 @@ def fail(message: str) -> None:
     print(f"FAIL: {message}", file=sys.stderr)
 
 
-__all__ = ["err", "fail", "ok", "open_audit_logger", "require_reviewer", "warn"]
+__all__ = [
+    "audit_path_for",
+    "err",
+    "fail",
+    "ok",
+    "open_audit_logger",
+    "require_reviewer",
+    "warn",
+]
