@@ -139,6 +139,9 @@ session_store:
   purpose_ttl_seconds: 0        # 0 = no purpose window
   on_failure: fallback_sqlite   # fail_closed | fallback_memory | fallback_sqlite
   sqlite_path: /var/lib/nautilus/sessions.db
+  pool_min_size: 1              # postgres only
+  pool_max_size: 10             # postgres only
+  acquire_timeout_s: 10.0       # postgres only
 ```
 
 - `memory` — single process, lost on restart. Fine for dev.
@@ -156,6 +159,16 @@ session_store:
   window elapses every source in the request is denied until the agent
   declares a new purpose, which restarts it. `0` (the default) leaves the
   window open indefinitely.
+
+**Size the Postgres pool against your peak concurrency.** Each in-flight
+request holds *two* pooled connections at once — one for the advisory lock
+around the exposure ledger, one for the read-modify-write inside it — so a
+pool of `N` serves `N / 2` concurrent requests and the rest queue. Set
+`pool_max_size` to at least twice peak concurrency. Past that point requests
+wait `acquire_timeout_s` and then fail with a `SessionStoreUnavailableError`
+naming the pool size; before 1.0 they waited forever, so an over-subscribed
+broker hung instead of shedding load. `pool_min_size` is how many connections
+are opened at startup.
 
 Cumulative exposure — `sources_visited`, `data_types_seen` and
 `pii_sources_accessed_list` — accumulates over the sources actually
@@ -374,6 +387,18 @@ Baselines live under `.nautilus/adapters/fingerprints/` next to the
 config file, so they survive a restart. `schema-diff` and `schema-ack`
 take `--config` because they compare against — and rewrite — the same
 baselines the broker reads.
+
+### When a source is down or answers with too much
+
+- **Unreachable sources are not re-dialled on every request.** A source whose
+  `connect()` fails or times out is put in a 30-second cooldown; requests
+  routed to it during that window are denied immediately with the connect
+  error rather than spending the source's `timeout_s` again. The first request
+  after the window retries, so a recovered source comes back on its own.
+- **A response is bounded before it is parsed.** The REST adapter refuses a
+  body over 8 MiB, and the S3 adapter refuses an object over 8 MiB, in both
+  cases before materializing it. Either raises an adapter error naming the
+  ceiling; the source is not quarantined for it.
 
 ## 8. Validate rules before deploying
 

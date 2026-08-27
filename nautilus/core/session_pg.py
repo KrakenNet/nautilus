@@ -119,10 +119,16 @@ class PostgresSessionStore:
         on_failure: FailureMode = "fail_closed",
         sqlite_path: str | Path | None = None,
         ttl_seconds: int = 0,
+        pool_min_size: int = 1,
+        pool_max_size: int = 10,
+        acquire_timeout_s: float = 10.0,
     ) -> None:
         self._dsn: str = dsn
         self._on_failure: FailureMode = on_failure
         self._ttl_seconds: int = ttl_seconds
+        self._pool_min_size: int = pool_min_size
+        self._pool_max_size: int = pool_max_size
+        self._acquire_timeout_s: float = acquire_timeout_s
         self._sqlite_path: Path = Path(sqlite_path) if sqlite_path else _DEFAULT_SQLITE_PATH
         self._pool: Any = None
         self._closed: bool = False
@@ -168,8 +174,17 @@ class PostgresSessionStore:
         )
 
         try:
-            self._pool = await asyncpg.create_pool(dsn=self._dsn)  # pyright: ignore[reportUnknownMemberType]
-            async with self._pool.acquire() as conn, conn.transaction():
+            # Sized explicitly. asyncpg's default is 10/10, and every in-flight
+            # request holds two of them for its whole pipeline — one advisory
+            # lock for the declared session, one for the caller's principal — so
+            # the implicit default was a measured ceiling of five concurrent
+            # requests, past which ``acquire`` waited with no deadline.
+            self._pool = await asyncpg.create_pool(  # pyright: ignore[reportUnknownMemberType]
+                dsn=self._dsn,
+                min_size=self._pool_min_size,
+                max_size=self._pool_max_size,
+            )
+            async with self._acquire() as conn, conn.transaction():
                 # The lock is transaction-scoped, so it releases with the DDL
                 # even if this process dies mid-statement.
                 await conn.execute("SELECT pg_advisory_xact_lock($1)", _DDL_LOCK_KEY)
@@ -273,7 +288,7 @@ class PostgresSessionStore:
         # same session_id don't clobber each other's keys. JSONB concat (``||``)
         # would merge at the DB layer but loses the "later wins" Phase-1
         # semantics for nested dicts — keep parity with InMemorySessionStore.
-        async with self._pool.acquire() as conn, conn.transaction():
+        async with self._acquire() as conn, conn.transaction():
             if self._ttl_seconds > 0:
                 # Drop every expired row, not just this session's: without it
                 # a store whose sessions are never revisited grows forever.
@@ -297,6 +312,30 @@ class PostgresSessionStore:
             )
 
     @contextlib.asynccontextmanager
+    async def _acquire(self) -> AsyncIterator[Any]:
+        """Take a pooled connection, or say so when the pool is exhausted.
+
+        ``pool.acquire()`` with no timeout waits forever: a deployment past its
+        pool size stopped answering, with no error, no audit entry and nothing
+        in the logs. A deadline turns that into something an operator can see
+        and act on — the message names the setting that fixes it.
+        """
+        assert self._pool is not None  # noqa: S101 — callers check
+        try:
+            conn = await self._pool.acquire(timeout=self._acquire_timeout_s)
+        except TimeoutError as exc:
+            raise SessionStoreUnavailableError(
+                f"session-store pool exhausted: no connection became free within "
+                f"{self._acquire_timeout_s}s (pool max_size={self._pool_max_size}). "
+                f"Every in-flight request holds two, so raise "
+                f"session_store.pool_max_size to at least twice your peak concurrency."
+            ) from exc
+        try:
+            yield conn
+        finally:
+            await self._pool.release(conn)
+
+    @contextlib.asynccontextmanager
     async def alock(self, key: str) -> AsyncIterator[None]:
         """Hold a cross-process lock on ``key`` for the block's duration.
 
@@ -316,7 +355,7 @@ class PostgresSessionStore:
         # ponytail: one pooled connection per held key. Two keys per request
         # against the default pool size is fine; a deployment that locks more
         # keys per request wants a dedicated lock pool.
-        async with self._pool.acquire() as conn:
+        async with self._acquire() as conn:
             await conn.execute("SELECT pg_advisory_lock(hashtextextended($1, 0))", key)
             try:
                 yield

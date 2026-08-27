@@ -617,6 +617,13 @@ class Broker:
         # ``arequest`` can lazy-connect on first use and skip on subsequent
         # calls (design §3.5 — adapter lifecycle is owned by the broker).
         self._connected_adapters: set[str] = set()
+        # When each source's last connect attempt failed, so a source that has
+        # gone away is not re-dialled on every request. Without it one dead
+        # source charged its whole ``timeout_s`` — 15 s by default — to every
+        # request for as long as it stayed away, and every co-queried healthy
+        # source waited with it.
+        self._connect_failures: dict[str, float] = {}
+        self.connect_cooldown_s: float = 30.0
         # Schema baselines live for the life of the broker, and on disk under
         # ``base_dir`` when one is known (``from_config`` passes the config
         # file's directory). A per-call store would be empty on every call, so
@@ -904,6 +911,9 @@ class Broker:
                 on_failure=sess_cfg.on_failure,
                 sqlite_path=sqlite_path,
                 ttl_seconds=sess_cfg.ttl_seconds,
+                pool_min_size=sess_cfg.pool_min_size,
+                pool_max_size=sess_cfg.pool_max_size,
+                acquire_timeout_s=sess_cfg.acquire_timeout_s,
             )
         if sess_cfg.backend == "sqlite":
             return SqliteSessionStore(sqlite_path, sess_cfg.ttl_seconds)
@@ -2093,14 +2103,23 @@ class Broker:
         """
         source = self._registry.get(source_id)
         timeout = getattr(source, "timeout_s", None)
-        async with asyncio.timeout(timeout):
-            adapter = await self._prepare_adapter(source_id, state)
-            if adapter is None:
-                return None
-            scope = state.scope_by_source.get(source_id, [])
-            return await self._execute_adapter(
-                adapter, source_id, state.intent_analysis, scope, context
-            )
+        try:
+            async with asyncio.timeout(timeout):
+                adapter = await self._prepare_adapter(source_id, state)
+                if adapter is None:
+                    return None
+                scope = state.scope_by_source.get(source_id, [])
+                return await self._execute_adapter(
+                    adapter, source_id, state.intent_analysis, scope, context
+                )
+        except TimeoutError:
+            # A budget spent without ever getting connected is a connect
+            # failure, whichever side of the deadline noticed: it is the case
+            # that costs every later request the same wait, so it arms the
+            # cooldown in :meth:`_prepare_adapter`.
+            if source_id not in self._connected_adapters:
+                self._connect_failures[source_id] = time.monotonic()
+            raise
 
     async def _prepare_adapter(self, source_id: str, state: _RequestState) -> Adapter | None:
         """Resolve and lazy-connect the adapter for ``source_id``.
@@ -2138,6 +2157,21 @@ class Broker:
             return None
         if source_id in self._connected_adapters and source_id not in self._quarantined_adapters:
             return adapter
+        failed_at = self._connect_failures.get(source_id)
+        if failed_at is not None:
+            waited = time.monotonic() - failed_at
+            if waited < self.connect_cooldown_s:
+                state.errored.append(
+                    _source_error(
+                        source_id,
+                        "AdapterError",
+                        f"connect() failed {waited:.1f}s ago; not retried for another "
+                        f"{self.connect_cooldown_s - waited:.1f}s",
+                        state.request_id,
+                    )
+                )
+                return None
+            del self._connect_failures[source_id]
         async with self._connect_locks.setdefault(source_id, asyncio.Lock()):
             # Re-check under the lock: the request that lost the race must
             # reuse the winner's pool, not build a second one -- and must see
@@ -2150,6 +2184,7 @@ class Broker:
                 try:
                     await adapter.connect(self._registry.get(source_id))
                 except Exception as exc:  # noqa: BLE001 — surface as per-source error
+                    self._connect_failures[source_id] = time.monotonic()
                     state.errored.append(
                         _source_error(
                             source_id,
@@ -2159,6 +2194,7 @@ class Broker:
                         )
                     )
                     return None
+                self._connect_failures.pop(source_id, None)
                 # Connect is lazy, so this is where an adapter's schema is
                 # first reachable — checking only in setup() left the gate dead.
                 drifted = await self._check_adapter_schema(source_id, adapter)

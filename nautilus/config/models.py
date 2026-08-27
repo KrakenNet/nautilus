@@ -478,6 +478,15 @@ class SessionStoreConfig(_Strict):
     # #26 — database file for ``backend: sqlite`` and the
     # ``on_failure: fallback_sqlite`` degradation target.
     sqlite_path: str = "./.nautilus/sessions.db"
+    # ``backend: postgres`` only. Every in-flight request holds two pooled
+    # connections for its whole pipeline (one advisory lock for its declared
+    # session, one for the caller's principal), so this is twice the concurrency
+    # the store will carry. ``acquire_timeout_s`` bounds the wait when they are
+    # all taken — without it a deployment past its pool size simply stopped
+    # answering.
+    pool_min_size: int = 1
+    pool_max_size: int = 10
+    acquire_timeout_s: float = 10.0
 
 
 class SessionTokenConfig(_Strict):

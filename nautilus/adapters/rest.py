@@ -25,6 +25,7 @@ SSRF defense (NFR-17, AC-9.2):
 from __future__ import annotations
 
 import ipaddress
+import json
 import time
 from collections.abc import Callable
 from typing import Any, ClassVar, cast
@@ -50,6 +51,13 @@ from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
 # Default row cap applied when the intent does not specify a ``LIMIT``.
 _DEFAULT_LIMIT: int = 1000
+
+# The row cap bounds the rows; it runs after the whole body has been parsed, so
+# it bounds nothing an oversized upstream response can do to this process. This
+# is the byte ceiling that runs first.
+# ponytail: one constant for every REST source. Move it onto SourceConfig if a
+# deployment legitimately needs a bigger body from one endpoint.
+MAX_RESPONSE_BYTES: int = 8 * 1024 * 1024
 
 # Operator allowlist mirroring :data:`nautilus.adapters.base._OPERATOR_ALLOWLIST`.
 # ``NOT IN`` is intentionally NOT in the default template map below; it is
@@ -425,15 +433,18 @@ class RestAdapter:
         # pyright strict invariance check).
         params_tuple: tuple[tuple[str, str], ...] = tuple(params)
         query = httpx.QueryParams(params_tuple)
-        response: httpx.Response = await self._client.request(
-            method, path, params=query, headers=headers
-        )
-        duration_ms = int((time.perf_counter() - started) * 1000)
+        async with self._client.stream(method, path, params=query, headers=headers) as response:
+            duration_ms = int((time.perf_counter() - started) * 1000)
 
-        _enforce_no_cross_host_redirect(response, self._base_host)
+            _enforce_no_cross_host_redirect(response, self._base_host)
 
-        response.raise_for_status()
-        body: Any = response.json()
+            if response.status_code >= 400:  # noqa: PLR2004 — httpx's own threshold
+                # The error path wants the body for its message, and a streamed
+                # response has not read one yet.
+                await response.aread()
+            response.raise_for_status()
+            raw = await self._read_bounded(response)
+        body: Any = json.loads(raw)
         rows: list[dict[str, Any]] = _coerce_rows(body, limit=_DEFAULT_LIMIT)
 
         return AdapterResult(
@@ -442,6 +453,30 @@ class RestAdapter:
             duration_ms=duration_ms,
             truncated=len(rows) >= _DEFAULT_LIMIT,
         )
+
+    async def _read_bounded(self, response: httpx.Response) -> bytes:
+        """Read the response body, refusing to allocate past the ceiling.
+
+        Declared ``Content-Length`` is checked first so an oversized answer
+        costs nothing; a chunked response without one is bounded as it arrives.
+        """
+        source_id = self._config.id if self._config is not None else "rest"
+        declared = response.headers.get("content-length")
+        if declared is not None and declared.isdigit() and int(declared) > MAX_RESPONSE_BYTES:
+            raise AdapterError(
+                f"source '{source_id}' answered with {declared} bytes, over the "
+                f"{MAX_RESPONSE_BYTES}-byte ceiling"
+            )
+        chunks: list[bytes] = []
+        total = 0
+        async for chunk in response.aiter_bytes():
+            total += len(chunk)
+            if total > MAX_RESPONSE_BYTES:
+                raise AdapterError(
+                    f"source '{source_id}' streamed more than the {MAX_RESPONSE_BYTES}-byte ceiling"
+                )
+            chunks.append(chunk)
+        return b"".join(chunks)
 
     async def get_schema(self) -> AdapterSchema:
         """Return operator-declared schema from adapter config. AC-21, OQ3."""

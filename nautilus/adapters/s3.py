@@ -29,6 +29,14 @@ from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 # Default row cap when the intent does not specify a ``LIMIT``.
 _DEFAULT_LIMIT: int = 1000
 
+# The row cap bounds how many objects come back; it says nothing about how big
+# one of them is. An exact-key read materialized the whole body and decoded it
+# to ``str``, so a multi-gigabyte object was a multi-gigabyte allocation inside
+# the broker.
+# ponytail: one constant for every S3 source. Move it onto SourceConfig if a
+# deployment legitimately serves bigger objects through the broker.
+MAX_OBJECT_BYTES: int = 8 * 1024 * 1024
+
 
 def _client_kwargs(config: SourceConfig) -> dict[str, Any]:
     """Build the aiobotocore ``create_client`` kwargs for one source.
@@ -299,8 +307,21 @@ class S3Adapter:
             Bucket=self._bucket,
             Key=key,
         )
+        declared = response.get("ContentLength")
+        source_id = self._config.id if self._config else "s3"
+        if isinstance(declared, int) and declared > MAX_OBJECT_BYTES:
+            raise AdapterError(
+                f"source '{source_id}' object {key!r} is {declared} bytes, over the "
+                f"{MAX_OBJECT_BYTES}-byte ceiling"
+            )
         body_stream = response["Body"]
-        body_bytes: bytes = await body_stream.read()
+        # Read one byte past the ceiling so an undeclared length is caught too.
+        body_bytes: bytes = await body_stream.read(MAX_OBJECT_BYTES + 1)
+        if len(body_bytes) > MAX_OBJECT_BYTES:
+            raise AdapterError(
+                f"source '{source_id}' object {key!r} streamed more than the "
+                f"{MAX_OBJECT_BYTES}-byte ceiling"
+            )
         return [
             {
                 "key": key,
