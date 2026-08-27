@@ -42,23 +42,26 @@ uv add nautilus-rkm
 
 ## Quick Start
 
+```bash
+nautilus demo    # a governed agent-to-agent handoff decision. No config, no database.
+nautilus init    # writes a nautilus.yaml that runs as it stands
+```
+
 ```python
 from nautilus import Broker
 
-broker = Broker.from_config("nautilus.yaml")
-try:
+with Broker.from_config("nautilus.yaml") as broker:
     response = broker.request(
         "agent-alpha",
         "Find vulnerabilities for CVE-2026-1234",
-        {"clearance": "unclassified", "purpose": "threat-analysis", "session_id": "s1"},
+        {"purpose": "threat-analysis", "session_id": "s1"},
     )
+    print(response.outcome)             # "allowed" | "denied" | "errored" | "skipped"
     print(response.data)                # {"main-db": [...]}
     print(response.sources_queried)     # ["main-db"]
-    print(response.sources_denied)      # ["classified-db"]
+    print(response.denial_records)      # why "classified-db" was refused, and by which rule
     print(response.attestation_token)   # signed JWS
     print(response.duration_ms)         # 47
-finally:
-    broker.close()
 ```
 
 See the [Getting Started guide](https://krakennet.github.io/nautilus/getting-started/) for a full walkthrough.
@@ -74,14 +77,15 @@ See the [Getting Started guide](https://krakennet.github.io/nautilus/getting-sta
 - Pattern-matching and LLM-based intent analysis (Anthropic, OpenAI)
 - Cross-agent handoff reasoning with session-backed escalation detection
 
-**Adapters (8 built-in)**
-- PostgreSQL, PgVector, Elasticsearch, Neo4j, REST, ServiceNow, InfluxDB, S3
+**Adapters (10 built-in)**
+- PostgreSQL, PgVector, Elasticsearch, Neo4j, REST, ServiceNow, InfluxDB, S3, LLM
+- `static` — rows declared in `nautilus.yaml`, for a first run with no database
 - Pluggable via entry points and the [Adapter SDK](https://krakennet.github.io/nautilus/reference/adapter-sdk/)
 
 **Transports**
 - FastAPI REST server (`POST /v1/request`, health/readiness probes)
 - MCP transport (stdio and HTTP modes)
-- CLI: `nautilus serve`, `nautilus health`, `nautilus version`
+- CLI: `nautilus demo`, `nautilus init`, `nautilus serve`, `nautilus health`, `nautilus version`
 
 **Rule packs**
 - `data-routing-nist` — NIST clearance/classification routing rules
@@ -105,13 +109,15 @@ Unlike stateless policy engines, Nautilus maintains working memory across reques
 - **Cross-agent handoffs** — "Agent A is passing `secret` data to Agent B who has `unclassified` clearance — deny."
 - **Escalation detection** — "Anomalous access pattern detected — escalate for forensic review."
 
+Run the handoff refusal yourself with `nautilus demo` — no config, no adapter, no database.
+
 ## Integration Shapes
 
 **As a library**
 ```python
 from nautilus import Broker
-broker = Broker.from_config("nautilus.yaml")
-response = broker.request("agent-id", "intent", context)
+with Broker.from_config("nautilus.yaml") as broker:
+    response = broker.request("agent-id", "intent", context)
 ```
 
 **As a REST sidecar**

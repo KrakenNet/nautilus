@@ -2,6 +2,26 @@
 
 Nautilus provides a CLI via `nautilus` (or `python -m nautilus`).
 
+## `nautilus demo`
+
+Run two agent-to-agent handoff declarations and print what the broker decided
+about each. Needs no config, no adapter and no database — the whole run is
+in-process and its audit log is written to a temporary directory.
+
+```
+nautilus demo
+```
+
+## `nautilus init`
+
+Write a runnable `nautilus.yaml` into the current directory. Its source has
+type `static`, so the config serves rows declared in itself and needs no
+database. Refuses to overwrite an existing `nautilus.yaml`.
+
+```
+nautilus init [--dir PATH]
+```
+
 ## `nautilus serve`
 
 Start the broker transport.

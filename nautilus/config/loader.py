@@ -29,6 +29,7 @@ _SUPPORTED_TYPES = {
     "influxdb",
     "s3",
     "llm",
+    "static",
 }
 
 

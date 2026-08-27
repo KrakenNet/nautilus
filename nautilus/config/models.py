@@ -11,7 +11,7 @@ load unchanged (NFR-5, AC-1.4).
 from __future__ import annotations
 
 from ipaddress import ip_network
-from typing import Annotated, Literal, cast
+from typing import Annotated, Any, Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -107,7 +107,26 @@ _REQUIRED_BY_TYPE: dict[str, str] = {
     "elasticsearch": "index",
     "neo4j": "label",
     "llm": "model",
+    "static": "rows",
 }
+
+# Built-in types whose adapter dials something: ``connection`` is the DSN, base
+# URL or endpoint it dials, so an empty one is a source that cannot serve. It
+# defaults to empty for ``static`` (whose data is in the config) and for
+# third-party types, whose adapters this model cannot know anything about.
+_CONNECTS_OUT: frozenset[str] = frozenset(
+    {
+        "postgres",
+        "pgvector",
+        "elasticsearch",
+        "rest",
+        "neo4j",
+        "servicenow",
+        "influxdb",
+        "s3",
+        "llm",
+    }
+)
 
 
 class SourceConfig(_Strict):
@@ -125,11 +144,15 @@ class SourceConfig(_Strict):
     # built-ins + declared adapter types, and Broker._build_adapter raises
     # ConfigError for any type missing from the merged registry.
     type: str
-    description: str
+    # Documentation for a human reading the config; nothing reads it, so it is
+    # not worth failing a first config over.
+    description: str = ""
     classification: str
     data_types: list[str]
     allowed_purposes: list[str] | None = None
-    connection: str  # post-interpolation DSN / base URL
+    connection: str = ""  # post-interpolation DSN / base URL
+    # ``static`` only: the rows this source serves, straight from the YAML.
+    rows: list[dict[str, Any]] = Field(default_factory=list[dict[str, Any]])
     # pgvector-only
     table: str | None = None
     embedding_column: str | None = None
@@ -175,6 +198,12 @@ class SourceConfig(_Strict):
                 f"source '{self.id}' has type '{self.type}' but no '{required}'. "
                 f"The {self.type} adapter requires it, so every request to this "
                 f"source would fail at runtime."
+            )
+        if self.type in _CONNECTS_OUT and not self.connection:
+            raise ValueError(
+                f"source '{self.id}' has type '{self.type}' but no 'connection'. "
+                f"The {self.type} adapter has nothing to dial, so every request "
+                f"to this source would fail at runtime."
             )
         return self
 

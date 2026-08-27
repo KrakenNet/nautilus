@@ -32,6 +32,7 @@ from nautilus.adapters.postgres import PostgresAdapter
 from nautilus.adapters.rest import RestAdapter, SSRFBlockedError
 from nautilus.adapters.s3 import S3Adapter
 from nautilus.adapters.servicenow import ServiceNowAdapter
+from nautilus.adapters.static import StaticAdapter
 
 # ``SourceConfig.type`` literal -> adapter class, and the single definition of
 # it: ``nautilus.core.broker`` imports this one rather than keeping a second
@@ -50,6 +51,7 @@ ADAPTER_REGISTRY: dict[str, type[Adapter]] = {
     "influxdb": InfluxDBAdapter,
     "s3": S3Adapter,
     "llm": LLMAdapter,
+    "static": StaticAdapter,
 }
 
 __all__ = [
@@ -70,6 +72,7 @@ __all__ = [
     "S3Adapter",
     "ScopeEnforcementError",
     "ServiceNowAdapter",
+    "StaticAdapter",
     "quote_identifier",
     "quote_table",
     "render_field",

@@ -174,6 +174,23 @@ session_store:
   declares a new purpose, which restarts it. `0` (the default) leaves the
   window open indefinitely.
 
+The `postgres` and `sqlite` backends need their schema created before the
+first request, and `Broker.setup()` is what creates it — it is a no-op for
+`memory` and `redis`. `nautilus serve` calls it for you. In library code, open
+the broker as a context manager and it is called on the way in:
+
+```python
+with Broker.from_config("nautilus.yaml") as broker:      # setup() runs here
+    ...
+                                                          # close() runs here
+
+async with await Broker.afrom_config("nautilus.yaml") as broker:
+    ...
+```
+
+`afrom_config` is `from_config` on a worker thread, so it needs `setup()`
+exactly as much as the sync path does.
+
 **Size the Postgres pool against your peak concurrency.** Each in-flight
 request holds *two* pooled connections at once — one for the advisory lock
 around the exposure ledger, one for the read-modify-write inside it — so a

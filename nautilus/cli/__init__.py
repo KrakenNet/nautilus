@@ -88,8 +88,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_serve.add_argument(
         "--config",
-        required=True,
-        help="Path to nautilus.yaml.",
+        default="nautilus.yaml",
+        help="Path to nautilus.yaml (default: ./nautilus.yaml).",
     )
     p_serve.add_argument(
         "--transport",
@@ -128,6 +128,16 @@ def _build_parser() -> argparse.ArgumentParser:
             "'json' for SIEM-ingestable structured lines on stdout."
         ),
     )
+
+    # demo ----------------------------------------------------------------
+    from nautilus.cli import demo as _demo_mod
+
+    _demo_mod.add_subparser(sub)
+
+    # init ----------------------------------------------------------------
+    from nautilus.cli import init as _init_mod
+
+    _init_mod.add_subparser(sub)
 
     # rkm -----------------------------------------------------------------
     from nautilus.cli import rkm as _rkm_mod
@@ -285,6 +295,14 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_health(args.url)
     if args.command == "serve":
         return _cmd_serve(args)
+    if args.command == "demo":
+        from nautilus.cli import demo as _demo_mod
+
+        return _demo_mod.dispatch(args)
+    if args.command == "init":
+        from nautilus.cli import init as _init_mod
+
+        return _init_mod.dispatch(args)
     if args.command == "rkm":
         from nautilus.cli import rkm as _rkm_mod
 

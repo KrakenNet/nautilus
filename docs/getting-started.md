@@ -12,70 +12,57 @@ Requires Python 3.13 or later.
 uv add nautilus-rkm
 ```
 
-## Configuration
+## First run
 
-This walkthrough uses a self-contained, in-memory demo adapter so you can run
-your first request with nothing but the repo — no database or external service
-required. (For a real source, swap `type: demo-local` for `postgres` and point
-`connection` at your database; see the [Adapter SDK](reference/adapter-sdk.md).)
+Nothing to configure, nothing to install beyond the package:
 
-Save this single-file adapter as `demo_adapter.py`:
-
-```python
-from typing import Any, ClassVar
-
-from nautilus.config.models import SourceConfig
-from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
-
-
-class DemoLocalAdapter:
-    source_type: ClassVar[str] = "demo-local"
-
-    async def connect(self, config: SourceConfig) -> None:
-        pass
-
-    async def execute(
-        self,
-        intent: IntentAnalysis,
-        scope: list[ScopeConstraint],
-        context: dict[str, Any],
-    ) -> AdapterResult:
-        return AdapterResult(
-            source_id="main-db",
-            rows=[
-                {"order_id": 1001, "user_id": 42, "total": 19.99},
-                {"order_id": 1002, "user_id": 42, "total": 7.50},
-            ],
-            duration_ms=0,
-        )
-
-    async def close(self) -> None:
-        pass
+```bash
+nautilus demo
 ```
 
-Create a `nautilus.yaml` alongside it:
+It declares two agent-to-agent handoffs and lets the broker decide each one:
+
+```
+  analyst (confidential) hands confidential data to chief (secret)
+    handoff ALLOWED
+
+  chief (secret) hands secret data to intern (unclassified)
+    handoff DENIED
+    reason: receiving agent clearance does not dominate declared classification
+    rule:   information-flow-violation
+```
+
+That is the whole product in miniature: a decision made by a rule, with the
+rule named, and an audit entry written for both outcomes. No database, no
+adapter, no network.
+
+## Configuration
+
+```bash
+nautilus init
+```
+
+writes a `nautilus.yaml` that runs as it stands. Its source has type `static`,
+which serves rows declared in the config itself — so a first run needs no
+database and no adapter code:
 
 ```yaml
 sources:
-  - id: main-db
-    type: demo-local
-    description: "In-memory demo source (no external service required)"
-    classification: confidential
-    data_types: [users, orders]
+  - id: orders
+    type: static
+    description: Sample order rows, served from this file.
+    classification: unclassified
+    data_types: [orders]
     allowed_purposes: [support]
-    connection: "memory://"
+    rows:
+      - {order_id: 1001, user_id: 42, total: 19.99}
+      - {order_id: 1002, user_id: 43, total: 7.50}
 
-adapters:
-  - module_path: ./demo_adapter.py
-    class: DemoLocalAdapter
-    source_type: demo-local
-
-rules:
-  user_rules_dirs: []
-
-analysis:
-  keyword_map:
-    orders: [order, orders]
+agents:
+  agent-alpha:
+    id: agent-alpha
+    clearance: confidential
+    allowed_purposes: [support]
 
 attestation:
   enabled: true
@@ -83,6 +70,12 @@ attestation:
 audit:
   path: ./audit.jsonl
 ```
+
+For a real source, swap the `static` block for the type that matches your data
+— `postgres`, `elasticsearch`, `neo4j`, `rest`, `s3` and the rest are built in
+— and point `connection` at it. To reach something with no built-in adapter,
+`nautilus adapters new` scaffolds one; see the
+[Adapter SDK](reference/adapter-sdk.md).
 
 ## First request
 
@@ -94,12 +87,12 @@ from nautilus import Broker
 with Broker.from_config("nautilus.yaml") as broker:
     response = broker.request(
         "agent-alpha",
-        "Find recent orders for user 42",
-        {"clearance": "confidential", "purpose": "support", "session_id": "s1"},
+        "Find recent orders",
+        {"purpose": "support", "session_id": "s1"},
     )
     print(response.outcome)         # "allowed"
-    print(response.data)            # {"main-db": [{"order_id": 1001, ...}, {"order_id": 1002, ...}]}
-    print(response.sources_queried) # ["main-db"]
+    print(response.data)            # {"orders": [{"order_id": 1001, ...}, {"order_id": 1002, ...}]}
+    print(response.sources_queried) # ["orders"]
     print(response.attestation_token)
 ```
 
@@ -118,11 +111,11 @@ refused, `response.skip_records` for anything the intent never asked for, and
 rows, `response.attestation_token` is a signed JWS, and `response.request_id`
 joins the response to its audit entry.
 
-Note what the third argument is doing: this config declares no `agents:`, so
-the caller's `clearance` and `purpose` are taken at face value. That is fine
-for a first run and it is why the broker warns about it at startup — declare
-agents in `nautilus.yaml` and those attributes come from the config instead.
-See [Operator guide](how-to/operator-guide.md#2-configure-nautilusyaml).
+Note what the third argument is *not* doing: it names a purpose, not a
+clearance. `agent-alpha` is declared in the config, so its clearance comes from
+there. A config that declares no `agents:` takes the caller's word for both —
+which the broker warns about at startup. See
+[Operator guide](how-to/operator-guide.md#2-configure-nautilusyaml).
 
 ## Next steps
 
