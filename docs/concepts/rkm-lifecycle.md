@@ -35,8 +35,13 @@ Validated proposals wait in a durable queue for human judgment:
 nautilus rkm queue list
 nautilus rkm queue show <proposal-id>
 nautilus rkm queue diff <proposal-id>
-nautilus rkm queue approve <proposal-id>   # or reject
+nautilus rkm queue approve <proposal-id> --url http://localhost:8000
+nautilus rkm queue reject <proposal-id> --reason "..."
 ```
+
+`approve` requires `--url`: approval promotes the rule into the CLIPS
+environment of a *running* broker, so there is nothing the CLI can approve
+against the queue on disk alone.
 
 The same operations exist over REST (`GET /v1/rkm/queue`,
 `POST /v1/rkm/queue/{id}/approve|reject`) — approvals require a
@@ -61,6 +66,11 @@ nautilus rule rollback <rule-name> ...   # restore a prior version
 nautilus rule retract <rule-name> ...    # retire a rule (destructive)
 ```
 
+Promotion writes the approved rule into the first directory of
+`rules.user_rules_dirs` and loads it into the running engine, so the rule
+is still in force after a restart. A broker with no `rules.user_rules_dirs`
+refuses the promotion rather than loading a rule that would vanish.
+
 Rollback and retraction are audited the same way, as `rule_rolled_back`
 and `rule_retracted`. A rollback is append-only — the restored version is
 re-inserted as a new one — and it does not reload the rule into a running
@@ -73,7 +83,13 @@ that approved it.
 
 ## Meta-rules
 
-The curator module watches the rule base itself — rules about rules.
-Meta-rule firings emit `meta_rule_fired` audit events with
-`rule_module="curator"`, keeping even the system's self-modification
-proposals inside the audit trail.
+The curator module is where rules about rules live. Its isolation boundary
+is enforced: a rule in any module other than `nautilus-routing` may not
+assert, modify or retract a routing-owned template, and `nautilus rules
+validate` rejects one that tries. Meta-rule firings emit `meta_rule_fired`
+audit events with `rule_module="curator"`.
+
+The shipped meta-ruleset (`pattern-tracker.yaml`) is currently empty: its
+rules need negation conditions that fathom-rules 0.11 does not support, so
+nothing in the curator module fires yet and `meta_rule_fired` has no
+producer outside tests.

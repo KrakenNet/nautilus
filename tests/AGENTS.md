@@ -10,7 +10,8 @@ red until its fix lands.
 - `tests/journeys/` — one test per user-facing promise, end to end against a
   live backend. Green. A journey going red means a shipped promise broke.
 - `tests/defects/` — one test per confirmed defect in the 1.0 audit
-  (`REPORT.md`). Red on purpose. Each fix flips a named test to green.
+  (`REPORT.md`), the re-audit (`REAUDIT.md`) and the 1.0 readiness review.
+  Red on purpose. Each fix flips a named test to green.
 - `tests/unit/`, `tests/integration/` — pure-function and in-process tests for
   logic with no backend: scope-field validation, CLIPS encoding, hierarchy
   math, validators, config loading, replay sufficiency.

@@ -10,23 +10,39 @@ load unchanged (NFR-5, AC-1.4).
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from ipaddress import ip_network
+from typing import Annotated, Literal, cast
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+
+class _Strict(BaseModel):
+    """Base for every config model: a key no field declares is an error.
+
+    ``nautilus.yaml`` is the operator's document, and until now it accepted
+    anything: ``sesion_store:`` validated, ran the in-memory session store in
+    production, and reported nothing. Silence about a key that changes what
+    runs is the opposite of the fail-closed handling the rest of the config
+    already has (an unknown clearance aborts load; ``auto_promote: true`` is
+    refused rather than ignored).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
 
 # ---------------------------------------------------------------------------
 # Phase 2 auth discriminated union (design §3.5).
 # ---------------------------------------------------------------------------
 
 
-class BearerAuth(BaseModel):
+class BearerAuth(_Strict):
     """Bearer-token auth config; token is resolved from env via interpolation."""
 
     type: Literal["bearer"] = "bearer"
     token: str
 
 
-class BasicAuth(BaseModel):
+class BasicAuth(_Strict):
     """HTTP Basic auth config."""
 
     type: Literal["basic"] = "basic"
@@ -34,7 +50,7 @@ class BasicAuth(BaseModel):
     password: str
 
 
-class MtlsAuth(BaseModel):
+class MtlsAuth(_Strict):
     """Mutual-TLS auth config; paths are filesystem locations."""
 
     type: Literal["mtls"] = "mtls"
@@ -43,7 +59,7 @@ class MtlsAuth(BaseModel):
     ca_path: str | None = None
 
 
-class NoneAuth(BaseModel):
+class NoneAuth(_Strict):
     """Explicit no-auth marker."""
 
     type: Literal["none"] = "none"
@@ -60,7 +76,7 @@ AuthConfig = Annotated[
 # ---------------------------------------------------------------------------
 
 
-class EndpointSpec(BaseModel):
+class EndpointSpec(_Strict):
     """Named REST/ServiceNow endpoint descriptor."""
 
     path: str
@@ -94,7 +110,7 @@ _REQUIRED_BY_TYPE: dict[str, str] = {
 }
 
 
-class SourceConfig(BaseModel):
+class SourceConfig(_Strict):
     """Per-source YAML entry (design §4.1, extended §3.5, §3.11).
 
     Carries the adapter kind, classification metadata, connection DSN/base-URL
@@ -168,7 +184,7 @@ class SourceConfig(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class AgentRecord(BaseModel):
+class AgentRecord(_Strict):
     """Single agent identity declared in ``nautilus.yaml`` under ``agents``."""
 
     id: str
@@ -182,13 +198,13 @@ class AgentRecord(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class NullSinkSpec(BaseModel):
+class NullSinkSpec(_Strict):
     """No-op attestation sink (default, preserves NFR-5 backwards compat)."""
 
     type: Literal["null"] = "null"
 
 
-class FileSinkSpec(BaseModel):
+class FileSinkSpec(_Strict):
     """Append-only JSONL attestation sink with per-emit flush + fsync (AC-14.2).
 
     ``chained: true`` upgrades the sink to a hash-chained, JWS-signed log
@@ -206,7 +222,7 @@ class FileSinkSpec(BaseModel):
     checkpoint_interval: int = 0
 
 
-class RetryPolicySpec(BaseModel):
+class RetryPolicySpec(_Strict):
     """Retry schedule for :class:`HttpAttestationSink` (design §3.14, AC-14.3).
 
     Mirrors :class:`nautilus.core.attestation_sink.RetryPolicy` one-for-one; the
@@ -220,7 +236,7 @@ class RetryPolicySpec(BaseModel):
     max_backoff_s: float = 5.0
 
 
-class HttpSinkSpec(BaseModel):
+class HttpSinkSpec(_Strict):
     """HTTP POST attestation sink with retry + dead-letter spill (AC-14.3).
 
     ``url`` is the verifier's ingest endpoint; ``retry_policy`` defaults match
@@ -242,7 +258,7 @@ AttestationSinkSpec = Annotated[
 ]
 
 
-class AttestationConfig(BaseModel):
+class AttestationConfig(_Strict):
     """Attestation subsection of ``nautilus.yaml`` (design §4.10, §3.14).
 
     ``sink`` selects the store-and-forward destination for signed payloads
@@ -256,7 +272,7 @@ class AttestationConfig(BaseModel):
     sink: AttestationSinkSpec = Field(default_factory=NullSinkSpec)
 
 
-class RulesConfig(BaseModel):
+class RulesConfig(_Strict):
     """Routing-rules subsection of ``nautilus.yaml`` (design §4.10)."""
 
     user_rules_dirs: list[str] = Field(default_factory=list)
@@ -270,13 +286,13 @@ class RulesConfig(BaseModel):
     consistency_checks: bool = True
 
 
-class AuditConfig(BaseModel):
+class AuditConfig(_Strict):
     """Audit-log subsection of ``nautilus.yaml`` (design §4.10)."""
 
     path: str = "./audit.jsonl"
 
 
-class AnthropicProviderSpec(BaseModel):
+class AnthropicProviderSpec(_Strict):
     """``analysis.provider`` spec selecting :class:`AnthropicProvider` (design §3.8)."""
 
     type: Literal["anthropic"] = "anthropic"
@@ -285,7 +301,7 @@ class AnthropicProviderSpec(BaseModel):
     timeout_s: float = 2.0
 
 
-class OpenAIProviderSpec(BaseModel):
+class OpenAIProviderSpec(_Strict):
     """``analysis.provider`` spec selecting :class:`OpenAIProvider` (design §3.8)."""
 
     type: Literal["openai"] = "openai"
@@ -294,7 +310,7 @@ class OpenAIProviderSpec(BaseModel):
     timeout_s: float = 2.0
 
 
-class LocalInferenceProviderSpec(BaseModel):
+class LocalInferenceProviderSpec(_Strict):
     """``analysis.provider`` spec selecting :class:`LocalInferenceProvider` (design §3.8)."""
 
     type: Literal["local"] = "local"
@@ -310,7 +326,7 @@ AnalysisProviderSpec = Annotated[
 ]
 
 
-class AnalysisConfig(BaseModel):
+class AnalysisConfig(_Strict):
     """Intent-analyzer subsection of ``nautilus.yaml`` (design §4.10, §3.8).
 
     ``mode`` selects how :meth:`Broker.arequest` resolves the intent
@@ -331,7 +347,42 @@ class AnalysisConfig(BaseModel):
     timeout_s: float = 2.0
 
 
-class ApiConfig(BaseModel):
+class ApiAuthConfig(_Strict):
+    """``api.auth`` — how the HTTP surfaces identify a caller (design §3.12, D-11).
+
+    ``proxy_trust`` was documented in the operator guide and implemented on
+    REST, MCP and the admin UI, and ``ApiConfig`` had no ``auth`` field, so no
+    config could select it. Under that mode ``X-Forwarded-User`` *is* the
+    credential, which makes it an identity only if nobody but the proxy can
+    set it — hence ``trusted_proxies``, and hence the refusal to start without
+    it.
+    """
+
+    mode: Literal["api_key", "proxy_trust"] = "api_key"
+    # CIDR blocks (or bare addresses) the forwarded identity is accepted from.
+    trusted_proxies: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _proxy_trust_needs_a_trusted_peer(self) -> ApiAuthConfig:
+        """Refuse ``proxy_trust`` with no peer restriction."""
+        if self.mode == "proxy_trust" and not self.trusted_proxies:
+            raise ValueError(
+                "api.auth.mode 'proxy_trust' requires api.auth.trusted_proxies. "
+                "Without it, X-Forwarded-User is settable by anyone who can reach "
+                "the port, so every caller can assert every identity."
+            )
+        for entry in self.trusted_proxies:
+            try:
+                ip_network(entry, strict=False)
+            except ValueError as exc:
+                raise ValueError(
+                    f"api.auth.trusted_proxies entry {entry!r} is not an address "
+                    f"or CIDR block: {exc}"
+                ) from exc
+        return self
+
+
+class ApiConfig(_Strict):
     """FastAPI/MCP API subsection of ``nautilus.yaml`` (design §3.11).
 
     Phase-2 shell extended for Phase-5 VE surface (FR-26, D-11):
@@ -347,9 +398,10 @@ class ApiConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 8000
     keys: list[str] = Field(default_factory=list)
+    auth: ApiAuthConfig = Field(default_factory=ApiAuthConfig)
 
 
-class MCPConfig(BaseModel):
+class MCPConfig(_Strict):
     """MCP transport subsection of ``nautilus.yaml`` (design §3.13).
 
     ``expose_declare_handoff`` (default ``False``) gates the optional
@@ -361,7 +413,7 @@ class MCPConfig(BaseModel):
     expose_declare_handoff: bool = False
 
 
-class SessionStoreConfig(BaseModel):
+class SessionStoreConfig(_Strict):
     """Session-store subsection of ``nautilus.yaml`` (design §3.11, §3.2).
 
     ``backend: postgres`` selects :class:`~nautilus.core.session_pg.PostgresSessionStore`.
@@ -385,7 +437,7 @@ class SessionStoreConfig(BaseModel):
     sqlite_path: str = "./.nautilus/sessions.db"
 
 
-class SessionTokenConfig(BaseModel):
+class SessionTokenConfig(_Strict):
     """Session-provenance token subsection of ``nautilus.yaml`` (#18, AC-18.a–g).
 
     ``enabled: true`` makes the broker mint an EdDSA JWS on the first
@@ -409,7 +461,7 @@ class SessionTokenConfig(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class AutoPromoteConfig(BaseModel):
+class AutoPromoteConfig(_Strict):
     """``rkm.auto_promote`` sub-section (AC-35.4.d).
 
     Default OFF is a permanent safety gate in v2.0.  When ``enabled`` is
@@ -436,7 +488,7 @@ class AutoPromoteConfig(BaseModel):
         return self
 
 
-class SandboxConfig(BaseModel):
+class SandboxConfig(_Strict):
     """``rkm.sandbox`` sub-section (AC-35.7.f).
 
     ``min_entries`` is the minimum number of audit-log entries required
@@ -448,14 +500,14 @@ class SandboxConfig(BaseModel):
     min_entries: int = 100
 
 
-class RkmConfig(BaseModel):
+class RkmConfig(_Strict):
     """``rkm`` subsection of ``nautilus.yaml`` (AC-35.4)."""
 
     auto_promote: AutoPromoteConfig = Field(default_factory=AutoPromoteConfig)
     sandbox: SandboxConfig = Field(default_factory=SandboxConfig)
 
 
-class LocalAdapterConfig(BaseModel):
+class LocalAdapterConfig(_Strict):
     """One local-path adapter entry under top-level ``adapters:`` (#17).
 
     Loads an :class:`~nautilus.adapters.base.Adapter` subclass from a
@@ -478,8 +530,26 @@ class LocalAdapterConfig(BaseModel):
     source_type: str
 
 
-class NautilusConfig(BaseModel):
+class NautilusConfig(_Strict):
     """Root ``nautilus.yaml`` document (design §4.1, §4.10, extended §3.11)."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _drop_anchor_blocks(cls, data: object) -> object:
+        """Ignore top-level ``x-``/``_`` keys — the YAML anchor idiom.
+
+        Shared fragments are declared as a top-level key and referenced with
+        ``*alias``; the key itself is not config. Every other unknown key is
+        rejected, here and in every nested model.
+        """
+        if not isinstance(data, dict):
+            return data
+        items = cast("dict[object, object]", data).items()
+        return {
+            key: value
+            for key, value in items
+            if not (isinstance(key, str) and key.startswith(("x-", "_")))
+        }
 
     sources: list[SourceConfig] = Field(default_factory=list[SourceConfig])
     adapters: list[LocalAdapterConfig] = Field(default_factory=list[LocalAdapterConfig])

@@ -110,8 +110,8 @@ _AUDIT_MAX_LIMIT = 500
 _AUDIT_DEFAULT_LIMIT = 50
 
 
-def _resolve_auth_config(broker: Broker | None) -> tuple[str, list[str]]:
-    """Extract ``(mode, keys)`` from the broker's config, tolerating absent fields.
+def _resolve_auth_config(broker: Broker | None) -> tuple[str, list[str], list[str]]:
+    """Extract ``(mode, keys, trusted_proxies)`` from the broker's config.
 
     ``ApiConfig`` is still a minimal shell in Phase 2 (host/port only). The
     design pins ``mode: "api_key" | "proxy_trust"`` and ``keys: list[str]``
@@ -120,12 +120,13 @@ def _resolve_auth_config(broker: Broker | None) -> tuple[str, list[str]]:
     ``auth`` object.
 
     Returns:
-        Tuple of ``(mode, keys)``. ``mode`` defaults to ``"api_key"``;
-        ``keys`` defaults to ``[]`` (which forces fail-closed 401 under
-        :func:`verify_api_key`).
+        Tuple of ``(mode, keys, trusted_proxies)``. ``mode`` defaults to
+        ``"api_key"``; ``keys`` defaults to ``[]`` (which forces fail-closed
+        401 under :func:`verify_api_key`); ``trusted_proxies`` is the peer
+        allow-list :func:`proxy_trust_dependency` checks the socket against.
     """
     if broker is None:
-        return ("api_key", [])
+        return ("api_key", [], [])
     api_cfg = getattr(broker, "_config", None)
     api_cfg = getattr(api_cfg, "api", None) if api_cfg is not None else None
     # auth.mode — nested discriminated object, still TBD in pydantic.
@@ -138,7 +139,12 @@ def _resolve_auth_config(broker: Broker | None) -> tuple[str, list[str]]:
     if isinstance(keys_raw, list):
         for k in keys_raw:  # pyright: ignore[reportUnknownVariableType]
             keys.append(str(k))  # pyright: ignore[reportUnknownArgumentType]
-    return (mode, keys)
+    proxies_raw: object = getattr(auth_obj, "trusted_proxies", None)
+    proxies: list[str] = []
+    if isinstance(proxies_raw, list):
+        for entry in proxies_raw:  # pyright: ignore[reportUnknownVariableType]
+            proxies.append(str(entry))  # pyright: ignore[reportUnknownArgumentType]
+    return (mode, keys, proxies)
 
 
 def _find_audit_entry(reader: AuditReader, request_id: str) -> Any:
@@ -198,9 +204,10 @@ def create_app(
             broker = Broker.from_config(config_path)
         await broker.setup()
         app.state.broker = broker
-        mode, keys = _resolve_auth_config(broker)
+        mode, keys, trusted_proxies = _resolve_auth_config(broker)
         app.state.auth_mode = mode
         app.state.api_keys = keys
+        app.state.trusted_proxies = trusted_proxies
         # Key ring for session-token endpoints (AC-18.a–g). Reuse the
         # broker's ring when session tokens are enabled — the ring is
         # in-memory, so a separate transport-level instance could never
@@ -237,6 +244,7 @@ def create_app(
     app.state.broker = None
     app.state.auth_mode = "api_key"
     app.state.api_keys = []
+    app.state.trusted_proxies = []
     app.state.ready = False
 
     # ------------------------------------------------------------------

@@ -21,7 +21,7 @@ from nautilus.adapters.base import (
     wrap_execute,
 )
 from nautilus.adapters.schema import AdapterField, AdapterSchema, AdapterTable
-from nautilus.config.models import SourceConfig
+from nautilus.config.models import BearerAuth, NoneAuth, SourceConfig
 from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
 # Default row cap applied when the intent does not specify a limit.
@@ -159,6 +159,27 @@ def _flux_like(field: str, pattern: str) -> str:
     return f"{ref} == {escaped}"
 
 
+def _auth_token(config: SourceConfig) -> str | None:
+    """The token a source's ``auth:`` block declares, if it can be one.
+
+    ``config.auth`` was read by nothing here, so a source that declared
+    credentials connected with whatever ``INFLUXDB_V2_TOKEN`` happened to hold
+    — or with none. InfluxDB v2 authenticates with a token, so ``bearer`` is
+    the block that maps; anything else is named and refused the way
+    :mod:`nautilus.adapters.s3` refuses an auth type it cannot honour.
+    """
+    auth = config.auth
+    if auth is None or isinstance(auth, NoneAuth):
+        return None
+    if isinstance(auth, BearerAuth):
+        return auth.token
+    raise AdapterError(
+        f"InfluxDBAdapter: source '{config.id}' declares auth type {auth.type!r}, which "
+        f"InfluxDB cannot use. Use 'bearer' (token=the InfluxDB API token), or omit "
+        f"'auth' to read INFLUXDB_V2_TOKEN from the environment."
+    )
+
+
 class InfluxDBAdapter:
     """InfluxDB adapter backed by ``influxdb_client.InfluxDBClient``.
 
@@ -196,11 +217,11 @@ class InfluxDBAdapter:
                 InfluxDBClient,  # pyright: ignore[reportMissingTypeStubs, reportPrivateImportUsage]
             )
 
-            # Connection is the URL; token and org are picked up from standard
-            # InfluxDB env vars (INFLUXDB_V2_TOKEN, INFLUXDB_V2_ORG) or passed
-            # explicitly when the env vars are present.
+            # Connection is the URL. The token comes from the source's own
+            # ``auth: {type: bearer}`` block when it declares one, else from the
+            # standard InfluxDB env vars (INFLUXDB_V2_TOKEN, INFLUXDB_V2_ORG).
             client_kwargs: dict[str, Any] = {"url": config.connection}
-            token = os.environ.get("INFLUXDB_V2_TOKEN")
+            token = _auth_token(config) or os.environ.get("INFLUXDB_V2_TOKEN")
             org = os.environ.get("INFLUXDB_V2_ORG")
             if token:
                 client_kwargs["token"] = token

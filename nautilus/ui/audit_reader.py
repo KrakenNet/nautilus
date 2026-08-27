@@ -15,6 +15,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -182,25 +183,22 @@ class AuditReader:
         # For desc, cursor=0 means "start from the end".
         # A non-zero cursor means "start reading backwards from this offset".
         read_end = file_size if offset == 0 else offset
-        lines = self._read_lines_backwards(read_end, self._page_size * 2)
 
         entries: list[AuditEntry] = []
-        consumed_up_to = read_end  # track where we stopped
-        first_line_offset: int | None = None
-
-        for line_text, line_offset in lines:
+        consumed_up_to = 0  # start of the oldest line we looked at
+        for line_text, line_offset in self._iter_lines_backwards(read_end):
+            consumed_up_to = line_offset
             entry = self._parse_line(line_text)
             if entry is None:
                 continue
             if self._matches(entry, agent_id, source_id, event_type, start, end):
                 entries.append(entry)
-                if first_line_offset is None or line_offset < first_line_offset:
-                    first_line_offset = line_offset
                 if len(entries) >= self._page_size:
-                    consumed_up_to = line_offset
                     break
 
-        # next_cursor = further back in the file (older entries)
+        # next_cursor = further back in the file (older entries). A page that
+        # stopped short of a full page has reached the start of the file, so
+        # there is nothing older; a full page resumes at the line it stopped on.
         has_older = consumed_up_to > 0 and len(entries) >= self._page_size
         next_cursor = self._encode_cursor(consumed_up_to) if has_older else None
         # prev_cursor = toward end of file (newer entries)
@@ -213,49 +211,53 @@ class AuditReader:
             total_estimate=total_estimate,
         )
 
-    def _read_lines_backwards(self, from_offset: int, max_lines: int) -> list[tuple[str, int]]:
-        """Read up to ``max_lines`` complete lines backwards from ``from_offset``.
+    def _iter_lines_backwards(self, from_offset: int) -> Iterator[tuple[str, int]]:
+        """Yield ``(line_text, line_start_offset)`` backwards from ``from_offset``.
 
-        Returns list of (line_text, line_start_offset) tuples, ordered
-        newest-first (highest offset first).
+        Backwards reading used to stop after a fixed window of ``page_size * 2``
+        lines, which is correct only for an unfiltered read: a filter whose
+        matches are older than the window returned an empty page *and* no
+        cursor, i.e. "no such access happened". This yields until the start of
+        the file and lets the caller stop when its page is full, which is what
+        the ascending reader already does.
+
+        Byte offsets throughout: the file is read in binary so an offset is a
+        seekable position regardless of the encoding of the bytes around it.
         """
-        if from_offset <= 0:
-            return []
-
         chunk_size = 8192
-        result: list[tuple[str, int]] = []
         remaining = from_offset
-        leftover = ""
+        leftover = b""
 
-        with open(self._path, encoding="utf-8") as fh:
-            while remaining > 0 and len(result) < max_lines:
+        with open(self._path, "rb") as fh:
+            while remaining > 0:
                 read_size = min(chunk_size, remaining)
                 start_pos = remaining - read_size
                 fh.seek(start_pos)
-                chunk = fh.read(read_size)
+                chunk = fh.read(read_size) + leftover
                 remaining = start_pos
 
-                chunk = chunk + leftover
-                parts = chunk.split("\n")
-                # First part may be a partial line (split mid-line); save it
+                parts = chunk.split(b"\n")
+                # The first part may be a partial line — it continues backwards
+                # into the chunk we have not read yet, so it is carried over.
                 leftover = parts[0]
 
-                # Process remaining parts in reverse (newest first)
-                for part in reversed(parts[1:]):
-                    text = part.strip()
-                    if not text:
-                        continue
-                    # Approximate offset for this line
-                    line_offset = start_pos + chunk.rfind(part)
-                    result.append((text, max(line_offset, 0)))
-                    if len(result) >= max_lines:
-                        break
+                # Offset of each part, relative to the chunk we just read.
+                offsets: list[int] = []
+                pos = start_pos
+                for part in parts:
+                    offsets.append(pos)
+                    pos += len(part) + 1
 
-            # Handle leftover (the very first line in the read region)
-            if leftover.strip() and len(result) < max_lines:
-                result.append((leftover.strip(), 0))
+                for part, part_offset in zip(
+                    reversed(parts[1:]), reversed(offsets[1:]), strict=True
+                ):
+                    text = part.decode("utf-8", errors="replace").strip()
+                    if text:
+                        yield (text, part_offset)
 
-        return result
+            tail = leftover.decode("utf-8", errors="replace").strip()
+            if tail:
+                yield (tail, 0)
 
     # -- parsing / filtering -------------------------------------------
 

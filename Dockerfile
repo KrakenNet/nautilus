@@ -40,13 +40,16 @@ COPY pyproject.toml uv.lock README.md /app/
 # edits), then (2) re-sync with the project after source is copied so
 # importlib.metadata can resolve `nautilus` at runtime (powers `nautilus
 # version` / FR-30).
-RUN uv sync --frozen --no-dev --no-install-project
+# ``--extra otel`` is not optional for the published image: without it every
+# metric is a no-op stub and ``GET /metrics`` raises ImportError, i.e. a 500
+# on every Prometheus scrape the monitoring guide tells operators to set up.
+RUN uv sync --frozen --no-dev --extra otel --no-install-project
 
 # Copy the application source last so edits don't bust the dep layer.
 COPY nautilus /app/nautilus
 
 # Install the nautilus package itself so `importlib.metadata.version` works.
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev --extra otel
 
 ############################
 # Stage 2 — runtime        #
@@ -67,8 +70,11 @@ ENV PYTHONPATH=/app \
 USER 65532:65532
 
 # No shell available — invoke the interpreter directly (exec form).
+# ``--bind 0.0.0.0``: ``nautilus serve`` defaults to 127.0.0.1, which inside a
+# container means "serve nobody" — and the HEALTHCHECK below probes localhost
+# from inside the same namespace, so that misconfiguration reported healthy.
 ENTRYPOINT ["/app/.venv/bin/python", "-m", "nautilus"]
-CMD ["serve", "--config", "/config/nautilus.yaml"]
+CMD ["serve", "--config", "/config/nautilus.yaml", "--bind", "0.0.0.0"]
 
 # HEALTHCHECK runs the CLI's `health` subcommand which probes /readyz via
 # urllib (no external binary needed — NFR-10). Exec form is mandatory on
@@ -97,4 +103,4 @@ RUN apt-get update \
 COPY --from=builder /app /app
 
 ENTRYPOINT ["/app/.venv/bin/python", "-m", "nautilus"]
-CMD ["serve", "--config", "/config/nautilus.yaml"]
+CMD ["serve", "--config", "/config/nautilus.yaml", "--bind", "0.0.0.0"]

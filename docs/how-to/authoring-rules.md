@@ -239,8 +239,13 @@ and from which proposal.
 
 ## RKM: rules proposed by the system
 
-Beyond hand-written rules, the Rule Knowledge Management subsystem
-proposes new rules from observed traffic, runs them through the same
-validator pipeline, and queues them for human review
-(`GET /v1/rkm/queue`, approve/reject endpoints). See
+Beyond hand-written rules, the Rule Knowledge Management subsystem takes
+proposed rules, runs them through the same validator pipeline, and queues
+them for human review (`GET /v1/rkm/queue`, approve/reject endpoints). See
 [RKM lifecycle](../concepts/rkm-lifecycle.md).
+
+The curator meta-rules that would *generate* those proposals from observed
+traffic ship disabled: they need negation conditions (`not:`) that
+fathom-rules 0.11 does not have, so `pattern-tracker.yaml` loads with an
+empty rule list. Proposals today come from the pipeline you invoke, not
+from the system watching itself.

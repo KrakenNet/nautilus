@@ -21,8 +21,7 @@ RouteResult`` imports keep working.
 
 from __future__ import annotations
 
-import contextlib
-import tempfile
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -253,7 +252,13 @@ class FathomRouter:
                 "clearance": (
                     record.clearance if record is not None else str(context.get("clearance", ""))
                 ),
-                "purpose": str(context.get("purpose", "")),
+                # A registered agent's ``default_purpose`` is what the config
+                # says it is. It was parsed, shipped in three example configs,
+                # and read only by the session-token minter, so an agent that
+                # declared one and omitted ``purpose`` was still denied by
+                # ``deny-purpose-mismatch``.
+                "purpose": str(context.get("purpose") or "")
+                or (record.default_purpose or "" if record is not None else ""),
                 "compartments": _encode_compartments(
                     record.compartments
                     if record is not None
@@ -642,33 +647,52 @@ class FathomRouter:
             )
 
     def reload_rule(self, rule_name: str, rule_yaml: str) -> None:
-        """Load/reload a single rule into the active CLIPS environment.
+        """Persist a promoted rule into the user rules directory, then load it.
 
-        Writes ``rule_yaml`` to a temp file then calls ``engine.load_rules``.
-        Raises :class:`~nautilus.core.PolicyEngineError` if the engine rejects
-        the rule (caller should mark proposal ``promotion_failed`` and re-raise).
+        Promotion is a deploy: ``rkm-lifecycle.md`` describes an approved
+        proposal as in force, and the queue marks it ``promoted``, which
+        ``approve_proposal`` refuses to re-approve. This used to write the YAML
+        to a ``NamedTemporaryFile``, load it, and unlink it — so the rule was
+        gone at the next restart with no way back through the queue.
+
+        The file is written where the broker's own ``rules.user_rules_dirs``
+        points, which is the directory a restart re-reads.
+
+        Raises:
+            PolicyEngineError: if the engine rejects the rule (caller marks the
+                proposal ``promotion_failed`` and re-raises), or if there is no
+                configured ``rules.user_rules_dirs`` to persist into — a
+                promotion that cannot outlive the process is not a promotion.
         """
+        if not self._user_rules_dirs:
+            raise PolicyEngineError(
+                f"cannot promote rule {rule_name!r}: no rules.user_rules_dirs is "
+                f"configured, so the rule would live only in this process and be "
+                f"gone at the next restart while the proposal reads 'promoted'. "
+                f"Configure a writable rules directory and retry the approval."
+            )
+        safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", rule_name).strip("._-") or "promoted-rule"
+        target_dir = Path(self._user_rules_dirs[0])
+        target = target_dir / f"{safe_name}.yaml"
         try:
-            with tempfile.NamedTemporaryFile(
-                mode="w",
-                suffix=".yaml",
-                delete=False,
-                encoding="utf-8",
-            ) as tmp:
-                tmp.write(rule_yaml)
-                tmp_path = tmp.name
-            self._engine.load_rules(tmp_path)
+            target_dir.mkdir(parents=True, exist_ok=True)
+            target.write_text(rule_yaml, encoding="utf-8")
+        except OSError as exc:
+            raise PolicyEngineError(
+                f"cannot promote rule {rule_name!r}: writing {target} failed: {exc}"
+            ) from exc
+        try:
+            self._engine.load_rules(str(target))
         except PolicyEngineError:
+            target.unlink(missing_ok=True)
             raise
         except Exception as exc:  # noqa: BLE001
+            # A rule the engine refuses must not be left on disk, or the next
+            # restart loads it and the broker does not come up.
+            target.unlink(missing_ok=True)
             raise PolicyEngineError(
                 f"FathomRouter.reload_rule() failed for rule_name={rule_name!r}: {exc}"
             ) from exc
-        finally:
-            import os as _os
-
-            with contextlib.suppress(OSError):
-                _os.unlink(tmp_path)  # type: ignore[possibly-undefined]
 
     def close(self) -> None:
         """No-op for the Phase 1 in-process Engine (kept for Protocol parity)."""

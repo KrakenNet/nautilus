@@ -26,10 +26,20 @@ if TYPE_CHECKING:
 AUTH_HEADERS = {"X-Forwarded-User": "test-operator"}
 
 
+# The admin router authenticates in ``proxy_trust`` mode, which trusts the
+# forwarded identity only when the peer is one of the configured proxies.
+TRUSTED_PEER = ("10.0.0.5", 40000)
+
+
+def _client(app: FastAPI) -> TestClient:
+    return TestClient(app, client=TRUSTED_PEER)
+
+
 def _build_app(broker: object) -> FastAPI:
     app = FastAPI()
     app.include_router(router)
     app.state.auth_mode = "proxy_trust"
+    app.state.trusted_proxies = ["10.0.0.0/8"]
     app.state.broker = broker
     return app
 
@@ -75,7 +85,7 @@ class TestAuditChainBanner:
         sink = ChainedFileAttestationSink(tmp_path / "att.jsonl", service)
         _emit_n(sink, 2)
 
-        client = TestClient(_build_app(_fake_broker(tmp_path, sink, service)))
+        client = _client(_build_app(_fake_broker(tmp_path, sink, service)))
         resp = client.get("/admin/audit", headers=AUTH_HEADERS)
         assert resp.status_code == 200
         assert "VERIFIED (2 records)" in resp.text
@@ -91,7 +101,7 @@ class TestAuditChainBanner:
         del lines[1]
         log_path.write_bytes(b"\n".join(lines) + b"\n")
 
-        client = TestClient(_build_app(_fake_broker(tmp_path, sink, service)))
+        client = _client(_build_app(_fake_broker(tmp_path, sink, service)))
         resp = client.get("/admin/audit", headers=AUTH_HEADERS)
         assert resp.status_code == 200
         assert "BROKEN" in resp.text
@@ -100,7 +110,7 @@ class TestAuditChainBanner:
     def test_not_chained_banner_without_chained_sink(
         self, tmp_path: Path, service: AttestationService
     ) -> None:
-        client = TestClient(_build_app(_fake_broker(tmp_path, object(), service)))
+        client = _client(_build_app(_fake_broker(tmp_path, object(), service)))
         resp = client.get("/admin/audit", headers=AUTH_HEADERS)
         assert resp.status_code == 200
         assert "NOT CHAINED" in resp.text
@@ -118,7 +128,7 @@ class TestAuditChainBanner:
 
         monkeypatch.setattr(router_mod, "_attestation_chain_status", _spy)
         sink = ChainedFileAttestationSink(tmp_path / "att.jsonl", service)
-        client = TestClient(_build_app(_fake_broker(tmp_path, sink, service)))
+        client = _client(_build_app(_fake_broker(tmp_path, sink, service)))
         resp = client.get("/admin/audit", headers={**AUTH_HEADERS, "HX-Request": "true"})
         assert resp.status_code == 200
         assert calls == []

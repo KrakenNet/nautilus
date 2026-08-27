@@ -26,6 +26,7 @@ from elasticsearch.dsl.query import Bool, Exists, Range, Term, Terms, Wildcard
 from nautilus.adapters.base import (
     AdapterError,
     ScopeEnforcementError,
+    mtls_context,
     validate_field,
     wrap_execute,
 )
@@ -255,8 +256,11 @@ class ElasticsearchAdapter:
         elif isinstance(auth, BearerAuth):
             # ES python client uses ``api_key`` for bearer-style tokens.
             client_kwargs["api_key"] = auth.token
-        elif isinstance(auth, MtlsAuth) and auth.ca_path is not None:
-            client_kwargs["ca_certs"] = auth.ca_path
+        elif isinstance(auth, MtlsAuth):
+            # The client certificate is the credential here; forwarding only
+            # ``ca_path`` (and only when it was set) meant the connection
+            # presented nothing and the operator was told nothing.
+            client_kwargs["ssl_context"] = mtls_context(auth, config.id)
 
         try:
             self._client = AsyncElasticsearch(**client_kwargs)

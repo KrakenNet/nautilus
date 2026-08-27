@@ -19,6 +19,7 @@ otherwise. Read-only probes (``/healthz``, ``/readyz``) stay un-gated.
 from __future__ import annotations
 
 import secrets
+from ipaddress import ip_address, ip_network
 from typing import TYPE_CHECKING, Any
 
 from fastapi import Depends, HTTPException, status
@@ -46,7 +47,6 @@ to keep the adapter layer off the transport layer) by
 # security scheme declaration consistent.
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
 """FastAPI security scheme for the ``X-API-Key`` header (auto_error=True)."""
-
 
 
 def caller_identity(request: Request, *, auth_mode: str = "api_key") -> dict[str, str]:
@@ -125,18 +125,48 @@ async def require_api_key(
     return header_value
 
 
+def _peer_is_trusted(peer: str, trusted: list[str]) -> bool:
+    """Is ``peer`` inside one of the configured ``trusted_proxies`` blocks?"""
+    if not peer:
+        return False
+    try:
+        address = ip_address(peer)
+    except ValueError:
+        return False
+    for entry in trusted:
+        try:
+            if address in ip_network(entry, strict=False):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
 async def proxy_trust_dependency(request: Request) -> str:
     """Return the upstream-proxy-asserted user from ``X-Forwarded-User``.
 
     Used when ``config.api.auth.mode == "proxy_trust"`` — the upstream
-    mesh/ingress has already authenticated the caller and forwarded the
-    resolved identity. Nautilus trusts the header verbatim (D-11).
+    mesh/ingress has already authenticated the caller (mTLS, SPIFFE, OIDC) and
+    forwarded the resolved identity. Under this mode the header *is* the
+    credential, so it is only an identity while nobody but the proxy can set
+    it: the socket peer must fall inside ``api.auth.trusted_proxies``, which
+    the config refuses to omit.
 
     Raises:
-        HTTPException: 401 if ``X-Forwarded-User`` is missing or empty —
-            the proxy SHOULD always set it when traffic reaches us;
-            missing header implies a bypass attempt.
+        HTTPException: 401 if the peer is not a configured proxy, or if
+            ``X-Forwarded-User`` is missing or empty — the proxy SHOULD always
+            set it when traffic reaches us; a missing header implies a bypass
+            attempt.
     """
+    app = request.scope.get("app")
+    state = getattr(app, "state", None)
+    trusted: list[str] = list(getattr(state, "trusted_proxies", []) or [])
+    peer = request.client.host if request.client else ""
+    if not _peer_is_trusted(peer, trusted):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Forwarded identity rejected: peer is not a trusted proxy",
+        )
     user = request.headers.get("X-Forwarded-User")
     if not user:
         raise HTTPException(

@@ -3,7 +3,7 @@
 Subcommands:
     rkm queue list [--status STATUS] [--min-confidence FLOAT] [--json]
     rkm queue show <proposal_id> [--json]
-    rkm queue approve <proposal_id> [--note TEXT] [--config PATH]
+    rkm queue approve <proposal_id> --url URL [--api-key KEY] [--note TEXT]
     rkm queue reject <proposal_id> --reason TEXT [--config PATH]
     rkm queue diff <proposal_id>
     rkm lineage <proposal_id|rule_name> [--depth N] [--json]
@@ -84,6 +84,14 @@ def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> N
     p_approve.add_argument("proposal_id", help="Proposal ID.")
     p_approve.add_argument("--note", default=None, help="Optional reviewer note.")
     p_approve.add_argument("--json", action="store_true", help="Emit JSON to stdout.")
+    p_approve.add_argument(
+        "--url",
+        help=(
+            "Base URL of the running broker (e.g. http://localhost:8000). Required: "
+            "approving promotes the rule into the engine that broker is serving with."
+        ),
+    )
+    p_approve.add_argument("--api-key", dest="api_key", help="X-API-Key for the broker.")
     p_approve.add_argument(
         "--config",
         default=None,
@@ -290,59 +298,67 @@ def _cmd_queue_show(args: argparse.Namespace) -> int:
 
 
 def _cmd_queue_approve(args: argparse.Namespace) -> int:
+    """Approve a proposal on a running broker.
+
+    Approval is not a bookkeeping change: it promotes the rule into the CLIPS
+    environment the broker is serving with. This used to call
+    ``approve_proposal(..., router=None)`` against the on-disk queue, so it
+    marked the proposal ``promoted`` and loaded the rule nowhere — while
+    ``rkm-lifecycle.md`` claimed the CLI and REST paths were equivalent.
+    ``nautilus key rotate`` already answers this shape: require ``--url`` and
+    refuse to act locally on state that lives inside a broker.
+    """
+    import httpx
+
     reviewer = require_reviewer()  # exits 1 if not set (DQ4)
-    queue = _open_queue()
-    proposal = queue.get(args.proposal_id)
-    if proposal is None:
-        err(f"proposal {args.proposal_id} not found")
-        return 1
+    url = getattr(args, "url", None)
+    if not url:
+        err(
+            "rkm queue approve: --url is required. Approving promotes the rule into "
+            "the engine of a running broker, so there is nothing for the CLI to "
+            "approve locally — point --url at the broker (e.g. --url http://localhost:8000)."
+        )
+        return 2
 
-    # Idempotency: already approved/promoted → treat as success
-    if proposal.status in ("approved", "promoted"):
-        msg = f"proposal {args.proposal_id} already_approved (status={proposal.status})"
-        if getattr(args, "json", False):
-            print(json.dumps({"status": "already_approved", "proposal_id": args.proposal_id}))
-        else:
-            ok(msg)
-        return 0
+    endpoint = f"{str(url).rstrip('/')}/v1/rkm/queue/{args.proposal_id}/approve"
+    headers = {"X-Nautilus-Reviewer": reviewer}
+    api_key = getattr(args, "api_key", None)
+    if api_key:
+        headers["X-API-Key"] = api_key
+    body: dict[str, Any] = {}
+    if getattr(args, "note", None):
+        body["note"] = args.note
 
-    from nautilus.rkm.lineage import LineageStore
-    from nautilus.rkm.review import AlreadyDecidedError, approve_proposal
-
-    lineage = LineageStore(_DEFAULT_LINEAGE_DIR)
     try:
-        result = approve_proposal(
-            args.proposal_id,
-            reviewer,
-            queue=queue,
-            lineage=lineage,
-            router=None,
-            audit_logger=open_audit_logger(getattr(args, "config", None)),
-        )
-    except AlreadyDecidedError as exc:
-        msg = f"proposal {args.proposal_id} already_approved (status={exc.current_status})"
+        with httpx.Client(timeout=10.0) as client:
+            response = client.post(endpoint, json=body, headers=headers)
+    except httpx.HTTPError as exc:
+        err(f"rkm queue approve: cannot reach {endpoint}: {exc}")
+        return 2
+
+    if response.status_code == 409:
+        msg = f"proposal {args.proposal_id} already decided"
         if getattr(args, "json", False):
             print(json.dumps({"status": "already_approved", "proposal_id": args.proposal_id}))
         else:
             ok(msg)
         return 0
-    except KeyError:
+    if response.status_code == 404:
         err(f"proposal {args.proposal_id} not found")
         return 1
+    if response.status_code != 200:
+        err(f"rkm queue approve: server returned {response.status_code}: {response.text}")
+        return 2
 
+    payload: dict[str, Any] = response.json()
     if getattr(args, "json", False):
-        print(
-            json.dumps(
-                {
-                    "proposal_id": result.proposal_id,
-                    "reviewer": result.reviewer,
-                    "approved_at": result.approved_at.isoformat(),
-                    "promoted": result.promoted,
-                }
-            )
-        )
+        print(json.dumps(payload, default=str))
     else:
-        ok(f"proposal {result.proposal_id} approved by {result.reviewer}")
+        promoted = payload.get("promoted")
+        ok(
+            f"proposal {payload.get('proposal_id', args.proposal_id)} approved by "
+            f"{payload.get('reviewer', reviewer)} (promoted={promoted})"
+        )
     return 0
 
 

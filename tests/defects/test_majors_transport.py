@@ -43,12 +43,17 @@ def app_config(
 ) -> tuple[str, Path]:
     monkeypatch.setenv("JOURNEY_PG_DSN", pg_dsn)
     audit = tmp_path / "audit.jsonl"
+    # A promoted rule has to land somewhere that survives the process, so the
+    # app is configured the way a deployment that reviews rules would be.
+    user_rules = tmp_path / "user-rules"
+    user_rules.mkdir()
     config = write_config(
         {
             "sources": [_pg_source()],
             "agents": {"a": {"id": "a", "clearance": "unclassified"}},
             "audit": {"path": str(audit)},
             "api": {"keys": [API_KEY]},
+            "rules": {"user_rules_dirs": [str(user_rules)]},
         }
     )
     return config, audit

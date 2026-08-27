@@ -21,6 +21,7 @@ existed carry no engine input and cannot be replayed; they are counted in
 from __future__ import annotations
 
 import json
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -195,6 +196,7 @@ def _build_routers(
     built_in_rules_dir: Path,
     rule_packs: list[str],
     user_rules_dirs: list[Path],
+    scratch_dir: Path,
 ) -> tuple[FathomRouter, FathomRouter, str]:
     """Build the baseline and candidate engines. Returns ``(baseline, candidate, rule_name)``.
 
@@ -210,9 +212,13 @@ def _build_routers(
         user_rules_dirs=user_rules_dirs,
         rule_packs=rule_packs,
     )
+    # ``scratch_dir`` is where the candidate rule lands: ``reload_rule`` writes
+    # the rule into the router's first user-rules directory (a promotion has to
+    # survive a restart), and a sandbox replay is the one caller for which the
+    # load is deliberately throwaway.
     candidate = FathomRouter(
         built_in_rules_dir=built_in_rules_dir,
-        user_rules_dirs=user_rules_dirs,
+        user_rules_dirs=[scratch_dir, *user_rules_dirs],
         rule_packs=rule_packs,
     )
     try:
@@ -246,12 +252,16 @@ def sandbox_replay(
     the engine rejects is not a rule with a clean sandbox record.
     """
     entries = _load_entries(audit_log_path, replay_n)
-    baseline, candidate, rule_name = _build_routers(
-        proposed_rule,
-        built_in_rules_dir or BUILT_IN_RULES_DIR,
-        rule_packs or [],
-        user_rules_dirs or [],
-    )
+    # The scratch directory only has to outlive the load: once the engine has
+    # the rule, the file is no longer read.
+    with tempfile.TemporaryDirectory(prefix="nautilus-sandbox-") as scratch:
+        baseline, candidate, rule_name = _build_routers(
+            proposed_rule,
+            built_in_rules_dir or BUILT_IN_RULES_DIR,
+            rule_packs or [],
+            user_rules_dirs or [],
+            Path(scratch),
+        )
 
     fired_count = 0
     regression_count = 0

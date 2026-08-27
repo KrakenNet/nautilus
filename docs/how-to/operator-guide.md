@@ -5,7 +5,7 @@ serve, monitor, rotate keys, and back up the audit trail.
 
 ## 1. Install
 
-Requires Python 3.14+.
+Requires Python 3.13+.
 
 ```bash
 uv add nautilus-rkm

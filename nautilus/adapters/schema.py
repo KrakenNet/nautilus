@@ -329,21 +329,21 @@ class SchemaFingerprintStore:
     def get(self, adapter_id: str) -> str | None:
         """Return the last-recorded fingerprint for ``adapter_id``. AC-21.c.
 
-        Falls back to the on-disk record when the store is rooted: a baseline
-        recorded before a restart has to survive it, or drift detection only
-        ever sees the current process and can never fire.
+        The on-disk record wins when the store is rooted. A baseline recorded
+        before a restart has to survive it — and ``nautilus adapters schema-ack``
+        runs in its own process, so answering from the in-memory cache first
+        meant a serving broker never saw the ack: it kept comparing against the
+        pre-ack fingerprint and stayed quarantined until restart, while the
+        quarantine message told the operator to run exactly that command.
         """
-        cached = self._store.get(adapter_id)
-        if cached is not None:
-            return cached
         fp_path = self._path_for(adapter_id)
         if fp_path is None:
-            return None
+            return self._store.get(adapter_id)
         import json
         import os
 
         if not os.path.exists(fp_path):
-            return None
+            return self._store.get(adapter_id)
         try:
             with open(fp_path) as fh:
                 stored: object = json.load(fh)

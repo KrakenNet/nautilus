@@ -36,6 +36,7 @@ from neo4j import READ_ACCESS, AsyncGraphDatabase, RoutingControl
 from nautilus.adapters.base import (
     AdapterError,
     ScopeEnforcementError,
+    mtls_context,
     wrap_execute,
 )
 from nautilus.adapters.schema import AdapterSchema, AdapterTable
@@ -188,6 +189,7 @@ class Neo4jAdapter:
             return
 
         auth: tuple[str, str] | None = None
+        driver_kwargs: dict[str, Any] = {}
         a = config.auth
         if isinstance(a, BasicAuth):
             auth = (a.username, a.password)
@@ -196,9 +198,11 @@ class Neo4jAdapter:
             # arbitrary 2-tuples and the Phase-2 fixtures use BasicAuth here.
             auth = ("bearer", a.token)
         elif isinstance(a, MtlsAuth):
-            # mTLS at the transport layer is configured via the URI scheme
-            # (``neo4j+s://``) and certificate trust store; no auth tuple.
+            # No auth tuple: the certificate is the credential. It has to reach
+            # the driver, though — this branch used to discard the whole block
+            # and connect with the ambient trust store.
             auth = None
+            driver_kwargs["ssl_context"] = mtls_context(a, config.id)
 
         try:
             # ``AsyncGraphDatabase.driver`` is partially typed in the neo4j
@@ -206,7 +210,7 @@ class Neo4jAdapter:
             # ``**config: Any``). Pin to ``Any`` for the broker-side handle
             # which mirrors the ``ElasticsearchAdapter._client`` pattern.
             self._driver = AsyncGraphDatabase.driver(  # pyright: ignore[reportUnknownMemberType]
-                config.connection, auth=auth
+                config.connection, auth=auth, **driver_kwargs
             )
         except AdapterError:
             raise

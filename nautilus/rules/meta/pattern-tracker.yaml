@@ -142,9 +142,9 @@
 #         artifact_type: relationship_fact
 #         target_module: curator
 
-# TODO(fathom-0.4): the rules above use `not:` CEs and slot `value:`
-# pinning that fathom-rules 0.3.1 RulesetDefinition does not support
-# (when: list[FactPattern] only). They fail engine construction at
+# TODO(fathom): the rules above use `not:` CEs and slot `value:` pinning
+# that the fathom-rules RulesetDefinition still does not support as of
+# 0.11 (when: list[FactPattern] only; FactPattern has no negation). They fail engine construction at
 # broker startup. Original bodies preserved in the comment block above;
 # re-enable when fathom grows negation CEs. Stub below keeps the
 # ruleset loadable so `nautilus serve` can construct the engine.

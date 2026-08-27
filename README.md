@@ -13,7 +13,7 @@
 
 > **Part of the [Kraken](https://github.com/KrakenNet) stack:** [Fathom](https://github.com/KrakenNet/fathom) (reasoning engine) · [**Nautilus**](https://github.com/KrakenNet/nautilus) (policy data broker) · [Stargraph](https://github.com/KrakenNet/stargraph) (agent-graph framework).
 
-**Current version:** 0.1.5
+**Current version:** 0.2.2
 **License:** Apache-2.0
 **Language:** Python 3.13+
 **Package Manager:** uv
@@ -138,19 +138,27 @@ A `nautilus.yaml` declares sources, rules, analysis, audit, and attestation:
 ```yaml
 sources:
   - id: main-db
-    adapter: postgres
-    dsn: ${DATABASE_URL}
+    type: postgres
+    description: "Customer orders"
     classification: confidential
     data_types: [users, orders]
+    allowed_purposes: [support]
+    connection: ${DATABASE_URL}
+    table: public.orders
+
+agents:
+  support-bot:
+    id: support-bot
+    clearance: confidential
+    default_purpose: support
 
 rules:
-  paths: [./rules/]
+  user_rules_dirs: [./rules/]
 
 attestation:
   enabled: true
 
 audit:
-  sink: file
   path: ./audit.jsonl
 ```
 

@@ -135,6 +135,13 @@ def load_config(path: str | Path) -> NautilusConfig:
         seen_ids.add(source_id)
 
         source_type = entry_dict.get("type")
+        if source_type is None:
+            # Reporting ``type='None'`` sent readers looking for a source type
+            # they had spelled wrong; the key is simply absent.
+            raise ConfigError(
+                f"Source id='{source_id}' is missing the required key 'type' "
+                f"(one of: {sorted(supported_types)})"
+            )
         if source_type not in supported_types:
             raise ConfigError(
                 f"Unsupported source type='{source_type}' for id='{source_id}' "

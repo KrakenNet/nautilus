@@ -4,7 +4,7 @@ Covers FR-26, AC-12.2, AC-12.3:
     (a) ``verify_api_key("good", ["good","other"])`` passes.
     (b) ``verify_api_key("bad", ["good"])`` raises HTTP 401.
     (c) ``secrets.compare_digest`` is used (patched + asserted called).
-    (d) ``proxy_trust`` mode reads ``X-Forwarded-User`` header value as identity.
+    (d) ``proxy_trust`` mode reads ``X-Forwarded-User`` as identity, from a trusted peer.
     (e) Both modes return the resolved identity string.
 """
 
@@ -27,14 +27,31 @@ pytestmark = pytest.mark.unit
 
 
 class _StateCarrier:
-    """Minimal ``app``-like object exposing a ``state.api_keys`` attribute."""
+    """Minimal ``app``-like object exposing the auth-relevant ``state`` fields."""
 
-    def __init__(self, *, api_keys: list[str]) -> None:
-        self.state = type("State", (), {"api_keys": api_keys})()
+    def __init__(
+        self,
+        *,
+        api_keys: list[str] | None = None,
+        trusted_proxies: list[str] | None = None,
+    ) -> None:
+        self.state = type(
+            "State",
+            (),
+            {"api_keys": api_keys or [], "trusted_proxies": trusted_proxies or []},
+        )()
 
 
-def _build_request(headers: list[tuple[bytes, bytes]], app: Any = None) -> Any:
-    """Construct a minimal Starlette Request with the given headers / app."""
+TRUSTED_PROXIES = ["10.0.0.0/8"]
+TRUSTED_PEER = ("10.0.0.5", 40000)
+
+
+def _build_request(
+    headers: list[tuple[bytes, bytes]],
+    app: Any = None,
+    client: tuple[str, int] | None = None,
+) -> Any:
+    """Construct a minimal Starlette Request with the given headers / app / peer."""
     from starlette.requests import Request as StarletteRequest
 
     scope: Any = {
@@ -45,7 +62,18 @@ def _build_request(headers: list[tuple[bytes, bytes]], app: Any = None) -> Any:
     }
     if app is not None:
         scope["app"] = app
+    if client is not None:
+        scope["client"] = client
     return StarletteRequest(scope)
+
+
+def _forwarded_request(identity: str) -> Any:
+    """A forwarded-identity request arriving from a trusted proxy."""
+    return _build_request(
+        [(b"x-forwarded-user", identity.encode("utf-8"))],
+        app=_StateCarrier(trusted_proxies=TRUSTED_PROXIES),
+        client=TRUSTED_PEER,
+    )
 
 
 # --- (a) verify_api_key accepts a matching key in a multi-key allow-list ------
@@ -111,10 +139,18 @@ def test_c_verify_api_key_uses_secrets_compare_digest(
 
 
 async def test_d_proxy_trust_reads_x_forwarded_user_as_identity() -> None:
-    """``proxy_trust_dependency`` returns the header value verbatim."""
-    req = _build_request([(b"x-forwarded-user", b"alice")])
-    identity = await proxy_trust_dependency(req)
+    """``proxy_trust_dependency`` returns the header value sent by a trusted proxy."""
+    identity = await proxy_trust_dependency(_forwarded_request("alice"))
     assert identity == "alice"
+
+    # Control: the same header from an untrusted peer must not be believed.
+    untrusted = _build_request(
+        [(b"x-forwarded-user", b"alice")],
+        app=_StateCarrier(trusted_proxies=TRUSTED_PROXIES),
+        client=("203.0.113.9", 40000),
+    )
+    with pytest.raises(HTTPException):
+        await proxy_trust_dependency(untrusted)
 
 
 # --- (e) both modes return the resolved identity string -----------------------
@@ -136,7 +172,6 @@ async def test_e_both_modes_return_resolved_identity_string(
         req = _build_request(headers=[], app=_StateCarrier(api_keys=[identity]))
         resolved = await require_api_key(req, header_value=identity)
     else:
-        req = _build_request(headers=[(b"x-forwarded-user", identity.encode("utf-8"))])
-        resolved = await proxy_trust_dependency(req)
+        resolved = await proxy_trust_dependency(_forwarded_request(identity))
     assert isinstance(resolved, str)
     assert resolved == identity

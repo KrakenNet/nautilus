@@ -23,6 +23,7 @@ import yaml
 from fathom.compiler import CompilationError, Compiler
 from fathom.models import RuleDefinition, TemplateDefinition
 
+from nautilus.rkm.curator.isolation import CuratorIsolationViolation, assert_module_isolation
 from nautilus.rkm.types import ValidationError
 from nautilus.rules import BUILT_IN_RULES_DIR
 
@@ -62,6 +63,7 @@ def validate_static(rule_yaml_path: Path) -> StaticResult:
     - Missing ``rules`` / ``module`` top-level keys per rule
     - Unknown template references in ``lhs`` patterns
     - Duplicate rule names within the file
+    - A non-routing module asserting a routing-owned template
 
     Returns a :class:`StaticResult` with ``ok=True`` and empty ``errors``
     on success, or ``ok=False`` with populated ``errors`` on failure.
@@ -205,6 +207,30 @@ def validate_static(rule_yaml_path: Path) -> StaticResult:
                             ),
                         )
                     )
+
+    # Module isolation. A rule outside ``nautilus-routing`` must not write the
+    # routing module's facts: that is the control that keeps a self-proposing
+    # curator from rewriting routing decisions directly. It ran only at router
+    # construction, against the shipped meta-ruleset (which ships ``rules: []``),
+    # so it never saw a rule an author validates.
+    module_name = str(data_dict.get("module", ""))
+    if module_name and module_name != "nautilus-routing":
+        try:
+            assert_module_isolation(rule_yaml_path, module_name)
+        except CuratorIsolationViolation as exc:
+            errors.append(
+                ValidationError(
+                    file=file_str,
+                    line=1,
+                    col=1,
+                    message=f"Module isolation violation: {exc}",
+                    hint=(
+                        f"Rules in module '{module_name}' may not assert, modify or "
+                        f"retract templates owned by 'nautilus-routing'. Emit a "
+                        f"proposal instead and let review promote it."
+                    ),
+                )
+            )
 
     if errors:
         return StaticResult(ok=False, errors=tuple(errors))

@@ -19,7 +19,10 @@ from nautilus.config.models import SourceConfig
 from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
 if TYPE_CHECKING:
+    import ssl
+
     from nautilus.adapters.schema import AdapterSchema
+    from nautilus.config.models import MtlsAuth
 
 
 class AdapterError(Exception):
@@ -154,6 +157,34 @@ SESSION_TOKEN_HEADER = "X-Nautilus-Session-Token"
 Mirrors ``nautilus.transport.auth._SESSION_TOKEN_HEADER`` — duplicated here so
 the adapter layer never imports the transport layer.
 """
+
+
+def mtls_context(auth: MtlsAuth, source_id: str) -> ssl.SSLContext:
+    """Build the TLS context a source's ``auth: {type: mtls}`` block describes.
+
+    Both the Elasticsearch and Neo4j adapters used to accept an ``mtls`` block
+    and drop the certificate: Elasticsearch forwarded ``ca_path`` alone (and
+    only when it was set), Neo4j discarded the block entirely with a comment
+    saying the certificate belongs on the URI. Either way the operator saw no
+    error and got a connection that presents no client certificate — a
+    credential silently downgraded to none.
+
+    Raises:
+        AdapterError: if the certificate, key or CA cannot be loaded. A path
+            that does not resolve is a configuration error, not a reason to
+            connect anonymously.
+    """
+    import ssl
+
+    context = ssl.create_default_context(cafile=auth.ca_path)
+    try:
+        context.load_cert_chain(certfile=auth.cert_path, keyfile=auth.key_path)
+    except (OSError, ssl.SSLError) as exc:
+        raise AdapterError(
+            f"source '{source_id}' declares mTLS but its client certificate could "
+            f"not be loaded (cert_path={auth.cert_path!r}, key_path={auth.key_path!r}): {exc}"
+        ) from exc
+    return context
 
 
 def session_token_headers(context: dict[str, Any]) -> dict[str, str] | None:
@@ -300,6 +331,7 @@ def wrap_execute(fn: _ExecuteFn) -> _ExecuteFn:
 
 
 __all__ = [
+    "mtls_context",
     "SESSION_TOKEN_HEADER",
     "Adapter",
     "AdapterError",
