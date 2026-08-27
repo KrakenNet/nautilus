@@ -5,11 +5,13 @@ Subcommands:
     key rotate --yes --url URL [--api-key KEY] [--json]
     key revoke <kid> --reason "..." --yes --url URL [--api-key KEY] [--json]
 
-``--url`` is REQUIRED on all three. The signing ring lives in the broker
-process' memory, so there is no local ring for the CLI to act on: the previous
-no-``--url`` mode built a throwaway :class:`KeyRing` (whose ``__init__``
-auto-mints a primary), printed a fresh random kid and exited 0 having changed
-nothing on any broker and written no audit event.
+``--url`` is REQUIRED on all three. Rotation and revocation are audited events
+a *broker* emits, and a broker holds its ring in memory whether or not
+``session_tokens.key_ring_path`` also persists it, so acting on the file
+directly would leave the running broker signing with a key it no longer has and
+write no audit event. The previous no-``--url`` mode built a throwaway
+:class:`KeyRing` (whose ``__init__`` auto-mints a primary), printed a fresh
+random kid and exited 0 having changed nothing on any broker.
 
 With ``--url`` the command drives the ``GET /v1/keys/jwks.json`` /
 auth-gated ``POST /v1/keys/rotate`` / ``POST /v1/keys/{kid}/revoke``
@@ -78,9 +80,10 @@ def _require_url(args: argparse.Namespace, command: str) -> str | None:
     if url:
         return str(url).rstrip("/")
     fail(
-        f"key {command}: --url is required. The signing ring lives in the broker "
-        f"process, so there is nothing for the CLI to act on locally — point "
-        f"--url at the running broker (e.g. --url http://localhost:8000)."
+        f"key {command}: --url is required. Rotation and revocation are audited "
+        f"events the broker emits against the ring it is serving with, so there "
+        f"is nothing for the CLI to act on locally — point --url at the running "
+        f"broker (e.g. --url http://localhost:8000)."
     )
     return None
 

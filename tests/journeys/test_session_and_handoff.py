@@ -96,6 +96,7 @@ def test_the_ledger_follows_the_caller_not_the_declared_session(session_config: 
     different callers.
     """
     from nautilus import Broker
+    from nautilus.core.principal import derive_principal_id
 
     async def _run() -> tuple[set[str], set[str], set[str]]:
         broker = Broker.from_config(session_config)
@@ -105,18 +106,25 @@ def test_the_ledger_follows_the_caller_not_the_declared_session(session_config: 
             await broker.arequest("chief", "phone", {"purpose": "care", "session_id": "gamma"})
             store: Any = broker.session_store
 
-            async def _visited(sid: str) -> set[str]:
-                state = await store.aget(sid) if hasattr(store, "aget") else store.get(sid)
+            async def _visited(key: str) -> set[str]:
+                state = await store.aget(key) if hasattr(store, "aget") else store.get(key)
                 return set((state or {}).get("sources_visited", []))
 
-            return await _visited("alpha"), await _visited("beta"), await _visited("gamma")
+            # ``alpha`` is a session row -- what that one session did. The other
+            # two reads are principal ledgers: the accumulation a caller cannot
+            # reset by declaring a new session id.
+            return (
+                await _visited("alpha"),
+                await _visited(derive_principal_id("analyst")),
+                await _visited(derive_principal_id("chief")),
+            )
         finally:
             await broker.aclose()
 
-    alpha, beta, gamma = asyncio.run(_run())
+    alpha, analyst, chief = asyncio.run(_run())
     assert alpha == {"pii_ssn"}
-    assert beta == {"pii_ssn", "pii_dob"}, "a fresh session id reset the same caller's ledger"
-    assert gamma == {"pii_phone"}, "a different caller inherited someone else's exposure"
+    assert analyst == {"pii_ssn", "pii_dob"}, "a fresh session id reset the same caller's ledger"
+    assert chief == {"pii_phone"}, "a different caller inherited someone else's exposure"
 
 
 # ---------------------------------------------------------------------------

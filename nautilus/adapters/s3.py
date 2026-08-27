@@ -179,14 +179,18 @@ class S3Adapter:
         if self._client is None or self._config is None or self._bucket is None:
             raise AdapterError("S3Adapter.execute called before connect()")
 
-        prefix: str | None = None
-        exact_key: str | None = None
+        # Every constraint on a field ANDs with the others. These used to be
+        # single slots assigned in the loop, so a second constraint on 'key'
+        # overwrote the first: "under restricted/ AND not the payroll object"
+        # returned the payroll object.
+        prefixes: list[str] = []
+        exact_keys: set[str] = set()
+        classifications: set[str] = set()
         # (tag_name, op, value). ``IN`` keeps its members as a tuple; it used
         # to be str(value), which turned ["alice", "bob"] into the literal
         # "['alice', 'bob']" and made the membership test below a substring
         # match -- a tag value of "li" passed a filter for alice-or-bob.
         tag_filters: list[_TagFilter] = []
-        classification_filter: str | None = None
 
         for constraint in scope:
             field = constraint.field
@@ -195,14 +199,14 @@ class S3Adapter:
 
             if field == "key":
                 if op == "=":
-                    exact_key = str(value)
+                    exact_keys.add(str(value))
                 elif op == "LIKE":
                     if not isinstance(value, str):
                         raise ScopeEnforcementError(
                             "S3Adapter: LIKE operator requires a string value"
                         )
                     # Strip trailing % wildcard for prefix matching.
-                    prefix = value.rstrip("%")
+                    prefixes.append(value.rstrip("%"))
                 else:
                     raise ScopeEnforcementError(
                         f"S3Adapter: unsupported operator '{op}' for field 'key'"
@@ -221,16 +225,27 @@ class S3Adapter:
                     raise ScopeEnforcementError(
                         f"S3Adapter: unsupported operator '{op}' for classification"
                     )
-                classification_filter = str(value)
+                classifications.add(str(value))
             else:
                 raise ScopeEnforcementError(f"S3Adapter: unsupported scope field '{field}'")
 
-        # Classification gate: reject early if the source classification
-        # does not match the requested classification label.
-        if (
-            classification_filter is not None
-            and self._config.classification != classification_filter
-        ):
+        # Intersect the accumulated constraints. The longest prefix is the
+        # binding one; anything the others exclude makes the whole conjunction
+        # unsatisfiable, and so does a second, different exact key or
+        # classification. An unsatisfiable scope selects no object -- returning
+        # rows for the loosest of the constraints would be the fail-open.
+        prefix: str | None = max(prefixes, key=len) if prefixes else None
+        exact_key: str | None = next(iter(exact_keys)) if len(exact_keys) == 1 else None
+        unsatisfiable = (
+            len(exact_keys) > 1
+            or len(classifications) > 1
+            or (prefix is not None and any(not prefix.startswith(p) for p in prefixes))
+            or (exact_key is not None and prefix is not None and not exact_key.startswith(prefix))
+            # Classification gate: the source's own label must match the
+            # requested one.
+            or bool(classifications and self._config.classification not in classifications)
+        )
+        if unsatisfiable:
             return AdapterResult(
                 source_id=self._config.id,
                 rows=[],

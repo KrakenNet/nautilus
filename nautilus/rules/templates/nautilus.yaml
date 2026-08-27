@@ -36,6 +36,7 @@ templates:
       - { name: allowed_purposes, type: string, default: "" }      # space-separated
       - { name: compartments,     type: string, default: "" }      # pipe-delimited (fathom parse_compartments)
       - { name: sub_category,     type: string, default: "" }
+      - { name: purpose_field,    type: string, default: "" }      # column carrying a row's collected-for purpose
 
   - name: session
     description: "Per-request session counters and purpose/exposure tracking."

@@ -14,10 +14,20 @@ Reuse anchors:
 from __future__ import annotations
 
 import dataclasses
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Literal, cast
+
+log = logging.getLogger(__name__)
+
+# Version of what a stored fingerprint *means*. Bump it whenever the schema a
+# fingerprint is taken over changes shape (0.2.x hashed every table the
+# connection could see; the current format hashes only the declared table).
+# A record written under an older format is not drift -- it is not comparable
+# -- so it re-baselines instead of quarantining every source on upgrade.
+FINGERPRINT_FORMAT: int = 2
 
 
 @dataclass(frozen=True)
@@ -343,8 +353,21 @@ class SchemaFingerprintStore:
             return None
         if not isinstance(stored, dict):
             return None
-        fingerprint = cast("dict[str, object]", stored).get("fingerprint")
+        record = cast("dict[str, object]", stored)
+        fingerprint = record.get("fingerprint")
         if not isinstance(fingerprint, str):
+            return None
+        if record.get("format") != FINGERPRINT_FORMAT:
+            # Written by a release that fingerprinted a different shape. Its
+            # value cannot be compared to today's, so reporting a mismatch
+            # would quarantine every source on upgrade with no migration path.
+            log.info(
+                "re-baselining adapter '%s': its fingerprint was recorded in format %r, "
+                "this release uses format %d",
+                adapter_id,
+                record.get("format"),
+                FINGERPRINT_FORMAT,
+            )
             return None
         self._store[adapter_id] = fingerprint
         return fingerprint
@@ -359,7 +382,14 @@ class SchemaFingerprintStore:
         if fp_path is not None:
             os.makedirs(os.path.dirname(fp_path), exist_ok=True)
             with open(fp_path, "w") as fh:
-                json.dump({"adapter_id": adapter_id, "fingerprint": fingerprint}, fh)
+                json.dump(
+                    {
+                        "adapter_id": adapter_id,
+                        "fingerprint": fingerprint,
+                        "format": FINGERPRINT_FORMAT,
+                    },
+                    fh,
+                )
 
     def record_ack(
         self,
@@ -383,6 +413,7 @@ class SchemaFingerprintStore:
                     {
                         "adapter_id": adapter_id,
                         "fingerprint": fingerprint,
+                        "format": FINGERPRINT_FORMAT,
                         "reviewer": reviewer,
                         "reason": reason,
                         "acked_at": datetime.now(UTC).isoformat(),
@@ -392,6 +423,7 @@ class SchemaFingerprintStore:
 
 
 __all__ = [
+    "FINGERPRINT_FORMAT",
     "AdapterField",
     "AdapterSchema",
     "AdapterTable",

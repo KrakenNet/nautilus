@@ -132,6 +132,12 @@ class SourceConfig(BaseModel):
     auth: AuthConfig | None = None
     compartments: str = ""
     sub_category: str = ""
+    # Column carrying the purpose a row was collected for. The shipped
+    # compliance packs scope on it; they cannot know an operator's schema, so
+    # they used to assert a literal ``purpose`` column and every covered
+    # request died with ``UndefinedColumnError``. Undeclared, a pack that
+    # scopes by purpose denies the source rather than over-returning it.
+    purpose_field: str = ""
     like_style: Literal["starts_with", "regex"] = "starts_with"
     # llm-only (#43): model name sent to the OpenAI-compatible endpoint at
     # ``connection``. Required for ``type: llm`` (enforced by LLMAdapter).
@@ -391,6 +397,11 @@ class SessionTokenConfig(BaseModel):
 
     enabled: bool = False
     ttl_seconds: int = 3600
+    # Where the signing ring persists. Unset keeps it in-process, which is fine
+    # for one broker and wrong for two: replicas with their own rings reject
+    # each other's tokens with ``unknown_kid``. Point every replica at one path
+    # (a shared volume or mounted secret) to run more than one.
+    key_ring_path: str | None = None
 
 
 # ---------------------------------------------------------------------------

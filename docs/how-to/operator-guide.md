@@ -130,6 +130,7 @@ reset it; see above.
 session_tokens:
   enabled: true
   ttl_seconds: 3600
+  key_ring_path: /var/lib/nautilus/keyring.json   # required for >1 replica
 ```
 
 When enabled, the first request in a session mints an EdDSA JWS bound to
@@ -139,6 +140,28 @@ present-but-invalid header is a 401). A valid token's `session_id` claim
 overrides the caller-declared session id. Verification is fail-closed.
 Session tokens are not what protects the exposure ledger — omitting one is
 always allowed — the per-caller principal above is.
+
+`key_ring_path` persists the signing ring. Without it each broker process
+generates its own keys at startup, so a restart invalidates every outstanding
+token and a second replica rejects the first one's tokens with `unknown_kid`.
+Point every replica at one path on shared storage. The file holds private key
+material and is written `0600`.
+
+### Running more than one replica
+
+Two brokers can serve one deployment, but they have to share the state that
+makes a decision reproducible:
+
+- `session_store.backend: postgres` (or `redis`) — the exposure ledger. The
+  broker takes a Postgres advisory lock around each ledger read-modify-write,
+  so replicas serialise against each other rather than overwriting.
+- `session_tokens.key_ring_path` — one signing ring, as above.
+- `attestation.sink` with `chained: true` — **one writer only**. A hash chain
+  is a total order; the second replica to append to the same file is refused
+  (`SinkAlreadyLockedError`) rather than allowed to corrupt the chain. Give
+  each replica its own path, or use `chained: false`, whose appends are atomic.
+- MCP over HTTP keeps its transport sessions in process memory, so a client
+  must be routed to the replica it initialized against (sticky sessions).
 
 ### Relative paths
 
@@ -163,6 +186,7 @@ nautilus serve --config /etc/nautilus/nautilus.yaml \
 | `--transport` | `rest` | `rest`, `mcp`, or `both` |
 | `--mcp-mode` | `stdio` | MCP transport when `mcp`/`both`: `stdio` or `http` |
 | `--bind` | `127.0.0.1:8000` | REST bind address (`both` puts MCP http on port+1) |
+
 | `--air-gapped` | — | See below |
 | `--log-format` | `text` | `text` or `json` (structured logs for SIEM ingestion) |
 
@@ -171,6 +195,12 @@ Probe it:
 ```bash
 nautilus health --url http://127.0.0.1:8000/readyz
 ```
+
+`--mcp-mode http` runs the MCP streamable transport with sessions: the server
+issues an `mcp-session-id` at `initialize` and every later call must present
+it. That id is what keys a caller's session state, so two clients never share
+one working memory. Sessions live in the serving process — see
+[Running more than one replica](#running-more-than-one-replica).
 
 ### Air-gapped mode
 
@@ -292,6 +322,10 @@ baselines the broker reads.
 nautilus rules validate my-rules.yaml
 nautilus rules test --file my-rules.yaml --audit-log /var/lib/nautilus/audit.jsonl
 ```
+
+`rules validate` builds the file into a real engine, not just the compiler, so
+an unknown module, a slot no template declares, or an operator CLIPS does not
+have is caught here rather than at the next broker start.
 
 See the [rule-authoring guide](authoring-rules.md) for the full workflow,
 including shadow detection and sandbox replay against production audit

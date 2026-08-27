@@ -2,7 +2,7 @@
 
 import glob
 import os
-from typing import Any, TypedDict, cast
+from typing import Any, NotRequired, TypedDict, cast
 
 import pytest
 import yaml
@@ -20,8 +20,16 @@ HIPAA_PACK = "data-routing-hipaa"
 # Named explicitly rather than re-derived from the pack YAML: a test that reads
 # the same files it is checking cannot detect a pack that fails to load.
 PACK_RULE_NAMES = {
-    NIST_PACK: {"ac-6-least-privilege", "ac-16-unbound-security-attributes"},
-    HIPAA_PACK: {"minimum-necessary-phi-scope", "deny-phi-outside-tpo"},
+    NIST_PACK: {
+        "ac-6-least-privilege",
+        "ac-6-unscopable-source",
+        "ac-16-unbound-security-attributes",
+    },
+    HIPAA_PACK: {
+        "minimum-necessary-phi-scope",
+        "minimum-necessary-unscopable-phi",
+        "deny-phi-outside-tpo",
+    },
 }
 
 # Expected salience band per asserted fact template. Keyed on what a rule
@@ -134,7 +142,7 @@ class TestSalienceBands:
     def test_the_packs_actually_ship_rules(self) -> None:
         # Guards the parametrisation below: an empty discovery would make
         # every case vanish silently.
-        assert len(self._rules) == 4
+        assert len(self._rules) == 6
 
     @pytest.mark.parametrize(
         "basename,rule",
@@ -189,11 +197,24 @@ class Trigger(TypedDict):
     classification: str
     data_types: list[str]
     allowed_purposes: list[str]
+    purpose_field: NotRequired[str]
 
 
 TRIGGERS: dict[str, Trigger] = {
     # confidential-or-above source -> purpose scope constraint
     "ac-6-least-privilege": {
+        "clearance": "secret",
+        "purpose": "analytics",
+        "classification": "confidential",
+        "data_types": ["pii"],
+        "allowed_purposes": ["analytics"],
+        # The column the scope constraint is written against. A pack cannot
+        # know the operator's schema, so a source that declares none is denied
+        # by ``ac-6-unscopable-source`` instead of being scoped.
+        "purpose_field": "purpose",
+    },
+    # confidential source that declares no purpose_field -> denial, not scoping
+    "ac-6-unscopable-source": {
         "clearance": "secret",
         "purpose": "analytics",
         "classification": "confidential",
@@ -210,6 +231,15 @@ TRIGGERS: dict[str, Trigger] = {
     },
     # PHI source -> minimum-necessary scope constraint
     "minimum-necessary-phi-scope": {
+        "clearance": "secret",
+        "purpose": "treatment",
+        "classification": "confidential",
+        "data_types": ["phi"],
+        "allowed_purposes": ["treatment"],
+        "purpose_field": "purpose",
+    },
+    # PHI source that declares no purpose_field -> denial, not scoping
+    "minimum-necessary-unscopable-phi": {
         "clearance": "secret",
         "purpose": "treatment",
         "classification": "confidential",
@@ -234,6 +264,7 @@ def _route(
     classification: str,
     data_types: list[str],
     allowed_purposes: list[str],
+    purpose_field: str = "",
 ) -> Any:
     """Route a single-source request built from a TRIGGERS entry."""
     from nautilus.config.models import SourceConfig
@@ -251,6 +282,7 @@ def _route(
                 classification=classification,
                 data_types=data_types,
                 allowed_purposes=allowed_purposes,
+                purpose_field=purpose_field,
                 connection="memory://",
             )
         ],

@@ -30,7 +30,7 @@ import sys
 import threading
 import time
 import uuid
-from collections.abc import Coroutine, Iterable, Mapping
+from collections.abc import AsyncIterator, Coroutine, Iterable, Mapping
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -341,6 +341,12 @@ class _RequestState:
     # this request's exposure into it, so the accumulation must start from the
     # same snapshot the rules evaluated against.
     session_state: dict[str, Any] = field(default_factory=dict[str, Any])
+    # The two ledgers as they were read, before ``_merge_exposure`` unioned them
+    # into ``session_state``. Kept apart so each is written back holding what it
+    # actually accumulated: the union belongs in the policy input, not in the
+    # per-session row, which an operator reads as "what this session did".
+    session_row: dict[str, Any] = field(default_factory=dict[str, Any])
+    principal_row: dict[str, Any] = field(default_factory=dict[str, Any])
 
     def apply_route_result(self, route_result: RouteResult) -> None:
         """Copy router output into the mutable request state."""
@@ -750,8 +756,14 @@ class Broker:
         synthesizer = BasicSynthesizer()
 
         # Session-provenance tokens (#18) — KeyRing only when enabled, so
-        # Phase-1 YAML keeps the token path entirely off (NFR-5).
-        key_ring = KeyRing() if config.session_tokens.enabled else None
+        # Phase-1 YAML keeps the token path entirely off (NFR-5). A configured
+        # ``key_ring_path`` persists the ring so replicas share signing keys.
+        key_ring_path = config.session_tokens.key_ring_path
+        key_ring = (
+            KeyRing(cls._resolve(base_dir, key_ring_path) if key_ring_path else None)
+            if config.session_tokens.enabled
+            else None
+        )
 
         return cls(
             config=config,
@@ -1707,14 +1719,40 @@ class Broker:
                 f"could not be receipted. Build a new Broker."
             )
 
-    def _session_lock(self, session_id: str | None) -> AbstractAsyncContextManager[None]:
-        """Serialise the read-merge-write of one session's exposure ledger.
+    def _ledger_lock(self, *keys: str) -> AbstractAsyncContextManager[None]:
+        """Serialise the read-merge-write of every exposure ledger this request touches.
 
-        A no-op for sessionless requests, which have no ledger to race on.
+        A request accumulates under two keys -- the declared session and the
+        caller's principal -- and both are read-modify-written. Locking only the
+        session left the principal record racing: two requests declaring
+        different session ids took different locks, both read the principal
+        ledger empty, and the loser's exposure was dropped. That is the B3
+        defeat one key over, and it is reachable with ``asyncio.gather``.
+
+        Keys are acquired in sorted order so two requests that share one key and
+        differ on the other cannot deadlock. A no-op when there is no key at all.
         """
-        if not session_id:
+        wanted = sorted({k for k in keys if k})
+        if not wanted:
             return contextlib.nullcontext()
-        return self._session_locks.setdefault(session_id, asyncio.Lock())
+        return self._hold_ledger_locks(wanted)
+
+    @contextlib.asynccontextmanager
+    async def _hold_ledger_locks(self, keys: list[str]) -> AsyncIterator[None]:
+        """Hold every lock in ``keys`` (already sorted) for the block's duration.
+
+        Two locks per key, not one: the ``asyncio.Lock`` serialises this
+        process's own concurrent requests, and the session store's lock — when
+        the store has one, i.e. when it is shared — serialises this replica
+        against every other replica writing the same ledger.
+        """
+        store_lock = getattr(self._session_store, "alock", None)
+        async with contextlib.AsyncExitStack() as stack:
+            for key in keys:
+                await stack.enter_async_context(self._session_locks.setdefault(key, asyncio.Lock()))
+                if store_lock is not None:
+                    await stack.enter_async_context(store_lock(key))
+            yield
 
     async def _run_pipeline(
         self,
@@ -1724,7 +1762,7 @@ class Broker:
         state: _RequestState,
     ) -> None:
         """Happy-path pipeline body — mutates ``state`` in place."""
-        async with self._session_lock(state.session_id):
+        async with self._ledger_lock(state.session_id, state.principal_id):
             with broker_span(SPAN_INTENT_ANALYSIS):
                 await self._analyze_intent(intent, context, state)
             with broker_span(SPAN_FATHOM_ROUTING):
@@ -1894,11 +1932,14 @@ class Broker:
         session_state = await self._session_get(state.session_id) if state.session_id else {}
         if state.session_id:
             session_state.setdefault("id", state.session_id)
+        state.session_row = dict(session_state)
         # Fold the caller's principal-wide exposure in before the rules see it.
         # Without this a caller escaped cumulative escalation by declaring a
         # session id it had never used -- the ledger is the control, and the
-        # key was the caller's to pick (§4.15).
-        session_state = _merge_exposure(await self._session_get(state.principal_id), session_state)
+        # key was the caller's to pick (§4.15). The union is the policy input
+        # only; each record is written back with its own history.
+        state.principal_row = await self._session_get(state.principal_id)
+        session_state = _merge_exposure(state.principal_row, session_state)
         state.session_state = dict(session_state)
         route_result = self._router.route(
             agent_id=agent_id,
@@ -1935,27 +1976,32 @@ class Broker:
         """
         if not state.session_id:
             return
-        entry: dict[str, Any] = {
+        common: dict[str, Any] = {
             "last_request_id": state.request_id,
             "last_sources_queried": state.sources_queried,
         }
-        entry.update(self._accumulate_exposure(state, context))
-        # Written under both keys: the session record is what an operator reads
-        # and what TTL ages out, the principal record is what survives the
-        # caller picking a new session id.
+        # Two records, each folded onto its OWN prior. The session record is
+        # what an operator reads and what TTL ages out, so it must describe that
+        # session; the principal record is what survives the caller picking a
+        # new session id. Writing the merged union to both made every session
+        # row claim the caller's whole history.
+        session_entry = common | self._accumulate_exposure(state, context, state.session_row)
+        principal_entry = common | self._accumulate_exposure(state, context, state.principal_row)
         if hasattr(self._session_store, "aupdate"):
-            await self._session_store.aupdate(state.session_id, entry)  # type: ignore[attr-defined]
-            await self._session_store.aupdate(state.principal_id, entry)  # type: ignore[attr-defined]
+            await self._session_store.aupdate(state.session_id, session_entry)  # type: ignore[attr-defined]
+            await self._session_store.aupdate(state.principal_id, principal_entry)  # type: ignore[attr-defined]
             return
         # Sync fallback — only reachable when the store implements the Phase-1
         # :class:`SessionStore` Protocol (``update``). The union type widens to
         # include :class:`AsyncSessionStore` so pyright needs the explicit cast.
         sync_store: SessionStore = self._session_store  # type: ignore[assignment]
-        sync_store.update(state.session_id, entry)
-        sync_store.update(state.principal_id, entry)
+        sync_store.update(state.session_id, session_entry)
+        sync_store.update(state.principal_id, principal_entry)
 
-    def _accumulate_exposure(self, state: _RequestState, context: dict[str, Any]) -> dict[str, Any]:
-        """Fold this request's exposure into the session's cumulative slots.
+    def _accumulate_exposure(
+        self, state: _RequestState, context: dict[str, Any], prior: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Fold this request's exposure into ``prior``'s cumulative slots.
 
         :meth:`FathomRouter._assert_session` reads ``data_types_seen``,
         ``sources_visited``, ``pii_sources_accessed_list``,
@@ -1970,7 +2016,6 @@ class Broker:
         first request of a session and restarts whenever the declared purpose
         changes, since a new purpose is a new grant.
         """
-        prior = state.session_state
         by_id = {s.id: s for s in self._registry}
         queried = [by_id[sid] for sid in state.sources_queried if sid in by_id]
 
@@ -2089,26 +2134,34 @@ class Broker:
                 )
             )
             return None
-        if source_id in self._connected_adapters:
+        if source_id in self._connected_adapters and source_id not in self._quarantined_adapters:
             return adapter
         async with self._connect_locks.setdefault(source_id, asyncio.Lock()):
             # Re-check under the lock: the request that lost the race must
-            # reuse the winner's pool, not build a second one.
+            # reuse the winner's pool, not build a second one -- and must see
+            # the winner's drift verdict, which is why the gate below runs
+            # before the adapter is published as connected. Checking after the
+            # publish let the loser skip the gate and query a drifted source.
             if source_id in self._connected_adapters:
-                return adapter
-            try:
-                await adapter.connect(self._registry.get(source_id))
-            except Exception as exc:  # noqa: BLE001 — surface as per-source error
-                state.errored.append(
-                    _source_error(
-                        source_id, type(exc).__name__, f"connect() failed: {exc}", state.request_id
+                drifted = source_id in self._quarantined_adapters
+            else:
+                try:
+                    await adapter.connect(self._registry.get(source_id))
+                except Exception as exc:  # noqa: BLE001 — surface as per-source error
+                    state.errored.append(
+                        _source_error(
+                            source_id,
+                            type(exc).__name__,
+                            f"connect() failed: {exc}",
+                            state.request_id,
+                        )
                     )
-                )
-                return None
-            self._connected_adapters.add(source_id)
-        # Connect is lazy, so this is where an adapter's schema is first
-        # reachable — checking only in setup() left the drift gate dead.
-        if await self._check_adapter_schema(source_id, adapter):
+                    return None
+                # Connect is lazy, so this is where an adapter's schema is
+                # first reachable — checking only in setup() left the gate dead.
+                drifted = await self._check_adapter_schema(source_id, adapter)
+                self._connected_adapters.add(source_id)
+        if drifted:
             state.errored.append(
                 _source_error(
                     source_id,

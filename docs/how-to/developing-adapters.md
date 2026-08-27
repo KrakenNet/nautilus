@@ -116,3 +116,7 @@ fingerprint changes unexpectedly (see `nautilus adapters schema-diff` /
 `schema-ack` in the [operator guide](operator-guide.md)). Returning a
 static capability-only schema is fine for backends without
 introspectable schemas (REST and LLM adapters do this).
+
+Stored baselines carry the format version they were taken under. When a release
+changes *what* is fingerprinted, an existing baseline is re-recorded instead of
+read as drift — an upgrade must not quarantine every source at once.

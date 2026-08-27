@@ -25,6 +25,10 @@ sources:
   by the default purpose-mismatch rule. An empty list allows any purpose.
 - `data_types` drive both routing (intent analysis matches requested
   data types to sources) and the auto-generated intent vocabulary.
+- `purpose_field` (optional) names the column a purpose-scoping rule writes
+  its row filter against. Only the shipped
+  [rule packs](../reference/rule-packs.md) read it; without one they deny the
+  source rather than guess a column name.
 
 ## 2. Restart and verify routing
 

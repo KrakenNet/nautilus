@@ -66,9 +66,16 @@ async def get_auth_user(request: Request) -> str:
 
 
 async def get_audit_path(request: Request) -> str:
-    """Return the audit JSONL file path from the broker's configuration."""
+    """Return the audit JSONL file the broker actually writes to.
+
+    ``config.audit.path`` is what the operator typed and is resolved against the
+    config directory when the broker is built; reading it raw pointed the audit
+    surface at the same relative name under the *process* cwd, so an incident
+    response answered 200 with an empty trail.
+    """
     broker: Broker = request.app.state.broker  # type: ignore[assignment]
-    return str(broker._config.audit.path)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    path = broker.audit_path
+    return str(path) if path is not None else str(broker.config.audit.path)
 
 
 __all__ = [

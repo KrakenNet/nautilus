@@ -70,6 +70,7 @@ from nautilus.core.models import BrokerRequest, BrokerResponse
 from nautilus.transport.auth import (
     SESSION_TOKEN_HEADER,
     api_key_header,
+    caller_identity,
     proxy_trust_dependency,
     verify_api_key,
     verify_session_token,
@@ -244,22 +245,10 @@ def create_app(
     # ------------------------------------------------------------------
 
     def _caller_identity(request: Request) -> dict[str, str]:
-        """Who the transport authenticated this request as (§4.15).
-
-        Keys the cumulative-exposure ledger, so it must carry nothing the
-        caller's own payload can set. ``auth`` is the API key the request
-        presented or, under ``proxy_trust``, the upstream's
-        ``X-Forwarded-User``; ``peer`` is the socket address, recorded for
-        provenance and used as the key's fallback only when the deployment
-        authenticates nobody.
-        """
-        mode = getattr(request.app.state, "auth_mode", "api_key")
-        if mode == "proxy_trust":
-            auth = request.headers.get("X-Forwarded-User") or ""
-        else:
-            auth = request.headers.get("X-API-Key") or ""
-        peer = request.client.host if request.client else ""
-        return {"auth": auth, "peer": peer}
+        """This app's auth mode, then the shared derivation in ``auth``."""
+        return caller_identity(
+            request, auth_mode=getattr(request.app.state, "auth_mode", "api_key")
+        )
 
     async def _write_guard(request: Request) -> str:
         """Delegate to api_key or proxy_trust based on current ``auth_mode``."""
@@ -1125,9 +1114,11 @@ def create_app(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Broker not ready",
             )
-        # Mirror nautilus.ui.dependencies.get_audit_path — the audit log path
-        # lives on the broker's config (the same source the admin UI reads).
-        audit_path = str(broker._config.audit.path)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+        # Mirror nautilus.ui.dependencies.get_audit_path — the resolved path the
+        # broker writes to, not the raw config string, which is relative to the
+        # process cwd rather than to the config directory.
+        resolved = broker.audit_path
+        audit_path = str(resolved) if resolved is not None else str(broker.config.audit.path)
         return AuditReader(audit_path, page_size=page_size)
 
     def _parse_audit_dt(value: str | None) -> datetime | None:

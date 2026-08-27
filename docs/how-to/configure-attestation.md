@@ -50,6 +50,12 @@ attestation:
       --expected-head <mirrored-line-hash>
     ```
 
+    A chained log admits exactly one writer. The first attestation a broker
+    emits takes an exclusive lock on `<path>.lock`; a second process writing
+    the same path is refused rather than allowed to fork the chain. Read-only
+    tooling that builds a broker without emitting anything (`nautilus adapters
+    list`, `schema-ack`) does not take the lock and works while a server runs.
+
 - `http` — POST each envelope to an external collector, with a retry
   policy and optional `dead_letter_path`.
 

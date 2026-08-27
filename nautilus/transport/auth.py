@@ -48,6 +48,29 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
 """FastAPI security scheme for the ``X-API-Key`` header (auto_error=True)."""
 
 
+
+def caller_identity(request: Request, *, auth_mode: str = "api_key") -> dict[str, str]:
+    """Who the transport authenticated this request as (§4.15).
+
+    This keys the cumulative-exposure ledger, so it must carry nothing the
+    caller's own payload can set. ``auth`` is the API key the request presented
+    or, under ``proxy_trust``, the upstream's ``X-Forwarded-User``; ``peer`` is
+    the socket address, recorded for provenance and used as the key's fallback
+    only when the deployment authenticates nobody.
+
+    Shared rather than per-transport on purpose: it lived inside ``create_app``
+    and only REST ever called it, so the same client presenting the same key to
+    the MCP port accumulated into a different ledger and escaped escalation by
+    switching transport.
+    """
+    if auth_mode == "proxy_trust":
+        auth = request.headers.get("X-Forwarded-User") or ""
+    else:
+        auth = request.headers.get("X-API-Key") or ""
+    peer = request.client.host if request.client else ""
+    return {"auth": auth, "peer": peer}
+
+
 def verify_api_key(header_value: str, keys: list[str]) -> None:
     """Verify ``header_value`` against every key in ``keys`` in constant time.
 
@@ -174,6 +197,7 @@ async def verify_session_token(
 __all__ = [
     "SESSION_TOKEN_HEADER",
     "api_key_header",
+    "caller_identity",
     "proxy_trust_dependency",
     "require_api_key",
     "verify_api_key",

@@ -248,6 +248,7 @@ def test_m415_omitting_the_session_token_does_not_reset_the_ledger(
     has no equivalent and ``SessionTokenConfig`` exposes no "require" knob.
     """
     from nautilus import Broker
+    from nautilus.core.principal import derive_principal_id
 
     monkeypatch.setenv("JOURNEY_PG_DSN", pg_dsn)
     sources = [
@@ -284,15 +285,17 @@ def test_m415_omitting_the_session_token_does_not_reset_the_ledger(
 
             store: Any = broker.session_store
 
-            async def _visited(session_id: str) -> set[str]:
-                state = (
-                    await store.aget(session_id)
-                    if hasattr(store, "aget")
-                    else store.get(session_id)
-                )
+            async def _visited(key: str) -> set[str]:
+                state = await store.aget(key) if hasattr(store, "aget") else store.get(key)
                 return set((state or {}).get("sources_visited", []))
 
-            return await _visited("ledger-reset"), await _visited("other-agent")
+            # Read the *principal* ledger, not the per-session row: the session
+            # row records what that session did, and the ledger a caller cannot
+            # reset is the one keyed on who they are.
+            return (
+                await _visited(derive_principal_id("a")),
+                await _visited(derive_principal_id("b")),
+            )
         finally:
             await broker.aclose()
 

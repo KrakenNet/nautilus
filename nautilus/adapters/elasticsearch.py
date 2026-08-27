@@ -194,9 +194,22 @@ _DSL_BUILDERS: dict[str, _BuilderFn] = {
 
 
 # Operators whose DSL builders do not analyse their input, so they must run
-# against a verbatim-indexed field. Range operators are excluded: they are
-# already lexicographic and are not what §4.3 reports.
-_EXACT_OPERATORS: frozenset[str] = frozenset({"=", "!=", "IN", "NOT IN", "LIKE"})
+# against a verbatim-indexed field. Range operators belong here too: they are
+# lexicographic over the *analysed terms*, so ``classification >= 'public'`` on
+# a dynamically-mapped string ranks 'top secret' by its 'secret' token and
+# answers wrongly with no error.
+_EXACT_OPERATORS: frozenset[str] = frozenset(
+    {"=", "!=", "IN", "NOT IN", "LIKE", "<", "<=", ">", ">=", "BETWEEN"}
+)
+
+
+def _strings(value: Any) -> list[str]:
+    """Every string in a constraint value (scalars, ``IN`` lists, ``BETWEEN`` pairs)."""
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple)):
+        return [v for v in cast("list[Any]", value) if isinstance(v, str)]
+    return []
 
 
 class ElasticsearchAdapter:
@@ -277,7 +290,7 @@ class ElasticsearchAdapter:
         self._props = props
         return props
 
-    def _exact_field(self, field: str) -> str:
+    def _exact_field(self, field: str, value: Any = None) -> str:
         """Return the field a term-level query must target for ``field``.
 
         ES default dynamic mapping indexes every string as ``text`` (analysed)
@@ -301,13 +314,13 @@ class ElasticsearchAdapter:
         if not isinstance(definition, dict) or definition.get("type") != "text":
             # Unmapped, or already an exact type (keyword/long/date/boolean...).
             return field
-        subfields: dict[str, Any] = definition.get("fields") or {}
-        exact = sorted(
-            name
+        subfields = cast("dict[str, Any]", definition.get("fields") or {})
+        keywords: dict[str, dict[str, Any]] = {
+            name: cast("dict[str, Any]", sub)
             for name, sub in subfields.items()
-            if isinstance(sub, dict) and sub.get("type") == "keyword"
-        )
-        if not exact:
+            if isinstance(sub, dict) and cast("dict[str, Any]", sub).get("type") == "keyword"
+        }
+        if not keywords:
             raise ScopeEnforcementError(
                 f"ElasticsearchAdapter: field '{field}' is mapped as analysed 'text' "
                 f"with no 'keyword' subfield, so it cannot be matched exactly. An "
@@ -315,7 +328,30 @@ class ElasticsearchAdapter:
                 f"data. Add a keyword subfield to the mapping, or target one "
                 f"explicitly as 'field.<subfield>'."
             )
-        return f"{field}.{exact[0]}"
+        # A keyword subfield with ``ignore_above`` does not index values longer
+        # than the limit *at all*, so a term query for one matches nothing and
+        # ``!=`` / ``NOT IN`` match everything -- the same fail-open the
+        # ``.keyword`` routing exists to close. Prefer an unlimited subfield;
+        # refuse the constraint if the only one available would drop the value.
+        unlimited: list[str] = sorted(
+            n for n, sub in keywords.items() if sub.get("ignore_above") is None
+        )
+        if unlimited:
+            return f"{field}.{unlimited[0]}"
+        limits: dict[str, int] = {n: int(sub["ignore_above"]) for n, sub in keywords.items()}
+        chosen = sorted(limits, key=lambda n: (-limits[n], n))[0]
+        limit = limits[chosen]
+        longest = max((len(v) for v in _strings(value)), default=0)
+        if longest > limit:
+            raise ScopeEnforcementError(
+                f"ElasticsearchAdapter: the only exact subfield for '{field}' is "
+                f"'{field}.{chosen}', which has ignore_above={limit}, and the "
+                f"constraint compares a value of length {longest}. Values over the "
+                f"limit are not indexed, so the comparison would silently return "
+                f"over-scoped data. Raise ignore_above on the mapping, or target a "
+                f"subfield without one as 'field.<subfield>'."
+            )
+        return f"{field}.{chosen}"
 
     def _constraint_to_query(self, constraint: ScopeConstraint) -> Any:
         """Translate one :class:`ScopeConstraint` into a DSL query object per AC-8.2.
@@ -334,7 +370,7 @@ class ElasticsearchAdapter:
         value: Any = constraint.value
         _typecheck_value(op, value)
         if op in _EXACT_OPERATORS:
-            field = self._exact_field(field)
+            field = self._exact_field(field, value)
         return _DSL_BUILDERS[op](field, value)
 
     def _build_search(
@@ -370,8 +406,13 @@ class ElasticsearchAdapter:
             raise AdapterError("ElasticsearchAdapter.execute called before connect()")
 
         # ``_exact_field`` needs the mapping to know which fields are analysed.
-        # Fetched once per adapter and only when a constraint actually needs it.
-        if self._props is None and any(c.operator in _EXACT_OPERATORS for c in scope):
+        # Fetched only when a constraint actually needs it, and refetched when one
+        # names a field the cache has never seen: an index gains fields over a
+        # broker's lifetime, and a field missing from a stale cache reads as
+        # "unmapped" and routes to the bare analysed field -- the fail-open this
+        # whole path exists to close.
+        needed = {c.field.split(".", 1)[0] for c in scope if c.operator in _EXACT_OPERATORS}
+        if needed and (self._props is None or not needed <= set(self._props)):
             await self._fetch_properties()
 
         search = self._build_search(self._index, scope, _DEFAULT_LIMIT)

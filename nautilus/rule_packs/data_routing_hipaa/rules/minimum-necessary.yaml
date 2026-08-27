@@ -2,6 +2,17 @@
 #
 # A source carrying PHI is scoped to the requesting agent's purpose, so a request
 # cannot pull more PHI than the stated purpose justifies.
+#
+# Row-level scoping needs a column that says what a row was collected for, and a
+# pack cannot know the operator's schema. The scope therefore names
+# ``source.purpose_field`` -- ``SourceConfig.purpose_field`` in nautilus.yaml --
+# rather than a literal column name. Asserting a literal ``purpose`` column made
+# every covered request fail with ``UndefinedColumnError`` against the
+# operator's own table.
+#
+# A PHI source with no ``purpose_field`` is denied, not silently un-scoped: this
+# pack's whole claim is that PHI is minimised, and a source it cannot minimise
+# must not be read under it.
 module: nautilus-routing
 ruleset: hipaa-minimum-necessary
 version: "1.0"
@@ -20,7 +31,10 @@ rules:
             bind: ?sid
           - slot: data_types
             bind: ?dts
+          - slot: purpose_field
+            bind: ?pf
           - test: '(python-function overlaps ?dts "phi")'
+          - test: '(neq ?pf "")'
       # B2 -- without this pattern the rule scopes every matching source,
       # routed or not, and the default-on ``scope_without_routing``
       # consistency check turns any request that does not happen to reach
@@ -38,6 +52,30 @@ rules:
         - template: scope_constraint
           slots:
             source_id: "?sid"
-            field: "purpose"
+            field: "?pf"
             operator: "="
             value: "?purpose"
+
+  - name: minimum-necessary-unscopable-phi
+    description: "Deny PHI sources that declare no purpose_field to scope on."
+    salience: 180
+    when:
+      - template: source
+        conditions:
+          - slot: id
+            bind: ?sid
+          - slot: data_types
+            bind: ?dts
+          - slot: purpose_field
+            bind: ?pf
+          - test: '(python-function overlaps ?dts "phi")'
+          - test: '(eq ?pf "")'
+    then:
+      action: deny
+      reason: "HIPAA minimum necessary: source declares no purpose_field to scope on"
+      assert:
+        - template: denial_record
+          slots:
+            source_id: "?sid"
+            reason: "HIPAA minimum necessary: declare purpose_field on this source to scope PHI by purpose"
+            rule_name: "minimum-necessary-unscopable-phi"

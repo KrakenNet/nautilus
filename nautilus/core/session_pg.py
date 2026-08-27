@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import contextlib
 import json
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -53,6 +54,12 @@ _DDL: str = (
     "updated_at TIMESTAMPTZ NOT NULL DEFAULT now()"
     ")"
 )
+
+
+# One advisory-lock key for the schema DDL. ``CREATE TABLE IF NOT EXISTS`` is
+# not concurrency-safe: two replicas starting together collide on the composite
+# type Postgres creates alongside the table.
+_DDL_LOCK_KEY: int = 0x6E617574  # "naut"
 
 
 def _decode_state(raw: Any) -> dict[str, Any]:
@@ -162,7 +169,10 @@ class PostgresSessionStore:
 
         try:
             self._pool = await asyncpg.create_pool(dsn=self._dsn)  # pyright: ignore[reportUnknownMemberType]
-            async with self._pool.acquire() as conn:
+            async with self._pool.acquire() as conn, conn.transaction():
+                # The lock is transaction-scoped, so it releases with the DDL
+                # even if this process dies mid-statement.
+                await conn.execute("SELECT pg_advisory_xact_lock($1)", _DDL_LOCK_KEY)
                 await conn.execute(_DDL)
         except (
             CannotConnectNowError,
@@ -285,6 +295,33 @@ class PostgresSessionStore:
                 session_id,
                 json.dumps(current),
             )
+
+    @contextlib.asynccontextmanager
+    async def alock(self, key: str) -> AsyncIterator[None]:
+        """Hold a cross-process lock on ``key`` for the block's duration.
+
+        The broker's exposure ledger is a read-merge-write spanning two calls
+        into this store, so serialising it needs a lock the *store* owns: an
+        in-process ``asyncio.Lock`` serialises one replica against itself and
+        nothing against the replica next to it. Postgres advisory locks are
+        that lock — held on their own connection, released on exit, and dropped
+        by the server if the holder's connection dies.
+
+        A degraded store (in-memory / SQLite fallback) is per-process by
+        definition; there is nothing to serialise against, so this is a no-op.
+        """
+        if self._pool is None:
+            yield
+            return
+        # ponytail: one pooled connection per held key. Two keys per request
+        # against the default pool size is fine; a deployment that locks more
+        # keys per request wants a dedicated lock pool.
+        async with self._pool.acquire() as conn:
+            await conn.execute("SELECT pg_advisory_lock(hashtextextended($1, 0))", key)
+            try:
+                yield
+            finally:
+                await conn.execute("SELECT pg_advisory_unlock(hashtextextended($1, 0))", key)
 
     async def aclose(self) -> None:
         """Idempotent close — release the pool (FR-17)."""

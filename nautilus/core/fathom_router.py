@@ -282,6 +282,10 @@ class FathomRouter:
                     # default "", so every source read as uncompartmented and
                     # compartment isolation was inert.
                     "compartments": source.compartments,
+                    # Empty unless the operator declared it; the compliance
+                    # packs branch on that, scoping when it is set and denying
+                    # when it is not.
+                    "purpose_field": source.purpose_field,
                 }
                 self._assert("source", source_fact)
 

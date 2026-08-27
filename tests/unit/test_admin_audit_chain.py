@@ -38,7 +38,10 @@ def _fake_broker(tmp_path: Path, sink: object, attestation: object) -> SimpleNam
     audit_file = tmp_path / "audit.jsonl"
     audit_file.touch()
     return SimpleNamespace(
-        _config=SimpleNamespace(audit=SimpleNamespace(path=str(audit_file))),
+        # ``audit_path`` is the resolved path a real broker exposes; the router
+        # reads that, not the raw config string.
+        audit_path=audit_file,
+        config=SimpleNamespace(audit=SimpleNamespace(path=str(audit_file))),
         _attestation_sink=sink,
         _attestation=attestation,
     )

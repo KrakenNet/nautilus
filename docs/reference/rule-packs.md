@@ -39,6 +39,7 @@ runs one module's agenda to exhaustion before moving to the next, so salience
 only orders rules within a module.
 
 The shipped pack rules sit at 185 and 180 (denial) and 140 (scope constraint),
+so a source that cannot be scoped is denied before the scope rule would run,
 around the built-in saliences listed in
 [Authoring Rules](../how-to/authoring-rules.md#salience-what-the-shipped-rules-use).
 
@@ -60,12 +61,30 @@ read — a pack that ships one is shipping a file the engine never sees.
 `pack.yaml` is descriptive metadata for humans and tooling; the loader does not
 read it.
 
+## Scoping packs need `purpose_field`
+
+The two shipped scope rules write a row filter, and a pack cannot know which
+column of your table records the purpose a row may be used for. Declare it on
+the source:
+
+```yaml
+sources:
+  - id: patients
+    type: postgres
+    purpose_field: intended_use    # the column the scope constraint is written against
+```
+
+A source that a scoping pack matches and that declares no `purpose_field` is
+**denied**, with a denial record naming the source. Fail-closed is deliberate:
+the alternative was a constraint written against a guessed column name, which
+the adapter reports as an error, or worse, silently applies to the wrong column.
+
 ## data-routing-nist
 
 NIST SP 800-53 access control. Implements AC-6 (least privilege, emits a
 `scope_constraint` binding confidential-and-above sources to the agent's stated
-purpose) and AC-16 (security attributes, denies a source carrying no
-classification label).
+purpose, and denies such a source when it declares no `purpose_field`) and
+AC-16 (security attributes, denies a source carrying no classification label).
 
 Other controls the pack previously advertised are not implemented, because their
 conditions cannot be expressed over the facts the broker asserts. See the pack
@@ -73,8 +92,10 @@ README for the control-by-control reasons.
 
 ## data-routing-hipaa
 
-HIPAA Privacy Rule constraints. Implements minimum necessary (45 CFR 164.502(b))
-and the treatment/payment/operations purpose limitation (45 CFR 164.506).
+HIPAA Privacy Rule constraints. Implements minimum necessary (45 CFR 164.502(b),
+scoping PHI to the stated purpose and denying a PHI source that declares no
+`purpose_field`) and the treatment/payment/operations purpose limitation
+(45 CFR 164.506).
 
 ## Writing a pack
 

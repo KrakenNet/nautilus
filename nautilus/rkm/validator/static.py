@@ -215,7 +215,59 @@ def validate_static(rule_yaml_path: Path) -> StaticResult:
 
     if errors:
         return StaticResult(ok=False, errors=tuple(errors))
+
+    # Build. Compiling is not loading: an unknown module, a slot no template
+    # declares, an operator CLIPS does not have -- each compiles and then makes
+    # ``load_rules`` fail, which is a broker that does not start on a file this
+    # gate called OK. The only authority on "the engine accepts this" is the
+    # engine.
+    errors.extend(_build_errors(rule_yaml_path, file_str))
+    if errors:
+        return StaticResult(ok=False, errors=tuple(errors))
     return StaticResult(ok=True, errors=())
+
+
+def _build_errors(rule_yaml_path: Path, file_str: str) -> list[ValidationError]:
+    """Load the file into a real engine, the way the broker does at startup."""
+    import shutil
+    import tempfile
+
+    from nautilus.core.fathom_router import FathomRouter
+
+    def _build(user_rules_dirs: list[Path]) -> list[ValidationError]:
+        try:
+            FathomRouter(
+                built_in_rules_dir=BUILT_IN_RULES_DIR,
+                user_rules_dirs=user_rules_dirs,
+                check_consistency=False,
+            )
+        except Exception as exc:  # noqa: BLE001 — every build failure is a validation error
+            return [
+                ValidationError(
+                    file=file_str,
+                    line=1,
+                    col=1,
+                    message=f"The engine refuses to load this file: {exc}",
+                    hint=(
+                        "The rule compiles but the engine rejects it. Check the "
+                        "module name, that every slot is declared by its template, "
+                        "and that every operator is one CLIPS defines."
+                    ),
+                )
+            ]
+        return []
+
+    if rule_yaml_path.resolve().is_relative_to(BUILT_IN_RULES_DIR.resolve()):
+        # A shipped file is already loaded by construction; loading a copy of it
+        # as a user directory would report a duplicate rule name that says
+        # something about this validator and nothing about the file.
+        return _build([])
+
+    with tempfile.TemporaryDirectory() as tmp:
+        # Its own directory: ``load_rules`` takes a directory, and the file's
+        # real neighbours are not what is being validated.
+        shutil.copy(rule_yaml_path, Path(tmp) / rule_yaml_path.name)
+        return _build([Path(tmp)])
 
 
 def _compile_errors(

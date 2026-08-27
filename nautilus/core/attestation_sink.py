@@ -34,7 +34,7 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import IO, Any, Protocol, runtime_checkable
 
 import httpx
 from fathom.attestation import AttestationService
@@ -167,11 +167,17 @@ class ChainedFileAttestationSink:
     **Single writer, enforced.** A chain is a total order, so two writers
     interleaving into one file produce permanently unrecoverable corruption
     whose ``verify_chain`` failure is indistinguishable from tampering. The
-    constructor therefore takes an exclusive ``flock`` on a ``<path>.lock``
-    sidecar and raises :class:`SinkAlreadyLockedError` if another process
-    holds it — a refused start, not a silently corrupted log. Unlike
+    sink therefore takes an exclusive ``flock`` on a ``<path>.lock`` sidecar
+    and raises :class:`SinkAlreadyLockedError` if another process holds it —
+    a refused write, not a silently corrupted log. Unlike
     :class:`FileAttestationSink`, whose atomic ``O_APPEND`` writes survive
     concurrency, this sink has no safe concurrent mode.
+
+    The lock is taken at the first :meth:`emit`, not in the constructor: a
+    ``Broker`` is also built by read-only surfaces (``nautilus adapters list``,
+    ``schema-ack``, the config validators) that never emit an attestation, and
+    locking on construction made the documented recovery from a drift
+    quarantine impossible while the server it recovers was running.
     """
 
     def __init__(
@@ -183,25 +189,32 @@ class ChainedFileAttestationSink:
     ) -> None:
         self._lock_path = Path(path).with_name(Path(path).name + ".lock")
         self._lock_path.parent.mkdir(parents=True, exist_ok=True)
-        self._lock_fh = self._lock_path.open("a+", encoding="utf-8")
+        self._lock_fh: IO[str] | None = None
+        self._log = ChainedAttestationLog(path, service, checkpoint_interval=checkpoint_interval)
+        self._closed = False
+
+    def _take_writer_lock(self) -> None:
+        """Claim the single-writer lock; no-op once held. Called on first append."""
+        if self._lock_fh is not None:
+            return
+        handle = self._lock_path.open("a+", encoding="utf-8")
         try:
-            fcntl.flock(self._lock_fh.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as exc:
-            self._lock_fh.seek(0)
-            holder = self._lock_fh.read().strip() or "an unidentified process"
-            self._lock_fh.close()
+            handle.seek(0)
+            holder = handle.read().strip() or "an unidentified process"
+            handle.close()
             raise SinkAlreadyLockedError(
-                f"chained attestation log {Path(path)} is already open for writing by "
-                f"{holder}. A hash chain admits exactly one writer: a second one "
+                f"chained attestation log {self._log.path} is already open for writing "
+                f"by {holder}. A hash chain admits exactly one writer: a second one "
                 f"interleaves into corruption that verify_chain cannot distinguish "
                 f"from tampering. Give this broker its own path, or use "
                 f"chained: false (plain FileAttestationSink appends are atomic)."
             ) from exc
-        self._lock_fh.truncate(0)
-        self._lock_fh.write(f"pid {os.getpid()}\n")
-        self._lock_fh.flush()
-        self._log = ChainedAttestationLog(path, service, checkpoint_interval=checkpoint_interval)
-        self._closed = False
+        handle.truncate(0)
+        handle.write(f"pid {os.getpid()}\n")
+        handle.flush()
+        self._lock_fh = handle
 
     @property
     def path(self) -> Path:
@@ -211,6 +224,7 @@ class ChainedFileAttestationSink:
         """Sign + append one chained JSONL line (fsynced by the chain log)."""
         if self._closed:
             raise ValueError("emit on closed ChainedFileAttestationSink")
+        self._take_writer_lock()
         self._log.append(payload.model_dump(mode="json"))
 
     async def close(self) -> None:
@@ -223,8 +237,9 @@ class ChainedFileAttestationSink:
         # Closing the handle drops the flock. The sidecar file is left behind
         # deliberately: an unlocked lock file is not a lock, and removing it
         # would race a process that has just opened it.
-        with contextlib.suppress(Exception):
-            self._lock_fh.close()
+        if self._lock_fh is not None:
+            with contextlib.suppress(Exception):
+                self._lock_fh.close()
 
 
 class RetryPolicy(BaseModel):

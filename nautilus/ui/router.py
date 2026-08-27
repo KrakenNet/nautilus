@@ -68,7 +68,9 @@ async def _safe_audit_path(request: Request) -> str | None:
     broker: Broker | None = getattr(request.app.state, "broker", None)
     if broker is None:
         return None
-    return str(broker._config.audit.path)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    # The resolved path, not the raw config string: see ui.dependencies.get_audit_path.
+    path = broker.audit_path
+    return str(path) if path is not None else str(broker.config.audit.path)
 
 
 # Cache of the last chain verification per log path, keyed on (size, mtime):
@@ -225,7 +227,19 @@ async def playground_query(
         return JSONResponse({"error": "intent is required"}, status_code=400)
 
     try:
-        result = await broker.arequest(agent_id, intent, context)
+        # The admin session cookie is this caller's identity: the playground
+        # reaches the same broker as /v1/request, so it must accumulate into a
+        # ledger of its own rather than an unkeyed one shared with every other
+        # transport that supplies nothing (§4.15).
+        result = await broker.arequest(
+            agent_id,
+            intent,
+            context,
+            caller={
+                "auth": f"admin:{user}",
+                "peer": request.client.host if request.client else "",
+            },
+        )
         return JSONResponse(result.model_dump(mode="json"))
     except Exception as exc:
         return JSONResponse({"error": str(exc)}, status_code=500)

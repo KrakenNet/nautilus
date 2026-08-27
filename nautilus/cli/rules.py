@@ -253,6 +253,7 @@ def _cmd_test(args: argparse.Namespace) -> int:
     from nautilus.rkm.validator.sandbox import (
         SandboxRegressionError,
         SandboxResult,
+        SandboxRuleError,
         sandbox_replay,
     )
     from nautilus.rkm.validator.scoring import score
@@ -316,7 +317,10 @@ def _cmd_test(args: argparse.Namespace) -> int:
                 rule_packs=rule_packs,
                 user_rules_dirs=user_rules_dirs,
             )
-        except SandboxRegressionError as exc:
+        except (SandboxRegressionError, SandboxRuleError) as exc:
+            # SandboxRuleError too: a proposal the engine will not build is not
+            # a proposal with a clean sandbox record, and letting it escape
+            # ended the command in a traceback instead of a scored verdict.
             err(f"rule '{name}': {exc}")
             return 1
         breakdown = score(sandbox_result, flags)

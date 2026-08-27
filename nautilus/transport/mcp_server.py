@@ -17,8 +17,8 @@ Session-id resolution (D-10 / UQ-4) — before calling ``broker.arequest``:
 
 1. If ``context.get("session_id")`` is set → use it verbatim; audit
    ``session_id_source="context"``.
-2. Else if ``ctx`` has a ``session_id`` attribute (HTTP streamable-
-   transport mode) → use ``ctx.session_id``; audit
+2. Else if the request carries the transport's ``mcp-session-id``
+   (HTTP streamable transport) → use ``mcp:<id>``; audit
    ``session_id_source="transport"``.
 3. Else (stdio or no context at all) → use ``ctx.request_id``; audit
    ``session_id_source="stdio_request_id"``.
@@ -50,7 +50,7 @@ from mcp.server.fastmcp import Context, FastMCP
 
 from nautilus.core.broker import Broker
 from nautilus.core.models import BrokerResponse, HandoffDecision
-from nautilus.transport.auth import verify_api_key
+from nautilus.transport.auth import caller_identity, verify_api_key
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -74,8 +74,8 @@ def _resolve_session(
 
     1. ``context["session_id"]`` (caller-asserted, e.g. carried across
        multi-turn reasoning) → source ``"context"``.
-    2. ``ctx.session_id`` (HTTP streamable-transport supplies one per
-       stream) → source ``"transport"``.
+    2. the transport's ``mcp-session-id`` (HTTP streamable transport
+       issues one per client at ``initialize``) → source ``"transport"``.
     3. ``ctx.request_id`` (stdio — per-tool-call id) → source
        ``"stdio_request_id"``.
     4. Freshly minted UUID → source ``"generated"`` (D-10 safe default;
@@ -85,13 +85,45 @@ def _resolve_session(
     if isinstance(ctx_session, str) and ctx_session:
         return ctx_session, "context"
     if ctx is not None:
-        transport_session = getattr(ctx, "session_id", None)
-        if isinstance(transport_session, str) and transport_session:
+        transport_session = _transport_session(ctx)
+        if transport_session:
             return transport_session, "transport"
         request_id = getattr(ctx, "request_id", None)
         if isinstance(request_id, str) and request_id:
             return request_id, "stdio_request_id"
     return str(uuid.uuid4()), "generated"
+
+
+def _transport_session(ctx: Context[Any, Any, Any]) -> str | None:
+    """The HTTP transport's own session id, or ``None`` (stdio, or no request).
+
+    ``Context`` has no ``session_id`` attribute -- the value lives on the
+    request as the ``mcp-session-id`` header the SDK issues at ``initialize``.
+    Reading a non-existent attribute silently fell through to ``request_id``.
+    """
+    request = getattr(getattr(ctx, "request_context", None), "request", None)
+    headers = getattr(request, "headers", None)
+    if headers is None:
+        return None
+    session_id = headers.get("mcp-session-id")
+    return f"mcp:{session_id}" if session_id else None
+
+
+def _caller(ctx: Context[Any, Any, Any] | None, auth_mode: str) -> dict[str, str] | None:
+    """The caller identity to key the exposure ledger with, or ``None``.
+
+    Only the HTTP transport has one: it carries the same ``X-API-Key`` /
+    ``X-Forwarded-User`` the REST surface authenticates, and the ledger has to
+    be the same ledger -- otherwise a client that has tripped escalation over
+    REST starts clean by sending its next request to the MCP port with the
+    credentials it already has. stdio has no such header and no network peer;
+    ``None`` there means the broker falls back to keying on ``agent_id``, which
+    is right, because the parent process owns the pipe.
+    """
+    request = getattr(getattr(ctx, "request_context", None), "request", None)
+    if request is None or not hasattr(request, "headers"):
+        return None
+    return caller_identity(request, auth_mode=auth_mode)
 
 
 def _mcp_settings(broker: Broker | None) -> tuple[bool, str, list[str]]:
@@ -211,13 +243,19 @@ def create_server(
         assert config_path is not None  # noqa: S101 — guarded above
         broker = Broker.from_config(config_path)
 
+    # Stateful streamable HTTP: the SDK issues one ``mcp-session-id`` per
+    # client and ``_resolve_session`` keys session state on it. Under
+    # ``stateless_http=True`` there is no transport session at all, so the
+    # fallback was ``ctx.request_id`` -- the client's own JSON-RPC id, which is
+    # usually a small integer, so two unrelated callers both sending ``id: 1``
+    # landed in one session and read each other's cumulative exposure.
     mcp: FastMCP[Any] = FastMCP(
         name="nautilus",
-        stateless_http=True,
+        stateless_http=False,
         json_response=True,
     )
 
-    expose_handoff, _auth_mode, _api_keys = _mcp_settings(broker)
+    expose_handoff, auth_mode, _api_keys = _mcp_settings(broker)
 
     # ------------------------------------------------------------------
     # Tool: nautilus_request — primary query entrypoint (AC-13.1, FR-27).
@@ -243,7 +281,7 @@ def create_server(
         session_id, source = _resolve_session(ctx_dict, ctx)
         ctx_dict["session_id"] = session_id
         ctx_dict["session_id_source"] = source
-        return await broker.arequest(agent_id, intent, ctx_dict)
+        return await broker.arequest(agent_id, intent, ctx_dict, caller=_caller(ctx, auth_mode))
 
     # ------------------------------------------------------------------
     # Optional tool: nautilus_declare_handoff — gated on

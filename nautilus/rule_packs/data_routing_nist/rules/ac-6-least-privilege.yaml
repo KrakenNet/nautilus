@@ -8,6 +8,12 @@
 # must interleave with them by salience. Salience 140 sits in the documented
 # scope_constraint band (130-150), i.e. after denial (170-190) and before routing
 # (100), so a source that is going to be denied is never scoped first.
+#
+# The scope names ``source.purpose_field`` (``SourceConfig.purpose_field`` in
+# nautilus.yaml), not a literal column: a pack cannot know the operator's
+# schema, and asserting a literal ``purpose`` column made every covered request
+# fail with ``UndefinedColumnError``. A confidential-and-above source that
+# declares none is denied rather than read unscoped.
 module: nautilus-routing
 ruleset: nist-ac-6-least-privilege
 version: "1.0"
@@ -26,7 +32,10 @@ rules:
             bind: ?sid
           - slot: classification
             bind: ?cls
+          - slot: purpose_field
+            bind: ?pf
           - test: '(member$ ?cls (create$ "confidential" "secret" "top-secret"))'
+          - test: '(neq ?pf "")'
       # B2 -- without this pattern the rule scopes every matching source,
       # routed or not, and the default-on ``scope_without_routing``
       # consistency check turns any request that does not happen to reach
@@ -44,6 +53,30 @@ rules:
         - template: scope_constraint
           slots:
             source_id: "?sid"
-            field: "purpose"
+            field: "?pf"
             operator: "="
             value: "?purpose"
+
+  - name: ac-6-unscopable-source
+    description: "Deny confidential-and-above sources that declare no purpose_field."
+    salience: 180
+    when:
+      - template: source
+        conditions:
+          - slot: id
+            bind: ?sid
+          - slot: classification
+            bind: ?cls
+          - slot: purpose_field
+            bind: ?pf
+          - test: '(member$ ?cls (create$ "confidential" "secret" "top-secret"))'
+          - test: '(eq ?pf "")'
+    then:
+      action: deny
+      reason: "AC-6 least privilege: source declares no purpose_field to scope on"
+      assert:
+        - template: denial_record
+          slots:
+            source_id: "?sid"
+            reason: "AC-6 least privilege: declare purpose_field on this source to scope by purpose"
+            rule_name: "ac-6-unscopable-source"

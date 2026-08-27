@@ -79,6 +79,51 @@ def _flux_time(value: Any) -> str:
     )
 
 
+# Seconds per Flux duration unit. ``mo``/``y`` are averages: these values are
+# used only to *compare* two bounds, never to build the query, which always
+# emits the operator's own literal.
+_UNIT_SECONDS: dict[str, float] = {
+    "ns": 1e-9,
+    "us": 1e-6,
+    "ms": 1e-3,
+    "mo": 2629800.0,
+    "s": 1.0,
+    "m": 60.0,
+    "h": 3600.0,
+    "d": 86400.0,
+    "w": 604800.0,
+    "y": 31557600.0,
+}
+_DURATION_PART_RE = re.compile(r"(\d+)(ns|us|ms|mo|s|m|h|d|w|y)")
+
+
+def _bound_seconds(literal: str, now: float) -> float:
+    """Absolute epoch seconds for a ``range()`` bound, for comparison only."""
+    if literal == "now()":
+        return now
+    if _RFC3339_RE.match(literal):
+        return datetime.fromisoformat(literal.replace("Z", "+00:00")).timestamp()
+    if _DURATION_RE.match(literal):
+        sign = -1.0 if literal.startswith("-") else 1.0
+        total = sum(
+            int(n) * _UNIT_SECONDS[u] for n, u in _DURATION_PART_RE.findall(literal.lstrip("-"))
+        )
+        return now + sign * total
+    return float(literal)  # Unix seconds.
+
+
+def _narrow(current: str, bound: str, now: float, *, lower: bool) -> str:
+    """Intersect a time bound with the one already in force.
+
+    Both slots used to be assigned, so a second bound on the same side replaced
+    the first: a rule that had narrowed the window to the last hour was widened
+    back to the 30-day default by a looser bound arriving after it. Scope
+    constraints only ever narrow.
+    """
+    keep = _bound_seconds(current, now) >= _bound_seconds(bound, now)
+    return current if keep == lower else bound
+
+
 def _flux_like(field: str, pattern: str) -> str:
     """Translate a SQL ``LIKE`` pattern into an equivalently anchored Flux test.
 
@@ -199,9 +244,11 @@ class InfluxDBAdapter:
             validate_operator(constraint.operator)
             validate_field(constraint.field)
 
-        # Start with bucket source and a wide time range (overridden by _time constraints).
+        # Start with bucket source and a wide time range (narrowed by _time
+        # constraints; see ``_narrow``).
         range_start = "-30d"
         range_stop = "now()"
+        now = time.time()
         filters: list[str] = []
 
         for constraint in scope:
@@ -212,16 +259,16 @@ class InfluxDBAdapter:
             # Time-range constraints are lifted into |> range().
             if field == "_time":
                 if op == ">=" or op == ">":
-                    range_start = _flux_time(value)
+                    range_start = _narrow(range_start, _flux_time(value), now, lower=True)
                 elif op == "<=" or op == "<":
-                    range_stop = _flux_time(value)
+                    range_stop = _narrow(range_stop, _flux_time(value), now, lower=False)
                 elif op == "BETWEEN":
                     if not isinstance(value, (list, tuple)) or len(value) != 2:  # pyright: ignore[reportUnknownArgumentType]
                         raise ScopeEnforcementError(
                             "Operator 'BETWEEN' requires a 2-tuple/list value"
                         )
-                    range_start = _flux_time(value[0])
-                    range_stop = _flux_time(value[1])
+                    range_start = _narrow(range_start, _flux_time(value[0]), now, lower=True)
+                    range_stop = _narrow(range_stop, _flux_time(value[1]), now, lower=False)
                 else:
                     # Anything the range lift cannot express used to fall
                     # through an unconditional `continue`: the constraint
