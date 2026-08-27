@@ -17,7 +17,14 @@ Submit a broker request.
 | `context` | `object` | Agent context: `clearance`, `purpose`, `session_id`, optional `embedding` |
 
 **Response:** `BrokerResponse` JSON with `request_id`, `data`, `sources_queried`,
-`sources_denied`, `attestation_token`, and `duration_ms`.
+`sources_denied`, `attestation_token`, and `duration_ms`, plus:
+
+| Field | Meaning |
+| --- | --- |
+| `outcome` | `allowed` \| `denied` \| `errored` \| `skipped` — what happened, in one word, on the audit log's own precedence. |
+| `denial_records` | One `{source_id, reason, rule_name}` per denied source: why it was refused and which rule said so. |
+| `skip_records` | One `{source_id, reason}` per source that took no part — usually because its `data_types` have nothing to do with the intent. |
+| `rule_trace` | The rules that fired, in order — the same trace the audit entry records. |
 
 ### `GET /v1/sources`
 

@@ -91,19 +91,28 @@ Run this from the directory containing `nautilus.yaml` and `demo_adapter.py`:
 ```python
 from nautilus import Broker
 
-broker = Broker.from_config("nautilus.yaml")
-try:
+with Broker.from_config("nautilus.yaml") as broker:
     response = broker.request(
         "agent-alpha",
         "Find recent orders for user 42",
         {"clearance": "confidential", "purpose": "support", "session_id": "s1"},
     )
+    print(response.outcome)         # "allowed"
     print(response.data)            # {"main-db": [{"order_id": 1001, ...}, {"order_id": 1002, ...}]}
     print(response.sources_queried) # ["main-db"]
     print(response.attestation_token)
-finally:
-    broker.close()
 ```
+
+The `with` block runs `setup()` on the way in — which is what creates the
+schema for the persistent session stores — and closes the broker on the way
+out. In async code the same shape is `async with await Broker.afrom_config(...)`;
+the two are genuinely different because `close()` refuses to run inside a
+running event loop.
+
+When a source is missing from `response.data`, the response says why:
+`response.denial_records` carries the reason and the rule for anything
+refused, `response.skip_records` for anything the intent never asked for, and
+`response.rule_trace` is the rules that fired.
 
 `response` is a `BrokerResponse`: `response.data` maps source IDs to result
 rows, `response.attestation_token` is a signed JWS, and `response.request_id`

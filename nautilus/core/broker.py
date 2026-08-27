@@ -103,6 +103,7 @@ from nautilus.core.models import (
     IntentAnalysis,
     RoutingDecision,
     ScopeConstraint,
+    SkipRecord,
 )
 from nautilus.core.principal import derive_principal_id
 from nautilus.core.session import AsyncSessionStore, InMemorySessionStore, SessionStore
@@ -315,6 +316,7 @@ class _RequestState:
     truncated_sources: list[str] = field(default_factory=list[str])
     sources_denied: list[str] = field(default_factory=list[str])
     sources_skipped: list[str] = field(default_factory=list[str])
+    skip_records: list[SkipRecord] = field(default_factory=list[SkipRecord])
     errored: list[ErrorRecord] = field(default_factory=list[ErrorRecord])
     data: dict[str, list[dict[str, Any]]] = field(default_factory=dict[str, list[dict[str, Any]]])
     # Per-source chain-of-custody digests (issue #19, design §5.7). Computed by
@@ -1999,6 +2001,7 @@ class Broker:
             state.scope_by_source.pop(source_id, None)
         state.sources_denied = sorted(set(state.sources_denied) | expired_ids)
         state.sources_skipped = [s for s in state.sources_skipped if s not in expired_ids]
+        state.skip_records = [r for r in state.skip_records if r.source_id not in expired_ids]
 
     async def _route(self, agent_id: str, context: dict[str, Any], state: _RequestState) -> None:
         """Invoke the Fathom router and classify sources into queried/denied/skipped.
@@ -2044,6 +2047,28 @@ class Broker:
         state.sources_skipped = sorted(
             s.id for s in self._registry if s.id not in selected_ids and s.id not in denied_ids
         )
+        state.skip_records = self._skip_records(state)
+
+    def _skip_records(self, state: _RequestState) -> list[SkipRecord]:
+        """Say why each source in ``sources_skipped`` took no part.
+
+        Almost always the data types: the source has nothing the intent asked
+        for. Naming that turns "my source is missing from the response" from a
+        support question into a one-line config fix.
+        """
+        needed = set(state.intent_analysis.data_types_needed)
+        records: list[SkipRecord] = []
+        for source_id in state.sources_skipped:
+            offered = set(self._registry.get(source_id).data_types)
+            if needed and not (offered & needed):
+                reason = (
+                    f"no data type in common with the intent: source '{source_id}' offers "
+                    f"{sorted(offered)}, the request needed {sorted(needed)}"
+                )
+            else:
+                reason = f"no routing rule selected source '{source_id}' for this request"
+            records.append(SkipRecord(source_id=source_id, reason=reason))
+        return records
 
     async def _update_session(self, state: _RequestState, context: dict[str, Any]) -> None:
         """Cumulative-exposure bookkeeping (design §3.9 — update at end).
@@ -2364,7 +2389,10 @@ class Broker:
             truncated_sources=sorted(state.truncated_sources),
             sources_denied=state.sources_denied,
             sources_skipped=state.sources_skipped,
+            skip_records=state.skip_records,
             sources_errored=state.errored,
+            denial_records=list(state.denial_records),
+            rule_trace=list(state.rule_trace),
             scope_restrictions=state.scope_by_source,
             attestation_token=state.attestation_token,
             duration_ms=state.duration_ms(),
@@ -2844,6 +2872,36 @@ class Broker:
         log.info("quarantine lifted for adapter '%s'; baseline now matches", source_id)
         self.emit_adapter_event("adapter_unquarantined", source_id)
         return True
+
+    @property
+    def closed(self) -> bool:
+        """True once :meth:`close` or :meth:`aclose` has run."""
+        return self._closed
+
+    def __enter__(self) -> Broker:
+        """Enter the sync lifecycle: run :meth:`setup`, hand back the broker.
+
+        ``setup()`` is mandatory for the persistent session stores — it is
+        what creates their schema — and every example spelled it out by hand,
+        or forgot to. So does ``close()``: it refuses to run inside a running
+        event loop, which is why the docs' ``try/finally`` is doing real work
+        and why the async form below exists separately.
+        """
+        self._run_sync(self.setup())
+        return self
+
+    def __exit__(self, *exc_info: object) -> None:
+        """Close on the way out, whatever happened inside."""
+        self.close()
+
+    async def __aenter__(self) -> Broker:
+        """Async counterpart of :meth:`__enter__`."""
+        await self.setup()
+        return self
+
+    async def __aexit__(self, *exc_info: object) -> None:
+        """Async counterpart of :meth:`__exit__`."""
+        await self.aclose()
 
     def close(self) -> None:
         """Idempotent sync close — FR-17, AC-8.6."""

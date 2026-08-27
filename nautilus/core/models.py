@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 
 class IntentAnalysis(BaseModel):
@@ -100,6 +100,20 @@ class DenialRecord(BaseModel):
     source_id: str
     reason: str
     rule_name: str
+
+
+class SkipRecord(BaseModel):
+    """Why one configured source took no part in a request (design §4.8).
+
+    A source is skipped when no routing decision selected it and nothing
+    denied it — almost always because its declared ``data_types`` have
+    nothing to do with the intent. ``sources_skipped`` carried the id and no
+    explanation, so a caller whose source was quietly absent had nothing to
+    debug against.
+    """
+
+    source_id: str
+    reason: str
 
 
 class InputFact(BaseModel):
@@ -194,6 +208,16 @@ class BrokerResponse(BaseModel):
     sources_denied: list[str]
     sources_skipped: list[str]
     sources_errored: list[ErrorRecord]
+    # Why each denied source was denied, and which rule said so. The router
+    # produces these for every request and the audit entry has always carried
+    # them; returning ids alone left the agent that has to decide what to do
+    # next reading a JSONL file on the broker's host. Defaults empty so a
+    # Phase-1 response round-trips unchanged (NFR-5).
+    denial_records: list[DenialRecord] = Field(default_factory=list["DenialRecord"])
+    # Why each skipped source took no part.
+    skip_records: list[SkipRecord] = Field(default_factory=list["SkipRecord"])
+    # The rules that fired, in order — the same trace the audit entry records.
+    rule_trace: list[str] = Field(default_factory=list[str])
     scope_restrictions: dict[str, list[ScopeConstraint]]
     attestation_token: str | None
     duration_ms: int
@@ -207,6 +231,24 @@ class BrokerResponse(BaseModel):
     # is configured with ``session_tokens.enabled: true``; ``None`` otherwise
     # so Phase-1 responses round-trip unchanged (NFR-5).
     session_token: str | None = None
+
+    @computed_field  # serialized, so REST and MCP callers get it too
+    @property
+    def outcome(self) -> Literal["allowed", "denied", "errored", "skipped"]:
+        """One word for what happened, on the audit log's own precedence.
+
+        ``allowed`` if any source answered; else ``denied`` if any was
+        refused; else ``errored`` if any failed; else ``skipped``. Reading
+        this off four lists in the right order is something every caller
+        otherwise re-derives, and the audit entry already does it.
+        """
+        if self.sources_queried:
+            return "allowed"
+        if self.sources_denied:
+            return "denied"
+        if self.sources_errored:
+            return "errored"
+        return "skipped"
 
 
 class HandoffDecision(BaseModel):
