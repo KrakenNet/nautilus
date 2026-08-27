@@ -62,6 +62,7 @@ nav:
   - Concepts:
       - Overview: concepts/index.md
       - Architecture: concepts/architecture.md
+      - The Trust Boundary: concepts/trust-boundary.md
       - The Attestation Chain: concepts/attestation-chain.md
       - RKM Rule Lifecycle: concepts/rkm-lifecycle.md
   - Reference:

@@ -249,6 +249,14 @@ makes a decision reproducible:
 - MCP over HTTP keeps its transport sessions in process memory, so a client
   must be routed to the replica it initialized against (sticky sessions).
 
+Replicas scale a deployment *out*, not *across*: **one deployment is one
+tenant**. The agent registry, the exposure ledger, the signing ring and the
+loaded rules are all deployment-wide, so agents in one deployment are
+separated by policy — clearance, compartments, purpose, rules — and not by
+isolation. A second tenant means a second deployment, with its own config,
+source credentials, audit log and key ring. See
+[The Trust Boundary](../concepts/trust-boundary.md).
+
 ### Relative paths
 
 Every path in `nautilus.yaml` — `audit.path`, `attestation.private_key_path`
