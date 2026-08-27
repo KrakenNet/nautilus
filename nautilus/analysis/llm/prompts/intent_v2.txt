@@ -19,6 +19,11 @@ REQUEST_CONTEXT (JSON, may be an empty object)
 $context_json
 
 ==================================================
+KNOWN_DATA_TYPES (the deployment's configured vocabulary)
+==================================================
+$known_data_types
+
+==================================================
 OUTPUT SCHEMA (IntentAnalysis)
 ==================================================
 {
@@ -33,10 +38,14 @@ OUTPUT SCHEMA (IntentAnalysis)
 ==================================================
 CLASSIFICATION RULES
 ==================================================
-1. "data_types_needed" uses dotted lowercase nouns. Prefer plural for
-   collections ("orders", "tickets") and singular for singletons
-   ("customer.profile", "account.status"). Emit an empty array ONLY if the
-   intent asks no concrete data question.
+1. "data_types_needed" MUST be drawn from KNOWN_DATA_TYPES, verbatim. That
+   list is the deployment's entire vocabulary: the routing engine intersects
+   your answer with it by exact token, so a near-miss ("case.files" where the
+   deployment configured "case") routes to nothing at all and the caller gets
+   an empty response rather than a policy decision. If nothing in
+   KNOWN_DATA_TYPES fits, emit an empty array — never invent a token. When the
+   list is empty, fall back to dotted lowercase nouns: plural for collections
+   ("orders", "tickets"), singular for singletons ("customer.profile").
 2. "entities" captures proper nouns, numeric identifiers, emails, order
    numbers, region codes, and date literals that appear in AGENT_INTENT.
    Exclude common nouns, verbs, and filler words.
@@ -57,7 +66,9 @@ CLASSIFICATION RULES
 HARD CONSTRAINTS
 ==================================================
 - Output MUST be valid JSON parseable by Python's json.loads.
-- Do NOT invent data_types that are not directly implied by AGENT_INTENT.
+- Do NOT invent data_types that are not directly implied by AGENT_INTENT, and
+  do NOT emit one that is absent from KNOWN_DATA_TYPES when that list is
+  non-empty.
 - Do NOT include keys outside the schema above.
 - Do NOT include trailing commas.
 - String values MUST be double-quoted; null is lowercase without quotes.

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # ---------------------------------------------------------------------------
 # Phase 2 auth discriminated union (design §3.5).
@@ -75,6 +75,25 @@ class EndpointSpec(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+# Fields a built-in adapter's ``connect()`` hard-requires. ``SourceConfig`` is
+# one flat model with everything optional, so a source missing its mandatory
+# field used to load cleanly: the broker started, ``/healthz`` and ``/readyz``
+# went green (neither touches an adapter), and the source failed on every
+# request for the life of the process. Checked here rather than in the loader so
+# a programmatically built config fails the same way.
+#
+# ``rest`` is deliberately absent: ``endpoints`` is optional by design and the
+# adapter falls back to the base URL with an empty path (NFR-5, AC-1.4).
+_REQUIRED_BY_TYPE: dict[str, str] = {
+    "postgres": "table",
+    "pgvector": "table",
+    "servicenow": "table",
+    "elasticsearch": "index",
+    "neo4j": "label",
+    "llm": "model",
+}
+
+
 class SourceConfig(BaseModel):
     """Per-source YAML entry (design §4.1, extended §3.5, §3.11).
 
@@ -124,6 +143,18 @@ class SourceConfig(BaseModel):
     # that are legitimately slow (a large LLM), or set ``null`` to wait
     # indefinitely and own that choice explicitly.
     timeout_s: float | None = 15.0
+
+    @model_validator(mode="after")
+    def _require_adapter_mandatory_field(self) -> SourceConfig:
+        """Reject a source whose adapter can never serve a request."""
+        required = _REQUIRED_BY_TYPE.get(self.type)
+        if required is not None and not getattr(self, required, None):
+            raise ValueError(
+                f"source '{self.id}' has type '{self.type}' but no '{required}'. "
+                f"The {self.type} adapter requires it, so every request to this "
+                f"source would fail at runtime."
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -373,9 +404,25 @@ class AutoPromoteConfig(BaseModel):
     Default OFF is a permanent safety gate in v2.0.  When ``enabled`` is
     ``False`` every promotion candidate routes to the human-review queue
     regardless of observation count or artifact kind.
+
+    ``True`` is refused rather than accepted-and-ignored: nothing reads this
+    flag, so a deployment that set it believed proposals were skipping human
+    review when in fact none were being promoted at all.  Silence on a knob
+    that claims to bypass review is the wrong failure mode.
     """
 
     enabled: bool = False
+
+    @model_validator(mode="after")
+    def _reject_unimplemented_auto_promotion(self) -> AutoPromoteConfig:
+        if self.enabled:
+            raise ValueError(
+                "rkm.auto_promote.enabled: auto-promotion is not implemented. "
+                "Every proposal routes to the human-review queue "
+                "(`nautilus rkm queue`, `POST /v1/rkm/queue/{id}/approve`); "
+                "remove the key or set it to false."
+            )
+        return self
 
 
 class SandboxConfig(BaseModel):

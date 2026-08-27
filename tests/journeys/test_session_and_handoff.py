@@ -85,28 +85,38 @@ def test_sequential_reads_accumulate_in_the_session_ledger(
     assert asyncio.run(_run()) == {"pii_ssn", "pii_dob", "pii_phone"}
 
 
-def test_a_separate_session_id_starts_a_separate_ledger(session_config: str) -> None:
-    """Sessions are isolated from each other; that is what makes the ledger mean anything."""
+def test_the_ledger_follows_the_caller_not_the_declared_session(session_config: str) -> None:
+    """Cumulative exposure is isolated between callers, not between one caller's sessions.
+
+    A caller picks its own ``session_id``, so a per-session ledger was a
+    control the controlled party could reset: three PII reads, then a fresh
+    session id, and escalation started over. Exposure now accumulates under an
+    internal principal derived from the caller's identity, and a new session id
+    inherits it. Isolation still holds where it means something -- between
+    different callers.
+    """
     from nautilus import Broker
 
-    async def _run() -> tuple[set[str], set[str]]:
+    async def _run() -> tuple[set[str], set[str], set[str]]:
         broker = Broker.from_config(session_config)
         try:
             await broker.arequest("analyst", "ssn", {"purpose": "care", "session_id": "alpha"})
             await broker.arequest("analyst", "dob", {"purpose": "care", "session_id": "beta"})
+            await broker.arequest("chief", "phone", {"purpose": "care", "session_id": "gamma"})
             store: Any = broker.session_store
 
             async def _visited(sid: str) -> set[str]:
                 state = await store.aget(sid) if hasattr(store, "aget") else store.get(sid)
                 return set((state or {}).get("sources_visited", []))
 
-            return await _visited("alpha"), await _visited("beta")
+            return await _visited("alpha"), await _visited("beta"), await _visited("gamma")
         finally:
             await broker.aclose()
 
-    alpha, beta = asyncio.run(_run())
+    alpha, beta, gamma = asyncio.run(_run())
     assert alpha == {"pii_ssn"}
-    assert beta == {"pii_dob"}
+    assert beta == {"pii_ssn", "pii_dob"}, "a fresh session id reset the same caller's ledger"
+    assert gamma == {"pii_phone"}, "a different caller inherited someone else's exposure"
 
 
 # ---------------------------------------------------------------------------

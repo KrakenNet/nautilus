@@ -37,6 +37,7 @@ def _source(
     return SourceConfig(
         id=sid,
         type="postgres",
+        table="t",
         description="d",
         classification=classification,
         data_types=["vulnerability"],

@@ -10,7 +10,8 @@ Formula (AC-35.8.a):
     -0.10 if more entries drifted than replayed
 
 Score interpretation:
-- >0.9: eligible for auto-promotion (gated by ``rkm.auto_promote.enabled``)
+- >0.9: would be eligible for auto-promotion, which is not implemented --
+  every proposal routes to the human-review queue
 - 0.6–0.9: human review queue
 - <0.6: reject; originating meta-rule observation count NOT reset.
 

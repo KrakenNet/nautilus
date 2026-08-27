@@ -257,12 +257,15 @@ def test_m415_omitting_the_session_token_does_not_reset_the_ledger(
     config = write_config(
         {
             "sources": sources,
-            "agents": {"a": {"id": "a", "clearance": "unclassified"}},
+            "agents": {
+                "a": {"id": "a", "clearance": "unclassified"},
+                "b": {"id": "b", "clearance": "unclassified"},
+            },
             "session_tokens": {"enabled": True},
         }
     )
 
-    async def _run() -> set[str]:
+    async def _run() -> tuple[set[str], set[str]]:
         broker = Broker.from_config(config)
         try:
             token: str | None = None
@@ -275,21 +278,33 @@ def test_m415_omitting_the_session_token_does_not_reset_the_ledger(
 
             # The reset: same agent, no token, a session id of its choosing.
             await broker.arequest("a", "ssn", {"purpose": "p", "session_id": "ledger-reset"})
+            # The control: a *different* caller must not inherit the ledger,
+            # or "everyone shares one ledger" would pass this test too.
+            await broker.arequest("b", "ssn", {"purpose": "p", "session_id": "other-agent"})
+
             store: Any = broker.session_store
-            state = (
-                await store.aget("ledger-reset")
-                if hasattr(store, "aget")
-                else store.get("ledger-reset")
-            )
-            return set((state or {}).get("sources_visited", []))
+
+            async def _visited(session_id: str) -> set[str]:
+                state = (
+                    await store.aget(session_id)
+                    if hasattr(store, "aget")
+                    else store.get(session_id)
+                )
+                return set((state or {}).get("sources_visited", []))
+
+            return await _visited("ledger-reset"), await _visited("other-agent")
         finally:
             await broker.aclose()
 
-    visited = asyncio.run(_run())
+    visited, other = asyncio.run(_run())
     assert len(visited) >= 3, (
         f"after three PII reads, one request that simply omitted the session "
         f"token started a fresh ledger holding {sorted(visited)}. Cumulative "
         f"escalation is the control being defeated."
+    )
+    assert len(other) == 1, (
+        f"a different agent's first request already carried {sorted(other)}. "
+        f"Exposure is pooling across callers, not following one."
     )
 
 

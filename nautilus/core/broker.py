@@ -104,6 +104,7 @@ from nautilus.core.models import (
     RoutingDecision,
     ScopeConstraint,
 )
+from nautilus.core.principal import derive_principal_id
 from nautilus.core.session import AsyncSessionStore, InMemorySessionStore, SessionStore
 from nautilus.core.session_pg import PostgresSessionStore
 from nautilus.core.session_sqlite import SqliteSessionStore
@@ -298,6 +299,9 @@ class _RequestState:
     started: float
     intent: str
     intent_analysis: IntentAnalysis
+    # Session-store key the caller's cumulative exposure accumulates under, so
+    # a caller-chosen ``session_id`` cannot start a clean ledger (§4.15).
+    principal_id: str = ""
     routing_decisions: list[RoutingDecision] = field(default_factory=list[RoutingDecision])
     scope_by_source: dict[str, list[ScopeConstraint]] = field(
         default_factory=dict[str, list[ScopeConstraint]]
@@ -376,6 +380,24 @@ def _merge_unique(prior: Any, incoming: list[str]) -> list[str]:
     for value in incoming:
         if value not in merged:
             merged.append(value)
+    return merged
+
+
+_EXPOSURE_KEYS = ("sources_visited", "data_types_seen", "pii_sources_accessed_list")
+
+
+def _merge_exposure(principal: dict[str, Any], session: dict[str, Any]) -> dict[str, Any]:
+    """Union the principal's cumulative exposure into one session's state.
+
+    Only the exposure slots are merged: everything else on the session record
+    (its id, purpose window, last request) belongs to that session alone.
+    """
+    merged = dict(session)
+    for key in _EXPOSURE_KEYS:
+        union = _merge_unique(principal.get(key), list(session.get(key) or []))
+        if union:
+            merged[key] = union
+    merged["pii_sources_accessed"] = len(merged.get("pii_sources_accessed_list") or [])
     return merged
 
 
@@ -623,6 +645,18 @@ class Broker:
     # ------------------------------------------------------------------
 
     @classmethod
+    async def afrom_config(cls, path: str | Path) -> Broker:
+        """Async counterpart of :meth:`from_config` (README "What Ships Today").
+
+        Construction is entirely blocking -- reading the YAML, reading the
+        attestation key, compiling the rule tree into a CLIPS environment --
+        so it runs on a worker thread rather than stalling the caller's event
+        loop. Adapters are still connected lazily by the first request, exactly
+        as with :meth:`from_config`.
+        """
+        return await asyncio.to_thread(cls.from_config, path)
+
+    @classmethod
     def from_config(cls, path: str | Path) -> Broker:
         """Build a fully-wired :class:`Broker` from a ``nautilus.yaml`` path.
 
@@ -656,7 +690,11 @@ class Broker:
         pattern_analyzer = PatternMatchingIntentAnalyzer(
             keyword_map=keyword_map,
         )
-        intent_analyzer = cls._build_intent_analyzer(config, pattern_analyzer)
+        # The configured vocabulary the router will intersect the analyzer's
+        # answer against, handed to the LLM provider so the model is asked to
+        # pick from it rather than to guess at it (§4.17).
+        known_data_types = sorted({dt for src in registry.sources for dt in src.data_types})
+        intent_analyzer = cls._build_intent_analyzer(config, pattern_analyzer, known_data_types)
 
         base_dir = Path(path).parent
         attestation = cls._build_attestation(config, base_dir)
@@ -737,6 +775,7 @@ class Broker:
         cls,
         config: NautilusConfig,
         pattern_analyzer: PatternMatchingIntentAnalyzer,
+        known_data_types: list[str] | None = None,
     ) -> IntentAnalyzer | FallbackIntentAnalyzer:
         """Construct the wired intent analyzer per ``config.analysis.mode``.
 
@@ -759,7 +798,7 @@ class Broker:
             raise ConfigError(
                 f"analysis.mode={analysis.mode!r} requires analysis.provider to be set"
             )
-        provider = cls._build_llm_provider(analysis.provider)
+        provider = cls._build_llm_provider(analysis.provider, known_data_types)
         return FallbackIntentAnalyzer(
             primary=provider,
             fallback=pattern_analyzer,
@@ -768,7 +807,9 @@ class Broker:
         )
 
     @staticmethod
-    def _build_llm_provider(spec: AnalysisProviderSpec) -> LLMIntentProvider:
+    def _build_llm_provider(
+        spec: AnalysisProviderSpec, known_data_types: list[str] | None = None
+    ) -> LLMIntentProvider:
         """Instantiate an :class:`LLMIntentProvider` from a config spec (design §3.8).
 
         Discriminated-union dispatch on ``spec.type``; provider modules are
@@ -782,6 +823,7 @@ class Broker:
                 api_key_env=spec.api_key_env,
                 model=spec.model,
                 timeout_s=spec.timeout_s,
+                known_data_types=known_data_types,
             )
         if isinstance(spec, OpenAIProviderSpec):
             from nautilus.analysis.llm.openai_provider import OpenAIProvider
@@ -790,6 +832,7 @@ class Broker:
                 api_key_env=spec.api_key_env,
                 model=spec.model,
                 timeout_s=spec.timeout_s,
+                known_data_types=known_data_types,
             )
         # Discriminated union — only the local spec remains.
         assert isinstance(spec, LocalInferenceProviderSpec)
@@ -800,6 +843,7 @@ class Broker:
             model=spec.model,
             api_key_env=spec.api_key_env,
             timeout_s=spec.timeout_s,
+            known_data_types=known_data_types,
         )
 
     @staticmethod
@@ -1255,8 +1299,17 @@ class Broker:
         context: dict[str, Any] | None = None,
         *,
         fact_set_hash: str | None = None,
+        caller: dict[str, str] | None = None,
     ) -> BrokerResponse:
         """Async request pipeline (design §3.1, §8, §9).
+
+        ``caller`` is the transport's view of who is calling -- ``{"auth":
+        <authenticated principal>, "peer": <network address>}`` -- and is what
+        keys the cumulative-exposure ledger (§4.15). It is a parameter rather
+        than a ``context`` key precisely because ``context`` is the caller's to
+        fill in: a client that could set it could reset its own ledger. An
+        in-library caller passes nothing and is identified by ``agent_id``
+        alone.
 
         Linear sequence of awaits; heavy lifting lives in private helpers
         (`_run_pipeline`, `_build_adapter_jobs`, `_gather_adapter_results`,
@@ -1267,6 +1320,11 @@ class Broker:
         context = dict(context) if context else {}
         state = _new_request_state(context, intent)
         state.fact_set_hash = fact_set_hash
+        state.principal_id = derive_principal_id(
+            agent_id,
+            auth_principal=(caller or {}).get("auth"),
+            peer=(caller or {}).get("peer"),
+        )
         # Session-provenance gate (#18) — verify a presented token (fail-closed
         # with its own audit entry) or mint one for a fresh session, BEFORE the
         # pipeline runs so adapters see the token in ``context`` (AC-18.b).
@@ -1619,6 +1677,12 @@ class Broker:
           :func:`_build_audit_entry` can copy each field onto the audit
           entry (FR-14, AC-6.5).
         """
+        # The minted session JWS rides in ``context`` so adapters can forward it
+        # downstream (AC-18.b), but every LLM provider ``json.dumps`` the whole
+        # context into its prompt -- so a live credential left the process on
+        # every request with ``session_tokens.enabled: true``. It appears in no
+        # context contract (``analysis/llm/base.py``) and no analyzer reads it.
+        context = {k: v for k, v in context.items() if k != "session_token"}
         analyzer = self._intent_analyzer
         if isinstance(analyzer, FallbackIntentAnalyzer):
             analysis, provenance = await analyzer.analyze(intent, context)
@@ -1665,7 +1729,6 @@ class Broker:
                 await self._analyze_intent(intent, context, state)
             with broker_span(SPAN_FATHOM_ROUTING):
                 await self._route(agent_id, context, state)
-                _metrics.routing_decisions_total.add(1)
             self._merge_context_scope_constraints(context, state)
             self._apply_temporal_filter(state)
             with broker_span(SPAN_ADAPTER_FAN_OUT):
@@ -1831,6 +1894,11 @@ class Broker:
         session_state = await self._session_get(state.session_id) if state.session_id else {}
         if state.session_id:
             session_state.setdefault("id", state.session_id)
+        # Fold the caller's principal-wide exposure in before the rules see it.
+        # Without this a caller escaped cumulative escalation by declaring a
+        # session id it had never used -- the ledger is the control, and the
+        # key was the caller's to pick (§4.15).
+        session_state = _merge_exposure(await self._session_get(state.principal_id), session_state)
         state.session_state = dict(session_state)
         route_result = self._router.route(
             agent_id=agent_id,
@@ -1841,6 +1909,11 @@ class Broker:
             agent_registry=self._agent_registry,
         )
         state.apply_route_result(route_result)
+        # One per decision, not one per request: incremented at the call site it
+        # made ``nautilus_routing_decisions_total`` a second copy of
+        # ``nautilus_requests_total``, so the dashboard panel plotted the
+        # request rate under a routing label.
+        _metrics.routing_decisions_total.add(len(route_result.routing_decisions))
         _metrics.fathom_evaluation_duration.record(route_result.duration_us / 1_000_000)
         for denial in route_result.denial_records:
             _metrics.scope_denials_total.add(1, {"rule_name": denial.rule_name})
@@ -1867,14 +1940,19 @@ class Broker:
             "last_sources_queried": state.sources_queried,
         }
         entry.update(self._accumulate_exposure(state, context))
+        # Written under both keys: the session record is what an operator reads
+        # and what TTL ages out, the principal record is what survives the
+        # caller picking a new session id.
         if hasattr(self._session_store, "aupdate"):
             await self._session_store.aupdate(state.session_id, entry)  # type: ignore[attr-defined]
+            await self._session_store.aupdate(state.principal_id, entry)  # type: ignore[attr-defined]
             return
         # Sync fallback — only reachable when the store implements the Phase-1
         # :class:`SessionStore` Protocol (``update``). The union type widens to
         # include :class:`AsyncSessionStore` so pyright needs the explicit cast.
         sync_store: SessionStore = self._session_store  # type: ignore[assignment]
         sync_store.update(state.session_id, entry)
+        sync_store.update(state.principal_id, entry)
 
     def _accumulate_exposure(self, state: _RequestState, context: dict[str, Any]) -> dict[str, Any]:
         """Fold this request's exposure into the session's cumulative slots.
@@ -2100,7 +2178,6 @@ class Broker:
             state.sources_queried.append(source_id)
             if res.truncated:
                 state.truncated_sources.append(source_id)
-            _metrics.adapter_latency.record(res.duration_ms / 1000.0, {"source_id": source_id})
             # Per-source chain-of-custody hash (issue #19, AC-19), computed
             # centrally by the broker over each source's raw rows at this
             # pre-synthesis boundary. The digest is ALWAYS derived from the rows
@@ -2321,6 +2398,7 @@ class Broker:
         context: dict[str, Any],
     ) -> AdapterResult:
         """Run one adapter; catch scope/adapter errors into a typed AdapterResult."""
+        started = time.perf_counter()
         try:
             return await adapter.execute(intent, scope, context)
         except ScopeEnforcementError as exc:
@@ -2347,6 +2425,13 @@ class Broker:
                     trace_id="",
                 ),
             )
+        finally:
+            # Timed here rather than derived from ``AdapterResult.duration_ms``:
+            # that field is an int, so every sub-millisecond call recorded as
+            # exactly 0.0 seconds and the first histogram bucket was the only
+            # one that ever filled. Failures are timed too -- an adapter that
+            # takes ten seconds to fail is a latency event.
+            _metrics.adapter_latency.record(time.perf_counter() - started, {"source_id": source_id})
 
     def _sign(
         self,

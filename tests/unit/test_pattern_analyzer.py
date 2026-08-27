@@ -38,6 +38,7 @@ def _source(source_id: str, data_types: list[str]) -> SourceConfig:
     return SourceConfig(
         id=source_id,
         type="postgres",
+        table="t",
         description="test source",
         classification="unclassified",
         data_types=data_types,

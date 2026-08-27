@@ -67,7 +67,13 @@ from nautilus.attestation.session_token import SessionTokenService
 from nautilus.core.broker import Broker
 from nautilus.core.metrics import register_rkm_queue
 from nautilus.core.models import BrokerRequest, BrokerResponse
-from nautilus.transport.auth import api_key_header, proxy_trust_dependency, verify_api_key
+from nautilus.transport.auth import (
+    SESSION_TOKEN_HEADER,
+    api_key_header,
+    proxy_trust_dependency,
+    verify_api_key,
+    verify_session_token,
+)
 from nautilus.ui import create_admin_router
 from nautilus.ui.audit_reader import AuditReader
 from nautilus.ui.dependencies import get_auth_user
@@ -237,6 +243,24 @@ def create_app(
     # ``app.state.auth_mode`` between requests get the new behaviour.
     # ------------------------------------------------------------------
 
+    def _caller_identity(request: Request) -> dict[str, str]:
+        """Who the transport authenticated this request as (§4.15).
+
+        Keys the cumulative-exposure ledger, so it must carry nothing the
+        caller's own payload can set. ``auth`` is the API key the request
+        presented or, under ``proxy_trust``, the upstream's
+        ``X-Forwarded-User``; ``peer`` is the socket address, recorded for
+        provenance and used as the key's fallback only when the deployment
+        authenticates nobody.
+        """
+        mode = getattr(request.app.state, "auth_mode", "api_key")
+        if mode == "proxy_trust":
+            auth = request.headers.get("X-Forwarded-User") or ""
+        else:
+            auth = request.headers.get("X-API-Key") or ""
+        peer = request.client.host if request.client else ""
+        return {"auth": auth, "peer": peer}
+
     async def _write_guard(request: Request) -> str:
         """Delegate to api_key or proxy_trust based on current ``auth_mode``."""
         mode = getattr(request.app.state, "auth_mode", "api_key")
@@ -261,6 +285,14 @@ def create_app(
         body: BrokerRequest,
         request: Request,
     ) -> BrokerResponse:
+        """Shared body of ``/v1/request`` and ``/v1/query``.
+
+        Both routes list ``verify_session_token`` in ``dependencies``: its
+        docstring promised a 401 for a present-but-invalid
+        ``X-Nautilus-Session-Token`` (AC-18.d) that nothing was wired to
+        produce, so the header was declared, documented as verified, and read
+        by nobody.
+        """
         broker: Broker | None = getattr(request.app.state, "broker", None)
         if broker is None:  # pragma: no cover — lifespan guards this.
             from fastapi import HTTPException
@@ -269,10 +301,23 @@ def create_app(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Broker not ready",
             )
+        # A header-borne token reaches the broker on the same channel as a
+        # body-borne one, so the session binding it carries actually applies
+        # (the broker re-verifies and lets the token's ``session_id`` override
+        # the declared one). The body wins if a caller sends both.
+        context = dict(body.context)
+        header_token = request.headers.get(SESSION_TOKEN_HEADER)
+        if header_token and "session_token" not in context:
+            context["session_token"] = header_token
         return await broker.arequest(
             body.agent_id,
             body.intent,
-            body.context,
+            context,
+            caller=_caller_identity(request),
+            # Declared on ``BrokerRequest`` and therefore in the OpenAPI schema.
+            # Dropping it here made REST return ``null`` where the library
+            # echoes the caller's value back (US-6 / FR-62).
+            fact_set_hash=body.fact_set_hash,
         )
 
     # ------------------------------------------------------------------
@@ -282,7 +327,7 @@ def create_app(
     @app.post(
         "/v1/request",
         response_model=BrokerResponse,
-        dependencies=[Depends(_write_guard)],
+        dependencies=[Depends(_write_guard), Depends(verify_session_token)],
         tags=["broker"],
     )
     async def post_request(  # pyright: ignore[reportUnusedFunction]
@@ -295,7 +340,7 @@ def create_app(
     @app.post(
         "/v1/query",
         response_model=BrokerResponse,
-        dependencies=[Depends(_write_guard)],
+        dependencies=[Depends(_write_guard), Depends(verify_session_token)],
         tags=["broker"],
     )
     async def post_query(  # pyright: ignore[reportUnusedFunction]

@@ -50,6 +50,7 @@ def _three_sources() -> list[SourceConfig]:
         SourceConfig(
             id="vuln-db",
             type="postgres",
+            table="t",
             description="vulnerability database",
             classification="secret",
             data_types=["vulnerability", "cve"],
@@ -59,6 +60,7 @@ def _three_sources() -> list[SourceConfig]:
         SourceConfig(
             id="asset-db",
             type="postgres",
+            table="t",
             description="asset inventory",
             classification="secret",
             data_types=["asset", "host"],
@@ -68,6 +70,7 @@ def _three_sources() -> list[SourceConfig]:
         SourceConfig(
             id="log-db",
             type="postgres",
+            table="t",
             description="event logs",
             classification="secret",
             data_types=["log", "event"],
@@ -223,6 +226,7 @@ def test_denial_removes_source_from_route_set() -> None:
             SourceConfig(
                 id="allowed-db",
                 type="postgres",
+                table="t",
                 description="allows research",
                 classification="secret",
                 data_types=["vulnerability"],
@@ -232,6 +236,7 @@ def test_denial_removes_source_from_route_set() -> None:
             SourceConfig(
                 id="denied-db",
                 type="postgres",
+                table="t",
                 description="audit only — denies research",
                 classification="secret",
                 data_types=["vulnerability"],

@@ -543,17 +543,18 @@ def test_m422_rest_forwards_fact_set_hash(
 
 
 @pytest.mark.parametrize(
-    ("source_type", "missing_field", "extra"),
+    ("source_type", "missing_field", "present_value"),
     [
-        ("postgres", "table", {}),
-        ("elasticsearch", "index", {}),
-        ("neo4j", "label", {}),
-        ("llm", "model", {}),
-        ("rest", "endpoints", {}),
+        ("postgres", "table", "public.t"),
+        ("pgvector", "table", "public.t"),
+        ("elasticsearch", "index", "docs"),
+        ("neo4j", "label", "Doc"),
+        ("llm", "model", "a-model"),
+        ("servicenow", "table", "incident"),
     ],
 )
 def test_m422_config_rejects_a_source_the_runtime_can_never_serve(
-    write_config: Any, source_type: str, missing_field: str, extra: dict[str, Any]
+    write_config: Any, source_type: str, missing_field: str, present_value: str
 ) -> None:
     """A source missing its mandatory field must fail at load, not at runtime.
 
@@ -561,35 +562,48 @@ def test_m422_config_rejects_a_source_the_runtime_can_never_serve(
     starts, ``/healthz`` and ``/readyz`` go green (neither touches adapters),
     and the source errors on every request forever. ``models.py:100-106``
     already narrowed ``embedder`` to a ``Literal`` for exactly this reason.
+
+    The report also listed ``rest`` without ``endpoints``. It does not belong:
+    the adapter documents ``endpoints is None`` as the Phase-1 shape and falls
+    back to the base URL with an empty path (``rest.py:295-303``, NFR-5), and
+    in-repo configs rely on it. ``servicenow`` and ``pgvector`` are here
+    instead -- both hard-require ``table`` in ``connect()``.
+
+    The second half is the control: the same source *with* the field must load,
+    so a validator that rejected everything could not pass this test.
     """
     from nautilus import Broker
 
-    config = write_config(
-        {
-            "sources": [
-                {
-                    "id": "broken",
-                    "type": source_type,
-                    "description": f"a {source_type} source with no {missing_field}",
-                    "classification": "unclassified",
-                    "data_types": ["docs"],
-                    "allowed_purposes": [],
-                    "connection": "memory://",
-                    **extra,
-                }
-            ],
-            "agents": {"a": {"id": "a", "clearance": "unclassified"}},
-        }
-    )
+    def _config(**extra: str) -> Any:
+        return write_config(
+            {
+                "sources": [
+                    {
+                        "id": "broken",
+                        "type": source_type,
+                        "description": f"a {source_type} source",
+                        "classification": "unclassified",
+                        "data_types": ["docs"],
+                        "allowed_purposes": [],
+                        "connection": "memory://",
+                        **extra,
+                    }
+                ],
+                "agents": {"a": {"id": "a", "clearance": "unclassified"}},
+            }
+        )
 
-    with pytest.raises(Exception, match=r".+"):
-        broker = Broker.from_config(config)
+    with pytest.raises(Exception, match=missing_field):
+        broker = Broker.from_config(_config())
         broker.close()
         pytest.fail(
             f"a {source_type} source with no '{missing_field}' loaded cleanly. "
             f"The broker starts, the health probes go green, and every request "
             f"to it fails forever."
         )
+
+    broker = Broker.from_config(_config(**{missing_field: present_value}))
+    broker.close()
 
 
 # ---------------------------------------------------------------------------

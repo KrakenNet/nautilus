@@ -66,6 +66,7 @@ def _three_sources() -> list[SourceConfig]:
         SourceConfig(
             id="vuln-db",
             type="postgres",
+            table="t",
             description="vulnerability database",
             classification="secret",
             data_types=["vulnerability", "cve"],
@@ -75,6 +76,7 @@ def _three_sources() -> list[SourceConfig]:
         SourceConfig(
             id="asset-db",
             type="postgres",
+            table="t",
             description="asset inventory",
             classification="secret",
             data_types=["asset", "host"],
@@ -84,6 +86,7 @@ def _three_sources() -> list[SourceConfig]:
         SourceConfig(
             id="log-db",
             type="postgres",
+            table="t",
             description="event logs",
             classification="secret",
             data_types=["log", "event"],

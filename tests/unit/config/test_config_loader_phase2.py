@@ -160,6 +160,7 @@ def test_four_new_phase2_adapter_types_accepted(
         classification: cui
         data_types: [incident]
         connection: ${SNOW_URL}
+        table: incident
     """
     path = _write_yaml(tmp_path, body)
 

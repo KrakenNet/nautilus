@@ -44,9 +44,10 @@ reviewer identity (`X-Nautilus-Reviewer` header), which lands in the
 audit trail: the REST routes write to the serving broker's sink, the CLI
 to `--config`'s `audit.path` (default `./audit.jsonl`).
 
-`rkm.auto_promote.enabled` (default **false**) lets high-confidence
-proposals skip the human step; the validation evidence is preserved
-either way.
+Every proposal goes through that human step. `rkm.auto_promote.enabled`
+is reserved for a future high-confidence bypass and is **not implemented**;
+setting it to `true` is refused at config load rather than silently
+ignored.
 
 ## Lineage
 

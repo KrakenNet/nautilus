@@ -24,13 +24,21 @@ from typing import TYPE_CHECKING, Any
 from fastapi import Depends, HTTPException, status
 from fastapi.security import APIKeyHeader
 
-if TYPE_CHECKING:
-    from starlette.requests import Request  # noqa: TC002
+# Imported at runtime, not under TYPE_CHECKING: with ``from __future__ import
+# annotations`` a TYPE_CHECKING-only name leaves FastAPI an unresolvable
+# ForwardRef, so it read ``request`` as a query parameter and every call to a
+# route depending on ``verify_session_token`` 422'd instead of being verified.
+# The same trap is documented in ``ui/router.py`` and ``fastapi_app.py``.
+from starlette.requests import Request
 
+if TYPE_CHECKING:
     from nautilus.attestation.session_token import SessionTokenClaims
 
 # Optional session-token header for AC-18.f verification.
-_SESSION_TOKEN_HEADER = "X-Nautilus-Session-Token"
+SESSION_TOKEN_HEADER = "X-Nautilus-Session-Token"
+"""Header carrying the broker-issued session JWS. Mirrored (deliberately,
+to keep the adapter layer off the transport layer) by
+``nautilus.adapters.base.SESSION_TOKEN_HEADER``."""
 
 
 # Module-level APIKeyHeader instance — FastAPI caches dependency providers
@@ -129,7 +137,7 @@ async def verify_session_token(
     is absent the dependency is a no-op and returns ``None`` so existing tests
     that don't populate the state continue to pass.
     """
-    token_value = request.headers.get(_SESSION_TOKEN_HEADER)
+    token_value = request.headers.get(SESSION_TOKEN_HEADER)
     if not token_value:
         return None
     from nautilus.attestation.session_token import SessionTokenError, SessionTokenService
@@ -164,6 +172,7 @@ async def verify_session_token(
 
 
 __all__ = [
+    "SESSION_TOKEN_HEADER",
     "api_key_header",
     "proxy_trust_dependency",
     "require_api_key",

@@ -103,6 +103,16 @@ Cumulative exposure — `sources_visited`, `data_types_seen` and
 queried, and is what escalation packs and any rule matching
 `session_exposure` see.
 
+It accumulates **per caller**, not per declared `session_id`. The caller
+picks its own session id, so a per-session ledger was a control the
+controlled party could reset: enough PII to trip escalation, then a fresh
+session id, and the count started over. The broker derives an internal
+principal from the caller's identity — `agent_id` plus the transport's
+authenticated principal (the API key presented, or `X-Forwarded-User`
+under `proxy_trust`) — and a new session id inherits that principal's
+exposure. Different callers stay isolated from each other, and
+`ttl_seconds` still ages a ledger out.
+
 The built-in escalation pack
 (`nautilus/rules/escalation/default.yaml`) declares one entry:
 accumulating `email`, `phone`, `dob` and `ssn` within a session escalates
@@ -110,9 +120,9 @@ the request's effective classification to `confidential`. The built-in
 `session-exposure-escalation-deny` rule denies every source in that request
 when the agent's clearance does not dominate the escalated level; an agent
 who does clear it routes normally. No single request carries four PII data
-types, so the trigger is reachable only through the accumulated session
-state — with `session_store.ttl_seconds` elapsed, or a fresh session id, the
-ledger starts over.
+types, so the trigger is reachable only through accumulated exposure —
+which `session_store.ttl_seconds` ages out. A fresh session id does not
+reset it; see above.
 
 ### Session tokens (optional)
 
@@ -124,9 +134,11 @@ session_tokens:
 
 When enabled, the first request in a session mints an EdDSA JWS bound to
 the broker instance; subsequent requests present it via
-`context["session_token"]`. A valid token's `session_id` claim overrides
-the caller-declared session id, so the exposure ledger cannot be reset by
-declaring a fresh session. Verification is fail-closed.
+`context["session_token"]` or the `X-Nautilus-Session-Token` header (a
+present-but-invalid header is a 401). A valid token's `session_id` claim
+overrides the caller-declared session id. Verification is fail-closed.
+Session tokens are not what protects the exposure ledger — omitting one is
+always allowed — the per-caller principal above is.
 
 ### Relative paths
 

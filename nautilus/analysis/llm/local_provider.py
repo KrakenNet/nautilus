@@ -43,6 +43,7 @@ class LocalInferenceProvider(OpenAIProvider):
         timeout_s: float,
         api_key: str = "not-needed",
         api_key_env: str | None = None,
+        known_data_types: list[str] | None = None,
     ) -> None:
         # Parent's ``__init__`` guards the ``openai`` import and raises
         # :class:`LLMProviderError` if the extra is missing; we simply
@@ -51,6 +52,7 @@ class LocalInferenceProvider(OpenAIProvider):
             api_key_env=api_key_env or "__NAUTILUS_LOCAL_INFERENCE_UNUSED__",
             model=model,
             timeout_s=timeout_s,
+            known_data_types=known_data_types,
         )
         self.base_url = base_url
         self._api_key_literal = api_key

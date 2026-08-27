@@ -76,9 +76,16 @@ def test_llm_adapter_declares_non_deterministic_capability() -> None:
 
 
 async def test_connect_requires_model() -> None:
+    """The adapter's own guard, reached past the config-layer rejection.
+
+    ``SourceConfig`` now refuses ``type: llm`` without ``model`` outright, so
+    this builds the invalid config with ``model_construct`` -- the adapter
+    guard is the second line of defence for a config built in code.
+    """
     adapter = LLMAdapter()
+    invalid = _source().model_construct(**{**_source().__dict__, "model": None})
     with pytest.raises(AdapterError, match="model"):
-        await adapter.connect(_source(model=None))
+        await adapter.connect(invalid)
 
 
 async def test_connect_rejects_mtls_auth() -> None:
