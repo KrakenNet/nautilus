@@ -34,6 +34,12 @@ sources:
     connection: ${DATABASE_URL}
     table: vulns
 
+agents:
+  scanner:
+    id: scanner
+    clearance: unclassified
+    allowed_purposes: [threat-analysis]
+
 rules:
   user_rules_dirs: []        # directories of your own rule YAML files
 
@@ -52,6 +58,14 @@ api:
   port: 8000
   keys: ["${NAUTILUS_API_KEY}"]   # enables X-API-Key auth on the REST surface
 ```
+
+**Declaring agents is what turns enforcement on.** With no `agents:` block the
+router has no registered attributes to enforce, so it reads `clearance`,
+`compartments` and `purpose` out of the request context — the caller declares
+its own clearance, and a request that says `top-secret` reads a secret source.
+That is the bootstrap default and the shape the tutorial uses; a broker started
+without agents logs a warning at startup saying exactly this. A deployment
+declares its agents, and binds credentials to them (below).
 
 ### Bind a credential to an agent
 
@@ -300,8 +314,11 @@ surrounding operational events.
 
 ## 4. Monitor
 
-- `GET /healthz` — liveness; `GET /readyz` — readiness (verifies the
-  session store responds).
+- `GET /healthz` — liveness; `GET /readyz` — readiness (verifies the audit
+  sink is writable and the session store responds; the `reason` field on a
+  503 names which one failed). Every request writes an audit entry before it
+  answers, so a sink that has stopped accepting writes fails every request —
+  the probe takes the instance out of rotation instead of reporting ready.
 - `GET /metrics` — Prometheus exposition (request counts, durations,
   denials, adapter errors).
 - `examples/full-showcase/` ships a docker-compose stack with Prometheus,
@@ -323,6 +340,25 @@ curl -H "X-API-Key: $NAUTILUS_API_KEY" \
 Filters: `agent_id`, `source_id`, `event_type`, `start`/`end` (ISO-8601),
 `cursor`, `limit` (≤ 500), `order=asc|desc`. The response carries
 `next_cursor` for pagination.
+
+**Integrity (optional):** `audit.chained: true` upgrades the log to the same
+hash-chained, JWS-signed format the attestation sink can use — every line
+commits to its predecessor, so an edited or reordered entry is detectable
+offline instead of leaving no trace:
+
+```yaml
+audit:
+  path: /var/lib/nautilus/audit.jsonl
+  chained: true
+  checkpoint_interval: 100   # 0 = no checkpoints
+```
+
+It signs each line, so it requires `attestation.enabled` with a signing key
+and is refused at startup without one. A chain is a total order: one writer
+per file, exactly as for `attestation.sink`. Verify with the same
+`fathom.chained_log.verify_chain` the admin audit view uses. Checkpoints
+anchor the tail, which is what makes a *truncation* — as opposed to an edit —
+detectable, so set `checkpoint_interval` if that is part of your threat model.
 
 **Backup:** the audit file is append-only JSONL — rotate and archive it
 like any log (e.g. `logrotate` with `copytruncate` disabled; move the file
@@ -399,6 +435,26 @@ baselines the broker reads.
   body over 8 MiB, and the S3 adapter refuses an object over 8 MiB, in both
   cases before materializing it. Either raises an adapter error naming the
   ceiling; the source is not quarantined for it.
+
+### Which rules are in force
+
+```bash
+curl -H "X-API-Key: $NAUTILUS_API_KEY" http://127.0.0.1:8000/v1/rules
+```
+
+Returns every rule the running engine will fire — built-ins, user rules and
+pack rules alike — plus a `ruleset_hash`. That hash is recorded on every audit
+entry, so an entry can be replayed against the policy that produced it rather
+than against whatever is loaded today.
+
+**Retraction changes the running engine.** `POST /v1/rules/{name}/retract`
+removes the rule from the engine and, when its YAML lives in a configured
+`rules.user_rules_dirs`, from that file too; the response's `engine_updated`
+and `engine_note` say which of those happened. A built-in or pack rule can be
+retracted for the life of the process but comes back at the next start —
+remove the pack from `rules.packs` instead. **Rollback does not:** a lineage
+record carries no rule text, so `POST /v1/rules/{name}/rollback` re-promotes a
+version in the ledger and returns `engine_updated: false`.
 
 ## 8. Validate rules before deploying
 

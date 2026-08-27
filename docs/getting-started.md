@@ -109,6 +109,12 @@ finally:
 rows, `response.attestation_token` is a signed JWS, and `response.request_id`
 joins the response to its audit entry.
 
+Note what the third argument is doing: this config declares no `agents:`, so
+the caller's `clearance` and `purpose` are taken at face value. That is fine
+for a first run and it is why the broker warns about it at startup — declare
+agents in `nautilus.yaml` and those attributes come from the config instead.
+See [Operator guide](how-to/operator-guide.md#2-configure-nautilusyaml).
+
 ## Next steps
 
 - [Architecture](concepts/architecture.md) — understand the broker pipeline

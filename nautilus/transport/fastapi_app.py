@@ -387,16 +387,26 @@ def create_app(
         header_token = request.headers.get(SESSION_TOKEN_HEADER)
         if header_token and "session_token" not in context:
             context["session_token"] = header_token
-        return await broker.arequest(
-            body.agent_id,
-            body.intent,
-            context,
-            caller=caller,
-            # Declared on ``BrokerRequest`` and therefore in the OpenAPI schema.
-            # Dropping it here made REST return ``null`` where the library
-            # echoes the caller's value back (US-6 / FR-62).
-            fact_set_hash=body.fact_set_hash,
-        )
+        try:
+            return await broker.arequest(
+                body.agent_id,
+                body.intent,
+                context,
+                caller=caller,
+                # Declared on ``BrokerRequest`` and therefore in the OpenAPI
+                # schema. Dropping it here made REST return ``null`` where the
+                # library echoes the caller's value back (US-6 / FR-62).
+                fact_set_hash=body.fact_set_hash,
+            )
+        except ValueError as exc:
+            # Malformed caller input inside ``context`` — notably
+            # ``scope_constraints`` — which used to leave here as a 500.
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
 
     # ------------------------------------------------------------------
     # Route registrations
@@ -483,6 +493,14 @@ def create_app(
         if broker is None or not ready:
             response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
             return {"status": "not_ready", "reason": "startup_incomplete"}
+        # The audit sink is checked first: an entry is written before any
+        # request answers, so a sink that has stopped accepting writes fails
+        # every request, and the probe that exists to drain a pod said ok.
+        audit_logger: Any = getattr(broker, "audit_logger", None)
+        audit_problem = audit_logger.probe() if audit_logger is not None else None
+        if audit_problem is not None:
+            response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+            return {"status": "not_ready", "reason": audit_problem}
         store: Any = getattr(broker, "session_store", None)
         if store is None:
             # Broker without an exposed session_store still counts as ready
@@ -1046,6 +1064,31 @@ def create_app(
     # ------------------------------------------------------------------
 
     @app.get(
+        "/v1/rules",
+        dependencies=[Depends(_write_guard), Depends(_require_capability("query"))],
+        tags=["rules"],
+    )
+    async def get_rules_in_force(  # pyright: ignore[reportUnusedFunction]
+        request: Request,
+    ) -> dict[str, Any]:
+        """Every rule the running engine will fire, plus the ruleset identity.
+
+        Built-ins, user rules and pack rules alike. ``ruleset_hash`` is the
+        same value each audit entry records, so a deployment can be compared
+        against the policy an operator believes it is running — and against
+        the entries it produced.
+        """
+        from fastapi import HTTPException
+
+        broker: Broker | None = getattr(request.app.state, "broker", None)
+        if broker is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Broker not ready",
+            )
+        return {"ruleset_hash": broker.ruleset_hash, "rules": broker.rules_in_force()}
+
+    @app.get(
         "/v1/rules/{rule_name}/lineage",
         dependencies=[Depends(_write_guard), Depends(_require_capability("govern"))],
         tags=["rules"],
@@ -1149,7 +1192,32 @@ def create_app(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=str(exc),
             ) from exc
-        return {"rule_name": rule_name, "version": version, "affected_descendants": affected}
+
+        # Lineage says the rule is retired; the engine is what decides
+        # requests. Retraction used to stop at the ledger, so a rule an
+        # operator had been told was gone kept firing until the next restart.
+        router = _get_router(request)
+        engine_result: dict[str, bool] = (
+            router.retract_rule(rule_name)
+            if router is not None
+            else {"engine_updated": False, "persisted": False}
+        )
+        if engine_result["engine_updated"] and not engine_result["persisted"]:
+            note = (
+                "removed from the running engine; its YAML is not in "
+                "rules.user_rules_dirs, so a restart reloads it"
+            )
+        elif engine_result["engine_updated"]:
+            note = "removed from the running engine and from its rule file"
+        else:
+            note = "the rule was not in force; only the lineage record changed"
+        return {
+            "rule_name": rule_name,
+            "version": version,
+            "affected_descendants": affected,
+            "engine_updated": engine_result["engine_updated"],
+            "engine_note": note,
+        }
 
     @app.post(
         "/v1/rules/{rule_name}/rollback",
@@ -1207,6 +1275,15 @@ def create_app(
             "rule_name": rule_name,
             "rolled_back_from_version": to_version,
             "new_version": result.new_version,
+            # A lineage record carries no rule text, so there is nothing to
+            # reload: the running engine keeps deciding with the newer rule.
+            # Saying so is the difference between a ledger entry and a deploy.
+            "engine_updated": False,
+            "engine_note": (
+                "lineage only: the restored version's rule text is not stored, so the "
+                "running engine still has the newer rule. Re-submit it through the RKM "
+                "queue, or restart against the rule files you want in force."
+            ),
             "record": d,
         }
 

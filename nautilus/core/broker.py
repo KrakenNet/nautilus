@@ -502,6 +502,7 @@ def _build_audit_entry(
     state: _RequestState,
     attestation_token: str | None,
     session_store_mode: Literal["primary", "degraded_memory", "degraded_sqlite"] | None,
+    ruleset_hash: str | None = None,
 ) -> AuditEntry:
     """Materialize a flat :class:`AuditEntry` from pipeline state (design §4.9)."""
     prov = state.llm_provenance
@@ -520,6 +521,7 @@ def _build_audit_entry(
         denial_records=state.denial_records,
         error_records=state.errored,
         rule_trace=state.rule_trace,
+        ruleset_hash=ruleset_hash,
         sources_queried=state.sources_queried,
         sources_denied=state.sources_denied,
         sources_skipped=state.sources_skipped,
@@ -696,6 +698,18 @@ class Broker:
 
         registry = SourceRegistry(config.sources)
         agent_registry = AgentRegistry(config.agents)
+        if not config.agents:
+            # An empty registry makes the router read clearance, compartments
+            # and purpose from ``context`` — i.e. from the caller. That is the
+            # bootstrap default and getting-started teaches exactly this shape,
+            # but it is the single largest posture difference between a demo
+            # and a deployment, so it is said out loud rather than inferred.
+            log.warning(
+                "No 'agents:' are declared in %s, so every request declares its own "
+                "clearance, compartments and purpose and the broker enforces them "
+                "against the sources it knows. Declare agents to turn enforcement on.",
+                path,
+            )
 
         # Auto-generate base intent vocabulary from each source's declared
         # ``data_types`` (#24); explicit ``analysis.keyword_map`` entries
@@ -757,7 +771,7 @@ class Broker:
 
         audit_path = cls._resolve(base_dir, config.audit.path)
         audit_path.parent.mkdir(parents=True, exist_ok=True)
-        audit_logger = AuditLogger(sink=FileSink(path=audit_path))
+        audit_logger = AuditLogger(sink=cls._build_audit_sink(config, audit_path, attestation))
 
         session_store = cls._build_session_store(config, base_dir=base_dir)
 
@@ -984,6 +998,35 @@ class Broker:
         return NullAttestationSink()
 
     @staticmethod
+    def _build_audit_sink(
+        config: NautilusConfig,
+        audit_path: Path,
+        attestation: AttestationService | None,
+    ) -> Any:
+        """``FileSink``, or a hash-chained log when ``audit.chained`` is set.
+
+        ``ChainedAttestationLog.write`` satisfies the same ``AuditSink``
+        protocol ``FileSink`` does, so chaining is a swap of the sink rather
+        than a second write path. It signs each line, so it fails closed on a
+        config that asks for integrity without a key to sign with.
+        """
+        if not config.audit.chained:
+            return FileSink(path=audit_path)
+        if attestation is None:
+            msg = (
+                "audit.chained requires attestation.enabled with a signing key: "
+                "each chained line carries a JWS, and there is nothing to sign with"
+            )
+            raise ValueError(msg)
+        from fathom.chained_log import ChainedAttestationLog
+
+        return ChainedAttestationLog(
+            audit_path,
+            attestation,
+            checkpoint_interval=config.audit.checkpoint_interval,
+        )
+
+    @staticmethod
     def _build_attestation(config: NautilusConfig, base_dir: Path) -> AttestationService | None:
         """Construct the attestation service per design §9.4.
 
@@ -1089,6 +1132,15 @@ class Broker:
         without re-loading the YAML or reaching into private state.
         """
         return self._config.api
+
+    @property
+    def ruleset_hash(self) -> str:
+        """``sha256:…`` over the rules this broker is deciding with."""
+        return self._router.ruleset_hash
+
+    def rules_in_force(self) -> list[dict[str, str]]:
+        """Every rule loaded into the running engine (module + name)."""
+        return self._router.rules_in_force()
 
     @property
     def agent_registry(self) -> AgentRegistry:
@@ -1887,9 +1939,22 @@ class Broker:
             return
         items: list[Any] = list(raw) if isinstance(raw, (list, tuple)) else [raw]  # pyright: ignore[reportUnknownArgumentType]
         for item in items:
-            constraint = (
-                item if isinstance(item, ScopeConstraint) else ScopeConstraint.model_validate(item)
-            )
+            try:
+                constraint = (
+                    item
+                    if isinstance(item, ScopeConstraint)
+                    else ScopeConstraint.model_validate(item)
+                )
+            except ValidationError as exc:
+                # Caller input, so a typo is a client error. Unwrapped, the
+                # ValidationError left arequest as a 500 with no audit entry.
+                reasons = "; ".join(
+                    f"{'.'.join(str(p) for p in e['loc']) or '(root)'}: {e['msg']}"
+                    for e in exc.errors()
+                )
+                raise ValueError(
+                    f"context['scope_constraints'] entry is not a scope constraint: {reasons}"
+                ) from exc
             state.scope_by_source.setdefault(constraint.source_id, []).append(constraint)
 
     def _apply_temporal_filter(self, state: _RequestState) -> None:
@@ -2474,7 +2539,13 @@ class Broker:
     ) -> None:
         """Build and hand the :class:`AuditEntry` to the logger (NFR-8, §9.2)."""
         self._audit_logger.emit(
-            _build_audit_entry(agent_id, state, attestation_token, self._session_store_mode())
+            _build_audit_entry(
+                agent_id,
+                state,
+                attestation_token,
+                self._session_store_mode(),
+                self.ruleset_hash,
+            )
         )
 
     def _session_store_mode(

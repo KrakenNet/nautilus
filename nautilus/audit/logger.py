@@ -190,6 +190,32 @@ class AuditLogger:
         raw = getattr(self._sink, "path", None) or getattr(self._sink, "_path", None)
         return Path(raw) if raw is not None else None
 
+    def probe(self) -> str | None:
+        """Why this logger could not write, or ``None`` when it can.
+
+        Every request writes an entry before it answers, so an audit sink that
+        has stopped accepting writes fails every request — the one dependency
+        whose failure is total. ``/readyz`` calls this to take the instance out
+        of rotation instead of reporting ready while 500ing.
+
+        Cheap by construction: a permission check on the file (or, before the
+        first write, on its directory), not a probe append, so the readiness
+        endpoint cannot pollute the log an operator reads.
+        """
+        path = self.path
+        if path is None:  # non-file sink: nothing local to check.
+            return None
+        if path.exists():
+            if not os.access(path, os.W_OK):
+                return f"audit log {path} is not writable"
+            return None
+        parent = path.parent
+        if not parent.exists():
+            return f"audit log directory {parent} does not exist"
+        if not os.access(parent, os.W_OK):
+            return f"audit log directory {parent} is not writable"
+        return None
+
     def emit_event(self, entry: Any) -> None:
         """Emit a governance / meta-rule audit event.
 

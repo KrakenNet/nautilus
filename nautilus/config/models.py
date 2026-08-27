@@ -297,9 +297,19 @@ class RulesConfig(_Strict):
 
 
 class AuditConfig(_Strict):
-    """Audit-log subsection of ``nautilus.yaml`` (design §4.10)."""
+    """Audit-log subsection of ``nautilus.yaml`` (design §4.10).
+
+    ``chained: true`` upgrades the log to the same hash-chained, JWS-signed
+    format the attestation sink can use (:class:`fathom.chained_log.
+    ChainedAttestationLog`): every line commits to its predecessor, so a
+    deleted or edited entry is detectable offline rather than leaving no
+    trace. Requires ``attestation.enabled`` with a signing key, and — like
+    every chain — a single writer.
+    """
 
     path: str = "./audit.jsonl"
+    chained: bool = False
+    checkpoint_interval: int = 0
 
 
 class AnthropicProviderSpec(_Strict):

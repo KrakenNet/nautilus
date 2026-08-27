@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import yaml
+from pydantic import ValidationError
 
 from nautilus.config.models import NautilusConfig
 
@@ -29,6 +30,27 @@ _SUPPORTED_TYPES = {
     "s3",
     "llm",
 }
+
+
+def _redacted_errors(exc: ValidationError) -> str:
+    """Render a pydantic ``ValidationError`` without the values it rejected.
+
+    ``str(ValidationError)`` prints ``input_value=`` for every error. Config
+    values are post-interpolation by then, so a mistyped ``auth:`` block or a
+    structured ``api.keys`` entry puts the resolved password or API key into
+    stderr — and into whatever collects the container's startup logs, for a
+    failure the operator is about to paste into a ticket. The location and the
+    message are what diagnoses the error; the value is what leaks.
+
+    Discriminator tags are the exception: ``union_tag_invalid`` names the
+    offending tag in its message, which is the whole diagnosis and is never a
+    secret.
+    """
+    lines: list[str] = []
+    for error in exc.errors():
+        location = ".".join(str(part) for part in error["loc"]) or "(root)"
+        lines.append(f"  {location}: {error['msg']} [type={error['type']}]")
+    return "\n".join(lines)
 
 
 class ConfigError(Exception):
@@ -150,6 +172,8 @@ def load_config(path: str | Path) -> NautilusConfig:
 
     try:
         return NautilusConfig.model_validate(interpolated_dict)
+    except ValidationError as exc:
+        raise ConfigError(f"Config validation failed:\n{_redacted_errors(exc)}") from exc
     except Exception as exc:
         raise ConfigError(f"Config validation failed: {exc}") from exc
 

@@ -267,6 +267,11 @@ class AuditEntry(BaseModel):
     denial_records: list[DenialRecord]
     error_records: list[ErrorRecord]
     rule_trace: list[str]
+    # ``sha256:…`` over the rule YAML the engine was running. ``rule_trace``
+    # names which rules fired; this names which ruleset they came from, so an
+    # entry can be replayed against the policy that produced it. Optional so
+    # Phase-1 lines round-trip unchanged (NFR-5).
+    ruleset_hash: str | None = None
     sources_queried: list[str]
     sources_denied: list[str]
     sources_skipped: list[str] = Field(default_factory=list[str])

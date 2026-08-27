@@ -22,9 +22,11 @@ RouteResult`` imports keep working.
 from __future__ import annotations
 
 import re
+import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
+import yaml
 from fathom import Engine
 
 from nautilus.config.agent_registry import AgentRegistry, UnknownAgentError
@@ -141,37 +143,95 @@ class FathomRouter:
         # ``rules.consistency_checks: false`` for performance-sensitive
         # deployments.
         self._check_consistency_enabled = check_consistency
+        # Rules retracted on this instance. Held here rather than applied in
+        # place because CLIPS has no "unbuild one rule": a retraction is a
+        # rebuild of the environment without it.
+        self._retracted: set[str] = set()
+        self._engine: Engine = self._build_engine()
+        # Escalation packs are YAML → EscalationRule models loaded once;
+        # _assert_escalation_rules re-pushes them as facts per request
+        # (engine.clear_facts() wipes facts each route() call).
         try:
-            self._engine: Engine = Engine()
-            self._engine.load_templates(str(self._built_in_rules_dir / "templates"))
-            load_built_in_modules(self._engine)
-            register_overlaps(self._engine)
-            register_not_in_list(self._engine)
-            register_contains_all(self._engine)
-            self._engine.load_functions(str(self._built_in_rules_dir / "functions"))
-            self._engine.load_rules(str(self._built_in_rules_dir / "rules"))
-            # Curator module — pattern-tracker meta-rules (AC-35.3.a).
-            # assert_module_isolation runs parse-time YAML static analysis
-            # before loading so routing-template violations are caught early.
-            _meta_dir = self._built_in_rules_dir / "meta"
-            _pattern_tracker = _meta_dir / "pattern-tracker.yaml"
-            assert_module_isolation(_pattern_tracker)
-            self._engine.load_rules(str(_meta_dir))
-            for user_dir in self._user_rules_dirs:
-                self._engine.load_rules(str(user_dir))
-            # Packs load last: their rules join the built-in ``nautilus-routing``
-            # module and reference built-in templates, both of which must
-            # already exist in the environment.
-            for pack_name in self._rule_packs:
-                self._engine.load_pack(pack_name)
-            # Escalation packs are YAML → EscalationRule models loaded once;
-            # _assert_escalation_rules re-pushes them as facts per request
-            # (engine.clear_facts() wipes facts each route() call).
             self._escalation_rules: list[EscalationRule] = load_escalation_packs(
                 [self._built_in_rules_dir / "escalation"]
             )
         except Exception as exc:  # noqa: BLE001 — re-wrap as PolicyEngineError per design §3.4
             raise PolicyEngineError(f"Fathom engine construction failed: {exc}") from exc
+
+    def _build_engine(self) -> Engine:
+        """Build a fresh engine with every rule this router should be running.
+
+        Also the retraction path: a rule in ``self._retracted`` is filtered out
+        of the YAML on its way in, so removing one is a rebuild rather than an
+        edit of a live CLIPS environment.
+        """
+        try:
+            engine = Engine()
+            engine.load_templates(str(self._built_in_rules_dir / "templates"))
+            load_built_in_modules(engine)
+            register_overlaps(engine)
+            register_not_in_list(engine)
+            register_contains_all(engine)
+            engine.load_functions(str(self._built_in_rules_dir / "functions"))
+            self._load_rules(engine, self._built_in_rules_dir / "rules")
+            # Curator module — pattern-tracker meta-rules (AC-35.3.a).
+            # assert_module_isolation runs parse-time YAML static analysis
+            # before loading so routing-template violations are caught early.
+            meta_dir = self._built_in_rules_dir / "meta"
+            assert_module_isolation(meta_dir / "pattern-tracker.yaml")
+            self._load_rules(engine, meta_dir)
+            for user_dir in self._user_rules_dirs:
+                self._load_rules(engine, user_dir)
+            # Packs load last: their rules join the built-in ``nautilus-routing``
+            # module and reference built-in templates, both of which must
+            # already exist in the environment.
+            for pack_name in self._rule_packs:
+                engine.load_pack(pack_name)
+        except Exception as exc:  # noqa: BLE001 — re-wrap as PolicyEngineError per design §3.4
+            raise PolicyEngineError(f"Fathom engine construction failed: {exc}") from exc
+        return engine
+
+    def _load_rules(self, engine: Engine, path: Path) -> None:
+        """``engine.load_rules(path)``, minus anything retracted on this router."""
+        if not self._retracted or not path.exists():
+            engine.load_rules(str(path))
+            return
+        with tempfile.TemporaryDirectory(prefix="nautilus-rules-") as scratch:
+            scratch_dir = Path(scratch)
+            for source in sorted(path.glob("*.yaml")) if path.is_dir() else [path]:
+                filtered = self._without_retracted(source)
+                if filtered is not None:
+                    (scratch_dir / source.name).write_text(filtered, encoding="utf-8")
+            engine.load_rules(str(scratch_dir))
+
+    def _without_retracted(self, source: Path) -> str | None:
+        """``source``'s YAML with retracted rules dropped; ``None`` if empty.
+
+        Anything this router cannot parse is passed through untouched — the
+        engine is the authority on whether a rule file is valid, not this.
+        """
+        text = source.read_text(encoding="utf-8")
+        try:
+            raw: Any = yaml.safe_load(text)
+        except yaml.YAMLError:
+            return text
+        if not isinstance(raw, dict):
+            return text
+        document = cast("dict[str, Any]", raw)
+        if not isinstance(document.get("rules"), list):
+            return text
+        rules: list[Any] = [
+            rule
+            for rule in cast("list[Any]", document["rules"])
+            if not (
+                isinstance(rule, dict)
+                and cast("dict[str, Any]", rule).get("name") in self._retracted
+            )
+        ]
+        if not rules:
+            return None
+        document["rules"] = rules
+        return yaml.safe_dump(document, sort_keys=False)
 
     @property
     def engine(self) -> Engine:
@@ -182,6 +242,30 @@ class FathomRouter:
     def escalation_rules(self) -> list[EscalationRule]:
         """Escalation rules loaded at construction (read-only handle)."""
         return self._escalation_rules
+
+    @property
+    def ruleset_hash(self) -> str:
+        """``sha256:…`` over the rule YAML this engine is deciding with.
+
+        The identity of the policy that made a decision. Recorded on every
+        audit entry so an entry can be replayed against the rules that
+        produced it rather than against whatever is loaded today.
+        """
+        return self._engine.ruleset_hash
+
+    def rules_in_force(self) -> list[dict[str, str]]:
+        """Every rule the engine will fire, as ``{"module", "name"}`` pairs.
+
+        Built-ins, user rules and pack rules alike — the engine's registry is
+        the only authority on what is actually loaded, and nothing surfaced it,
+        so a deployment could not be compared against the rules an operator
+        believes it runs.
+        """
+        rules: list[dict[str, str]] = []
+        for key in self._engine.rule_registry:
+            module, _, name = key.rpartition("::")
+            rules.append({"module": module, "name": name})
+        return sorted(rules, key=lambda r: (r["module"], r["name"]))
 
     def hierarchy_levels(self, name: str = "classification") -> tuple[str, ...]:
         """Levels of the named hierarchy, lowest first; empty when unknown.
@@ -713,6 +797,69 @@ class FathomRouter:
             raise PolicyEngineError(
                 f"FathomRouter.reload_rule() failed for rule_name={rule_name!r}: {exc}"
             ) from exc
+
+    def retract_rule(self, rule_name: str) -> dict[str, bool]:
+        """Stop ``rule_name`` firing, and stop it coming back at the next start.
+
+        Returns ``{"engine_updated", "persisted"}``:
+
+        - ``engine_updated`` — the rule was in force and the rebuilt engine no
+          longer has it. ``False`` means it was never loaded, so retraction is
+          a lineage record and nothing else.
+        - ``persisted`` — the rule's YAML lived in a configured
+          ``rules.user_rules_dirs`` and was removed from it. ``False`` for a
+          built-in or pack rule: the retraction holds for this process, and the
+          next start reloads the rule unless the pack or built-in goes too.
+
+        Retraction was previously a lineage write only, so a rule the operator
+        had been told was retracted kept deciding every request until someone
+        restarted the broker.
+        """
+        if rule_name not in {rule["name"] for rule in self.rules_in_force()}:
+            return {"engine_updated": False, "persisted": False}
+        persisted = self._remove_persisted_rule(rule_name)
+        self._retracted.add(rule_name)
+        rebuilt = self._build_engine()
+        if rule_name in {key.rpartition("::")[2] for key in rebuilt.rule_registry}:
+            self._retracted.discard(rule_name)
+            raise PolicyEngineError(
+                f"cannot retract rule {rule_name!r}: it is still in force after a "
+                f"rebuild, so it comes from a loaded rule pack. Remove the pack "
+                f"from rules.packs instead."
+            )
+        self._engine = rebuilt
+        return {"engine_updated": True, "persisted": persisted}
+
+    def _remove_persisted_rule(self, rule_name: str) -> bool:
+        """Drop ``rule_name`` from the user rule files that carry it."""
+        changed = False
+        for user_dir in self._user_rules_dirs:
+            if not user_dir.is_dir():
+                continue
+            for source in sorted(user_dir.glob("*.yaml")):
+                raw: Any = yaml.safe_load(source.read_text(encoding="utf-8"))
+                if not isinstance(raw, dict):
+                    continue
+                document = cast("dict[str, Any]", raw)
+                if not isinstance(document.get("rules"), list):
+                    continue
+                kept: list[Any] = [
+                    rule
+                    for rule in cast("list[Any]", document["rules"])
+                    if not (
+                        isinstance(rule, dict)
+                        and cast("dict[str, Any]", rule).get("name") == rule_name
+                    )
+                ]
+                if len(kept) == len(cast("list[Any]", document["rules"])):
+                    continue
+                changed = True
+                if kept:
+                    document["rules"] = kept
+                    source.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+                else:
+                    source.unlink()
+        return changed
 
     def close(self) -> None:
         """No-op for the Phase 1 in-process Engine (kept for Protocol parity)."""
