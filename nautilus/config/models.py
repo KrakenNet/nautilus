@@ -401,6 +401,21 @@ class AnalysisConfig(_Strict):
 CAPABILITIES = ("query", "audit_read", "govern", "keys")
 
 
+class UIConfig(_Strict):
+    """``ui`` — the browser-facing admin console (design §3.13).
+
+    Off by default. The console is a second front door to the same broker: it
+    authenticates a browser with a cookie and, through the playground, runs
+    real queries against real sources. Mounting it on every deployment gives an
+    operator who never asked for one a login page on their production port, and
+    a login page is an invitation to guess at the key. When it is off the
+    routes are not registered at all, so ``/admin`` is a 404 rather than a
+    prompt.
+    """
+
+    enabled: bool = False
+
+
 class ApiKeyEntry(_Strict):
     """One API key, bound to an agent and scoped to a set of capabilities.
 
@@ -662,4 +677,5 @@ class NautilusConfig(_Strict):
     mcp: MCPConfig = Field(default_factory=MCPConfig)
     session_store: SessionStoreConfig = Field(default_factory=SessionStoreConfig)
     session_tokens: SessionTokenConfig = Field(default_factory=SessionTokenConfig)
+    ui: UIConfig = Field(default_factory=UIConfig)
     rkm: RkmConfig = Field(default_factory=RkmConfig)

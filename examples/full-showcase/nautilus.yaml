@@ -133,3 +133,9 @@ api:
 # ── Session store (in-memory for demo) ───────────────────────────────────
 session_store:
   backend: memory
+
+# ── Admin console ────────────────────────────────────────────────────────
+# Off by default: it is a second front door to the same broker, and a login
+# page on a port nobody meant to open is an invitation. The demo shows it.
+ui:
+  enabled: true

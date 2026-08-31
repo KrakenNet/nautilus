@@ -21,6 +21,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.responses import Response
 
 from nautilus.core.broker import Broker
+from nautilus.transport.auth import caller_identity, verify_session_token
 from nautilus.ui.audit_reader import AuditReader
 from nautilus.ui.dependencies import get_auth_user
 
@@ -198,7 +199,7 @@ async def playground(
     return templates.TemplateResponse(request, "pages/playground.html", context)
 
 
-@router.post("/api/query")
+@router.post("/api/query", dependencies=[Depends(verify_session_token)])
 async def playground_query(
     request: Request,
     broker: Annotated[Broker | None, Depends(_safe_broker)],
@@ -208,6 +209,13 @@ async def playground_query(
 
     Accepts the same JSON body as ``/v1/request`` but authenticates via
     the admin session cookie, avoiding the httponly cookie / JS barrier.
+
+    Everything past authentication is the same as ``/v1/request``, because it
+    is the same broker and the same data. It was not: the console read
+    ``agent_id`` off the body with no regard for what the credential is bound
+    to, never checked the ``query`` capability, and keyed cumulative exposure
+    under ``admin:<key>`` — so one credential had two ledgers and could reset
+    its own history by changing door (§4.15).
     """
     if isinstance(user, Response):
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
@@ -226,19 +234,41 @@ async def playground_query(
     if not intent:
         return JSONResponse({"error": "intent is required"}, status_code=400)
 
+    state = request.app.state
+    caller = caller_identity(
+        request,
+        auth_mode=getattr(state, "auth_mode", "api_key"),
+        keys=list(getattr(state, "api_keys", []) or []),
+        agent_subjects=dict(getattr(state, "agent_subjects", {}) or {}),
+    )
+    if "query" not in caller["capabilities"]:
+        return JSONResponse(
+            {
+                "error": (
+                    f"This credential does not hold the 'query' capability "
+                    f"(it holds {sorted(caller['capabilities'])})"
+                )
+            },
+            status_code=403,
+        )
+    bound: str | None = caller["agent_id"]
+    if bound is not None and bound != agent_id:
+        return JSONResponse(
+            {
+                "error": (
+                    f"This credential is bound to agent_id={bound!r}, "
+                    f"so it cannot ask as {agent_id!r}"
+                )
+            },
+            status_code=403,
+        )
+
     try:
-        # The admin session cookie is this caller's identity: the playground
-        # reaches the same broker as /v1/request, so it must accumulate into a
-        # ledger of its own rather than an unkeyed one shared with every other
-        # transport that supplies nothing (§4.15).
         result = await broker.arequest(
             agent_id,
             intent,
             context,
-            caller={
-                "auth": f"admin:{user}",
-                "peer": request.client.host if request.client else "",
-            },
+            caller={"auth": caller["auth"], "peer": caller["peer"]},
         )
         return JSONResponse(result.model_dump(mode="json"))
     except Exception as exc:

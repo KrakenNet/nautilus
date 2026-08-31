@@ -128,7 +128,13 @@ def caller_identity(
         if auth and agent_subjects:
             agent_id = agent_subjects.get(auth)
     else:
-        auth = request.headers.get("X-API-Key") or ""
+        # The admin console authenticates a browser with a ``nautilus_key``
+        # cookie, and that cookie holds an API key — ``/admin/login`` verifies
+        # it against the same registry before setting it. Reading only the
+        # header gave the same credential a different identity depending on
+        # which door it came through: unbound, holding every capability, and
+        # accumulating exposure under a separate principal.
+        auth = request.headers.get("X-API-Key") or request.cookies.get("nautilus_key") or ""
         entry = _match_key(auth, keys) if keys else None
         if entry is not None:
             agent_id = getattr(entry, "agent_id", None)

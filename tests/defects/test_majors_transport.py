@@ -54,6 +54,9 @@ def app_config(
             "audit": {"path": str(audit)},
             "api": {"keys": [API_KEY]},
             "rules": {"user_rules_dirs": [str(user_rules)]},
+            # The admin console is opt-in (E3); 4.12 is about the shape of one
+            # of its routes, so this fixture has to opt in to have one.
+            "ui": {"enabled": True},
         }
     )
     return config, audit

@@ -202,6 +202,26 @@ def _find_audit_entry(reader: AuditReader, request_id: str) -> Any:
         cursor = page.next_cursor
 
 
+def _ui_enabled(config_path: str | Path | None, existing_broker: Broker | None) -> bool:
+    """Whether to register the admin console's routes at all.
+
+    Routes are registered when the app is built and the broker is built in the
+    lifespan, so this reads the config a second time rather than waiting for
+    one. A config that will not load is not this function's problem — the
+    lifespan raises on it a moment later — so an unreadable one answers False
+    and the console stays shut.
+    """
+    if existing_broker is not None:
+        ui = getattr(getattr(existing_broker, "config", None), "ui", None)
+        return bool(getattr(ui, "enabled", False))
+    from nautilus.config.loader import load_config
+
+    try:
+        return bool(load_config(str(config_path)).ui.enabled)
+    except Exception:
+        return False
+
+
 def create_app(
     config_path: str | Path | None,
     *,
@@ -229,6 +249,7 @@ def create_app(
         raise ValueError(
             "create_app requires either config_path or existing_broker",
         )
+    ui_enabled = _ui_enabled(config_path, existing_broker)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
@@ -1410,14 +1431,18 @@ def create_app(
     # Admin UI — operator-facing dashboard (FR-1, AC-1.1)
     # ------------------------------------------------------------------
 
-    app.include_router(create_admin_router())
+    # Off unless the config asks for it. The console is a second front door to
+    # the same broker, and not registering its routes is the difference between
+    # a 404 and a login prompt on a port the operator did not know served one.
+    if ui_enabled:
+        app.include_router(create_admin_router())
 
-    _ui_static_dir = Path(__file__).resolve().parent.parent / "ui" / "static"
-    app.mount(
-        "/admin/static",
-        StaticFiles(directory=str(_ui_static_dir)),
-        name="admin-static",
-    )
+        _ui_static_dir = Path(__file__).resolve().parent.parent / "ui" / "static"
+        app.mount(
+            "/admin/static",
+            StaticFiles(directory=str(_ui_static_dir)),
+            name="admin-static",
+        )
 
     return app
 
