@@ -26,6 +26,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, cast
 
+# The shape of ``nautilus_session_state``. ``CREATE TABLE IF NOT EXISTS``
+# succeeds against any table of that name, so without a stamp a newer binary
+# adding a column is a silent no-op and an older one reads columns that moved.
+# Bump on any change to _DDL, and add the migration that reaches the new number.
+_SCHEMA_VERSION: int = 1
+
 _DDL: str = (
     "CREATE TABLE IF NOT EXISTS nautilus_session_state ("
     "session_id TEXT PRIMARY KEY, "
@@ -101,7 +107,21 @@ class SqliteSessionStore:
         conn = sqlite3.connect(self._path, check_same_thread=False)
         # WAL keeps readers unblocked during the read-merge-write transactions.
         conn.execute("PRAGMA journal_mode=WAL")
+        # 0 is both "brand new" and "written before versions existed"; the DDL
+        # is IF NOT EXISTS, so stamping an existing v0 table is the upgrade.
+        found = int(conn.execute("PRAGMA user_version").fetchone()[0])
+        if found not in (0, _SCHEMA_VERSION):
+            conn.close()
+            from nautilus.core.session_pg import SessionSchemaError
+
+            raise SessionSchemaError(
+                f"session database {self._path} carries schema version {found}; "
+                f"this build understands version {_SCHEMA_VERSION}. It was "
+                f"written by a different Nautilus — point session_store."
+                f"sqlite_path at a fresh file, or run the matching build."
+            )
         conn.execute(_DDL)
+        conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION:d}")
         conn.commit()
         return conn
 

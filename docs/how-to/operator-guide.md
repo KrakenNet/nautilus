@@ -145,8 +145,10 @@ Key behaviors:
   rejected at load.
 - The intent vocabulary is **auto-generated** from each source's
   `data_types` — you only need `analysis.keyword_map` entries to add
-  synonyms or override a generated entry (your entry wins wholesale for
-  that data type).
+  synonyms. Your keywords are **added** to the generated ones, never
+  substituted for them: a data type always matches its own advertised name,
+  so `orders: ["purchase order"]` matches both phrasings and never makes the
+  word *orders* unmatchable.
 
 ### Choose a session-store backend
 
@@ -171,6 +173,13 @@ session_store:
 - `on_failure: fallback_sqlite` degrades to SQLite if Postgres is
   unreachable at startup; sessions survive a broker restart and the
   audit trail records `session_store_mode: degraded_sqlite`.
+- Both durable backends stamp a **schema version** (SQLite `PRAGMA
+  user_version`, Postgres `nautilus_schema_version`) and refuse to start
+  against one they do not understand. `on_failure` does not cover this: a
+  version mismatch is a deployment error, not an outage, and degrading to
+  memory would leave each replica with a private ledger while the shared one
+  sits unread. Finish or roll back the rollout — do not run two builds against
+  one store.
 - `ttl_seconds` bounds how long a session's accumulated state survives being
   idle. A session untouched for longer reads as absent — cumulative exposure
   starts fresh — and expired rows are deleted on the next write, on every
@@ -251,6 +260,13 @@ overrides the caller-declared session id. Verification is fail-closed.
 Session tokens are not what protects the exposure ledger — omitting one is
 always allowed — the per-caller principal above is.
 
+A token's `purpose` and `clearance` claims describe the request that was
+actually served. Carry a session into a second purpose and the response hands
+back a re-minted token stating the new one — with the **original** expiry, so
+neither re-binding nor key rotation extends a session's lifetime. Anything
+reading the forwarded `X-Nautilus-Session-Token` can therefore trust the claims
+against the request they arrived with.
+
 `key_ring_path` persists the signing ring. Without it each broker process
 generates its own keys at startup, so a restart invalidates every outstanding
 token and a second replica rejects the first one's tokens with `unknown_kid`.
@@ -315,6 +331,12 @@ Probe it:
 nautilus health --url http://127.0.0.1:8000/readyz
 ```
 
+`serve` exits **2** when the application fails to start — an unreachable
+`on_failure: fail_closed` session store, an unwritable audit path — so a pod
+that never served reads as a crash and gets restarted, rather than exiting
+Completed. A clean `SIGTERM` after serving exits 0 (uvicorn re-raises the
+signal, so the shell reports 143).
+
 `--mcp-mode http` runs the MCP streamable transport with sessions: the server
 issues an `mcp-session-id` at `initialize` and every later call must present
 it. That id is what keys a caller's session state, so two clients never share
@@ -327,6 +349,13 @@ string), and `nautilus_declare_handoff` when `mcp.expose_declare_handoff` is
 on.
 
 ### On Kubernetes
+
+The Deployment declares `ephemeral-storage` requests and limits and a
+`sizeLimit` on both `emptyDir` volumes. The audit log is append-only and grows
+with traffic; uncapped it fills the node's disk, and disk pressure is a *node*
+condition — the kubelet evicts the neighbours too. Raise the numbers together
+if you raise either, and point the audit volume at a PersistentVolumeClaim or
+a collector before you rely on the trail.
 
 `deploy/` in the repository is a complete manifest set — Deployment, Service,
 ConfigMap and Secrets — with the probes wired to `/healthz` and `/readyz` and

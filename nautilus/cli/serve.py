@@ -150,6 +150,23 @@ def _load_config_for_serve(config_path: Path, *, air_gapped: bool) -> Path:
     return Path(tmp.name)
 
 
+async def _serve_or_raise(server: Any) -> None:
+    """Run a uvicorn server, and treat a startup that never happened as one.
+
+    ``Server.serve()`` does **not** raise when the ASGI lifespan raises: it
+    logs "Application startup failed. Exiting.", sets ``should_exit`` and
+    returns normally. The CLI then reached its unconditional ``return 0``, so a
+    pod whose fail-closed session store was unreachable exited Completed
+    instead of CrashLoopBackOff and nothing ever restarted it.
+    """
+    await server.serve()
+    if not server.started:
+        raise RuntimeError(
+            "application startup failed; the server never accepted a "
+            "connection. The cause is logged above."
+        )
+
+
 async def _run_rest(broker: Broker, host: str, port: int) -> None:
     """Run uvicorn against :func:`create_app` with an injected broker."""
     import uvicorn
@@ -158,8 +175,7 @@ async def _run_rest(broker: Broker, host: str, port: int) -> None:
 
     app = create_app(None, existing_broker=broker)
     config = uvicorn.Config(app, host=host, port=port, log_level="info")
-    server = uvicorn.Server(config)
-    await server.serve()
+    await _serve_or_raise(uvicorn.Server(config))
 
 
 async def _run_mcp(broker: Broker, mode: str, host: str, port: int) -> None:
@@ -188,8 +204,9 @@ async def _run_mcp(broker: Broker, mode: str, host: str, port: int) -> None:
     from nautilus.transport.mcp_server import _mcp_settings, http_app
 
     app = http_app(mcp, api_keys=_mcp_settings(broker)[2])
-    server = uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level="info"))
-    await server.serve()
+    await _serve_or_raise(
+        uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level="info"))
+    )
 
 
 async def _run_both(

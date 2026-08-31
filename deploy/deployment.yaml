@@ -66,8 +66,16 @@ spec:
             requests:
               cpu: "1"
               memory: 512Mi
+              # The audit log is append-only and grows with traffic. Without a
+              # request the scheduler places this pod with no regard for the
+              # disk it will use; without a limit the node hits disk pressure
+              # first, and disk pressure is a node condition -- the eviction
+              # manager takes down the neighbours too. Keep the two emptyDir
+              # sizeLimits below at or under this limit.
+              ephemeral-storage: 2Gi
             limits:
               memory: 1Gi
+              ephemeral-storage: 4Gi
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -92,9 +100,11 @@ spec:
           secret:
             secretName: nautilus-attestation-key
         - name: state
-          emptyDir: {}
+          emptyDir:
+            sizeLimit: 512Mi
         # The audit log is the record of every decision. emptyDir keeps this
         # example self-contained; point it at a PersistentVolumeClaim or ship
         # the lines to a collector before you rely on it.
         - name: audit
-          emptyDir: {}
+          emptyDir:
+            sizeLimit: 2Gi

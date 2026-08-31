@@ -57,6 +57,27 @@ _DDL: str = (
 )
 
 
+# Bump on any change to _DDL, and add the migration that reaches the new
+# number. Replicas roll one at a time, so old and new binaries share one
+# database for the length of a rollout — which is exactly when an unversioned
+# schema lets two readers disagree about what a row means.
+_SCHEMA_VERSION: int = 1
+
+_VERSION_DDL: str = (
+    "CREATE TABLE IF NOT EXISTS nautilus_schema_version (version INTEGER PRIMARY KEY)"
+)
+
+
+class SessionSchemaError(Exception):
+    """The store is pointed at a schema this build does not understand.
+
+    Deliberately not a :class:`SessionStoreUnavailableError`: a version
+    mismatch is a deployment error, not a transient outage, so it must not be
+    absorbed by ``on_failure: fallback_memory``. Falling back would leave every
+    replica with a private ledger while the shared one sits there unread.
+    """
+
+
 # One advisory-lock key for the schema DDL. ``CREATE TABLE IF NOT EXISTS`` is
 # not concurrency-safe: two replicas starting together collide on the composite
 # type Postgres creates alongside the table.
@@ -201,6 +222,27 @@ class PostgresSessionStore:
                 # even if this process dies mid-statement.
                 await conn.execute("SELECT pg_advisory_xact_lock($1)", _DDL_LOCK_KEY)
                 await conn.execute(_DDL)
+                await conn.execute(_VERSION_DDL)
+                row = await conn.fetchrow("SELECT version FROM nautilus_schema_version")
+                if row is None:
+                    # No row means either a fresh database or one written
+                    # before versions existed; the DDL above is IF NOT EXISTS,
+                    # so stamping it is the upgrade in both cases.
+                    await conn.execute(
+                        "INSERT INTO nautilus_schema_version (version) VALUES ($1)",
+                        _SCHEMA_VERSION,
+                    )
+                elif int(row["version"]) != _SCHEMA_VERSION:
+                    raise SessionSchemaError(
+                        f"session database carries schema version "
+                        f"{int(row['version'])}; this build understands version "
+                        f"{_SCHEMA_VERSION}. Finish or roll back the rollout — "
+                        f"do not run both builds against one store."
+                    )
+        except SessionSchemaError:
+            # Not an availability failure — see the class docstring. Escapes
+            # both handlers below so ``fallback_memory`` cannot swallow it.
+            raise
         except (
             CannotConnectNowError,
             ConnectionDoesNotExistError,
@@ -448,5 +490,6 @@ __all__ = [
     "FailureMode",
     "Mode",
     "PostgresSessionStore",
+    "SessionSchemaError",
     "SessionStoreUnavailableError",
 ]

@@ -2617,6 +2617,24 @@ class Broker:
             )
         return info or None
 
+    def _request_grant(self, agent_id: str, context: dict[str, Any]) -> tuple[str, str]:
+        """The (purpose, clearance) this request actually runs under.
+
+        One definition, read by both the mint path and the verify path, so a
+        presented token can be compared against the same grant a fresh one
+        would carry.
+        """
+        record: AgentRecord | None
+        try:
+            record = self._agent_registry.get(agent_id)
+        except UnknownAgentError:
+            record = None
+        purpose = str(context.get("purpose") or "") or (
+            (record.default_purpose or "") if record is not None else ""
+        )
+        clearance = record.clearance if record is not None else ""
+        return purpose, clearance
+
     def _process_session_token(
         self,
         agent_id: str,
@@ -2687,14 +2705,32 @@ class Broker:
             # token keeps the ORIGINAL expiry (security review C2): re-keying
             # must not extend the session's lifetime.
             assert self._key_ring is not None  # noqa: S101 — service implies ring
-            if claims.kid != self._key_ring.primary().kid:
+            # The token is a bearer credential adapters forward downstream, and
+            # a downstream reader has nothing but the signature and the claims.
+            # ``purpose`` and ``clearance`` are written at mint time, so a
+            # session carried into a second purpose kept attesting to the
+            # first. Re-mint when either drifts, so what is signed is what was
+            # enforced. The ORIGINAL expiry is kept in both cases (security
+            # review C2): neither re-keying nor re-binding extends a session.
+            purpose, clearance = self._request_grant(agent_id, context)
+            stale_kid = claims.kid != self._key_ring.primary().kid
+            drifted = claims.purpose != purpose or claims.clearance != clearance
+            if stale_kid or drifted:
                 fresh = self._session_tokens.issue(
                     session_id=claims.session_id,
                     agent_id=claims.agent_id,
-                    purpose=claims.purpose,
-                    clearance=claims.clearance,
+                    purpose=purpose,
+                    clearance=clearance,
                     expires_at=claims.expires_at,
                 )
+                trace: list[str] = []
+                if stale_kid:
+                    trace.append(f"resigned-from-kid={claims.kid}")
+                if drifted:
+                    trace.append(
+                        f"rebound-from-purpose={claims.purpose!r}/"
+                        f"clearance={claims.clearance!r}"
+                    )
                 state.session_token = fresh
                 context["session_token"] = fresh
                 self._emit_session_token_event(
@@ -2702,7 +2738,7 @@ class Broker:
                     agent_id=claims.agent_id,
                     session_id=claims.session_id,
                     request_id=state.request_id,
-                    trace=[f"resigned-from-kid={claims.kid}"],
+                    trace=trace,
                 )
             return
         # First request in the session — mint a token. A missing session_id
@@ -2710,15 +2746,7 @@ class Broker:
         if not state.session_id:
             state.session_id = str(uuid.uuid4())
             context["session_id"] = state.session_id
-        record: AgentRecord | None
-        try:
-            record = self._agent_registry.get(agent_id)
-        except UnknownAgentError:
-            record = None
-        purpose = str(context.get("purpose") or "") or (
-            (record.default_purpose or "") if record is not None else ""
-        )
-        clearance = record.clearance if record is not None else ""
+        purpose, clearance = self._request_grant(agent_id, context)
         token = self._session_tokens.issue(
             session_id=state.session_id,
             agent_id=agent_id,

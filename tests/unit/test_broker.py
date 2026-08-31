@@ -408,8 +408,8 @@ attestation:
 
 
 @pytest.mark.unit
-def test_explicit_keyword_map_overrides_generated_entry(tmp_path: Path) -> None:
-    """#24: an explicit keyword_map entry wins over the generated base on collision."""
+def test_explicit_keyword_map_extends_generated_entry(tmp_path: Path) -> None:
+    """#24: an explicit keyword_map entry is unioned with the generated base."""
     cfg = _write_yaml(
         tmp_path,
         """
@@ -433,8 +433,8 @@ attestation:
     broker = Broker.from_config(cfg)
     try:
         keyword_map = _analyzer_keyword_map(broker)
-        # Explicit list replaces the generated ["vulnerability"] base wholesale.
-        assert keyword_map["vulnerability"] == ["vuln", "weakness"]
+        # Explicit keywords first, then whatever the generated base added.
+        assert keyword_map["vulnerability"] == ["vuln", "weakness", "vulnerability"]
     finally:
         broker.close()
 

@@ -7,15 +7,19 @@ ConfigMap, and every credential in Secrets.
 docker build -t nautilus:latest .          # from the repository root
 kubectl apply -f deploy/
 kubectl port-forward svc/nautilus 8000:8000
-curl -H "X-API-Key: $NAUTILUS_API_KEY" -X POST localhost:8000/v1/request \
+curl -H "X-API-Key: $NAUTILUS_API_KEY" -H 'Content-Type: application/json' \
+  -X POST localhost:8000/v1/request \
   -d '{"agent_id": "support-bot", "intent": "recent orders", "context": {"purpose": "support"}}'
 ```
 
 ## What to change before you apply this
 
 - **`secret.yaml`** — every value is `replace-me`. Generate the API key
-  (`openssl rand -hex 32`) and the attestation key (`nautilus key generate`),
-  and keep both out of git; this file is a shape, not a store.
+  (`openssl rand -hex 32`) and the attestation key
+  (`openssl genpkey -algorithm ed25519 -out attestation.pem`), and keep both
+  out of git; this file is a shape, not a store. `nautilus key` operates on a
+  *running* broker's ring — `list`, `rotate`, `revoke` — so it cannot mint the
+  first key for you.
 - **`configmap.yaml`** — the `sources` block. It points at Postgres; swap in
   the type that matches your data, or `type: static` to serve rows declared in
   the config while you are wiring things up.

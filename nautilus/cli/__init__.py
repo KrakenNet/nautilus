@@ -262,6 +262,13 @@ def _cmd_serve(args: argparse.Namespace) -> int:
             asyncio.run(_cli_module._run_both(broker, host, port, mcp_mode))  # pyright: ignore[reportPrivateUsage]
     except KeyboardInterrupt:
         pass
+    except RuntimeError as exc:
+        # ``_serve_or_raise`` turns a lifespan that failed into this. uvicorn
+        # returns from ``serve()`` in that case rather than raising, and the
+        # unconditional ``return 0`` below reported a pod that never served as
+        # a clean run.
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
     finally:
         # For --transport rest the FastAPI lifespan already closed the
         # broker; aclose() is idempotent so the extra call is safe. A

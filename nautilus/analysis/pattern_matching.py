@@ -34,10 +34,13 @@ def build_keyword_map(
     equals the raw token, so single-word types yield a single keyword.
 
     ``explicit_keyword_map`` entries from ``analysis.keyword_map`` are then
-    overlaid: on a key collision the explicit entry **wins** wholesale (the
-    generated base for that data type is discarded, not merged), so operators
-    retain full control over any vocabulary they curate by hand. The generated
-    base only fills in data types the operator did not configure.
+    overlaid by **union**, explicit keywords first: an operator who curates
+    synonyms for a data type adds to its vocabulary and never subtracts from
+    it. Replacing the generated base wholesale used to mean that adding
+    ``orders: ["purchase order"]`` silently removed the word *orders* — the
+    name every source advertises and ``/v1/sources`` publishes — so an intent
+    naming the advertised data type verbatim matched nothing. Keys the
+    generated base does not cover are carried through as given.
 
     Pure function: no I/O, deterministic output for a given input.
     """
@@ -49,7 +52,11 @@ def build_keyword_map(
             normalized = data_type.replace("_", " ")
             keywords = [data_type] if normalized == data_type else [data_type, normalized]
             generated[data_type] = keywords
-    return {**generated, **explicit_keyword_map}
+    merged: dict[str, list[str]] = dict(generated)
+    for data_type, keywords in explicit_keyword_map.items():
+        base = merged.get(data_type, [])
+        merged[data_type] = keywords + [kw for kw in base if kw not in keywords]
+    return merged
 
 
 class PatternMatchingIntentAnalyzer:
