@@ -157,6 +157,11 @@ def _adapter_protocol_gaps(obj: type) -> list[str]:
     return gaps
 
 
+def _entry_point_distribution(entry_point: Any) -> str:
+    """The installed distribution an entry point came from, or ``"unknown"``."""
+    return str(getattr(getattr(entry_point, "dist", None), "name", None) or "unknown")
+
+
 def _discover_adapters() -> dict[str, type[Adapter]]:
     """Load adapter classes advertised via ``nautilus.adapters`` entry points.
 
@@ -171,6 +176,31 @@ def _discover_adapters() -> dict[str, type[Adapter]]:
     for ep in eps:
         try:
             obj: object = ep.load()
+            if ep.name in ADAPTER_REGISTRY and obj is not ADAPTER_REGISTRY[ep.name]:
+                # The discovered map is merged OVER the built-ins, so this used
+                # to replace one. Scope enforcement lives in the adapter -- it
+                # is the adapter that pushes the predicate into the query -- so
+                # installing an unrelated package could take over ``postgres``
+                # and return rows the policy engine scoped out, while the audit
+                # entry and its signature still recorded the constraint. The
+                # receipt said the control ran. Replacing a built-in on purpose
+                # is what the config's ``adapters`` block is for: an operator
+                # writes that one.
+                #
+                # Identity, not the name alone: nautilus advertises its own
+                # optional adapters through this same group, and an entry point
+                # that resolves to the built-in it "collides" with is that
+                # built-in.
+                log.error(
+                    "refusing adapter entry-point '%s' from distribution '%s': it "
+                    "would replace the built-in %s. Register it under a source "
+                    "type of its own, or name it explicitly in the config's "
+                    "'adapters' block.",
+                    ep.name,
+                    _entry_point_distribution(ep),
+                    ADAPTER_REGISTRY[ep.name].__name__,
+                )
+                continue
             if not isinstance(obj, type):
                 log.warning(
                     "adapter entry-point '%s' resolved to non-class %s; skipping",
@@ -189,7 +219,14 @@ def _discover_adapters() -> dict[str, type[Adapter]]:
                 )
                 continue
             discovered[ep.name] = cast("type[Adapter]", obj)
-            log.debug("discovered adapter entry-point %s -> %s", ep.name, obj)
+            # INFO, not DEBUG: which code answers a source type is provenance,
+            # and nothing else on the operational surface reports it.
+            log.info(
+                "discovered adapter entry-point '%s' -> %s (from '%s')",
+                ep.name,
+                obj.__name__,
+                _entry_point_distribution(ep),
+            )
         except Exception:  # noqa: BLE001
             log.warning(
                 "failed to load adapter entry-point '%s' (%s); skipping",

@@ -545,6 +545,27 @@ pack rules alike — plus a `ruleset_hash`. That hash is recorded on every audit
 entry, so an entry can be replayed against the policy that produced it rather
 than against whatever is loaded today.
 
+**A name resolves to one distribution, or to an error.** An entry point in the
+`nautilus.adapters` group whose name collides with a built-in is refused and
+logged at ERROR naming the distribution — scope enforcement lives in the
+adapter, so a package that replaced `postgres` would remove the control while
+every receipt still recorded it. Register a plugin under a source type of its
+own, or name it explicitly in the config's `adapters` block. Accepted
+discoveries log at INFO with their distribution. A rule-pack name claimed by
+more than one installed distribution is a config error for the same reason:
+entry points are ordered by distribution name, so first-match silently
+substitutes one policy for another.
+
+**Traces are exported only when you say where.** `OTEL_EXPORTER_OTLP_ENDPOINT`
+(or `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`) turns the OTLP span exporter on.
+Unset, the broker still creates spans and still serves every `nautilus_*`
+series on `/metrics`; it just does not export, and says nothing about it. It
+used to export to localhost:4318 by default, which nothing listens to in the
+shipped manifest — three WARNING retries plus an ERROR per span batch, about 39
+log lines a minute per replica. `OTEL_SDK_DISABLED=true` is still there but is
+the wrong tool for this: it also drops the Prometheus reader and every
+`nautilus_*` series with it.
+
 **Watch for a split fleet.** Every rolling deploy passes through a state where
 two replicas hold different rulesets, and the identical request then alternates
 `allowed` / `denied` behind the load balancer — a caller who is denied retries

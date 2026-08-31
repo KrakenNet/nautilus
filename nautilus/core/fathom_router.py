@@ -110,6 +110,43 @@ class _UnknownAgent:
 _UNKNOWN_AGENT = _UnknownAgent()
 
 
+def _check_pack_name_is_unambiguous(pack_name: str) -> None:
+    """Refuse a rule-pack name more than one installed distribution claims.
+
+    Fathom's loader returns the *first* ``fathom.packs`` entry whose name
+    matches, and entry points are ordered by distribution name -- so any
+    distribution sorting before ``nautilus-rkm`` deterministically wins a
+    shipped pack's name. An operator who wrote ``packs: [data-routing-nist]``
+    got a different pack's rules with no error and no warning; the NIST
+    least-privilege scope constraint simply stopped existing and the broker
+    returned rows outside the requesting agent's ``allowed_purposes``.
+
+    A pack name decides which policy runs, so an ambiguous one is a config
+    error, not a coin toss.
+    """
+    import importlib.metadata
+    import logging
+
+    claimants = sorted(
+        {
+            str(getattr(getattr(ep, "dist", None), "name", None) or "unknown")
+            for ep in importlib.metadata.entry_points(group="fathom.packs")
+            if ep.name == pack_name
+        }
+    )
+    if len(claimants) > 1:
+        raise PolicyEngineError(
+            f"rule pack {pack_name!r} is claimed by more than one installed "
+            f"distribution ({', '.join(claimants)}). Which policy runs would be "
+            f"decided by distribution name order. Uninstall one, or rename the "
+            f"pack in the distribution you do not want."
+        )
+    if claimants:
+        logging.getLogger(__name__).info(
+            "rule pack %r resolved to distribution %r", pack_name, claimants[0]
+        )
+
+
 class FathomRouter:
     """Wraps ``fathom.Engine`` with Nautilus templates, rules, and externals.
 
@@ -186,6 +223,7 @@ class FathomRouter:
             # module and reference built-in templates, both of which must
             # already exist in the environment.
             for pack_name in self._rule_packs:
+                _check_pack_name_is_unambiguous(pack_name)
                 engine.load_pack(pack_name)
         except Exception as exc:  # noqa: BLE001 — re-wrap as PolicyEngineError per design §3.4
             raise PolicyEngineError(f"Fathom engine construction failed: {exc}") from exc

@@ -35,6 +35,13 @@ spec:
           envFrom:
             - secretRef:
                 name: nautilus-secrets
+          # Traces are exported only when an endpoint is set. Left unset the
+          # broker still creates spans and still serves every nautilus_* series
+          # on /metrics; it just has nowhere to send traces, and says nothing
+          # about it. Point this at a collector to turn export on.
+          # env:
+          #   - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          #     value: http://otel-collector.observability:4318
           # /healthz is static: the process is up. /readyz also probes the
           # session store and the audit sink, so a broker that cannot write its
           # audit log leaves the rotation instead of serving unrecorded requests.
