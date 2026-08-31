@@ -20,6 +20,7 @@ from nautilus.adapters.base import (
     ScopeEnforcementError,
     quote_table,
     render_field,
+    row_bytes,
     validate_operator,
     wrap_execute,
 )
@@ -190,17 +191,36 @@ class PostgresAdapter:
 
         sql, params = self._build_sql(table, scope, _DEFAULT_LIMIT)
 
+        budget = self._config.max_response_bytes
+
         started = time.perf_counter()
-        async with self._pool.acquire() as conn:
-            records = await conn.fetch(sql, *params)
+        rows: list[dict[str, Any]] = []
+        over_budget = False
+        # A cursor, not ``fetch``: ``fetch`` materialises every matching row
+        # before anything can look at its size, so a byte budget checked
+        # afterwards still pays the memory the pod died of. 1000 rows of wide
+        # text values is 65 MB, and eight of those at once is a SIGKILL under
+        # the shipped 1Gi limit. Stopping the read is the only bound that helps.
+        async with self._pool.acquire() as conn, conn.transaction():
+            used = 0
+            async for record in conn.cursor(sql, *params):
+                row = dict(record)
+                if budget is not None:
+                    used += row_bytes(row)
+                    # ``and rows``: one oversized row still comes back, marked
+                    # truncated, rather than as an empty result the caller
+                    # cannot tell from "nothing matched".
+                    if used > budget and rows:
+                        over_budget = True
+                        break
+                rows.append(row)
         duration_ms = int((time.perf_counter() - started) * 1000)
 
-        rows: list[dict[str, Any]] = [dict(r) for r in records]
         return AdapterResult(
             source_id=self._config.id,
             rows=rows,
             duration_ms=duration_ms,
-            truncated=len(rows) >= _DEFAULT_LIMIT,
+            truncated=over_budget or len(rows) >= _DEFAULT_LIMIT,
         )
 
     def _declared_table(self) -> tuple[str, str]:

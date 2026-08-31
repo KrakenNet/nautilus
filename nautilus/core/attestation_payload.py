@@ -50,7 +50,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Iterable
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from pydantic_core import to_jsonable_python
 
@@ -89,9 +89,64 @@ def _stable_json(value: Any) -> str:
 
 
 def _sha256(value: Any) -> str:
-    """Return ``sha256:<hex>`` of the canonical JSON encoding of ``value``."""
-    digest = hashlib.sha256(_stable_json(value).encode("utf-8")).hexdigest()
-    return f"{_SHA256_PREFIX}{digest}"
+    """Return ``sha256:<hex>`` of the canonical JSON encoding of ``value``.
+
+    Fed to the hash in pieces rather than built first. The encoding is
+    unchanged -- the same bytes in the same order, so every digest already
+    published stays correct and ``docs/how-to/verify-a-token.md`` still
+    reproduces it -- but the whole string is never materialised. It was two
+    full-size allocations per call and the call happens twice per request (once
+    per source, once for the merged payload), which is most of the distance
+    between a 65 MB reply and 115 MB of process memory, and 58% of measured
+    broker CPU.
+    """
+    digest = hashlib.sha256()
+    _feed(digest, to_jsonable_python(value, fallback=str), 0)
+    return f"{_SHA256_PREFIX}{digest.hexdigest()}"
+
+
+# How far to walk before encoding a subtree whole. Two levels reaches the rows
+# inside ``{source_id: [row, ...]}`` and inside a bare ``[row, ...]``, which is
+# where the size is. Below that the C encoder is both faster and small enough.
+_CHUNK_DEPTH = 2
+
+
+def _feed(digest: Any, value: Any, depth: int) -> None:
+    """Write the canonical encoding of ``value`` into ``digest``, piecewise.
+
+    Byte-for-byte what ``json.dumps(value, sort_keys=True,
+    separators=(",", ":"))`` produces -- the recursion only decides where the
+    string is cut, never what it contains.
+    """
+    if depth < _CHUNK_DEPTH and isinstance(value, list):
+        digest.update(b"[")
+        for index, item in enumerate(cast("list[Any]", value)):
+            if index:
+                digest.update(b",")
+            _feed(digest, item, depth + 1)
+        digest.update(b"]")
+        return
+    # Non-string keys are left to ``json.dumps``: it coerces *and* sorts them
+    # by rules this loop would have to reimplement to stay byte-identical.
+    if (
+        depth < _CHUNK_DEPTH
+        and isinstance(value, dict)
+        and all(isinstance(k, str) for k in cast("dict[Any, Any]", value))
+    ):
+        digest.update(b"{")
+        for index, key in enumerate(sorted(cast("dict[str, Any]", value))):
+            if index:
+                digest.update(b",")
+            digest.update(json.dumps(key).encode("utf-8"))
+            digest.update(b":")
+            _feed(digest, cast("dict[str, Any]", value)[key], depth + 1)
+        digest.update(b"}")
+        return
+    # One definition of the canonical encoding, for the whole payload and for
+    # every piece of it: the recursion above only decides where the string is
+    # cut. ``value`` is already jsonable here, so the second pass is a cheap
+    # re-walk of one row.
+    digest.update(_stable_json(value).encode("utf-8"))
 
 
 def _get_slot(item: Any, name: str) -> Any:

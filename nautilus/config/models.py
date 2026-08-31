@@ -150,6 +150,17 @@ class SourceConfig(_Strict):
     classification: str
     data_types: list[str]
     allowed_purposes: list[str] | None = None
+    # Largest set of rows this source may return, in canonical-JSON bytes. The
+    # only cap used to be a row count (1000, in the postgres adapter), which is
+    # not a bound when a row can be any size: a table of wide text values turned
+    # one request into a 65 MB response and ~115 MB of process memory, and eight
+    # concurrent requests SIGKILLed the pod under the shipped
+    # ``limits.memory: 1Gi`` -- clients got a dropped socket, not a 413 or a
+    # 503, and both probes went unreachable because there was no process left.
+    # Rows are dropped whole and the source is named in ``truncated_sources``.
+    # ``None`` removes the bound. 8 MiB matches the ceilings the REST and S3
+    # adapters already apply to a response body.
+    max_response_bytes: int | None = Field(default=8_388_608, gt=0)
     connection: str = ""  # post-interpolation DSN / base URL
     # ``static`` only: the rows this source serves, straight from the YAML.
     rows: list[dict[str, Any]] = Field(default_factory=list[dict[str, Any]])

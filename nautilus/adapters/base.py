@@ -69,6 +69,37 @@ _OPERATOR_ALLOWLIST: frozenset[str] = frozenset(
 _FIELD_PATTERN: re.Pattern[str] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")
 
 
+def row_bytes(row: dict[str, Any]) -> int:
+    """Roughly what ``row`` costs in the canonical JSON the caller receives.
+
+    ``+ 1`` for the separator that will follow it. Deliberately the same
+    estimate the MCP transport bounds a tool result with, so a source trimmed
+    at one layer is trimmed the same way at the next.
+    """
+    import json
+
+    return len(json.dumps(row, default=str)) + 1
+
+
+def bounded_rows(
+    rows: list[dict[str, Any]], max_bytes: int | None
+) -> tuple[list[dict[str, Any]], bool]:
+    """Return ``rows`` cut to ``max_bytes``, and whether anything was dropped.
+
+    Whole rows only: half a row is not a row. Always keeps at least one, so a
+    single oversized row comes back marked truncated rather than as an empty
+    result the caller cannot tell from "nothing matched".
+    """
+    if max_bytes is None:
+        return rows, False
+    used = 0
+    for index, row in enumerate(rows):
+        used += row_bytes(row)
+        if used > max_bytes and index > 0:
+            return rows[:index], True
+    return rows, False
+
+
 def validate_operator(op: str) -> None:
     """Validate ``op`` against the design §6.1 operator allowlist.
 

@@ -492,6 +492,17 @@ state_dir: /var/lib/nautilus
   body over 8 MiB, and the S3 adapter refuses an object over 8 MiB, in both
   cases before materializing it. Either raises an adapter error naming the
   ceiling; the source is not quarantined for it.
+- **A source's rows are bounded in bytes, not only in rows.** The postgres
+  adapter's 1000-row cap is not a bound when a row can be any size: a table of
+  wide text values turned one request into a 65 MB response and ~115 MB of
+  process memory, and eight concurrent requests SIGKILLed the pod under
+  `limits.memory: 1Gi` — clients got a dropped socket, not a 413 or a 503, and
+  both probes went unreachable because there was no process left to answer.
+  `sources[].max_response_bytes` (default 8388608) drops whole rows until the
+  result fits and names the source in `truncated_sources`. Postgres stops
+  reading at the budget rather than trimming afterwards, which is what bounds
+  the peak; every other adapter is held to the same number by the broker. Set
+  it to `null` per source to remove the bound.
 - **A request body is bounded before it is read.** `api.max_request_bytes`
   (default 1048576) refuses a larger body with 413, and `intent` is capped at
   8192 characters. Neither existed: the audit entry stores the raw intent three

@@ -42,7 +42,7 @@ from fathom.audit import FileSink
 from pydantic import ValidationError
 
 from nautilus.adapters import ADAPTER_REGISTRY as _ADAPTER_REGISTRY
-from nautilus.adapters.base import Adapter, AdapterError, ScopeEnforcementError
+from nautilus.adapters.base import Adapter, AdapterError, ScopeEnforcementError, bounded_rows
 from nautilus.adapters.embedder import Embedder, NoopEmbedder
 from nautilus.adapters.schema import SchemaFingerprintStore
 from nautilus.analysis.fallback import FallbackIntentAnalyzer
@@ -2492,6 +2492,7 @@ class Broker:
                     1, {"source_id": source_id, "error_type": res.error.error_type}
                 )
                 continue
+            res = self._bound_rows(source_id, res)
             successful.append(res)
             state.sources_queried.append(source_id)
             if res.truncated:
@@ -2508,6 +2509,31 @@ class Broker:
             if not self._is_non_deterministic(source_id):
                 state.source_response_hashes[source_id] = compute_response_hash(res.rows)
         return successful
+
+    def _bound_rows(self, source_id: str, result: AdapterResult) -> AdapterResult:
+        """Hold every adapter to the source's ``max_response_bytes``.
+
+        The adapters that can stop reading do -- postgres streams and breaks at
+        the budget rather than materialising the whole result first, which is
+        the only thing that bounds the peak. This is the backstop for the ones
+        that cannot, and the single place the rule is stated for all of them:
+        the row cap was the only bound in the code, and a row can be any size.
+        """
+        try:
+            budget = self._registry.get(source_id).max_response_bytes
+        except Exception:  # noqa: BLE001 — never fail a served source over a budget lookup
+            return result
+        rows, trimmed = bounded_rows(result.rows, budget)
+        if not trimmed:
+            return result
+        log.warning(
+            "source %r returned more than max_response_bytes (%s); kept %d of %d rows",
+            source_id,
+            budget,
+            len(rows),
+            len(result.rows),
+        )
+        return result.model_copy(update={"rows": rows, "truncated": True})
 
     def _is_non_deterministic(self, source_id: str) -> bool:
         """True iff ``source_id``'s adapter declares the ``non_deterministic``
