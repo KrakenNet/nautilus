@@ -110,6 +110,28 @@ class DenialRecord(BaseModel):
     source_id: str
     reason: str
     rule_name: str
+    # Whether this refusal was about the request at all. A source is refused
+    # by the rules whether or not the intent ever concerned it, so a caller
+    # reading ``sources_denied`` could not tell "you were refused" from "some
+    # unrelated source is off-limits". Computed from data-type overlap by the
+    # broker. Defaults ``True`` so a Phase-1 record round-trips as a denial
+    # (NFR-5).
+    relevant: bool = True
+
+
+class SourceInfo(BaseModel):
+    """What a source *is*, echoed back beside the rows it returned.
+
+    ``data`` is ``{source_id: rows}`` and ``sources_queried`` is bare ids, so
+    two sources of the same shape are indistinguishable in a reply — a model
+    presented a cold-storage archive's rows as a customer's current orders.
+    The metadata that would have stopped it is already published at
+    ``GET /v1/sources``; this carries it in the response that used it.
+    """
+
+    description: str | None = None
+    classification: str | None = None
+    data_types: list[str] = Field(default_factory=list[str])
 
 
 class SkipRecord(BaseModel):
@@ -243,20 +265,35 @@ class BrokerResponse(BaseModel):
     # is configured with ``session_tokens.enabled: true``; ``None`` otherwise
     # so Phase-1 responses round-trip unchanged (NFR-5).
     session_token: str | None = None
+    # What each queried source is, keyed by id. ``None`` when the broker did
+    # not populate it, so a Phase-1 response round-trips unchanged (NFR-5).
+    source_info: dict[str, SourceInfo] | None = None
 
     @computed_field  # serialized, so REST and MCP callers get it too
     @property
     def outcome(self) -> Literal["allowed", "denied", "errored", "skipped"]:
-        """One word for what happened, on the audit log's own precedence.
+        """One word for what happened.
 
-        ``allowed`` if any source answered; else ``denied`` if any was
-        refused; else ``errored`` if any failed; else ``skipped``. Reading
-        this off four lists in the right order is something every caller
-        otherwise re-derives, and the audit entry already does it.
+        ``allowed`` if any source answered; else ``denied`` if a source the
+        request actually concerned was refused; else ``errored`` if any
+        source failed; else ``skipped``.
+
+        Denials used to outrank errors unconditionally, and every rules-refused
+        source emits a record whether or not the intent had anything to do with
+        it. So a request whose one relevant database was unreachable reported
+        ``denied`` — sending the reader after a policy rule while a service was
+        down — and a question nothing configured could answer reported ``denied``
+        too, citing sources that held nothing like what was asked for.
+
+        The ``sources_denied`` clause is the compatibility path: a response
+        deserialized without ``denial_records`` has no relevance to read, so its
+        denials still count.
         """
         if self.sources_queried:
             return "allowed"
-        if self.sources_denied:
+        if any(d.relevant for d in self.denial_records) or (
+            self.sources_denied and not self.denial_records
+        ):
             return "denied"
         if self.sources_errored:
             return "errored"

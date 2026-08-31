@@ -104,6 +104,7 @@ from nautilus.core.models import (
     RoutingDecision,
     ScopeConstraint,
     SkipRecord,
+    SourceInfo,
 )
 from nautilus.core.principal import derive_principal_id
 from nautilus.core.session import AsyncSessionStore, InMemorySessionStore, SessionStore
@@ -2122,6 +2123,38 @@ class Broker:
             s.id for s in self._registry if s.id not in selected_ids and s.id not in denied_ids
         )
         state.skip_records = self._skip_records(state)
+        state.denial_records = [self._annotate_denial(d, state) for d in state.denial_records]
+
+    def _annotate_denial(self, denial: DenialRecord, state: _RequestState) -> DenialRecord:
+        """Say whether a refusal concerned the request, and what would work.
+
+        Two things a denial cannot say for itself. The rules refuse a source on
+        its own terms, with no view of whether the intent ever wanted it — so
+        relevance is decided here, from the same data-type overlap
+        :meth:`_skip_records` already uses. And a purpose refusal that never
+        names an acceptable purpose is a dead end: a model measured against
+        this surface spent 21 of 21 attempts on one guess, because nothing told
+        it the guess was in the wrong vocabulary rather than merely refused.
+        The allowed set is metadata the operator wrote, published already at
+        ``GET /v1/sources``; the rule cannot interpolate it (fathom emits
+        ``reason`` verbatim), so the broker appends it.
+        """
+        try:
+            source = self._registry.get(denial.source_id)
+        except Exception:  # noqa: BLE001 — a denial can name a source we cannot resolve
+            return denial
+
+        needed = set(state.intent_analysis.data_types_needed)
+        # No identifiable data types means nothing to be relevant *to*: the
+        # request was unanswerable, not refused.
+        relevant = bool(needed) and bool(set(source.data_types) & needed)
+
+        reason = denial.reason
+        allowed = list(source.allowed_purposes or [])
+        if allowed and "purpose" in reason.lower():
+            names = ", ".join(sorted(allowed))
+            reason = f"{reason} (source '{source.id}' allows purposes: {names})"
+        return denial.model_copy(update={"relevant": relevant, "reason": reason})
 
     def _skip_records(self, state: _RequestState) -> list[SkipRecord]:
         """Say why each source in ``sources_skipped`` took no part.
@@ -2472,7 +2505,23 @@ class Broker:
             duration_ms=state.duration_ms(),
             fact_set_hash=state.fact_set_hash,
             session_token=state.session_token,
+            source_info=self._source_info(state.sources_queried),
         )
+
+    def _source_info(self, source_ids: list[str]) -> dict[str, SourceInfo] | None:
+        """What each queried source is, so its rows can be read for what they are."""
+        info: dict[str, SourceInfo] = {}
+        for source_id in sorted(source_ids):
+            try:
+                source = self._registry.get(source_id)
+            except Exception:  # noqa: BLE001 — never fail a served request over metadata
+                continue
+            info[source_id] = SourceInfo(
+                description=source.description,
+                classification=source.classification,
+                data_types=list(source.data_types),
+            )
+        return info or None
 
     def _process_session_token(
         self,

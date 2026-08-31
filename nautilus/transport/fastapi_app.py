@@ -587,6 +587,12 @@ def create_app(
                     "description": s.description,
                     "classification": s.classification,
                     "data_types": list(s.data_types),
+                    # The purposes this source accepts. Omitting it left a
+                    # caller refused on purpose with no way to learn the
+                    # vocabulary: it is the operator's own metadata, not a
+                    # credential, and it is the difference between a dead end
+                    # and a retry.
+                    "allowed_purposes": list(s.allowed_purposes or []),
                 }
                 for s in broker.sources
             ],

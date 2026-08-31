@@ -382,19 +382,26 @@ def create_server(
     @mcp.tool(
         description=(
             "Ask Nautilus for data. Nautilus decides which of its configured "
-            "sources may answer, scopes the query, runs it, and returns the "
-            "rows with a signed attestation of the decision.\n\n"
+            "sources may answer, applies whatever restrictions its rules "
+            "attach, runs the query, and returns the rows with a signed "
+            "attestation of the decision.\n\n"
             "Arguments:\n"
             "  agent_id: which agent is asking. Its clearance and permitted "
             "purposes come from the broker's config, not from this call.\n"
             "  intent: what you want, in plain language "
-            '("recent orders for user 42").\n'
+            '("recent orders for user 42"). Restrictions you write here are '
+            "not pushed into the query unless a rule says so — check "
+            "'scope_restrictions' in the reply for what was actually "
+            "applied.\n"
             "  context: why you want it. 'purpose' is the field policy is "
-            "written against and should always be set (e.g. 'support', "
-            "'care', 'threat-analysis'); 'session_id' ties several requests "
+            "written against and should always be set; the purposes each "
+            "source accepts are listed by nautilus_sources, so read them "
+            "there rather than guessing. 'session_id' ties several requests "
             "into one session so cumulative exposure accrues to it.\n\n"
             "The response says what happened: 'outcome' is allowed / denied / "
-            "errored / skipped, 'data' maps source id to rows, and "
+            "errored / skipped, 'data' maps source id to rows, 'source_info' "
+            "says what each of those sources is — read it before presenting "
+            "rows as current or complete — and "
             "'denial_records' names the rule that refused a source and why. "
             "'truncated_sources' names any source whose rows were cut short — "
             "by the adapter's own row cap or to keep this reply inside its size "
@@ -451,9 +458,11 @@ def create_server(
     @mcp.tool(
         description=(
             "List the data sources this broker can route to: id, type, "
-            "description, classification and the data types each one holds. "
-            "Metadata only — never connection strings or credentials. Use it "
-            "to phrase an intent that some source can actually answer."
+            "description, classification, the data types each one holds and "
+            "the purposes it accepts. Metadata only — never connection "
+            "strings or credentials. Use it to phrase an intent that some "
+            "source can actually answer, and to pick a purpose from "
+            "'allowed_purposes' rather than guessing one."
         )
     )
     async def nautilus_sources(  # pyright: ignore[reportUnusedFunction]
@@ -473,6 +482,7 @@ def create_server(
                 "description": source.description,
                 "classification": source.classification,
                 "data_types": list(source.data_types),
+                "allowed_purposes": list(source.allowed_purposes or []),
             }
             for source in broker.sources
         ]

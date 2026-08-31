@@ -21,14 +21,18 @@ Submit a broker request.
 
 | Field | Meaning |
 | --- | --- |
-| `outcome` | `allowed` \| `denied` \| `errored` \| `skipped` — what happened, in one word, on the audit log's own precedence. |
-| `denial_records` | One `{source_id, reason, rule_name}` per denied source: why it was refused and which rule said so. |
+| `outcome` | `allowed` \| `denied` \| `errored` \| `skipped` — what happened, in one word. `denied` only when a source the request actually concerned was refused; an unrelated refusal does not outrank a source that failed to answer. |
+| `denial_records` | One `{source_id, reason, rule_name, relevant}` per denied source: why it was refused, which rule said so, and whether the refusal concerned this request at all. A purpose refusal names the purposes the source does accept. |
+| `source_info` | `{source_id: {description, classification, data_types}}` for each queried source — what the rows in `data` actually are. |
 | `skip_records` | One `{source_id, reason}` per source that took no part — usually because its `data_types` have nothing to do with the intent. |
 | `rule_trace` | The rules that fired, in order — the same trace the audit entry records. |
 
 ### `GET /v1/sources`
 
-List all configured sources. Requires the `query` capability.
+List all configured sources: `id`, `type`, `description`, `classification`,
+`data_types` and `allowed_purposes`. Metadata only — never connection strings
+or credentials. `allowed_purposes` is what a caller refused on `purpose` should
+read to pick one that works. Requires the `query` capability.
 
 ### `GET /v1/rules`
 
