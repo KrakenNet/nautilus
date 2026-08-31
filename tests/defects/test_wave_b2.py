@@ -7,8 +7,10 @@ request anyway, and adapters that materialize an entire upstream body before
 the row cap that was supposed to bound it.
 
 Measured, not assumed: with the default pool, ten concurrently-held ledger
-locks exhaust it and the eleventh waits forever. A request holds two, so the
-ceiling is five concurrent requests, and the failure is a hang with no error.
+locks exhaust it and the eleventh waits forever, and the failure is a hang with
+no error. (Wave E1 moved ledger locks onto their own pool and made one request
+cost one connection; the bound this pin protects is now
+``session_store.lock_pool_max_size``.)
 """
 
 from __future__ import annotations
@@ -36,12 +38,10 @@ _INTENT = IntentAnalysis(raw_intent="read the source", data_types_needed=["docs"
 def test_b2a_exhausting_the_session_pool_raises_instead_of_hanging(pg_dsn: str) -> None:
     """A pool with no ``max_size`` and no ``acquire`` timeout hangs forever.
 
-    Every in-flight request holds two pooled connections for the whole
-    pipeline — one advisory lock for its declared session, one for the caller's
-    principal — so the asyncpg default of ten is a hard ceiling of five
-    concurrent requests. Past it, ``pool.acquire()`` waits with no deadline:
-    the request never completes, never errors and never appears in the audit
-    log.
+    Ledger locks are held for the length of a request, so the lock pool's size
+    is the store's concurrency ceiling. Past it, ``pool.acquire()`` with no
+    deadline waits forever: the request never completes, never errors and never
+    appears in the audit log.
 
     The control is the request that fits: with two connections available, two
     concurrently-held locks must still work.
@@ -78,6 +78,7 @@ def test_b2a_exhausting_the_session_pool_raises_instead_of_hanging(pg_dsn: str) 
             pg_dsn,
             on_failure="fail_closed",
             pool_max_size=2,
+            lock_pool_max_size=2,
             acquire_timeout_s=2.0,
         )
         await store.setup()

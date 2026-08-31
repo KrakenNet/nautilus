@@ -929,6 +929,7 @@ class Broker:
                 ttl_seconds=sess_cfg.ttl_seconds,
                 pool_min_size=sess_cfg.pool_min_size,
                 pool_max_size=sess_cfg.pool_max_size,
+                lock_pool_max_size=sess_cfg.lock_pool_max_size,
                 acquire_timeout_s=sess_cfg.acquire_timeout_s,
             )
         if sess_cfg.backend == "sqlite":
@@ -1823,11 +1824,18 @@ class Broker:
         the store has one, i.e. when it is shared — serialises this replica
         against every other replica writing the same ledger.
         """
+        # ``alock_all`` holds every key on one pooled connection. Entering the
+        # store's per-key lock separately took a connection per key, which made
+        # the store's ceiling ``pool_max_size / keys-per-request``.
+        store_lock_all = getattr(self._session_store, "alock_all", None)
         store_lock = getattr(self._session_store, "alock", None)
         async with contextlib.AsyncExitStack() as stack:
             for key in keys:
                 await stack.enter_async_context(self._session_locks.setdefault(key, asyncio.Lock()))
-                if store_lock is not None:
+            if store_lock_all is not None:
+                await stack.enter_async_context(store_lock_all(keys))
+            elif store_lock is not None:
+                for key in keys:
                     await stack.enter_async_context(store_lock(key))
             yield
 

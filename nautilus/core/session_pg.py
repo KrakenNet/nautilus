@@ -24,6 +24,7 @@ Failure policy (NFR-7, D-1):
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 from collections.abc import AsyncIterator
@@ -121,6 +122,7 @@ class PostgresSessionStore:
         ttl_seconds: int = 0,
         pool_min_size: int = 1,
         pool_max_size: int = 10,
+        lock_pool_max_size: int = 32,
         acquire_timeout_s: float = 10.0,
     ) -> None:
         self._dsn: str = dsn
@@ -128,9 +130,11 @@ class PostgresSessionStore:
         self._ttl_seconds: int = ttl_seconds
         self._pool_min_size: int = pool_min_size
         self._pool_max_size: int = pool_max_size
+        self._lock_pool_max_size: int = lock_pool_max_size
         self._acquire_timeout_s: float = acquire_timeout_s
         self._sqlite_path: Path = Path(sqlite_path) if sqlite_path else _DEFAULT_SQLITE_PATH
         self._pool: Any = None
+        self._lock_pool: Any = None
         self._closed: bool = False
         self._degraded_memory: InMemorySessionStore | None = None
         self._degraded_sqlite: SqliteSessionStore | None = None
@@ -174,15 +178,23 @@ class PostgresSessionStore:
         )
 
         try:
-            # Sized explicitly. asyncpg's default is 10/10, and every in-flight
-            # request holds two of them for its whole pipeline — one advisory
-            # lock for the declared session, one for the caller's principal — so
-            # the implicit default was a measured ceiling of five concurrent
-            # requests, past which ``acquire`` waited with no deadline.
+            # Two pools, deliberately. Ledger locks are held for the whole
+            # length of a request; the reads and writes they protect are taken
+            # and returned *inside* that hold. Drawn from one pool, the request
+            # holding the last connection can never acquire the one it needs to
+            # finish, and nothing in flight can release — measured at 32
+            # concurrent callers against a single pool of 10.
             self._pool = await asyncpg.create_pool(  # pyright: ignore[reportUnknownMemberType]
                 dsn=self._dsn,
                 min_size=self._pool_min_size,
                 max_size=self._pool_max_size,
+            )
+            # One connection per in-flight request, so this is the store's real
+            # concurrency ceiling — sized above the query pool for that reason.
+            self._lock_pool = await asyncpg.create_pool(  # pyright: ignore[reportUnknownMemberType]
+                dsn=self._dsn,
+                min_size=self._pool_min_size,
+                max_size=self._lock_pool_max_size,
             )
             async with self._acquire() as conn, conn.transaction():
                 # The lock is transaction-scoped, so it releases with the DDL
@@ -227,12 +239,13 @@ class PostgresSessionStore:
             self._degraded_memory = InMemorySessionStore(self._ttl_seconds)
             self._mode = "degraded_memory"
         self._degraded_since = datetime.now(UTC)
-        # Release any partial pool so we do not leak sockets.
-        pool = self._pool
-        self._pool = None
-        if pool is not None:
-            with contextlib.suppress(Exception):
-                await pool.close()
+        # Release any partial pools so we do not leak sockets.
+        for attr in ("_pool", "_lock_pool"):
+            pool = getattr(self, attr)
+            setattr(self, attr, None)
+            if pool is not None:
+                with contextlib.suppress(Exception):
+                    await pool.close()
 
     def _sanitized_dsn(self) -> str:
         """Strip credentials from the DSN for error messages."""
@@ -258,10 +271,15 @@ class PostgresSessionStore:
             raise SessionStoreUnavailableError(
                 "PostgresSessionStore.aget() called before setup() succeeded"
             )
-        row = await self._pool.fetchrow(
-            "SELECT state FROM nautilus_session_state WHERE session_id = $1" + self._ttl_clause(),
-            session_id,
-        )
+        # Bounded: ``pool.fetchrow`` acquires with no deadline, and /readyz
+        # calls this. A probe that hangs instead of answering 503 leaves a pod
+        # that cannot serve sitting in the load balancer.
+        async with self._acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT state FROM nautilus_session_state WHERE session_id = $1"
+                + self._ttl_clause(),
+                session_id,
+            )
         if row is None:
             return {}
         return _decode_state(row["state"])
@@ -327,8 +345,7 @@ class PostgresSessionStore:
             raise SessionStoreUnavailableError(
                 f"session-store pool exhausted: no connection became free within "
                 f"{self._acquire_timeout_s}s (pool max_size={self._pool_max_size}). "
-                f"Every in-flight request holds two, so raise "
-                f"session_store.pool_max_size to at least twice your peak concurrency."
+                f"Raise session_store.pool_max_size to at least your peak concurrency."
             ) from exc
         try:
             yield conn
@@ -349,28 +366,77 @@ class PostgresSessionStore:
         A degraded store (in-memory / SQLite fallback) is per-process by
         definition; there is nothing to serialise against, so this is a no-op.
         """
-        if self._pool is None:
+        async with self.alock_all([key]):
+            yield
+
+    @contextlib.asynccontextmanager
+    async def alock_all(self, keys: list[str]) -> AsyncIterator[None]:
+        """Hold a cross-process lock on every key in ``keys`` — one connection.
+
+        A request accumulates under more than one key (its declared session and
+        its caller's principal), and every one of them is read-modify-written.
+        Postgres advisory locks are session-scoped, not statement-scoped, so one
+        connection can hold all of them: taking a connection per key made the
+        store's concurrency ceiling ``pool_max_size / keys-per-request``, which
+        measured as five concurrent requests on the shipped pool of ten.
+
+        Keys are locked in sorted order so two requests sharing one key and
+        differing on another cannot deadlock against each other. Connections
+        come from the dedicated lock pool, never the query pool, so a request
+        holding a lock can always acquire the connection it needs to finish.
+
+        A degraded store (in-memory / SQLite fallback) is per-process by
+        definition; there is nothing to serialise against, so this is a no-op.
+        """
+        if self._lock_pool is None:
             yield
             return
-        # ponytail: one pooled connection per held key. Two keys per request
-        # against the default pool size is fine; a deployment that locks more
-        # keys per request wants a dedicated lock pool.
-        async with self._acquire() as conn:
-            await conn.execute("SELECT pg_advisory_lock(hashtextextended($1, 0))", key)
+        ordered = sorted({k for k in keys if k})
+        if not ordered:
+            yield
+            return
+        async with self._acquire_lock_connection() as conn:
+            for key in ordered:
+                await conn.execute("SELECT pg_advisory_lock(hashtextextended($1, 0))", key)
             try:
                 yield
             finally:
-                await conn.execute("SELECT pg_advisory_unlock(hashtextextended($1, 0))", key)
+                # Shielded: a cancelled request must still release what it took.
+                # asyncpg's pool reset would catch this on release anyway, but
+                # relying on that puts correctness in a library's cleanup path.
+                for key in reversed(ordered):
+                    await asyncio.shield(
+                        conn.execute("SELECT pg_advisory_unlock(hashtextextended($1, 0))", key)
+                    )
+
+    @contextlib.asynccontextmanager
+    async def _acquire_lock_connection(self) -> AsyncIterator[Any]:
+        """Take a connection from the lock pool, or say the ceiling was hit."""
+        assert self._lock_pool is not None  # noqa: S101 — callers check
+        try:
+            conn = await self._lock_pool.acquire(timeout=self._acquire_timeout_s)
+        except TimeoutError as exc:
+            raise SessionStoreUnavailableError(
+                f"session-store lock pool exhausted: no connection became free within "
+                f"{self._acquire_timeout_s}s (lock pool max_size={self._lock_pool_max_size}). "
+                f"One is held per in-flight request, so raise "
+                f"session_store.lock_pool_max_size to at least your peak concurrency."
+            ) from exc
+        try:
+            yield conn
+        finally:
+            await self._lock_pool.release(conn)
 
     async def aclose(self) -> None:
         """Idempotent close — release the pool (FR-17)."""
         if self._closed:
             return
         self._closed = True
-        pool = self._pool
-        self._pool = None
-        if pool is not None:
-            await pool.close()
+        for attr in ("_pool", "_lock_pool"):
+            pool = getattr(self, attr)
+            setattr(self, attr, None)
+            if pool is not None:
+                await pool.close()
         self._degraded_memory = None
         sqlite_store = self._degraded_sqlite
         self._degraded_sqlite = None
