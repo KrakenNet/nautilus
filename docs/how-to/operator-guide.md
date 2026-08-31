@@ -492,6 +492,12 @@ state_dir: /var/lib/nautilus
   body over 8 MiB, and the S3 adapter refuses an object over 8 MiB, in both
   cases before materializing it. Either raises an adapter error naming the
   ceiling; the source is not quarantined for it.
+- **A request body is bounded before it is read.** `api.max_request_bytes`
+  (default 1048576) refuses a larger body with 413, and `intent` is capped at
+  8192 characters. Neither existed: the audit entry stores the raw intent three
+  times, so one 4 MB request wrote 12.6 MB of JSONL, and the audit volume is
+  what `/readyz` fails closed on. Set `max_request_bytes: null` to remove the
+  body limit.
 - **An MCP reply is bounded before it reaches a model.** A tool result is read
   straight into a context window and the MCP SDK puts it on the wire twice, so
   `mcp.max_response_bytes` (default 262144) trims whole rows until the

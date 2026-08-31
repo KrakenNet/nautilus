@@ -172,7 +172,7 @@ def test_issue_session_token_raises_when_disabled(tmp_path: Path) -> None:
     broker = Broker.from_config(_write_yaml(tmp_path, tokens_enabled=False))
     try:
         with pytest.raises(RuntimeError, match="disabled"):
-            broker.issue_session_token(session_id="s", agent_id="a", purpose="p", clearance="c")
+            broker.issue_session_token(session_id="s", agent_id="a", purpose="p")
         with pytest.raises(RuntimeError, match="disabled"):
             broker.verify_session_token("whatever")
     finally:
@@ -378,7 +378,6 @@ def test_handoff_with_valid_token_allows_and_records_reference(tmp_path: Path) -
             session_id="sess-h",
             agent_id="agent-source",
             purpose="threat-analysis",
-            clearance="secret",
         )
         decision = asyncio.run(
             broker.declare_handoff(
@@ -408,7 +407,6 @@ def test_handoff_with_other_agents_token_denied(tmp_path: Path) -> None:
             session_id="sess-h",
             agent_id="agent-receiver",  # wrong agent presents as source
             purpose="threat-analysis",
-            clearance="secret",
         )
         decision = asyncio.run(
             broker.declare_handoff(

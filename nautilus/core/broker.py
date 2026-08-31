@@ -1244,23 +1244,36 @@ class Broker:
         session_id: str,
         agent_id: str,
         purpose: str,
-        clearance: str,
     ) -> str:
         """Mint a session token + emit ``session_token_issued`` audit (AC-18.f).
 
         Public surface for transports (``POST /v1/sessions``) so token
         issuance is always audited through the broker's single JSONL stream.
 
+        ``clearance`` is read from the AgentRegistry, never taken from the
+        caller. It used to be a parameter, and ``POST /v1/sessions`` passed
+        ``body["clearance"]`` into it, so the broker would sign
+        ``clearance: top-secret`` for an agent whose record says
+        ``unclassified`` -- an authorization assertion, signed by Nautilus,
+        verifiable by anyone against the unauthenticated JWKS, and forwarded to
+        downstream sources in ``X-Nautilus-Session-Token``. The in-request
+        minting path already read the registry; taking the parameter away means
+        no caller can disagree with it.
+
         Raises:
             RuntimeError: when session tokens are disabled.
         """
         if self._session_tokens is None:
             raise RuntimeError("session tokens are disabled (session_tokens.enabled: false)")
+        try:
+            record = self._agent_registry.get(agent_id)
+        except UnknownAgentError:
+            record = None
         token = self._session_tokens.issue(
             session_id=session_id,
             agent_id=agent_id,
             purpose=purpose,
-            clearance=clearance,
+            clearance=record.clearance if record is not None else "",
         )
         self._emit_session_token_event(
             "session_token_issued",

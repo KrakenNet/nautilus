@@ -496,6 +496,14 @@ class ApiConfig(_Strict):
     port: int = 8000
     keys: list[str | ApiKeyEntry] = Field(default_factory=list["str | ApiKeyEntry"])
     auth: ApiAuthConfig = Field(default_factory=ApiAuthConfig)
+    # Largest request body the HTTP surface will read, in bytes. There was no
+    # limit at any layer -- uvicorn applies none -- and the audit entry stores
+    # the raw intent three times, so one authenticated key could drive tens of
+    # MB/s onto the audit volume. The audit sink is the fail-closed path
+    # (``/readyz`` reports 503 when ``audit_logger.probe()`` complains), so
+    # filling it drains every replica rather than degrading one. ``None``
+    # removes the limit.
+    max_request_bytes: int | None = Field(default=1_048_576, gt=0)
 
 
 class MCPConfig(_Strict):

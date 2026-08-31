@@ -52,7 +52,7 @@ from pydantic import Field
 
 from nautilus.core.broker import Broker
 from nautilus.core.models import BrokerResponse, HandoffDecision
-from nautilus.transport.auth import caller_identity, verify_api_key
+from nautilus.transport.auth import caller_identity, capability_refusal, verify_api_key
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
@@ -132,7 +132,15 @@ def _caller(
     ``None`` there means the broker falls back to keying on ``agent_id``, which
     is right, because the parent process owns the pipe.
     """
-    request = getattr(getattr(ctx, "request_context", None), "request", None)
+    try:
+        request = getattr(ctx.request_context, "request", None) if ctx is not None else None
+    except (AttributeError, LookupError, ValueError):
+        # ``Context.request_context`` raises "Context is not available outside
+        # of a request" rather than returning None, and ``getattr`` with a
+        # default only swallows AttributeError. A tool invoked outside a
+        # request (a direct ``call_tool``, a stdio session) has no caller --
+        # which is the same answer as stdio, not an error.
+        return None
     if request is None or not hasattr(request, "headers"):
         return None
     return caller_identity(request, auth_mode=auth_mode, keys=keys, agent_subjects=agent_subjects)
@@ -332,6 +340,24 @@ def create_server(
     def _resolve_caller(ctx: Context[Any, Any, Any] | None) -> dict[str, Any] | None:
         return _caller(ctx, auth_mode, api_keys, agent_subjects)
 
+    def _refuse_without_capability(caller: dict[str, Any] | None, capability: str) -> None:
+        """The credential must hold ``capability``, exactly as it must on REST.
+
+        ``verify_api_key`` at the ASGI gate only asks whether the presented
+        secret matches *some* configured entry; it never reads that entry's
+        capabilities. So a key configured ``{capabilities: [audit_read]}`` --
+        one whose whole configured purpose is reading the audit log -- was
+        refused by ``/v1/request`` with a 403 and ran the same query here.
+
+        ``caller is None`` is stdio, which carries no credential at all: the
+        parent process owns the pipe, and there is nothing to scope.
+        """
+        if caller is None:
+            return
+        refusal = capability_refusal(caller, capability)
+        if refusal is not None:
+            raise ValueError(refusal)
+
     def _refuse_impersonation(caller: dict[str, Any] | None, agent_id: str) -> None:
         """The credential names one agent; the tool argument must match it.
 
@@ -399,6 +425,7 @@ def create_server(
         docstring, and a Sphinx cross-reference tells it nothing.
         """
         caller = _resolve_caller(ctx)
+        _refuse_without_capability(caller, "query")
         _refuse_impersonation(caller, agent_id)
         ctx_dict: dict[str, Any] = dict(context) if context else {}
         session_id, source = _resolve_session(ctx_dict, ctx)
@@ -429,8 +456,16 @@ def create_server(
             "to phrase an intent that some source can actually answer."
         )
     )
-    async def nautilus_sources() -> list[dict[str, Any]]:  # pyright: ignore[reportUnusedFunction]
-        """Metadata-only source listing, the same shape as ``GET /v1/sources``."""
+    async def nautilus_sources(  # pyright: ignore[reportUnusedFunction]
+        ctx: Context[Any, Any, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Metadata-only source listing, the same shape as ``GET /v1/sources``.
+
+        ``ctx`` is here only to resolve the caller: the REST twin is gated on
+        the ``query`` capability and this must be too, or the gate is a door
+        with a second entrance.
+        """
+        _refuse_without_capability(_resolve_caller(ctx), "query")
         return [
             {
                 "id": source.id,
@@ -466,7 +501,9 @@ def create_server(
             ``nautilus_request``: caller-supplied → transport-supplied →
             stdio ``request_id`` → generated UUID.
             """
-            _refuse_impersonation(_resolve_caller(ctx), source_agent_id)
+            handoff_caller = _resolve_caller(ctx)
+            _refuse_without_capability(handoff_caller, "query")
+            _refuse_impersonation(handoff_caller, source_agent_id)
             resolved_session, _source = _resolve_session(
                 {"session_id": session_id} if session_id else {},
                 ctx,

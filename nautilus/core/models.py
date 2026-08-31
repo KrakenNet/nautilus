@@ -28,6 +28,10 @@ class IntentAnalysis(BaseModel):
     estimated_sensitivity: str | None = None
 
 
+MAX_INTENT_LENGTH = 8192
+"""Longest ``intent`` a transport will accept, in characters (see below)."""
+
+
 class BrokerRequest(BaseModel):
     """Public input to :meth:`Broker.arequest` (research §5).
 
@@ -37,7 +41,13 @@ class BrokerRequest(BaseModel):
     """
 
     agent_id: str
-    intent: str
+    # The audit entry stores the raw intent three times (``raw_intent``, the
+    # intent analysis's copy, and the input fact's ``raw`` slot), so an
+    # unbounded intent is a 3x write amplifier onto the fail-closed audit
+    # sink: a 4 MB intent wrote 12.6 MB of JSONL in 0.22 s from the
+    # lowest-privilege credential in the config. 8 KiB is far more natural
+    # language than any caller sends and far less than that costs.
+    intent: str = Field(max_length=MAX_INTENT_LENGTH)
     context: dict[str, Any] = Field(default_factory=dict)
     fact_set_hash: str | None = None
 

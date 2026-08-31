@@ -41,6 +41,31 @@ Claims worth checking:
   source absent from the map (e.g. the LLM) is the unhashed one. Recompute
   each entry over that source's rows to prove its data is intact.
 
+### How to recompute a hash
+
+The digest is SHA-256 over a canonical JSON encoding of the rows exactly as
+you received them — the same encoder the response was serialised with, keys
+sorted, no whitespace:
+
+```python
+import hashlib, json
+from pydantic_core import to_jsonable_python
+
+def response_hash(value):
+    canonical = json.dumps(
+        to_jsonable_python(value, fallback=str),
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+assert response_hash(body["data"]["orders"]) == claims["source_response_hashes"]["orders"]
+```
+
+Hash the rows as the JSON gave them to you — do not parse timestamps back into
+`datetime` objects or decimals into `Decimal` first. Nothing but your copy
+holds the rows: not the token, not the audit log, not the attestation sink.
+
 ## Session tokens
 
 Session tokens are signed by the broker's rotating `KeyRing`. The JWS

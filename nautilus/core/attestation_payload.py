@@ -52,18 +52,40 @@ import json
 from collections.abc import Iterable
 from typing import Any, Literal
 
+from pydantic_core import to_jsonable_python
+
 _SHA256_PREFIX = "sha256:"
 
 
 def _stable_json(value: Any) -> str:
     """Canonical JSON encoding used for deterministic hashing.
 
+    - ``to_jsonable_python`` — the same encoder the transport serialises the
+      response with, so the bytes hashed are the bytes shipped.
     - ``sort_keys=True`` — dict key order is irrelevant.
     - ``separators=(",", ":")`` — no incidental whitespace.
-    - ``default=str`` — falls back to ``str(obj)`` for non-JSON-native
-      values (e.g. ``datetime``, ``Decimal``) so hashing never raises.
+    - ``fallback=str`` — anything even pydantic cannot encode becomes
+      ``str(obj)``, so hashing never raises.
+
+    This used to be ``json.dumps(..., default=str)`` over the adapter's raw
+    Python objects, which meant a Postgres ``timestamptz`` was hashed as
+    ``str(datetime)`` -- ``"2026-08-28 15:17:50.955432+00:00"`` -- while the
+    caller received ISO-8601 ``"2026-08-28T15:17:50.955432Z"``. Nothing stores
+    the rows: not the token, not the audit log, not the attestation sink. So
+    the caller's copy was the only one, and the documented verification in
+    ``docs/how-to/verify-a-token.md`` could never reproduce the digest on any
+    source with a datetime column -- which left an honest response
+    indistinguishable from a tampered one.
+
+    Changing the scheme does not invalidate tokens already issued: a token is
+    trusted by its signature, and the hash is a claim inside it, not a
+    recomputation of it.
     """
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+    return json.dumps(
+        to_jsonable_python(value, fallback=str),
+        sort_keys=True,
+        separators=(",", ":"),
+    )
 
 
 def _sha256(value: Any) -> str:

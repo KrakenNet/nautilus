@@ -21,7 +21,11 @@ from starlette.concurrency import run_in_threadpool
 from starlette.responses import Response
 
 from nautilus.core.broker import Broker
-from nautilus.transport.auth import caller_identity, verify_session_token
+from nautilus.transport.auth import (
+    caller_identity,
+    capability_refusal,
+    verify_session_token,
+)
 from nautilus.ui.audit_reader import AuditReader
 from nautilus.ui.dependencies import get_auth_user
 
@@ -241,16 +245,9 @@ async def playground_query(
         keys=list(getattr(state, "api_keys", []) or []),
         agent_subjects=dict(getattr(state, "agent_subjects", {}) or {}),
     )
-    if "query" not in caller["capabilities"]:
-        return JSONResponse(
-            {
-                "error": (
-                    f"This credential does not hold the 'query' capability "
-                    f"(it holds {sorted(caller['capabilities'])})"
-                )
-            },
-            status_code=403,
-        )
+    refusal = capability_refusal(caller, "query")
+    if refusal is not None:
+        return JSONResponse({"error": refusal}, status_code=403)
     bound: str | None = caller["agent_id"]
     if bound is not None and bound != agent_id:
         return JSONResponse(

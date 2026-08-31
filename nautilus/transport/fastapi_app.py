@@ -51,6 +51,7 @@ public allowlist; add routes there deliberately, not by omission.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 from contextlib import asynccontextmanager
@@ -61,6 +62,7 @@ from typing import TYPE_CHECKING, Any, cast
 from fastapi import Depends, FastAPI, Query, Request, Response, status
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
+from starlette.types import ASGIApp
 
 from nautilus.attestation.jwks import export_jwks
 from nautilus.attestation.key_ring import KeyRing
@@ -72,6 +74,7 @@ from nautilus.transport.auth import (
     SESSION_TOKEN_HEADER,
     api_key_header,
     caller_identity,
+    capability_refusal,
     proxy_trust_dependency,
     verify_api_key,
     verify_session_token,
@@ -222,6 +225,106 @@ def _ui_enabled(config_path: str | Path | None, existing_broker: Broker | None) 
         return False
 
 
+class BodyTooLargeError(Exception):
+    """A request body ran past ``api.max_request_bytes`` mid-read."""
+
+
+class _BodySizeLimit:
+    """Refuse a request body larger than ``max_bytes``.
+
+    There was no body limit anywhere -- uvicorn applies none -- and the audit
+    entry stores the raw intent three times, so one authenticated ``query`` key
+    could drive tens of MB/s onto the audit volume. That volume is the
+    fail-closed path: ``/readyz`` reports 503 when ``audit_logger.probe()``
+    complains, so filling it drains every replica rather than degrading one.
+
+    Two checks, because they cover different callers. ``Content-Length`` is
+    answered before a byte is read, which is every ordinary client. A client
+    that sends no length (chunked) is counted as it streams and the read is
+    aborted past the bound -- less graceful, deliberately so.
+    """
+
+    def __init__(self, app: ASGIApp, max_bytes: int) -> None:
+        self.app = app
+        self.max_bytes = max_bytes
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+        declared = _declared_length(scope)
+        if declared is not None and declared > self.max_bytes:
+            await _send_too_large(send, declared, self.max_bytes)
+            return
+
+        seen = 0
+
+        async def counted() -> Any:
+            nonlocal seen
+            message = await receive()
+            if message.get("type") == "http.request":
+                seen += len(message.get("body", b"") or b"")
+                if seen > self.max_bytes:
+                    raise BodyTooLargeError(
+                        f"request body exceeded api.max_request_bytes ({self.max_bytes} bytes)"
+                    )
+            return message
+
+        await self.app(scope, counted, send)
+
+
+def _declared_length(scope: Any) -> int | None:
+    """``Content-Length`` as an int, or ``None`` when absent or unparseable."""
+    for name, value in scope.get("headers", []):
+        if name.lower() == b"content-length":
+            try:
+                return int(value)
+            except ValueError:
+                return None
+    return None
+
+
+async def _send_too_large(send: Any, declared: int, limit: int) -> None:
+    body = json.dumps(
+        {
+            "detail": (
+                f"Request body is {declared} bytes; this broker accepts at most "
+                f"{limit} (api.max_request_bytes)."
+            )
+        }
+    ).encode("utf-8")
+    await send(
+        {
+            "type": "http.response.start",
+            "status": status.HTTP_413_CONTENT_TOO_LARGE,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode("ascii")),
+            ],
+        }
+    )
+    await send({"type": "http.response.body", "body": body})
+
+
+def _max_request_bytes(
+    config_path: str | Path | None, existing_broker: Broker | None
+) -> int | None:
+    """``api.max_request_bytes``, read the same way ``ui.enabled`` is.
+
+    Middleware is installed when the app is built and the broker is not built
+    until lifespan, so the config is read a second time here.
+    """
+    if existing_broker is not None:
+        api = getattr(getattr(existing_broker, "config", None), "api", None)
+        return getattr(api, "max_request_bytes", None)
+    from nautilus.config.loader import load_config
+
+    try:
+        return load_config(str(config_path)).api.max_request_bytes
+    except Exception:
+        return None
+
+
 def create_app(
     config_path: str | Path | None,
     *,
@@ -250,6 +353,7 @@ def create_app(
             "create_app requires either config_path or existing_broker",
         )
     ui_enabled = _ui_enabled(config_path, existing_broker)
+    max_request_bytes = _max_request_bytes(config_path, existing_broker)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
@@ -299,6 +403,8 @@ def create_app(
         version="0.1.0",
         lifespan=lifespan,
     )
+    if max_request_bytes is not None:
+        app.add_middleware(_BodySizeLimit, max_bytes=max_request_bytes)
     # Pre-populate defaults so routes don't AttributeError before lifespan
     # fires (e.g. startup-phase health checks during ASGI boot).
     app.state.broker = None
@@ -335,15 +441,9 @@ def create_app(
         async def dependency(request: Request) -> None:
             from fastapi import HTTPException
 
-            caller = _caller_identity(request)
-            if capability not in caller["capabilities"]:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=(
-                        f"This credential does not hold the {capability!r} capability "
-                        f"(it holds {sorted(caller['capabilities'])})"
-                    ),
-                )
+            refusal = capability_refusal(_caller_identity(request), capability)
+            if refusal is not None:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=refusal)
 
         return dependency
 
@@ -560,12 +660,34 @@ def create_app(
         body: dict[str, Any],
         request: Request,
     ) -> dict[str, Any]:
-        """Issue a session token (AC-18.a). Body: session_id, agent_id, purpose, clearance.
+        """Issue a session token (AC-18.a). Body: session_id, agent_id, purpose.
 
         Auth-gated (#18 security review): an unauthenticated caller must not
         be able to mint broker-valid tokens bound to arbitrary agent/session
         ids — that would bypass the session-pinning property entirely.
+
+        Authentication was the half that shipped. A credential bound to one
+        agent could still mint for another, and ``clearance`` was taken from
+        the body and signed verbatim: a key bound to ``intern`` minted
+        ``{agent_id: cleared, clearance: top-secret}``, which verifies against
+        the deliberately-unauthenticated JWKS and which Nautilus forwards
+        downstream as ``X-Nautilus-Session-Token``. The binding is now checked
+        here and the clearance comes from the AgentRegistry inside
+        :meth:`Broker.issue_session_token`; ``body["clearance"]`` is ignored.
         """
+        caller = _caller_identity(request)
+        bound: str | None = caller.get("agent_id")
+        requested_agent = str(body.get("agent_id", ""))
+        if bound is not None and bound != requested_agent:
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    f"This credential is bound to agent_id={bound!r}, so it cannot "
+                    f"mint a session token for {requested_agent!r}"
+                ),
+            )
         key_ring: KeyRing | None = getattr(request.app.state, "key_ring", None)
         if key_ring is None:
             from fastapi import HTTPException
@@ -586,16 +708,17 @@ def create_app(
             assert broker is not None  # noqa: S101 — broker_service implies broker
             token = broker.issue_session_token(
                 session_id=body.get("session_id", ""),
-                agent_id=body.get("agent_id", ""),
+                agent_id=requested_agent,
                 purpose=body.get("purpose", ""),
-                clearance=body.get("clearance", ""),
             )
         else:
+            # No broker to read a registry from (mock-broker tests). Signing an
+            # empty clearance is the honest answer; the caller's is never it.
             token = service.issue(
                 session_id=body.get("session_id", ""),
-                agent_id=body.get("agent_id", ""),
+                agent_id=requested_agent,
                 purpose=body.get("purpose", ""),
-                clearance=body.get("clearance", ""),
+                clearance="",
             )
         claims = service.verify(token)
         return {

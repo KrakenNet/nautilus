@@ -25,6 +25,7 @@ otherwise. Read-only probes (``/healthz``, ``/readyz``) stay un-gated.
 from __future__ import annotations
 
 import secrets
+from collections.abc import Mapping
 from ipaddress import ip_address, ip_network
 from typing import TYPE_CHECKING, Any
 
@@ -141,6 +142,27 @@ def caller_identity(
             capabilities = _capabilities_of(entry)
     peer = request.client.host if request.client else ""
     return {"auth": auth, "peer": peer, "agent_id": agent_id, "capabilities": capabilities}
+
+
+def capability_refusal(caller: Mapping[str, Any], capability: str) -> str | None:
+    """Why ``caller`` may not use ``capability``, or ``None`` when it may.
+
+    Returns the message instead of raising so each surface can answer in its
+    own dialect -- an ``HTTPException`` on REST, a ``JSONResponse`` in the admin
+    console, a tool error over MCP -- while all three agree on what is refused
+    and why. The check lived inside a REST dependency, which is exactly why a
+    credential scoped to ``audit_read`` was refused by ``/v1/request`` and ran
+    the same query over MCP: ``verify_api_key`` asks only whether the secret
+    matches *some* configured entry, never what that entry may do.
+
+    A credential the transport could not identify holds everything, which is the
+    unauthenticated-deployment and bare-string-key behaviour and is decided
+    before this function is reached.
+    """
+    held = caller.get("capabilities") or ALL_CAPABILITIES
+    if capability in held:
+        return None
+    return f"This credential does not hold the {capability!r} capability (it holds {sorted(held)})"
 
 
 def verify_api_key(header_value: str, keys: list[Any]) -> None:
