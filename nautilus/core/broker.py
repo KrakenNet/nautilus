@@ -630,10 +630,11 @@ class Broker:
         self._connect_failures: dict[str, float] = {}
         self.connect_cooldown_s: float = 30.0
         # Schema baselines live for the life of the broker, and on disk under
-        # ``base_dir`` when one is known (``from_config`` passes the config
-        # file's directory). A per-call store would be empty on every call, so
-        # every check would read as a first registration and drift could never
-        # be detected — neither within a process nor across a restart.
+        # ``base_dir`` when one is known (``from_config`` passes ``state_dir``,
+        # defaulting to the config file's directory). A per-call store would be
+        # empty on every call, so every check would read as a first
+        # registration and drift could never be detected — neither within a
+        # process nor across a restart.
         self._fingerprint_store = SchemaFingerprintStore(root=self._fingerprint_root(base_dir))
         # Adapters quarantined due to major schema drift (AC-21.e, PM Q3 LOCKED).
         # Requests targeting a quarantined adapter surface as ADAPTER_QUARANTINED
@@ -819,7 +820,10 @@ class Broker:
             key_ring=key_ring,
             session_token_ttl_s=config.session_tokens.ttl_seconds,
             broker_instance_id=broker_instance_id,
-            base_dir=Path(path).parent,
+            # Where this broker's own state goes. ``state_dir`` exists because
+            # the default -- the config file's directory -- is read-only in
+            # every deployment shape this repo ships.
+            base_dir=(cls._resolve(base_dir, config.state_dir) if config.state_dir else base_dir),
         )
 
     @classmethod

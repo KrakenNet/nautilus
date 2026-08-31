@@ -284,8 +284,9 @@ source credentials, audit log and key ring. See
 ### Relative paths
 
 Every path in `nautilus.yaml` — `audit.path`, `attestation.private_key_path`
-and its sink paths, `rules.user_rules_dirs` — resolves **relative to the
-config file's own directory**, not to the process working directory. So
+and its sink paths, `rules.user_rules_dirs`, `state_dir` — resolves
+**relative to the config file's own directory**, not to the process working
+directory. So
 `/etc/nautilus/nautilus.yaml` with `audit: {path: audit.jsonl}` writes
 `/etc/nautilus/audit.jsonl` no matter where the unit file starts the
 broker. Absolute paths are used as given. Parent directories are created
@@ -468,6 +469,18 @@ config file, so they survive a restart. `schema-diff` and `schema-ack`
 take `--config` because they compare against — and rewrite — the same
 baselines the broker reads.
 
+**In a container, point `state_dir` at a writable volume.** The config file
+is normally mounted read-only, and the broker will not fail a request it has
+already allowed just because it cannot write a baseline: it warns once and
+keeps them in memory, which means drift is detected within the process but
+not across a restart. `state_dir: /var/lib/nautilus` moves them somewhere
+writable — the shipped `deploy/configmap.yaml` and the full-showcase compose
+file both do this.
+
+```yaml
+state_dir: /var/lib/nautilus
+```
+
 ### When a source is down or answers with too much
 
 - **Unreachable sources are not re-dialled on every request.** A source whose
@@ -479,6 +492,12 @@ baselines the broker reads.
   body over 8 MiB, and the S3 adapter refuses an object over 8 MiB, in both
   cases before materializing it. Either raises an adapter error naming the
   ceiling; the source is not quarantined for it.
+- **An MCP reply is bounded before it reaches a model.** A tool result is read
+  straight into a context window and the MCP SDK puts it on the wire twice, so
+  `mcp.max_response_bytes` (default 262144) trims whole rows until the
+  serialized response fits and names every source it touched in
+  `truncated_sources`. REST is not bounded this way — an HTTP client streams to
+  a file. Set it to `null` to turn the bound off.
 
 ### Which rules are in force
 

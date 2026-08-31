@@ -223,8 +223,10 @@ class BrokerResponse(BaseModel):
     duration_ms: int
     cap_breached: bool | None = None
     fact_set_hash: str | None = None
-    # Sources whose rows hit the adapter row cap. Empty (not ``None``) when
-    # nothing truncated, so a Phase-1 response round-trips unchanged (NFR-5).
+    # Sources whose rows were cut short — by the adapter's own row cap, or by
+    # a transport bound such as ``mcp.max_response_bytes``. Either way it means
+    # the caller was given a subset. Empty (not ``None``) when nothing
+    # truncated, so a Phase-1 response round-trips unchanged (NFR-5).
     truncated_sources: list[str] = Field(default_factory=list[str])
     source_session_signatures: dict[str, dict[str, Any]] | None = None
     # Session-provenance JWS (#18, AC-18.a). Populated only when the broker

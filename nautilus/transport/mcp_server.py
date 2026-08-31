@@ -42,6 +42,7 @@ parent process that already trusts the subprocess boundary (design
 
 from __future__ import annotations
 
+import json
 import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any, cast
@@ -63,6 +64,11 @@ if TYPE_CHECKING:
 # Header name is shared verbatim with :mod:`nautilus.transport.fastapi_app`
 # so operators can configure one allow-list for both surfaces (D-11).
 _API_KEY_HEADER = "x-api-key"
+
+
+# Mirrors ``MCPConfig.max_response_bytes``; used only for the defensive
+# path where a test injects a broker with no full NautilusConfig.
+_DEFAULT_MAX_RESPONSE_BYTES = 262_144
 
 
 def _resolve_session(
@@ -132,8 +138,52 @@ def _caller(
     return caller_identity(request, auth_mode=auth_mode, keys=keys, agent_subjects=agent_subjects)
 
 
-def _mcp_settings(broker: Broker | None) -> tuple[bool, str, list[Any]]:
-    """Extract ``(expose_declare_handoff, auth_mode, api_keys)`` defensively.
+def _bound_response(response: BrokerResponse, max_bytes: int | None) -> BrokerResponse:
+    """Trim ``response.data`` until the serialized result fits ``max_bytes``.
+
+    An MCP tool result is read straight into a model's context window, and the
+    SDK re-encodes it indented and puts it on the wire twice -- once as text
+    content, once as ``structuredContent`` -- so the pipe carries about 2.1x
+    what is measured here. Measured at 1.9 MB for one unbounded call over a
+    single 2000-row source; adapters cap each source at 1000 rows, so several
+    sources multiply from there. REST needs none of this: an HTTP client
+    streams to a file.
+
+    Rows are dropped whole and from the end, and every source that lost rows is
+    named in ``truncated_sources`` -- the same field the adapter row cap
+    already uses, because from the caller's side both mean "you were given a
+    subset". The attestation still covers the full set the broker released;
+    ``truncated_sources`` is what says the wire carried less than that.
+    """
+    if max_bytes is None or not response.data:
+        return response
+    if len(response.model_dump_json()) <= max_bytes:
+        return response
+
+    # Budget is what is left after everything that is not rows -- the
+    # attestation JWT alone runs to a few kilobytes, and a bound that ignored
+    # it would still overshoot.
+    empty = response.model_copy(update={"data": {source: [] for source in response.data}})
+    share = max((max_bytes - len(empty.model_dump_json())) // len(response.data), 0)
+
+    kept: dict[str, list[dict[str, Any]]] = {}
+    truncated = set(response.truncated_sources)
+    for source_id, rows in response.data.items():
+        used = 0
+        keep: list[dict[str, Any]] = []
+        for row in rows:
+            used += len(json.dumps(row, default=str)) + 1
+            if used > share:
+                break
+            keep.append(row)
+        if len(keep) != len(rows):
+            truncated.add(source_id)
+        kept[source_id] = keep
+    return response.model_copy(update={"data": kept, "truncated_sources": sorted(truncated)})
+
+
+def _mcp_settings(broker: Broker | None) -> tuple[bool, str, list[Any], int | None]:
+    """Extract ``(expose_declare_handoff, auth_mode, api_keys, max_response_bytes)``.
 
     Mirrors :func:`nautilus.transport.fastapi_app._resolve_auth_config` —
     tolerates partially-populated configs from tests that inject a mock
@@ -142,10 +192,12 @@ def _mcp_settings(broker: Broker | None) -> tuple[bool, str, list[Any]]:
     keys list (fail-closed — :func:`verify_api_key` raises 401).
     """
     if broker is None:
-        return (False, "api_key", [])
+        return (False, "api_key", [], _DEFAULT_MAX_RESPONSE_BYTES)
     config = getattr(broker, "_config", None)
     mcp_cfg = getattr(config, "mcp", None) if config is not None else None
     expose_handoff = bool(getattr(mcp_cfg, "expose_declare_handoff", False))
+    max_bytes_raw: object = getattr(mcp_cfg, "max_response_bytes", _DEFAULT_MAX_RESPONSE_BYTES)
+    max_bytes = max_bytes_raw if isinstance(max_bytes_raw, int) or max_bytes_raw is None else None
     api_cfg = getattr(config, "api", None) if config is not None else None
     auth_obj = getattr(api_cfg, "auth", None)
     mode_raw = getattr(auth_obj, "mode", None) if auth_obj is not None else None
@@ -154,7 +206,7 @@ def _mcp_settings(broker: Broker | None) -> tuple[bool, str, list[Any]]:
     keys: list[Any] = []
     if isinstance(keys_raw, list):
         keys = list(cast("list[Any]", keys_raw))
-    return (expose_handoff, mode, keys)
+    return (expose_handoff, mode, keys, max_bytes)
 
 
 def _agent_subjects(broker: Broker | None) -> dict[str, str]:
@@ -274,7 +326,7 @@ def create_server(
         json_response=True,
     )
 
-    expose_handoff, auth_mode, api_keys = _mcp_settings(broker)
+    expose_handoff, auth_mode, api_keys, max_response_bytes = _mcp_settings(broker)
     agent_subjects = _agent_subjects(broker)
 
     def _resolve_caller(ctx: Context[Any, Any, Any] | None) -> dict[str, Any] | None:
@@ -317,7 +369,11 @@ def create_server(
             "into one session so cumulative exposure accrues to it.\n\n"
             "The response says what happened: 'outcome' is allowed / denied / "
             "errored / skipped, 'data' maps source id to rows, and "
-            "'denial_records' names the rule that refused a source and why."
+            "'denial_records' names the rule that refused a source and why. "
+            "'truncated_sources' names any source whose rows were cut short — "
+            "by the adapter's own row cap or to keep this reply inside its size "
+            "bound — so treat those rows as a sample, not the whole set, and "
+            "narrow the intent if you need all of it."
         )
     )
     async def nautilus_request(  # pyright: ignore[reportUnusedFunction]
@@ -348,7 +404,10 @@ def create_server(
         session_id, source = _resolve_session(ctx_dict, ctx)
         ctx_dict["session_id"] = session_id
         ctx_dict["session_id_source"] = source
-        return await broker.arequest(agent_id, intent, ctx_dict, caller=caller)
+        return _bound_response(
+            await broker.arequest(agent_id, intent, ctx_dict, caller=caller),
+            max_response_bytes,
+        )
 
     # ------------------------------------------------------------------
     # Optional tool: nautilus_declare_handoff — gated on

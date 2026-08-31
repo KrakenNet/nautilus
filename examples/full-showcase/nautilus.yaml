@@ -116,6 +116,12 @@ analysis:
 audit:
   path: /data/audit/audit.jsonl
 
+# ── Broker state ─────────────────────────────────────────────────────────
+# The config file is mounted read-only, so the schema-drift baselines need
+# somewhere writable of their own. Without this they are memory-only and drift
+# is undetectable across a restart.
+state_dir: /var/lib/nautilus
+
 # ── Attestation (auto-generates Ed25519 key on startup) ──────────────────
 attestation:
   enabled: true

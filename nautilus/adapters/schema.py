@@ -309,6 +309,9 @@ class SchemaFingerprintStore:
     def __init__(self, root: str | None = None) -> None:
         self._store: dict[str, str] = {}
         self._root = root
+        # One warning, not one per request: registration runs in the request
+        # path, so an unwritable root would otherwise log on every call.
+        self._warned_unwritable = False
 
     def _path_for(self, adapter_id: str) -> str | None:
         """On-disk location of ``adapter_id``'s record, or ``None`` if in-memory.
@@ -373,13 +376,26 @@ class SchemaFingerprintStore:
         return fingerprint
 
     def record(self, adapter_id: str, fingerprint: str) -> None:
-        """Persist a fingerprint at adapter-registration time. AC-21.c."""
+        """Persist a fingerprint at adapter-registration time. AC-21.c.
+
+        Registration happens inside the request path, so a root the process
+        cannot write to used to turn every request policy had already allowed
+        into ``outcome: errored`` -- which is what both shipped deployment
+        shapes do, since each mounts the config directory read-only. A baseline
+        is a drift *detection aid*; losing it is worth a warning, not an
+        outage, and ``state_dir`` says where to put it instead.
+
+        :meth:`record_ack` stays strict on purpose: an operator ack that never
+        reached disk has not cleared the quarantine it reports clearing.
+        """
         import json
         import os
 
         self._store[adapter_id] = fingerprint
         fp_path = self._path_for(adapter_id)
-        if fp_path is not None:
+        if fp_path is None:
+            return
+        try:
             os.makedirs(os.path.dirname(fp_path), exist_ok=True)
             with open(fp_path, "w") as fh:
                 json.dump(
@@ -389,6 +405,16 @@ class SchemaFingerprintStore:
                         "format": FINGERPRINT_FORMAT,
                     },
                     fh,
+                )
+        except OSError as exc:
+            if not self._warned_unwritable:
+                self._warned_unwritable = True
+                log.warning(
+                    "schema baselines are memory-only: cannot write %s (%s). Drift is "
+                    "still detected within this process but not across a restart. Set "
+                    "state_dir to a writable directory to keep them.",
+                    fp_path,
+                    exc,
                 )
 
     def record_ack(

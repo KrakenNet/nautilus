@@ -505,9 +505,24 @@ class MCPConfig(_Strict):
     ``nautilus_declare_handoff`` tool (D-12). Keeping the default off
     preserves backwards compatibility and prevents unintended exposure
     of the reasoning-only handoff surface through MCP clients.
+
+    ``max_response_bytes`` bounds one ``nautilus_request`` result. An MCP tool
+    result is read straight into a model's context window and the SDK puts the
+    payload on the wire twice -- once as text content, once as
+    ``structuredContent`` -- so an unbounded one spends the caller's context
+    and money on rows it did not ask for. Adapters cap each source at 1000
+    rows, so a config with several sources multiplies from there. Rows are
+    dropped whole and every source touched is named in ``truncated_sources``.
+
+    The number bounds the *serialized broker response*. The SDK then re-encodes
+    it indented and sends it twice, so measured wire cost is about 2.1x this --
+    262144 here put 553 040 bytes on the pipe. ``None`` removes the bound; REST
+    is unaffected either way, because an HTTP client streams to a file rather
+    than into a context window.
     """
 
     expose_declare_handoff: bool = False
+    max_response_bytes: int | None = Field(default=262_144, gt=0)
 
 
 class SessionStoreConfig(_Strict):
@@ -699,4 +714,11 @@ class NautilusConfig(_Strict):
     session_store: SessionStoreConfig = Field(default_factory=SessionStoreConfig)
     session_tokens: SessionTokenConfig = Field(default_factory=SessionTokenConfig)
     ui: UIConfig = Field(default_factory=UIConfig)
+    # Where Nautilus writes state of its own -- today the schema-drift
+    # baselines under ``.nautilus/adapters/fingerprints/``. Defaults to the
+    # config file's directory, which every shipped deployment mounts
+    # read-only, so a container or a Kubernetes Pod needs this pointed at a
+    # writable volume for drift baselines to survive a restart. Relative paths
+    # resolve against the config file's directory.
+    state_dir: str | None = None
     rkm: RkmConfig = Field(default_factory=RkmConfig)

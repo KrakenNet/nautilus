@@ -43,6 +43,11 @@ data:
       enabled: true
       key_ring_path: /var/lib/nautilus/keyring.json
 
+    # /config is a ConfigMap mounted readOnly under readOnlyRootFilesystem, so
+    # the broker's own state -- the schema-drift baselines -- goes on the
+    # writable `state` volume the Deployment already mounts here.
+    state_dir: /var/lib/nautilus
+
     attestation:
       enabled: true
       private_key_path: /etc/nautilus/keys/attestation.pem
