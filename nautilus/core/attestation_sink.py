@@ -403,8 +403,7 @@ class SingleWriterAuditSink:
         self._lock_path = self._path.with_name(self._path.name + ".lock")
         self._lock_fh: IO[str] | None = None
 
-    def write(self, record: Any) -> None:
-        """Take the writer lock on first use, then append."""
+    def _acquire(self) -> None:
         if self._lock_fh is None:
             self._lock_fh = take_writer_lock(
                 self._lock_path,
@@ -414,7 +413,31 @@ class SingleWriterAuditSink:
                     "audit.chained: false (plain appends are atomic)."
                 ),
             )
+
+    def write(self, record: Any) -> None:
+        """Take the writer lock on first use, then append."""
+        self._acquire()
         self._sink.write(record)
+
+    def probe(self) -> str | None:
+        """Why this sink could not write, or ``None`` when it can.
+
+        Readiness has to know about the writer lock. The lock is taken lazily —
+        constructing a Broker must not claim it, or the read-only CLI surfaces
+        could not run beside a live server (wave E2) — so a replica pointed at a
+        log another process owns used to pass a ``W_OK`` check, join the load
+        balancer, and return a bare 500 to every request it was handed.
+
+        Acquiring here rather than reporting-without-acquiring is deliberate: a
+        process that answers readiness is a process that intends to write, and
+        taking the lock at the first probe moves the failure to the probe, which
+        is where an operator is looking.
+        """
+        try:
+            self._acquire()
+        except SinkAlreadyLockedError as exc:
+            return str(exc)
+        return None
 
     def close(self) -> None:
         """Flush the wrapped sink and drop the writer lock. Idempotent."""

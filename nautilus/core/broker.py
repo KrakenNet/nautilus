@@ -75,7 +75,7 @@ from nautilus.config.models import (
     SourceConfig,
 )
 from nautilus.config.registry import SourceRegistry
-from nautilus.core import BrokerBusyError, PolicyEngineError
+from nautilus.core import BrokerBusyError, PolicyEngineError, PurposeNotPermittedError
 from nautilus.core.attestation_payload import (
     build_payload,
     canonical_input_hash,
@@ -1308,8 +1308,15 @@ class Broker:
         minting path already read the registry; taking the parameter away means
         no caller can disagree with it.
 
+        ``purpose`` gets the same treatment. It is caller free text, and it is
+        a live authorization input: the router denies every source when it falls
+        outside the agent's ``allowed_purposes``. Minting it unchecked meant a
+        caller could ask this route for a signed assertion of a purpose the
+        broker would refuse to act on, and be handed one.
+
         Raises:
             RuntimeError: when session tokens are disabled.
+            PurposeNotPermittedError: when the agent may not claim ``purpose``.
         """
         if self._session_tokens is None:
             raise RuntimeError("session tokens are disabled (session_tokens.enabled: false)")
@@ -1317,6 +1324,11 @@ class Broker:
             record = self._agent_registry.get(agent_id)
         except UnknownAgentError:
             record = None
+        if record is not None and not record.may_claim(purpose):
+            raise PurposeNotPermittedError(
+                f"purpose {purpose!r} is not one of the purposes agent "
+                f"{agent_id!r} may claim ({sorted(record.allowed_purposes)})"
+            )
         token = self._session_tokens.issue(
             session_id=session_id,
             agent_id=agent_id,
@@ -2635,6 +2647,23 @@ class Broker:
         clearance = record.clearance if record is not None else ""
         return purpose, clearance
 
+    def _may_claim_purpose(self, agent_id: str, purpose: str) -> bool:
+        """Whether a token for ``agent_id`` may carry this purpose claim.
+
+        The router denies every source when the purpose is outside the agent's
+        ``allowed_purposes``; the token used to be minted from the purpose the
+        caller typed, so a request refused on exactly this ground still handed
+        back a validly signed artefact asserting it — forwarded downstream,
+        where the signature and the claims are all a reader has.
+        """
+        try:
+            record = self._agent_registry.get(agent_id)
+        except UnknownAgentError:
+            # An undeclared agent is bounded by nothing, which is the shape
+            # every config written before allowed_purposes existed has.
+            return True
+        return record.may_claim(purpose)
+
     def _process_session_token(
         self,
         agent_id: str,
@@ -2713,8 +2742,14 @@ class Broker:
             # enforced. The ORIGINAL expiry is kept in both cases (security
             # review C2): neither re-keying nor re-binding extends a session.
             purpose, clearance = self._request_grant(agent_id, context)
+            claimable = self._may_claim_purpose(agent_id, purpose)
             stale_kid = claims.kid != self._key_ring.primary().kid
             drifted = claims.purpose != purpose or claims.clearance != clearance
+            if drifted and not claimable:
+                # The router is about to refuse this purpose. Leave the token
+                # describing the last request that was actually served rather
+                # than re-signing it into a claim the policy denies.
+                return
             if stale_kid or drifted:
                 fresh = self._session_tokens.issue(
                     session_id=claims.session_id,
@@ -2747,6 +2782,16 @@ class Broker:
             state.session_id = str(uuid.uuid4())
             context["session_id"] = state.session_id
         purpose, clearance = self._request_grant(agent_id, context)
+        if not self._may_claim_purpose(agent_id, purpose):
+            # The request still runs and the router still denies it. What must
+            # not happen is a signature over the refused claim.
+            log.warning(
+                "not minting a session token for agent %r: purpose %r is not one "
+                "it may claim, and the request will be denied on that ground",
+                agent_id,
+                purpose,
+            )
+            return
         token = self._session_tokens.issue(
             session_id=state.session_id,
             agent_id=agent_id,

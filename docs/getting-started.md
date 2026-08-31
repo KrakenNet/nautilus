@@ -81,7 +81,17 @@ attestation:
 
 audit:
   path: ./audit.jsonl
+
+api:
+  keys:
+    - <generated per scaffold — the command prints it>
 ```
+
+`api.keys` matters the moment you serve over HTTP. It defaults to **empty**,
+and empty fails closed: `/healthz` answers 200 while `/v1/sources` and
+`/v1/request` answer `401 Not authenticated`. `nautilus init` generates a key
+so the first `nautilus serve` works; replace it before anything but you can
+reach the port. A config with no keys says so in the startup log.
 
 For a real source, swap the `static` block for the type that matches your data
 — `postgres`, `elasticsearch`, `neo4j`, `rest`, `s3` and the rest are built in

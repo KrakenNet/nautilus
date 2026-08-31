@@ -381,11 +381,7 @@ class FathomRouter:
             # An operator who has written down what an agent is for gets to
             # bound it; an agent that declares none is unrestricted, which is
             # what every config written before this had.
-            if (
-                record is not None
-                and record.allowed_purposes
-                and purpose not in record.allowed_purposes
-            ):
+            if record is not None and not record.may_claim(purpose):
                 return self._deny_all(
                     sources,
                     reason=(

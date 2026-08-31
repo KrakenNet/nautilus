@@ -68,7 +68,7 @@ from starlette.types import ASGIApp
 from nautilus.attestation.jwks import export_jwks
 from nautilus.attestation.key_ring import KeyRing
 from nautilus.attestation.session_token import SessionTokenService
-from nautilus.core import BrokerBusyError
+from nautilus.core import BrokerBusyError, PurposeNotPermittedError
 from nautilus.core.broker import Broker
 from nautilus.core.metrics import register_rkm_queue, register_ruleset
 from nautilus.core.models import BrokerRequest, BrokerResponse
@@ -171,13 +171,24 @@ def _resolve_agent_subjects(broker: Broker | None) -> dict[str, str]:
     return subjects
 
 
-def _warn_about_unbound_keys(keys: list[Any]) -> None:
+def _warn_about_unbound_keys(keys: list[Any], auth_mode: str = "api_key") -> None:
     """Say once, at startup, which keys are bound to nothing.
 
     A bare-string key is root: it may ask as any agent and call every
     governance route. That is the historical behaviour and it keeps working —
     silence about it is the part that does not.
     """
+    if not keys and auth_mode == "api_key":
+        # Empty fails closed, which is right, and silent, which is not: the
+        # server starts clean, /healthz says 200, and every route that reads
+        # data answers 401 with nothing anywhere saying why.
+        log.warning(
+            "api.keys is empty, so every data and governance route will answer "
+            "401 Not authenticated. Only /healthz, /readyz and /metrics are "
+            "reachable. Add a key under 'api: keys:' — 'nautilus init' writes "
+            "one for you."
+        )
+        return
     bare = [i for i, entry in enumerate(keys) if isinstance(entry, str)]
     if bare:
         log.warning(
@@ -310,6 +321,11 @@ async def _send_too_large(send: Any, declared: int, limit: int) -> None:
 
 # Probes and the scrape endpoint are never gated: a full request queue must not
 # take the pod out of rotation, which would turn saturation into a restart loop.
+# How long /readyz waits on the session store before calling it not ready.
+# Kubernetes probes default to a 1s timeout; anything past this is already
+# a failed probe, so the only thing a longer wait buys is a stuck handler.
+_READY_PROBE_TIMEOUT_S: float = 2.0
+
 _UNGATED_PATHS = frozenset({"/healthz", "/readyz", "/metrics"})
 
 
@@ -447,7 +463,7 @@ def create_app(
         app.state.api_keys = keys
         app.state.trusted_proxies = trusted_proxies
         app.state.agent_subjects = _resolve_agent_subjects(broker)
-        _warn_about_unbound_keys(keys)
+        _warn_about_unbound_keys(keys, mode)
         # Key ring for session-token endpoints (AC-18.a–g). Reuse the
         # broker's ring when session tokens are enabled — the ring is
         # in-memory, so a separate transport-level instance could never
@@ -727,9 +743,18 @@ def create_app(
             return {"status": "ok"}
         try:
             if hasattr(store, "aget"):
-                await store.aget(_READY_PROBE_KEY)
+                # Bounded, because a store that is *down* answers fast and a
+                # store that is reachable but frozen does not answer at all:
+                # ``acquire_timeout_s`` covers taking a new pooled connection,
+                # and the sentinel read runs on one that is already open. An
+                # unbounded probe is a probe the kubelet gives up on, so the pod
+                # is never drained and every probe leaves a wedged handler.
+                await asyncio.wait_for(store.aget(_READY_PROBE_KEY), _READY_PROBE_TIMEOUT_S)
             elif hasattr(store, "get"):
                 store.get(_READY_PROBE_KEY)
+        except TimeoutError:
+            response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+            return {"status": "not_ready", "reason": "session_store_timeout"}
         except Exception as exc:  # noqa: BLE001 — any backend failure → 503.
             response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
             return {"status": "not_ready", "reason": type(exc).__name__}
@@ -804,11 +829,18 @@ def create_app(
         if isinstance(broker_service, SessionTokenService):
             service = broker_service
             assert broker is not None  # noqa: S101 — broker_service implies broker
-            token = broker.issue_session_token(
-                session_id=body.get("session_id", ""),
-                agent_id=requested_agent,
-                purpose=body.get("purpose", ""),
-            )
+            try:
+                token = broker.issue_session_token(
+                    session_id=body.get("session_id", ""),
+                    agent_id=requested_agent,
+                    purpose=body.get("purpose", ""),
+                )
+            except PurposeNotPermittedError as exc:
+                from fastapi import HTTPException
+
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
+                ) from exc
         else:
             # No broker to read a registry from (mock-broker tests). Signing an
             # empty clearance is the honest answer; the caller's is never it.

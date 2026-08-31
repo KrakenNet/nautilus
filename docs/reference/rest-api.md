@@ -99,10 +99,21 @@ A bound key that asks as another agent gets `403`. Capabilities gate the routes:
 
 | Capability | Routes |
 | --- | --- |
-| `query` | `/v1/request`, `/v1/query`, `/v1/sources`, `/v1/rules`, `/v1/adapters*`, `/v1/sessions` |
-| `audit_read` | `/v1/audit`, `/v1/audit/{request_id}` |
+| `query` | `/v1/request`, `/v1/query`, `/v1/sources`, `/v1/rules`, `/v1/adapters*`, `/v1/sessions`, `/admin/playground`, `/admin/sources` |
+| `audit_read` | `/v1/audit`, `/v1/audit/{request_id}`, `/admin/audit`, `/admin/decisions*`, `/admin/attestation*` |
 | `govern` | `/v1/rkm/*`, `/v1/rules/{name}/*` |
 | `keys` | `/v1/keys/rotate`, `/v1/keys/{kid}/revoke` |
+
+The console routes are in that table for a reason: `/admin` reaches the same
+broker, the same audit trail and the same source catalogue as `/v1`, so it
+enforces the same capability. A key that `/v1/audit` refuses is refused at
+`/admin/audit` too. `ui.enabled` defaults to false and the routes are not
+registered at all when it is off.
+
+`POST /v1/sessions` answers `403` when the requested `purpose` is outside the
+agent's `allowed_purposes`. The token is a signed authorization assertion that
+Nautilus forwards downstream, so it never carries a claim the router would
+refuse to act on.
 
 A bound credential is also the reviewer recorded on `/v1/rkm/queue/{id}/approve`
 and `/reject`; `X-Nautilus-Reviewer` stays required only for bare keys, which

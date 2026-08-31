@@ -242,6 +242,17 @@ class AgentRecord(_Strict):
     # caller types, so an operator needs somewhere to bound it.
     allowed_purposes: list[str] = Field(default_factory=list)
 
+    def may_claim(self, purpose: str) -> bool:
+        """Whether this agent is permitted to assert ``purpose``.
+
+        The single definition of the rule. ``fathom_router`` reads it to deny
+        the request; the broker reads it to decide whether a session token may
+        carry the claim. They disagreed once — the router refused a purpose and
+        the broker signed a token asserting it anyway — and one function is how
+        that stays fixed.
+        """
+        return not self.allowed_purposes or purpose in self.allowed_purposes
+
 
 # ---------------------------------------------------------------------------
 # Top-level subsections.

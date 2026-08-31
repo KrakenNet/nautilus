@@ -10,13 +10,15 @@ no database, no driver and no adapter code.
 from __future__ import annotations
 
 import argparse
+import secrets
 from pathlib import Path
 
 from nautilus.cli._common import err, ok
 
 # Written verbatim rather than dumped from a model: the comments are the point.
 _TEMPLATE = """\
-# Written by 'nautilus init'. See https://github.com/ (docs/getting-started.md).
+# Written by 'nautilus init'. See https://github.com/KrakenNet/nautilus
+# (docs/getting-started.md).
 #
 # This config serves the rows below with no database attached. Point a real
 # source at your data by replacing the 'static' block with, say:
@@ -52,6 +54,14 @@ attestation:
 
 audit:
   path: ./audit.jsonl
+
+# Every route that reads data needs a key. An empty list fails closed, which is
+# the right default and a poor first run: without this block 'nautilus serve'
+# starts clean and answers 401 to /v1/sources and /v1/request. Replace this
+# generated key before anyone else can reach the port.
+api:
+  keys:
+    - __API_KEY__
 """
 
 
@@ -73,12 +83,18 @@ def dispatch(args: argparse.Namespace) -> int:
         err(f"{target} already exists — refusing to overwrite it")
         return 1
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(_TEMPLATE, encoding="utf-8")
+    # A fresh key per scaffold: a constant here would ship one shared secret to
+    # everyone who ever ran the command.
+    api_key = secrets.token_hex(16)
+    target.write_text(_TEMPLATE.replace("__API_KEY__", api_key), encoding="utf-8")
 
     ok(f"wrote {target}")
     print("  next steps :")
     print(f"    nautilus serve --config {target}   # REST on 127.0.0.1:8000")
     print("    nautilus demo                       # a governed handoff decision")
+    print()
+    print(f"  the generated api key is in {target}:")
+    print(f"    curl -H 'X-API-Key: {api_key}' http://127.0.0.1:8000/v1/sources")
     return 0
 
 

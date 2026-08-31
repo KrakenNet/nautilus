@@ -260,6 +260,14 @@ overrides the caller-declared session id. Verification is fail-closed.
 Session tokens are not what protects the exposure ledger — omitting one is
 always allowed — the per-caller principal above is.
 
+A token only ever claims a purpose the agent may claim. `allowed_purposes` on
+an agent record is a live authorization input — `fathom_router` denies every
+source when the request falls outside it — so the broker mints no token, and
+`POST /v1/sessions` answers `403`, rather than signing an assertion the policy
+refuses to act on. An agent that declares no `allowed_purposes` is
+unrestricted, which is the shape every config written before the field existed
+has.
+
 A token's `purpose` and `clearance` claims describe the request that was
 actually served. Carry a session into a second purpose and the response hands
 back a re-minted token stating the new one — with the **original** expiry, so
@@ -393,6 +401,16 @@ surrounding operational events.
   503 names which one failed). Every request writes an audit entry before it
   answers, so a sink that has stopped accepting writes fails every request —
   the probe takes the instance out of rotation instead of reporting ready.
+  Two cases the probe covers that a permission check cannot:
+  - With `audit.chained: true` the log admits exactly one writer. The probe
+    takes that writer lock, so a replica pointed at a log another process owns
+    reports `not_ready` instead of joining the Service and 500ing every
+    request. Give each replica its own `audit.path`, or use
+    `audit.chained: false`.
+  - The session-store check is bounded at 2s and answers `503` with
+    `reason: session_store_timeout`. A store that is *down* fails fast; one
+    that is reachable but frozen — a paused container, a saturated primary —
+    would otherwise never answer the probe at all.
 - `GET /metrics` — Prometheus exposition (request counts, durations,
   denials, adapter errors).
 - `examples/full-showcase/` ships a docker-compose stack with Prometheus,

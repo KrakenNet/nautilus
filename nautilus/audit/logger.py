@@ -207,6 +207,14 @@ class AuditLogger:
         first write, on its directory), not a probe append, so the readiness
         endpoint cannot pollute the log an operator reads.
         """
+        # A sink that owns something beyond a file — the chained log's exclusive
+        # writer lock — answers for itself first. A permission check cannot see
+        # a lock another process holds.
+        sink_probe = getattr(self._sink, "probe", None)
+        if callable(sink_probe):
+            problem = sink_probe()
+            if problem is not None:
+                return str(problem)
         path = self.path
         if path is None:  # non-file sink: nothing local to check.
             return None

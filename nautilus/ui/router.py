@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -34,6 +34,32 @@ _TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 templates = Jinja2Templates(directory=str(_TEMPLATE_DIR))
+
+
+def _require_capability(capability: str) -> Any:
+    """The capability gate its ``/v1`` twin carries, for a console route.
+
+    Wave E3 gave ``/admin/api/query`` the binding, capability and ledger-keying
+    checks ``/v1/request`` enforces, and gave the read pages none of them. They
+    reach the same audit trail and the same source catalogue: a key scoped to
+    ``query`` read every decision every other agent ever made at
+    ``/admin/audit``, while ``/v1/audit`` refused it that exact data one URL
+    away. The console is a second front door, not a second policy.
+    """
+
+    async def dependency(request: Request) -> None:
+        state = request.app.state
+        caller = caller_identity(
+            request,
+            auth_mode=getattr(state, "auth_mode", "api_key"),
+            keys=list(getattr(state, "api_keys", []) or []),
+            agent_subjects=dict(getattr(state, "agent_subjects", {}) or {}),
+        )
+        refusal = capability_refusal(caller, capability)
+        if refusal is not None:
+            raise HTTPException(status_code=403, detail=refusal)
+
+    return dependency
 
 
 # ---------------------------------------------------------------------------
@@ -192,7 +218,7 @@ async def logout() -> Response:
     return response
 
 
-@router.get("/playground")
+@router.get("/playground", dependencies=[Depends(_require_capability("query"))])
 async def playground(
     request: Request,
     user: Annotated[str | Response, Depends(_safe_auth_user)],
@@ -276,7 +302,7 @@ async def playground_query(
         return JSONResponse({"error": str(exc)}, status_code=500)
 
 
-@router.get("/sources")
+@router.get("/sources", dependencies=[Depends(_require_capability("query"))])
 async def source_status(
     request: Request,
     broker: Annotated[Broker | None, Depends(_safe_broker)],
@@ -322,7 +348,7 @@ async def source_status(
     return templates.TemplateResponse(request, template_name, context)
 
 
-@router.get("/decisions")
+@router.get("/decisions", dependencies=[Depends(_require_capability("audit_read"))])
 async def decisions(
     request: Request,
     audit_path: Annotated[str | None, Depends(_safe_audit_path)],
@@ -415,7 +441,7 @@ async def decisions(
     return templates.TemplateResponse(request, "pages/decisions.html", context)
 
 
-@router.get("/decisions/{request_id}")
+@router.get("/decisions/{request_id}", dependencies=[Depends(_require_capability("audit_read"))])
 async def decision_detail(
     request: Request,
     request_id: str,
@@ -463,7 +489,7 @@ async def decision_detail(
     return templates.TemplateResponse(request, "partials/decision_detail.html", context)
 
 
-@router.get("/audit")
+@router.get("/audit", dependencies=[Depends(_require_capability("audit_read"))])
 async def audit(
     request: Request,
     audit_path: Annotated[str | None, Depends(_safe_audit_path)],
@@ -561,7 +587,7 @@ async def audit(
     return templates.TemplateResponse(request, "pages/audit.html", context)
 
 
-@router.get("/attestation")
+@router.get("/attestation", dependencies=[Depends(_require_capability("audit_read"))])
 async def attestation(
     request: Request,
     broker: Annotated[Broker | None, Depends(_safe_broker)],
@@ -579,7 +605,7 @@ async def attestation(
     return templates.TemplateResponse(request, "pages/attestation.html", context)
 
 
-@router.post("/attestation/verify")
+@router.post("/attestation/verify", dependencies=[Depends(_require_capability("audit_read"))])
 async def attestation_verify(
     request: Request,
     broker: Annotated[Broker | None, Depends(_safe_broker)],

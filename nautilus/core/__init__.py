@@ -20,6 +20,15 @@ class PolicyEngineError(Exception):
     """
 
 
+class PurposeNotPermittedError(Exception):
+    """A caller asked for a signed claim of a purpose its agent may not make.
+
+    Distinct from a routing denial: the request never runs. Transports answer
+    403 — the credential is real, the assertion it asked for is not one the
+    registry supports.
+    """
+
+
 class BrokerBusyError(Exception):
     """Raised when the broker refuses a request rather than queue it further.
 
@@ -80,6 +89,7 @@ __all__ = [
     "AttestationSink",
     "Broker",
     "BrokerBusyError",
+    "PurposeNotPermittedError",
     "BrokerResponse",
     "ConsistencyError",
     "FileAttestationSink",
