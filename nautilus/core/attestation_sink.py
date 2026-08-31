@@ -80,7 +80,35 @@ class AttestationSink(Protocol):
 
 
 class SinkAlreadyLockedError(RuntimeError):
-    """Raised when a chained attestation log already has a live writer."""
+    """Raised when a chained log already has a live writer."""
+
+
+def take_writer_lock(lock_path: Path, *, subject: str, remedy: str) -> IO[str]:
+    """Claim an exclusive ``flock`` on ``lock_path``, or name who holds it.
+
+    A hash chain is a total order, so it admits exactly one writer: a second
+    one interleaves into corruption that ``verify_chain`` cannot distinguish
+    from tampering. The chained attestation sink and the chained audit log
+    write different files with the same structure and the same failure, so
+    they take the lock the same way.
+    """
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = lock_path.open("a+", encoding="utf-8")
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as exc:
+        handle.seek(0)
+        holder = handle.read().strip() or "an unidentified process"
+        handle.close()
+        raise SinkAlreadyLockedError(
+            f"{subject} is already open for writing by {holder}. A hash chain "
+            f"admits exactly one writer: a second one interleaves into corruption "
+            f"that verify_chain cannot distinguish from tampering. {remedy}"
+        ) from exc
+    handle.truncate(0)
+    handle.write(f"pid {os.getpid()}\n")
+    handle.flush()
+    return handle
 
 
 class NullAttestationSink:
@@ -197,24 +225,14 @@ class ChainedFileAttestationSink:
         """Claim the single-writer lock; no-op once held. Called on first append."""
         if self._lock_fh is not None:
             return
-        handle = self._lock_path.open("a+", encoding="utf-8")
-        try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except OSError as exc:
-            handle.seek(0)
-            holder = handle.read().strip() or "an unidentified process"
-            handle.close()
-            raise SinkAlreadyLockedError(
-                f"chained attestation log {self._log.path} is already open for writing "
-                f"by {holder}. A hash chain admits exactly one writer: a second one "
-                f"interleaves into corruption that verify_chain cannot distinguish "
-                f"from tampering. Give this broker its own path, or use "
-                f"chained: false (plain FileAttestationSink appends are atomic)."
-            ) from exc
-        handle.truncate(0)
-        handle.write(f"pid {os.getpid()}\n")
-        handle.flush()
-        self._lock_fh = handle
+        self._lock_fh = take_writer_lock(
+            self._lock_path,
+            subject=f"chained attestation log {self._log.path}",
+            remedy=(
+                "Give this broker its own path, or use chained: false "
+                "(plain FileAttestationSink appends are atomic)."
+            ),
+        )
 
     @property
     def path(self) -> Path:
@@ -358,6 +376,58 @@ class HttpAttestationSink:
                 await self._dead_letter.close()
 
 
+class SingleWriterAuditSink:
+    """One writer per chained audit log, enforced by an exclusive ``flock``.
+
+    The audit log is the record of what was decided, and ``audit.chained``
+    makes it a hash chain. Two brokers appending to one file each keep their
+    own chain head, so the log forks within seconds while both replicas answer
+    200, and the next restart of either finds a log it cannot verify and fails
+    closed on every request. The attestation sink has refused a second writer
+    since #4.22; its audit twin never got the same treatment.
+
+    This wraps any ``AuditSink`` rather than only the chained log, but the
+    broker applies it only to the chained one — plain ``FileSink`` appends are
+    atomic and survive concurrency.
+
+    The lock is taken at the first write, not in the constructor. A ``Broker``
+    is also built by read-only surfaces (``nautilus adapters list``,
+    ``schema-ack``, the config validators) that never write an audit line, and
+    locking on construction is what made the documented recovery from a drift
+    quarantine impossible while the server it recovers was running.
+    """
+
+    def __init__(self, sink: Any, path: Path) -> None:
+        self._sink = sink
+        self._path = Path(path)
+        self._lock_path = self._path.with_name(self._path.name + ".lock")
+        self._lock_fh: IO[str] | None = None
+
+    def write(self, record: Any) -> None:
+        """Take the writer lock on first use, then append."""
+        if self._lock_fh is None:
+            self._lock_fh = take_writer_lock(
+                self._lock_path,
+                subject=f"chained audit log {self._path}",
+                remedy=(
+                    "Give each replica its own audit.path, or use "
+                    "audit.chained: false (plain appends are atomic)."
+                ),
+            )
+        self._sink.write(record)
+
+    def close(self) -> None:
+        """Flush the wrapped sink and drop the writer lock. Idempotent."""
+        with contextlib.suppress(Exception):
+            close = getattr(self._sink, "close", None)
+            if close is not None:
+                close()
+        if self._lock_fh is not None:
+            with contextlib.suppress(Exception):
+                self._lock_fh.close()
+            self._lock_fh = None
+
+
 __all__ = [
     "AttestationPayload",
     "AttestationSink",
@@ -366,5 +436,7 @@ __all__ = [
     "HttpAttestationSink",
     "NullAttestationSink",
     "RetryPolicy",
+    "SingleWriterAuditSink",
     "SinkAlreadyLockedError",
+    "take_writer_lock",
 ]

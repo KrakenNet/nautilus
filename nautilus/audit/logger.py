@@ -185,6 +185,11 @@ class AuditLogger:
         _flush_sink(self._sink)
 
     @property
+    def sink(self) -> AuditSink:
+        """The underlying sink, so the broker can close what holds a lock."""
+        return self._sink
+
+    @property
     def path(self) -> Path | None:
         """File this logger writes to, or ``None`` for a non-file sink."""
         raw = getattr(self._sink, "path", None) or getattr(self._sink, "_path", None)

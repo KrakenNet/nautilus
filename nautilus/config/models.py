@@ -547,6 +547,13 @@ class SessionTokenConfig(_Strict):
     # each other's tokens with ``unknown_kid``. Point every replica at one path
     # (a shared volume or mounted secret) to run more than one.
     key_ring_path: str | None = None
+    # Which broker a token says minted it. The check exists so a token cannot
+    # be replayed against an unrelated broker that shares key material, so it
+    # must be identical across the replicas of one deployment and different
+    # between deployments. Unset with a shared ``key_ring_path`` means one
+    # deployment and resolves to a constant; unset without one falls back to a
+    # per-process id, which is correct for a single broker only.
+    broker_instance_id: str | None = None
 
 
 # ---------------------------------------------------------------------------

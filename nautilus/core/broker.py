@@ -90,6 +90,7 @@ from nautilus.core.attestation_sink import (
     HttpAttestationSink,
     NullAttestationSink,
     RetryPolicy,
+    SingleWriterAuditSink,
 )
 from nautilus.core.fathom_router import FathomRouter
 from nautilus.core.models import (
@@ -573,6 +574,7 @@ class Broker:
         attestation_sink: AttestationSink | None = None,
         key_ring: KeyRing | None = None,
         session_token_ttl_s: int = 3600,
+        broker_instance_id: str | None = None,
         base_dir: Path | None = None,
     ) -> None:
         self._config = config
@@ -646,7 +648,11 @@ class Broker:
         # scopes minted tokens to this broker (AC-18.d
         # broker_instance_mismatch); the KeyRing is in-memory, so transports
         # MUST share this ring (via :attr:`key_ring`) for verification to work.
-        self._instance_id: str = str(uuid.uuid4())
+        # It comes from configuration when there is one, because a per-process
+        # uuid4 is unshareable: behind a load balancer every token minted by
+        # one replica is rejected by the next, however carefully the operator
+        # shares the key ring.
+        self._instance_id: str = broker_instance_id or str(uuid.uuid4())
         self._key_ring: KeyRing | None = key_ring
         self._session_tokens: SessionTokenService | None = (
             SessionTokenService(
@@ -788,6 +794,16 @@ class Broker:
             if config.session_tokens.enabled
             else None
         )
+        # A token names the broker that minted it so it cannot be replayed
+        # against an unrelated one that happens to share key material. That id
+        # has to be the same on every replica of one deployment, or the check
+        # rejects every token behind a load balancer. Configured id wins; a
+        # shared ring means a shared deployment, so it defaults to a constant
+        # there — deriving it from the ring's key material would change under
+        # rotation and invalidate every token in flight.
+        broker_instance_id = config.session_tokens.broker_instance_id or (
+            "shared" if key_ring_path else None
+        )
 
         return cls(
             config=config,
@@ -803,6 +819,7 @@ class Broker:
             attestation_sink=attestation_sink,
             key_ring=key_ring,
             session_token_ttl_s=config.session_tokens.ttl_seconds,
+            broker_instance_id=broker_instance_id,
             base_dir=Path(path).parent,
         )
 
@@ -1021,12 +1038,31 @@ class Broker:
                 "each chained line carries a JWS, and there is nothing to sign with"
             )
             raise ValueError(msg)
+        if not config.attestation.private_key_path and audit_path.exists():
+            msg = (
+                f"audit.chained cannot append to the existing chain at {audit_path} "
+                f"with an auto-generated signing key: attestation.private_key_path is "
+                f"unset, so this process signs with a key the lines already on disk "
+                f"were not signed by, and every request would fail closed on a log "
+                f"that reads as corrupt. Set attestation.private_key_path to the key "
+                f"that wrote them, or start a new chain at a new audit.path."
+            )
+            raise ValueError(msg)
+        if not config.attestation.private_key_path:
+            log.warning(
+                "audit.chained is on with an auto-generated attestation key: this "
+                "chain is signed by this process only and the next boot will refuse "
+                "to append to it. Set attestation.private_key_path to keep it.",
+            )
         from fathom.chained_log import ChainedAttestationLog
 
-        return ChainedAttestationLog(
+        return SingleWriterAuditSink(
+            ChainedAttestationLog(
+                audit_path,
+                attestation,
+                checkpoint_interval=config.audit.checkpoint_interval,
+            ),
             audit_path,
-            attestation,
-            checkpoint_interval=config.audit.checkpoint_interval,
         )
 
     @staticmethod
@@ -2973,6 +3009,13 @@ class Broker:
         #    still reference adapter connections.
         with contextlib.suppress(Exception):
             await self._attestation_sink.close()
+        # 2b. Audit sink: a chained audit log holds an exclusive writer lock
+        #     and an open file handle. Nothing closed it before, so a process
+        #     that built two brokers in sequence refused its own second one.
+        audit_close = getattr(self._audit_logger.sink, "close", None)
+        if audit_close is not None:
+            with contextlib.suppress(Exception):
+                audit_close()
         # 3. Adapters — release pools last so in-flight attestation can still
         #    reference their connections above.
         for adapter in self._adapters.values():
