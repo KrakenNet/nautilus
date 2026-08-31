@@ -167,3 +167,70 @@ def test_healthcheck_invokes_nautilus_health(built_image: str) -> None:
     assert "nautilus" in joined and "health" in joined, (
         f"HEALTHCHECK does not invoke 'nautilus health'; got args={test_cmd[1:]!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# WAVE E4 — the image was inspected but never started.
+# ---------------------------------------------------------------------------
+
+
+def test_the_runtime_image_can_actually_start(built_image: str) -> None:
+    """The distroless image must run, not merely build and inspect well.
+
+    Reproduced first-hand before the fix::
+
+        docker run --rm nautilus:test version
+        exec: "/app/.venv/bin/python": stat /app/.venv/bin/python:
+        no such file or directory
+
+    ``/app/.venv/bin/python`` is a symlink into ``/usr/local/bin`` on the
+    builder, and the runtime stage copied only ``/app``. Every assertion above
+    reads ``docker image inspect``, so an image that could not execute a single
+    byte passed all three.
+    """
+    result = subprocess.run(  # noqa: S603 — trusted binary
+        [_DOCKER or "docker", "run", "--rm", built_image, "version"],
+        check=False,
+        capture_output=True,
+        timeout=120,
+    )
+    assert result.returncode == 0, (
+        f"the runtime image could not run `nautilus version` "
+        f"(exit {result.returncode}):\n"
+        f"{result.stderr.decode('utf-8', errors='replace')}"
+    )
+
+
+def test_the_default_build_target_is_the_distroless_runtime() -> None:
+    """``docker build .`` must produce the image the Dockerfile says it does.
+
+    The Dockerfile's own header reads "Default target is `runtime`", and the
+    debug stage is documented as opt-in and "NOT built by CI". It was declared
+    last, so it won the default-last-stage selection: ``docker build -t
+    nautilus:latest .`` produced a python:3.14-slim image with bash and apt.
+    AC-16.5 held only for the ``--target runtime`` this suite passes and the
+    docs never mention.
+    """
+    root = _repo_root()
+    tag = "nautilus:test-default-target"
+    build = subprocess.run(  # noqa: S603 — trusted binary
+        [_DOCKER or "docker", "build", "-t", tag, "."],
+        check=False,
+        capture_output=True,
+        cwd=str(root),
+        timeout=900,
+    )
+    assert build.returncode == 0, (
+        f"default-target docker build failed:\n{build.stderr.decode('utf-8', errors='replace')}"
+    )
+    shell = subprocess.run(  # noqa: S603 — trusted binary
+        [_DOCKER or "docker", "run", "--rm", "--entrypoint", "sh", tag, "-c", "echo hi"],
+        check=False,
+        capture_output=True,
+        timeout=30,
+    )
+    assert shell.returncode != 0, (
+        "`docker build .` with no --target produced an image WITH a shell. "
+        "The debug stage is declared last and wins the default, so the "
+        "documented build command ships the operator-only image."
+    )

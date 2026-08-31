@@ -13,7 +13,7 @@ from __future__ import annotations
 from ipaddress import ip_network
 from typing import Annotated, Any, Literal, cast
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class _Strict(BaseModel):
@@ -518,9 +518,30 @@ class SessionStoreConfig(_Strict):
     broker falls back to the ``TEST_PG_DSN`` env var so integration fixtures
     can reuse the existing pg_container DSN without duplicating YAML plumbing.
     ``on_failure`` mirrors :attr:`PostgresSessionStore._on_failure` (NFR-7).
+
+    ``redis`` was accepted and silently served in-memory. Cumulative exposure
+    is what escalation rules read, so an operator who configured a store shared
+    across replicas and got a per-process one had replicas that each saw a
+    fraction of a caller's history, with nothing said about it. It is refused
+    by name until there is a Redis store to select.
     """
 
-    backend: Literal["memory", "redis", "postgres", "sqlite"] = "memory"
+    backend: Literal["memory", "postgres", "sqlite"] = "memory"
+
+    @field_validator("backend", mode="before")
+    @classmethod
+    def _no_unimplemented_backend(cls, value: Any) -> Any:
+        """Name what happened to ``redis`` rather than listing it as a typo."""
+        if value == "redis":
+            raise ValueError(
+                "session_store.backend: redis has no implementation. It used to "
+                "load and serve sessions from memory instead, which gives "
+                "replicas a per-process view of cumulative exposure and no "
+                "signal that this is happening. Use postgres for a store shared "
+                "across replicas, or sqlite for a durable single-node one."
+            )
+        return value
+
     ttl_seconds: int = 3600
     # Lifetime of a session's declared purpose, feeding the session fact's
     # ``purpose_ttl_seconds`` slot. 0 disables the window, matching the

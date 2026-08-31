@@ -44,7 +44,6 @@ from pydantic import ValidationError
 from nautilus.adapters import ADAPTER_REGISTRY as _ADAPTER_REGISTRY
 from nautilus.adapters.base import Adapter, AdapterError, ScopeEnforcementError
 from nautilus.adapters.embedder import Embedder, NoopEmbedder
-from nautilus.adapters.pgvector import PgVectorAdapter
 from nautilus.adapters.schema import SchemaFingerprintStore
 from nautilus.analysis.fallback import FallbackIntentAnalyzer
 from nautilus.analysis.llm.base import LLMIntentProvider, LLMProvenance
@@ -914,8 +913,6 @@ class Broker:
           ``fallback_sqlite`` at ``sqlite_path`` (NFR-7, #26).
         - ``sqlite`` → :class:`SqliteSessionStore` at ``sqlite_path`` —
           durable single-node store, no Postgres required (#26).
-        - ``redis`` → reserved; falls back to in-memory until Phase 2 lands a
-          Redis adapter (intentional soft-land per design §3.11).
 
         ``ttl_seconds`` reaches every backend: a session idle for longer than
         the TTL reads as absent, so cumulative exposure state does not
@@ -1111,9 +1108,13 @@ class Broker:
                 f"(import failed: {getattr(adapter_cls, 'import_error', '?')})"
             )
 
-        # pgvector needs the embedder kwarg — special-case it.
+        # pgvector needs the embedder kwarg — special-case it. The class comes
+        # from the registry, not a top-level import: asyncpg and pgvector are
+        # optional extras, and importing the adapter module here made
+        # ``import nautilus`` fail outright on a lean install, three lines below
+        # the stand-in that exists to keep exactly that working.
         if source.type == "pgvector":
-            return PgVectorAdapter(broker_default_embedder=broker_default_embedder)
+            return adapter_cls(broker_default_embedder=broker_default_embedder)  # type: ignore[call-arg]
         return adapter_cls()
 
     # ------------------------------------------------------------------

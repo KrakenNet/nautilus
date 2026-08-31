@@ -6,10 +6,11 @@
 # Stages:
 #   builder  — uv-based Debian slim image that resolves dependencies into
 #              /app/.venv using uv.lock (deterministic, no dev deps).
-#   runtime  — distroless/cc image that only carries the venv + nautilus
-#              package. No shell, no package manager (AC-16.5).
 #   debug    — optional python:3.14-slim target with bash for operator
 #              inspection; NOT built by CI (UQ-5 / D-17).
+#   runtime  — distroless/cc image carrying the interpreter, the venv and the
+#              nautilus package. No shell, no package manager (AC-16.5).
+#              Declared last, so it is what a bare `docker build .` selects.
 #
 # Default target is `runtime`. Build with:
 #     docker build -t nautilus:latest .
@@ -52,41 +53,13 @@ COPY nautilus /app/nautilus
 RUN uv sync --frozen --no-dev --extra otel
 
 ############################
-# Stage 2 — runtime        #
-############################
-FROM gcr.io/distroless/cc-debian13 AS runtime
-
-# Copy the prepared /app tree (venv + nautilus source) from the builder.
-COPY --from=builder /app /app
-
-# Make the bundled python + nautilus package importable without a shell.
-# distroless has no /bin/sh, so we rely on the interpreter directly.
-ENV PYTHONPATH=/app \
-    PATH=/app/.venv/bin:$PATH \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
-
-# Drop root (distroless ships a `nonroot` user at UID/GID 65532).
-USER 65532:65532
-
-# No shell available — invoke the interpreter directly (exec form).
-# ``--bind 0.0.0.0``: ``nautilus serve`` defaults to 127.0.0.1, which inside a
-# container means "serve nobody" — and the HEALTHCHECK below probes localhost
-# from inside the same namespace, so that misconfiguration reported healthy.
-ENTRYPOINT ["/app/.venv/bin/python", "-m", "nautilus"]
-CMD ["serve", "--config", "/config/nautilus.yaml", "--bind", "0.0.0.0"]
-
-# HEALTHCHECK runs the CLI's `health` subcommand which probes /readyz via
-# urllib (no external binary needed — NFR-10). Exec form is mandatory on
-# distroless since `CMD-SHELL` would require /bin/sh.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD ["/app/.venv/bin/python", "-m", "nautilus", "health"]
-
-############################
-# Stage 3 — debug (opt-in) #
+# Stage 2 — debug (opt-in) #
 ############################
 # Operator-local only. NOT produced by CI (D-17 / UQ-5). Use for shelling
 # into a layer that mirrors `runtime` but with bash + apt available.
+# Declared BEFORE runtime: the last stage in the file is what a bare
+# ``docker build .`` selects, and this one carries a shell and a package
+# manager. Ordered the other way it silently won the documented default.
 FROM python:3.14-slim AS debug
 
 ENV PYTHONPATH=/app \
@@ -103,4 +76,70 @@ RUN apt-get update \
 COPY --from=builder /app /app
 
 ENTRYPOINT ["/app/.venv/bin/python", "-m", "nautilus"]
-CMD ["serve", "--config", "/config/nautilus.yaml", "--bind", "0.0.0.0"]
+CMD ["serve", "--config", "/config/nautilus.yaml", "--bind", "0.0.0.0:8000"]
+
+############################
+# Stage 3 — runtime        #
+############################
+FROM gcr.io/distroless/cc-debian13 AS runtime
+
+# The interpreter, first. ``/app/.venv/bin/python`` is a symlink into
+# /usr/local on the builder, so copying only /app produced an image that
+# built, inspected and measured perfectly and could not execute a byte:
+#   exec: "/app/.venv/bin/python": no such file or directory
+# distroless/cc supplies glibc and libstdc++; CPython needs its own binary,
+# its shared library and its standard library on top of that.
+COPY --from=builder /usr/local/bin/python3.14 /usr/local/bin/python3.14
+COPY --from=builder /usr/local/bin/python3 /usr/local/bin/python3
+COPY --from=builder /usr/local/lib/libpython3.14.so.1.0 /usr/local/lib/
+COPY --from=builder /usr/local/lib/python3.14 /usr/local/lib/python3.14
+
+# The C libraries the stdlib's extension modules link against. distroless/cc
+# carries libc, libm, libgcc_s and libstdc++ and nothing else, so without these
+# ``import sqlite3`` (the session store's fallback backend), ``import ssl`` and
+# ``import hashlib`` all fail at runtime on an image that started fine.
+# Enumerated from `ldd` over lib-dynload on the builder; tcl/tk are omitted
+# because tkinter has no place in a server image.
+COPY --from=builder \
+    /lib/x86_64-linux-gnu/libbz2.so.1.0 \
+    /lib/x86_64-linux-gnu/libcrypto.so.3 \
+    /lib/x86_64-linux-gnu/libdb-5.3.so \
+    /lib/x86_64-linux-gnu/libffi.so.8 \
+    /lib/x86_64-linux-gnu/libgdbm.so.6 \
+    /lib/x86_64-linux-gnu/liblzma.so.5 \
+    /lib/x86_64-linux-gnu/libncursesw.so.6 \
+    /lib/x86_64-linux-gnu/libpanelw.so.6 \
+    /lib/x86_64-linux-gnu/libreadline.so.8 \
+    /lib/x86_64-linux-gnu/libsqlite3.so.0 \
+    /lib/x86_64-linux-gnu/libssl.so.3 \
+    /lib/x86_64-linux-gnu/libtinfo.so.6 \
+    /lib/x86_64-linux-gnu/libuuid.so.1 \
+    /lib/x86_64-linux-gnu/libz.so.1 \
+    /lib/x86_64-linux-gnu/libzstd.so.1 \
+    /lib/x86_64-linux-gnu/
+
+# Copy the prepared /app tree (venv + nautilus source) from the builder.
+COPY --from=builder /app /app
+
+# Make the bundled python + nautilus package importable without a shell.
+# distroless has no /bin/sh, so we rely on the interpreter directly.
+ENV PYTHONPATH=/app \
+    PATH=/app/.venv/bin:$PATH \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# Drop root (distroless ships a `nonroot` user at UID/GID 65532).
+USER 65532:65532
+
+# No shell available — invoke the interpreter directly (exec form).
+# ``--bind 0.0.0.0:8000``: ``nautilus serve`` defaults to 127.0.0.1, which inside a
+# container means "serve nobody" — and the HEALTHCHECK below probes localhost
+# from inside the same namespace, so that misconfiguration reported healthy.
+ENTRYPOINT ["/app/.venv/bin/python", "-m", "nautilus"]
+CMD ["serve", "--config", "/config/nautilus.yaml", "--bind", "0.0.0.0:8000"]
+
+# HEALTHCHECK runs the CLI's `health` subcommand which probes /readyz via
+# urllib (no external binary needed — NFR-10). Exec form is mandatory on
+# distroless since `CMD-SHELL` would require /bin/sh.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD ["/app/.venv/bin/python", "-m", "nautilus", "health"]

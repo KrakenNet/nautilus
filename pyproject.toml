@@ -35,7 +35,14 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "httpx>=0.27",
-    "mcp>=1.12",
+    # Capped below 2: mcp 2.x moved ``mcp.server.fastmcp`` to
+    # ``mcp.server.mcpserver`` and renamed FastMCP to MCPServer, whose
+    # __init__ takes neither ``stateless_http`` nor ``json_response`` and no
+    # **kwargs, and whose Context is generic over two parameters, not three.
+    # That is a port of nautilus/transport/mcp_server.py, not an import alias;
+    # until it is done an uncapped range ships an MCP transport that dies on
+    # import for anyone installing today.
+    "mcp>=1.12,<2",
     "sse-starlette>=2.0",
     "python-multipart>=0.0.9",
     "jinja2>=3.1",

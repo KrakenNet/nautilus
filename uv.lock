@@ -1613,18 +1613,12 @@ name = "nautilus-rkm"
 version = "0.2.2"
 source = { editable = "." }
 dependencies = [
-    { name = "aiobotocore" },
-    { name = "asyncpg" },
     { name = "cryptography" },
-    { name = "elasticsearch" },
     { name = "fastapi" },
     { name = "fathom-rules" },
     { name = "httpx" },
-    { name = "influxdb-client" },
     { name = "jinja2" },
     { name = "mcp" },
-    { name = "neo4j" },
-    { name = "pgvector" },
     { name = "pyjwt" },
     { name = "python-multipart" },
     { name = "pyyaml" },
@@ -1633,13 +1627,27 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+all = [
+    { name = "aiobotocore" },
+    { name = "asyncpg" },
+    { name = "elasticsearch" },
+    { name = "influxdb-client" },
+    { name = "neo4j" },
+    { name = "pgvector" },
+]
 dev = [
+    { name = "aiobotocore" },
+    { name = "asyncpg" },
     { name = "copier" },
+    { name = "elasticsearch" },
+    { name = "influxdb-client" },
     { name = "locust" },
     { name = "mkdocs" },
     { name = "mkdocs-material" },
     { name = "mkdocstrings", extra = ["python"] },
     { name = "nautilus-adapter-sdk" },
+    { name = "neo4j" },
+    { name = "pgvector" },
     { name = "pip-licenses" },
     { name = "pyright" },
     { name = "pytest" },
@@ -1655,11 +1663,20 @@ docs = [
     { name = "mkdocs-material" },
     { name = "mkdocstrings", extra = ["python"] },
 ]
+elasticsearch = [
+    { name = "elasticsearch" },
+]
+influxdb = [
+    { name = "influxdb-client" },
+]
 llm-anthropic = [
     { name = "anthropic" },
 ]
 llm-openai = [
     { name = "openai" },
+]
+neo4j = [
+    { name = "neo4j" },
 ]
 otel = [
     { name = "opentelemetry-api" },
@@ -1669,22 +1686,41 @@ otel = [
     { name = "opentelemetry-sdk" },
     { name = "prometheus-client" },
 ]
+pgvector = [
+    { name = "asyncpg" },
+    { name = "pgvector" },
+]
+postgres = [
+    { name = "asyncpg" },
+]
+s3 = [
+    { name = "aiobotocore" },
+]
 
 [package.metadata]
 requires-dist = [
-    { name = "aiobotocore", specifier = ">=2.12" },
+    { name = "aiobotocore", marker = "extra == 'all'", specifier = ">=2.12" },
+    { name = "aiobotocore", marker = "extra == 'dev'", specifier = ">=2.12" },
+    { name = "aiobotocore", marker = "extra == 's3'", specifier = ">=2.12" },
     { name = "anthropic", marker = "extra == 'llm-anthropic'", specifier = ">=0.40" },
-    { name = "asyncpg", specifier = ">=0.30.0" },
+    { name = "asyncpg", marker = "extra == 'all'", specifier = ">=0.30.0" },
+    { name = "asyncpg", marker = "extra == 'dev'", specifier = ">=0.30.0" },
+    { name = "asyncpg", marker = "extra == 'pgvector'", specifier = ">=0.30.0" },
+    { name = "asyncpg", marker = "extra == 'postgres'", specifier = ">=0.30.0" },
     { name = "copier", marker = "extra == 'dev'", specifier = ">=9.0" },
     { name = "cryptography", specifier = ">=46.0.7" },
-    { name = "elasticsearch", specifier = ">=8,<10" },
+    { name = "elasticsearch", marker = "extra == 'all'", specifier = ">=8,<10" },
+    { name = "elasticsearch", marker = "extra == 'dev'", specifier = ">=8,<10" },
+    { name = "elasticsearch", marker = "extra == 'elasticsearch'", specifier = ">=8,<10" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "fathom-rules", specifier = ">=0.11.0" },
     { name = "httpx", specifier = ">=0.27" },
-    { name = "influxdb-client", specifier = ">=1.40" },
+    { name = "influxdb-client", marker = "extra == 'all'", specifier = ">=1.40" },
+    { name = "influxdb-client", marker = "extra == 'dev'", specifier = ">=1.40" },
+    { name = "influxdb-client", marker = "extra == 'influxdb'", specifier = ">=1.40" },
     { name = "jinja2", specifier = ">=3.1" },
     { name = "locust", marker = "extra == 'dev'", specifier = ">=2.0" },
-    { name = "mcp", specifier = ">=1.12" },
+    { name = "mcp", specifier = ">=1.12,<2" },
     { name = "mike", marker = "extra == 'docs'", specifier = ">=2.1" },
     { name = "mkdocs", marker = "extra == 'dev'", specifier = ">=1.6" },
     { name = "mkdocs-material", marker = "extra == 'dev'", specifier = ">=9.0" },
@@ -1692,14 +1728,18 @@ requires-dist = [
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'dev'", specifier = ">=0.24" },
     { name = "mkdocstrings", extras = ["python"], marker = "extra == 'docs'", specifier = ">=0.24" },
     { name = "nautilus-adapter-sdk", marker = "extra == 'dev'", editable = "packages/nautilus-adapter-sdk" },
-    { name = "neo4j", specifier = ">=5" },
+    { name = "neo4j", marker = "extra == 'all'", specifier = ">=5" },
+    { name = "neo4j", marker = "extra == 'dev'", specifier = ">=5" },
+    { name = "neo4j", marker = "extra == 'neo4j'", specifier = ">=5" },
     { name = "openai", marker = "extra == 'llm-openai'", specifier = ">=1.50" },
     { name = "opentelemetry-api", marker = "extra == 'otel'", specifier = ">=1.20" },
     { name = "opentelemetry-exporter-otlp-proto-http", marker = "extra == 'otel'", specifier = ">=1.20" },
     { name = "opentelemetry-exporter-prometheus", marker = "extra == 'otel'", specifier = ">=0.50b0" },
     { name = "opentelemetry-instrumentation-fastapi", marker = "extra == 'otel'", specifier = ">=0.41b0" },
     { name = "opentelemetry-sdk", marker = "extra == 'otel'", specifier = ">=1.20" },
-    { name = "pgvector", specifier = ">=0.3.0" },
+    { name = "pgvector", marker = "extra == 'all'", specifier = ">=0.3.0" },
+    { name = "pgvector", marker = "extra == 'dev'", specifier = ">=0.3.0" },
+    { name = "pgvector", marker = "extra == 'pgvector'", specifier = ">=0.3.0" },
     { name = "pip-licenses", marker = "extra == 'dev'", specifier = ">=5.0" },
     { name = "prometheus-client", marker = "extra == 'otel'", specifier = ">=0.20" },
     { name = "pyjwt", specifier = ">=2.12.1" },
@@ -1717,7 +1757,7 @@ requires-dist = [
     { name = "testcontainers", extras = ["postgres"], marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30" },
 ]
-provides-extras = ["dev", "otel", "llm-anthropic", "llm-openai", "docs"]
+provides-extras = ["postgres", "pgvector", "elasticsearch", "neo4j", "influxdb", "s3", "all", "dev", "otel", "llm-anthropic", "llm-openai", "docs"]
 
 [[package]]
 name = "neo4j"
