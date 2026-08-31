@@ -3,6 +3,7 @@
 Public exports:
 - :class:`PolicyEngineError` — raised by :class:`FathomRouter` for engine
   construction or fact-assertion failures (design §3.4 failure modes).
+- :class:`BrokerBusyError` — the broker is saturated; retry (503).
 - :class:`Broker` — public facade (design §3.1).
 - :class:`BrokerResponse` — response model (design §4.8).
 """
@@ -16,6 +17,23 @@ class PolicyEngineError(Exception):
     Per design §3.4: engine construction failures surface at broker
     construction time; fact assertion / evaluation failures surface
     per-request with the offending fact payload in the message.
+    """
+
+
+class BrokerBusyError(Exception):
+    """Raised when the broker refuses a request rather than queue it further.
+
+    Two places produce it, both backpressure rather than failure:
+
+    - the exposure-ledger lock, when a caller's earlier request has held it
+      past ``session_store.lock_timeout_s``. Requests from one caller are
+      serialised on purpose -- two that both read the ledger empty both pass a
+      cumulative cap -- but the wait used to sit outside every deadline in the
+      config, so a caller measured 32 seconds to an HTTP 200;
+    - the HTTP surface's ``api.max_concurrent_requests`` gate.
+
+    The transports map it to 503 with ``Retry-After``: it is worth retrying,
+    which is precisely what a 500 does not say.
     """
 
 
@@ -61,6 +79,7 @@ __all__ = [
     "AttestationPayload",
     "AttestationSink",
     "Broker",
+    "BrokerBusyError",
     "BrokerResponse",
     "ConsistencyError",
     "FileAttestationSink",

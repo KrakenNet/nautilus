@@ -24,6 +24,7 @@ Submit a broker request.
 | `outcome` | `allowed` \| `denied` \| `errored` \| `skipped` — what happened, in one word. `denied` only when a source the request actually concerned was refused; an unrelated refusal does not outrank a source that failed to answer. |
 | `denial_records` | One `{source_id, reason, rule_name, relevant}` per denied source: why it was refused, which rule said so, and whether the refusal concerned this request at all. A purpose refusal names the purposes the source does accept. |
 | `source_info` | `{source_id: {description, classification, data_types}}` for each queried source — what the rows in `data` actually are. |
+| `ruleset_hash` | Which ruleset answered this request. Mid-rollout two replicas hold different ones, and the identical request alternates `allowed` / `denied` behind the load balancer; this is how a caller can tell. |
 | `skip_records` | One `{source_id, reason}` per source that took no part — usually because its `data_types` have nothing to do with the intent. |
 | `rule_trace` | The rules that fired, in order — the same trace the audit entry records. |
 

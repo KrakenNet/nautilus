@@ -75,7 +75,7 @@ from nautilus.config.models import (
     SourceConfig,
 )
 from nautilus.config.registry import SourceRegistry
-from nautilus.core import PolicyEngineError
+from nautilus.core import BrokerBusyError, PolicyEngineError
 from nautilus.core.attestation_payload import (
     build_payload,
     canonical_input_hash,
@@ -286,6 +286,16 @@ if TYPE_CHECKING:
     from nautilus.analysis.base import IntentAnalyzer
     from nautilus.core.fathom_router import RouteResult
     from nautilus.synthesis.base import Synthesizer
+
+
+def _busy_message(what: str, budget: float | None) -> str:
+    """What to tell a caller that lost the race for the exposure ledger."""
+    return (
+        f"Broker busy: waited {budget}s for the exposure ledger on {what!r} and "
+        f"another request from the same caller still holds it. Requests from one "
+        f"caller are served one at a time so cumulative exposure is counted "
+        f"once. Retry, or raise session_store.lock_timeout_s."
+    )
 
 
 @dataclass
@@ -1884,14 +1894,34 @@ class Broker:
         # the store's ceiling ``pool_max_size / keys-per-request``.
         store_lock_all = getattr(self._session_store, "alock_all", None)
         store_lock = getattr(self._session_store, "alock", None)
+        # The wait is bounded because the hold is long: the lock spans the whole
+        # pipeline, source query included, so one caller's concurrent requests
+        # run strictly one at a time. That serialisation is the guarantee -- two
+        # requests that both read the ledger empty both pass a cumulative cap --
+        # but ``SourceConfig.timeout_s`` only starts once the lock is won, so
+        # the queueing used to sit outside every deadline the config had.
+        budget = self._config.session_store.lock_timeout_s
+        deadline = None if budget is None else time.monotonic() + budget
+
+        async def _hold(cm: AbstractAsyncContextManager[Any], what: str) -> Any:
+            if deadline is None:
+                return await stack.enter_async_context(cm)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise BrokerBusyError(_busy_message(what, budget))
+            try:
+                return await asyncio.wait_for(stack.enter_async_context(cm), remaining)
+            except TimeoutError as exc:
+                raise BrokerBusyError(_busy_message(what, budget)) from exc
+
         async with contextlib.AsyncExitStack() as stack:
             for key in keys:
-                await stack.enter_async_context(self._session_locks.setdefault(key, asyncio.Lock()))
+                await _hold(self._session_locks.setdefault(key, asyncio.Lock()), key)
             if store_lock_all is not None:
-                await stack.enter_async_context(store_lock_all(keys))
+                await _hold(store_lock_all(keys), ", ".join(keys))
             elif store_lock is not None:
                 for key in keys:
-                    await stack.enter_async_context(store_lock(key))
+                    await _hold(store_lock(key), key)
             yield
 
     async def _run_pipeline(
@@ -2506,6 +2536,7 @@ class Broker:
             fact_set_hash=state.fact_set_hash,
             session_token=state.session_token,
             source_info=self._source_info(state.sources_queried),
+            ruleset_hash=self.ruleset_hash,
         )
 
     def _source_info(self, source_ids: list[str]) -> dict[str, SourceInfo] | None:

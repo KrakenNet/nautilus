@@ -504,6 +504,24 @@ state_dir: /var/lib/nautilus
   serialized response fits and names every source it touched in
   `truncated_sources`. REST is not bounded this way — an HTTP client streams to
   a file. Set it to `null` to turn the bound off.
+- **Concurrency is bounded, and saturation says so.**
+  `api.max_concurrent_requests` (default 64) holds that many requests in flight
+  and answers the rest with 503 and `Retry-After: 1`. Without it throughput was
+  flat from 1 concurrent client to 512 while latency grew with the queue — 12 ms
+  at 1, 8.5 s at 512, every request still 200 — so nothing in front of the
+  broker could tell a saturated one from a healthy one, and retries joined the
+  same queue. `/healthz`, `/readyz` and `/metrics` are never gated, so a full
+  queue does not take the pod out of rotation. Set it to `null` to remove the
+  limit.
+- **Waiting for the exposure ledger is bounded.** Requests from one caller are
+  served one at a time on purpose: two that both read the ledger empty both pass
+  a cumulative cap. The lock is held across the source query, and
+  `SourceConfig.timeout_s` only starts once the lock is won, so the queueing
+  used to sit outside every deadline in the config — one caller measured 32
+  seconds to an HTTP 200. `session_store.lock_timeout_s` (default 30) bounds it;
+  past it the request answers 503 with `Retry-After`. Raise it for callers that
+  legitimately run long queries back-to-back, or set it to `null` for the old
+  unbounded wait.
 
 ### Which rules are in force
 
@@ -515,6 +533,22 @@ Returns every rule the running engine will fire — built-ins, user rules and
 pack rules alike — plus a `ruleset_hash`. That hash is recorded on every audit
 entry, so an entry can be replayed against the policy that produced it rather
 than against whatever is loaded today.
+
+**Watch for a split fleet.** Every rolling deploy passes through a state where
+two replicas hold different rulesets, and the identical request then alternates
+`allowed` / `denied` behind the load balancer — a caller who is denied retries
+and is allowed. Two things make that visible: every `BrokerResponse` carries
+the `ruleset_hash` that answered it, and each replica's `/metrics` exposes
+`nautilus_ruleset_info{ruleset_hash="…"} 1`. Alert on more than one distinct
+hash across the fleet:
+
+```promql
+count(count by (ruleset_hash) (nautilus_ruleset_info)) > 1
+```
+
+Do not poll `/v1/rules` through the Service for this — it is load-balanced, so
+the hash just flaps between the replicas and a split is indistinguishable from
+a policy change.
 
 **Retraction changes the running engine.** `POST /v1/rules/{name}/retract`
 removes the rule from the engine and, when its YAML lives in a configured

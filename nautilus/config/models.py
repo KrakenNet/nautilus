@@ -504,6 +504,14 @@ class ApiConfig(_Strict):
     # filling it drains every replica rather than degrading one. ``None``
     # removes the limit.
     max_request_bytes: int | None = Field(default=1_048_576, gt=0)
+    # How many requests the HTTP surface will have in flight at once. Past it,
+    # callers get 503 + Retry-After instead of joining an unbounded queue.
+    # Measured at 512 concurrent clients: throughput flat, an 8.5-second p50,
+    # and a 100% success rate -- so nothing in front of the broker could tell a
+    # saturated one from a healthy one, and retries joined the same queue.
+    # Probes are never gated: a full queue must not take the pod out of
+    # rotation. ``None`` removes the limit.
+    max_concurrent_requests: int | None = Field(default=64, gt=0)
 
 
 class MCPConfig(_Strict):
@@ -587,6 +595,16 @@ class SessionStoreConfig(_Strict):
     pool_max_size: int = 10
     lock_pool_max_size: int = 32
     acquire_timeout_s: float = 10.0
+    # How long a request will wait for the exposure-ledger lock before giving
+    # up. Every request from one caller takes the same lock and holds it across
+    # the source query -- that serialisation is deliberate, because two
+    # requests that both read the ledger empty both pass a cumulative cap. What
+    # was missing is a budget: ``SourceConfig.timeout_s`` is entered after the
+    # lock is won, so the queueing sat outside every deadline the config had
+    # and a caller measured 32 seconds to an HTTP 200. Applies to every
+    # backend, not just postgres -- the in-process lock is where the queue
+    # forms. ``None`` restores the unbounded wait.
+    lock_timeout_s: float | None = Field(default=30.0, gt=0)
 
 
 class SessionTokenConfig(_Strict):

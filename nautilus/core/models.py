@@ -268,6 +268,13 @@ class BrokerResponse(BaseModel):
     # What each queried source is, keyed by id. ``None`` when the broker did
     # not populate it, so a Phase-1 response round-trips unchanged (NFR-5).
     source_info: dict[str, SourceInfo] | None = None
+    # Which ruleset answered. Every rolling deploy passes through a state where
+    # two replicas hold different rulesets, and the identical request then
+    # alternates allowed / denied behind the load balancer -- so a caller who is
+    # denied retries and is allowed. The audit entry has carried this all along;
+    # the response the caller actually reads did not. ``None`` when unset, so a
+    # Phase-1 response round-trips unchanged (NFR-5).
+    ruleset_hash: str | None = None
 
     @computed_field  # serialized, so REST and MCP callers get it too
     @property

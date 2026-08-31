@@ -51,8 +51,13 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
           resources:
+            # One uvicorn worker, and the per-request work is dominated by
+            # synchronous CPU on that one event loop -- measured throughput does
+            # not rise with concurrency, so a pod cannot use more than a core
+            # and is throttled by anything less. 250m sized this for roughly a
+            # quarter of the rate the same image serves on a full core.
             requests:
-              cpu: 250m
+              cpu: "1"
               memory: 512Mi
             limits:
               memory: 1Gi

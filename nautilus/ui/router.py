@@ -20,6 +20,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import Response
 
+from nautilus.core import BrokerBusyError
 from nautilus.core.broker import Broker
 from nautilus.transport.auth import (
     caller_identity,
@@ -268,6 +269,9 @@ async def playground_query(
             caller={"auth": caller["auth"], "peer": caller["peer"]},
         )
         return JSONResponse(result.model_dump(mode="json"))
+    except BrokerBusyError as exc:
+        # Backpressure, not failure — the same 503 /v1/request answers with.
+        return JSONResponse({"error": str(exc)}, status_code=503, headers={"Retry-After": "1"})
     except Exception as exc:
         return JSONResponse({"error": str(exc)}, status_code=500)
 

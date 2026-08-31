@@ -51,6 +51,7 @@ public allowlist; add routes there deliberately, not by omission.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -67,8 +68,9 @@ from starlette.types import ASGIApp
 from nautilus.attestation.jwks import export_jwks
 from nautilus.attestation.key_ring import KeyRing
 from nautilus.attestation.session_token import SessionTokenService
+from nautilus.core import BrokerBusyError
 from nautilus.core.broker import Broker
-from nautilus.core.metrics import register_rkm_queue
+from nautilus.core.metrics import register_rkm_queue, register_ruleset
 from nautilus.core.models import BrokerRequest, BrokerResponse
 from nautilus.transport.auth import (
     SESSION_TOKEN_HEADER,
@@ -306,6 +308,64 @@ async def _send_too_large(send: Any, declared: int, limit: int) -> None:
     await send({"type": "http.response.body", "body": body})
 
 
+# Probes and the scrape endpoint are never gated: a full request queue must not
+# take the pod out of rotation, which would turn saturation into a restart loop.
+_UNGATED_PATHS = frozenset({"/healthz", "/readyz", "/metrics"})
+
+
+class _ConcurrencyLimit:
+    """Refuse past ``max_in_flight`` rather than grow the queue behind it.
+
+    Throughput is flat from 1 concurrent client to 512 -- the per-request work
+    is dominated by synchronous CPU on one event loop -- so offered concurrency
+    buys latency, not rate: 12 ms at 1 client, 8470 ms at 512, with every
+    request still returning 200, some after 17 seconds. A load balancer or
+    agent framework in front of that has no way to tell a saturated broker from
+    a healthy one, so it retries, and the retries join the same queue.
+
+    503 + ``Retry-After`` is the signal that was missing. It is deliberately
+    not 429: the caller did nothing wrong and the same request will work.
+    """
+
+    def __init__(self, app: ASGIApp, max_in_flight: int) -> None:
+        self.app = app
+        self.max_in_flight = max_in_flight
+        self._semaphore = asyncio.Semaphore(max_in_flight)
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope.get("type") != "http" or scope.get("path") in _UNGATED_PATHS:
+            await self.app(scope, receive, send)
+            return
+        if self._semaphore.locked():
+            await _send_busy(send, self.max_in_flight)
+            return
+        async with self._semaphore:
+            await self.app(scope, receive, send)
+
+
+async def _send_busy(send: Any, limit: int) -> None:
+    body = json.dumps(
+        {
+            "detail": (
+                f"Broker busy: {limit} requests are already in flight "
+                f"(api.max_concurrent_requests). Retry."
+            )
+        }
+    ).encode("utf-8")
+    await send(
+        {
+            "type": "http.response.start",
+            "status": status.HTTP_503_SERVICE_UNAVAILABLE,
+            "headers": [
+                (b"content-type", b"application/json"),
+                (b"content-length", str(len(body)).encode("ascii")),
+                (b"retry-after", b"1"),
+            ],
+        }
+    )
+    await send({"type": "http.response.body", "body": body})
+
+
 def _max_request_bytes(
     config_path: str | Path | None, existing_broker: Broker | None
 ) -> int | None:
@@ -321,6 +381,21 @@ def _max_request_bytes(
 
     try:
         return load_config(str(config_path)).api.max_request_bytes
+    except Exception:
+        return None
+
+
+def _max_concurrent_requests(
+    config_path: str | Path | None, existing_broker: Broker | None
+) -> int | None:
+    """``api.max_concurrent_requests``, read the same way as the byte limit."""
+    if existing_broker is not None:
+        api = getattr(getattr(existing_broker, "config", None), "api", None)
+        return getattr(api, "max_concurrent_requests", None)
+    from nautilus.config.loader import load_config
+
+    try:
+        return load_config(str(config_path)).api.max_concurrent_requests
     except Exception:
         return None
 
@@ -354,6 +429,7 @@ def create_app(
         )
     ui_enabled = _ui_enabled(config_path, existing_broker)
     max_request_bytes = _max_request_bytes(config_path, existing_broker)
+    max_concurrent_requests = _max_concurrent_requests(config_path, existing_broker)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
@@ -385,6 +461,9 @@ def create_app(
         app.state.ready = True
         # Wire Prometheus RKM queue collector (AC-35.9.f).
         register_rkm_queue(lambda: getattr(app.state, "proposal_queue", None))
+        # Name the policy this replica loaded, so a fleet mid-rollout can be
+        # told apart from one running a single ruleset.
+        register_ruleset(lambda: getattr(getattr(app.state, "broker", None), "ruleset_hash", None))
         try:
             from nautilus.observability import setup_otel
 
@@ -405,6 +484,8 @@ def create_app(
     )
     if max_request_bytes is not None:
         app.add_middleware(_BodySizeLimit, max_bytes=max_request_bytes)
+    if max_concurrent_requests is not None:
+        app.add_middleware(_ConcurrencyLimit, max_in_flight=max_concurrent_requests)
     # Pre-populate defaults so routes don't AttributeError before lifespan
     # fires (e.g. startup-phase health checks during ASGI boot).
     app.state.broker = None
@@ -519,6 +600,17 @@ def create_app(
                 # library echoes the caller's value back (US-6 / FR-62).
                 fact_set_hash=body.fact_set_hash,
             )
+        except BrokerBusyError as exc:
+            # Backpressure, not failure: the caller's own earlier request still
+            # holds the exposure ledger. A 500 says "something broke"; this says
+            # "come back", which is the only thing a client can act on.
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+                headers={"Retry-After": "1"},
+            ) from exc
         except ValueError as exc:
             # Malformed caller input inside ``context`` — notably
             # ``scope_constraints`` — which used to leave here as a 500.
