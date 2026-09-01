@@ -196,6 +196,7 @@ curl -s "$NAUTILUS/readyz"; echo
 | `Unsupported source type='{source_type}' for id='{source_id}' (supported: {sorted(supported_types)})` |
 | `Missing env var '{var}' referenced by source id='{source_id}'` |
 | `Config validation failed:` |
+| `sources.{i}.id: String should match pattern '^[A-Za-z0-9][A-Za-z0-9._-]*$' [type=string_pattern_mismatch]` |
 | `source '{self.id}' has type '{self.type}' but no '{required}'. …` |
 | `source '{self.id}' has type '{self.type}' but no 'connection'. …` |
 | `source id='{source.id}' has type '{source.type}', whose driver is not installed: pip install 'nautilus-rkm[{extra}]' …` |
@@ -241,7 +242,48 @@ curl -s "$NAUTILUS/readyz"; echo
 | `source type '{source_type}' needs its driver: pip install 'nautilus-rkm[{extra}]'` |
 | `anthropic extra not installed; install nautilus[llm-anthropic]` |
 | `AnthropicProvider: env var {self.api_key_env!r} is unset or empty` |
-| …and the per-adapter messages for Postgres, pgvector, Elasticsearch, Neo4j, InfluxDB, S3, ServiceNow, REST, LLM and static. |
+| `PostgresAdapter requires 'table' on source '{config.id}' (Phase 1 shortcut)` |
+| `PostgresAdapter missing 'table' for source '{self._config.id}'` |
+| `PgVectorAdapter requires 'table' on source '{config.id}'` |
+| `PgVectorAdapter missing 'table' for source '{config.id}'` |
+| `distance_operator '{distance_operator}' not in allowlist: {sorted(_ALLOWED_DISTANCE_OPERATORS)}` |
+| `ElasticsearchAdapter requires non-empty 'index' on SourceConfig` |
+| `Invalid Elasticsearch index '{index}': must match {_INDEX_PATTERN.pattern}` |
+| `ElasticsearchAdapter could not read the mapping for index '{self._index}': {exc}` |
+| `Neo4jAdapter requires non-empty 'label' on SourceConfig` |
+| `Invalid Neo4j label '{label}': must match {_LABEL_PATTERN.pattern}` |
+| `Invalid Neo4j property identifier '{name}'` |
+| `neo4j: get_schema failed for source '{self._config.id}': {exc}` |
+| `InfluxDBAdapter: '_time' bound {value!r} is not a Flux duration …` |
+| `InfluxDBAdapter: '_time' bound {value!r} is not a time, duration or Unix-second integer` |
+| `InfluxDBAdapter: operator {op!r} is not expressible as a time range on '_time' …` |
+| `InfluxDBAdapter: LIKE pattern {pattern!r} uses the '_' single-character wildcard, …` |
+| `InfluxDBAdapter: LIKE pattern {pattern!r} has an interior '%' wildcard, …` |
+| `InfluxDBAdapter: source '{config.id}' declares auth type {auth.type!r}, which InfluxDB cannot use. …` |
+| `influxdb: get_schema failed for source '{self._config.id}': {exc}` |
+| `S3Adapter: source '{config.id}' declares auth type {auth.type!r}, which S3 cannot use. …` |
+| `S3Adapter: unsupported operator '{op}' for field 'key'` |
+| `S3Adapter: unsupported operator '{op}' for tag filter` |
+| `S3Adapter: unsupported operator '{op}' for classification` |
+| `S3Adapter: unsupported scope field '{field}'` |
+| `S3Adapter: empty tag name` |
+| `S3Adapter: IN operator requires a list value, got {type(value).__name__}` |
+| `S3Adapter: LIKE operator requires a string value` |
+| `S3Adapter request failed for source '{self._config.id}': {exc}` |
+| `sn-invalid-value: operator {op!r} requires a list, got {type(cast(object, value)).__name__}` |
+| `sn-invalid-value: operator 'BETWEEN' requires a 2-tuple/list` |
+| `sn-invalid-value: operator 'BETWEEN' requires exactly two endpoints` |
+| `ServiceNowAdapter source '{config.id}' has invalid table {table!r} (expected regex '^[a-z][a-z0-9_]*$')` |
+| `sn-attachment-fetch-cap: {len(rows)} rows pinned, cap is {_MAX_ATTACHMENT_FETCHES}` |
+| `servicenow: get_schema failed for source '{self._config.id}': {exc}` |
+| `Operator 'NOT IN' is not supported by the REST adapter unless explicitly declared …` |
+| `RestAdapter source '{config.id}' declares endpoints=[] (must list at least one EndpointSpec …)` |
+| `EndpointSpec.operator_templates declares unknown operator '{op}' for source '{config.id}'` |
+| `LLMAdapter source '{config.id}' requires a 'model' field in its source block` |
+| `LLMAdapter source '{config.id}' does not support mTLS auth; use bearer/basic …` |
+| `LLMAdapter call failed: {exc}` |
+| `LLMAdapter received a non-OpenAI-compatible response shape: {exc}` |
+| …and the static adapter's operator refusal, plus the analysis-provider messages below. |
 
 ### Rules, RKM and the policy engine — [rules.md](rules.md)
 
@@ -292,6 +334,11 @@ curl -s "$NAUTILUS/readyz"; echo
 | `{subject} is already open for writing by {holder}. A hash chain admits exactly one writer: …` |
 | `emit on closed ChainedFileAttestationSink` |
 | `unreadable offsets file {path}: {exc}` |
+| `offsets payload must be a JSON object, got {type(payload).__name__}` |
+| `last_byte_offset must be int, got {type(offset_raw).__name__}` |
+| `last_byte_offset must be non-negative, got {offset_raw}` |
+| `seen_line_sha256 must be list, got {type(seen_raw).__name__}` |
+| `seen_line_sha256 entries must be str, got {type(item).__name__}` |
 | `refusing non-monotonic save: current={…} < persisted={…}` |
 | `AuditRecord has no {NAUTILUS_METADATA_KEY!r} metadata` |
 
@@ -300,6 +347,8 @@ curl -s "$NAUTILUS/readyz"; echo
 | Message | Exit |
 | --- | --- |
 | `ERROR: NAUTILUS_REVIEWER env var required for this command. Set it to your operator identity.` | 1 |
+| `ERROR: this decision cannot be recorded, so it will not be taken: {problem}` | 2 |
+| `ERROR: this acknowledgement cannot be recorded, so it will not be made: {problem}` | 2 |
 | `ERROR: config path does not exist or is not a file: {config_path}` | 2 |
 | `ERROR: invalid config: {exc}` | 2 |
 | `ERROR: broker construction failed: {exc}` | 2 |
@@ -349,7 +398,7 @@ curl -s "$NAUTILUS/readyz"; echo
 | `ERROR: no schema available for adapter {name!r}` | 1 |
 | `ERROR: no schema available for adapter {name!r}; cannot ack` | 1 |
 | `ERROR: schema-ack requires --yes to confirm` | 1 |
-| `WARN: could not read schema for {name!r}: {exc}` | 0 |
+| `WARN: could not read schema for {name!r}: {exc}` | 1 from `schema`, `schema-fingerprint` and `schema-ack`; 0 from `schema-diff` |
 | `WARN: no stored fingerprint for {name!r}; treating as new` | 0 |
 | `ERROR: attestation verify: log not found: {log_path}` | 1 |
 | `ERROR: attestation verify: pubkey not found: {pubkey_path}` | 1 |

@@ -24,7 +24,7 @@ Invalid session token: bad_signature
 
 ### `Invalid session token ({exc.reason_code}): {exc}`
 
-**HTTP 401**, with `WWW-Authenticate: Bearer`. `nautilus/transport/fastapi_app.py:645-651`. The
+**HTTP 401**, with `WWW-Authenticate: Bearer`. `nautilus/transport/fastapi_app.py:712-718`. The
 token was in the **request body**, at `context.session_token`. Both the code and the message are
 shown. Rendered example:
 

@@ -107,19 +107,65 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload, default=str)
 
 
+# C0 controls and DEL, rendered as their escape sequences. ``\n`` is the one
+# that matters (it ends a text log record); ``\r`` can overwrite the line a
+# terminal already drew, and ``\x1b`` starts an ANSI sequence, so an operator
+# reading the file with ``cat`` is covered too. ``\t`` is escaped for the same
+# reason a TSV would want it: nothing here needs a literal control character.
+_CONTROL_ESCAPES: dict[int, str] = {c: f"\\x{c:02x}" for c in range(0x20)}
+_CONTROL_ESCAPES.update({0x09: "\\t", 0x0A: "\\n", 0x0D: "\\r", 0x7F: "\\x7f"})
+
+
+class TextFormatter(logging.Formatter):
+    """:data:`logging.BASIC_FORMAT`, with control characters escaped.
+
+    The text log's record separator is the newline, so any newline that
+    reaches the rendered message *is* a record boundary. A source id or a
+    config path containing one splits a single warning into two lines, and the
+    second is indistinguishable from a line the broker wrote itself::
+
+        $ F=$'evil\\nWARNING:nautilus.core.broker:audit chain verified OK.yaml'
+        $ nautilus serve --config "$F"
+        WARNING:nautilus.core.broker:No 'agents:' are declared in evil
+        WARNING:nautilus.core.broker:audit chain verified OK.yaml, so every ...
+
+    The second line is a forged "chain verified" claim, in the log an operator
+    reads to decide whether the chain is intact, emitted by the product's own
+    startup path. :class:`JsonFormatter` never had the problem --
+    :func:`json.dumps` escapes the newline and the record stays one line -- so
+    this is the text formatter catching up, and it is the default format.
+
+    Escaping is applied to the interpolated message only. ``exc_info`` and
+    ``stack_info`` are appended by :meth:`logging.Formatter.format` after this
+    runs, so a traceback is still a readable multi-line traceback: it is
+    generated from the interpreter's own frames, not from a caller's value.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(logging.BASIC_FORMAT)
+
+    def formatMessage(self, record: logging.LogRecord) -> str:  # noqa: N802 — stdlib hook
+        record.message = record.message.translate(_CONTROL_ESCAPES)
+        return super().formatMessage(record)
+
+
 def configure_logging(log_format: LogFormat = "text", level: int = logging.INFO) -> None:
     """Configure root logging for a process entry point.
 
     ``"json"`` installs a stdout :class:`JsonFormatter` handler; ``"text"``
-    is plain :func:`logging.basicConfig` (local-dev default). ``force=True``
-    so re-invocation (e.g. tests) deterministically replaces prior handlers.
+    installs a stderr :class:`TextFormatter` one -- same stream and same layout
+    :func:`logging.basicConfig` would have given, with control characters
+    escaped. ``force=True`` so re-invocation (e.g. tests) deterministically
+    replaces prior handlers.
     """
+    handler: logging.Handler
     if log_format == "json":
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(JsonFormatter())
-        logging.basicConfig(level=level, handlers=[handler], force=True)
     else:
-        logging.basicConfig(level=level, force=True)
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setFormatter(TextFormatter())
+    logging.basicConfig(level=level, handlers=[handler], force=True)
 
 
-__all__ = ["JsonFormatter", "LogFormat", "configure_logging"]
+__all__ = ["JsonFormatter", "LogFormat", "TextFormatter", "configure_logging"]

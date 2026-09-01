@@ -167,18 +167,20 @@ async def _serve_or_raise(server: Any) -> None:
         )
 
 
-async def _run_rest(broker: Broker, host: str, port: int) -> None:
+async def _run_rest(broker: Broker, host: str, port: int, log_level: str = "info") -> None:
     """Run uvicorn against :func:`create_app` with an injected broker."""
     import uvicorn
 
     from nautilus.transport.fastapi_app import create_app
 
     app = create_app(None, existing_broker=broker)
-    config = uvicorn.Config(app, host=host, port=port, log_level="info")
+    config = uvicorn.Config(app, host=host, port=port, log_level=log_level)
     await _serve_or_raise(uvicorn.Server(config))
 
 
-async def _run_mcp(broker: Broker, mode: str, host: str, port: int) -> None:
+async def _run_mcp(
+    broker: Broker, mode: str, host: str, port: int, log_level: str = "info"
+) -> None:
     """Run FastMCP with the given transport mode and the injected broker."""
     from nautilus.transport.mcp_server import create_server
 
@@ -205,7 +207,7 @@ async def _run_mcp(broker: Broker, mode: str, host: str, port: int) -> None:
 
     app = http_app(mcp, api_keys=_mcp_settings(broker)[2])
     await _serve_or_raise(
-        uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level="info"))
+        uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level=log_level))
     )
 
 
@@ -214,6 +216,7 @@ async def _run_both(
     host: str,
     port: int,
     mcp_mode: str,
+    log_level: str = "info",
 ) -> None:
     """Run REST + MCP concurrently on the same asyncio loop (NFR-14).
 
@@ -223,8 +226,8 @@ async def _run_both(
     """
     mcp_port = port + 1 if mcp_mode == "http" else port
     await asyncio.gather(
-        _run_rest(broker, host, port),
-        _run_mcp(broker, mcp_mode, host, mcp_port),
+        _run_rest(broker, host, port, log_level),
+        _run_mcp(broker, mcp_mode, host, mcp_port, log_level),
     )
 
 

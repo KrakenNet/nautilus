@@ -11,7 +11,9 @@ from typing import Any
 
 import pytest
 import yaml
+from fathom.audit import FileSink
 
+from nautilus.audit.logger import AuditLogger
 from nautilus.rkm.queue import ProposalQueue
 from nautilus.rkm.validator.pipeline import run_pipeline
 from nautilus.rkm.validator.shadow import ShadowFlag, shadow_check
@@ -21,13 +23,25 @@ pytestmark = pytest.mark.integration
 _FIXTURE_DIR = Path(__file__).parent.parent / "fixtures" / "rkm" / "shadow-pairs"
 
 
+def _logger(audit_log: Path) -> AuditLogger:
+    """The audit sink the caller owns.
+
+    ``run_pipeline`` takes the logger rather than opening one over the path it
+    was handed: the deployment's log may be a hash chain with exactly one
+    writer, and a second sink over it is unrecoverable corruption.
+    """
+    return AuditLogger(sink=FileSink(path=audit_log))
+
+
 def test_pipeline_submits_proposal_to_queue(tmp_path: Path) -> None:
     rule_yaml = tmp_path / "ok.yaml"
     rule_yaml.write_text("rules: []\n")
     audit_log = tmp_path / "audit.jsonl"
     audit_log.write_text("")
     queue = ProposalQueue(tmp_path / "queue")
-    proposal = run_pipeline(rule_yaml, queue=queue, audit_log=audit_log)
+    proposal = run_pipeline(
+        rule_yaml, queue=queue, audit_log=audit_log, audit_logger=_logger(audit_log)
+    )
     assert proposal.proposal_id.startswith("prop_")
     assert queue.get(proposal.proposal_id) is not None
 
@@ -138,6 +152,7 @@ def test_pipeline_rejects_a_regressive_proposal(tmp_path: Path) -> None:
         _proposal_file(tmp_path, "regressive", DENY_ALL_PII),
         queue=queue,
         audit_log=audit_log,
+        audit_logger=_logger(audit_log),
     )
     assert proposal.status == "rejected"
     sandbox = proposal.validation["sandbox"]
@@ -162,12 +177,16 @@ def test_pipeline_distinguishes_proposals(tmp_path: Path) -> None:
     queue = ProposalQueue(tmp_path / "queue")
 
     benign = run_pipeline(
-        _proposal_file(tmp_path, "benign", DEAD_RULE), queue=queue, audit_log=audit_log
+        _proposal_file(tmp_path, "benign", DEAD_RULE),
+        queue=queue,
+        audit_log=audit_log,
+        audit_logger=_logger(audit_log),
     )
     regressive = run_pipeline(
         _proposal_file(tmp_path, "regressive", DENY_ALL_PII),
         queue=queue,
         audit_log=audit_log,
+        audit_logger=_logger(audit_log),
     )
 
     assert benign.validation["sandbox"] != regressive.validation["sandbox"]
@@ -184,6 +203,7 @@ def test_pipeline_rejects_an_uncompilable_proposal(tmp_path: Path) -> None:
         _proposal_file(tmp_path, "broken", {"name": "broken", "when": "not-a-list"}),
         queue=queue,
         audit_log=audit_log,
+        audit_logger=_logger(audit_log),
     )
     assert proposal.status == "rejected"
     assert proposal.validation["sandbox"]["error"]
@@ -210,6 +230,7 @@ def test_the_pipeline_writes_the_key_its_readers_read(tmp_path: Path) -> None:
         _proposal_file(tmp_path, "benign", ROUTE_VULN_DB),
         queue=queue,
         audit_log=audit_log,
+        audit_logger=_logger(audit_log),
     )
     confidence = proposal.validation["confidence"]
     assert isinstance(confidence, float)

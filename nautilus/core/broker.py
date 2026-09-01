@@ -38,7 +38,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypeVar, cast
 
 from fathom.attestation import AttestationService
-from fathom.audit import FileSink
 from pydantic import ValidationError
 
 from nautilus.adapters import ADAPTER_REGISTRY as _ADAPTER_REGISTRY
@@ -58,6 +57,7 @@ from nautilus.attestation.session_token import (
     SessionTokenService,
 )
 from nautilus.audit.logger import AuditLogger
+from nautilus.audit.sink import build_audit_sink
 from nautilus.config.agent_registry import AgentRegistry, UnknownAgentError
 from nautilus.config.loader import ConfigError, load_config
 from nautilus.config.models import (
@@ -94,7 +94,6 @@ from nautilus.core.attestation_sink import (
     HttpAttestationSink,
     NullAttestationSink,
     RetryPolicy,
-    SingleWriterAuditSink,
 )
 from nautilus.core.fathom_router import FathomRouter
 from nautilus.core.models import (
@@ -207,7 +206,7 @@ def _discover_adapters() -> dict[str, type[Adapter]]:
                 # that resolves to the built-in it "collides" with is that
                 # built-in.
                 log.error(
-                    "refusing adapter entry-point '%s' from distribution '%s': it "
+                    "refusing adapter entry-point %r from distribution %r: it "
                     "would replace the built-in %s. Register it under a source "
                     "type of its own, or name it explicitly in the config's "
                     "'adapters' block.",
@@ -218,7 +217,7 @@ def _discover_adapters() -> dict[str, type[Adapter]]:
                 continue
             if not isinstance(obj, type):
                 log.warning(
-                    "adapter entry-point '%s' resolved to non-class %s; skipping",
+                    "adapter entry-point %r resolved to non-class %s; skipping",
                     ep.name,
                     type(obj).__name__,
                 )
@@ -226,7 +225,7 @@ def _discover_adapters() -> dict[str, type[Adapter]]:
             gaps = _adapter_protocol_gaps(obj)
             if gaps:
                 log.warning(
-                    "adapter entry-point '%s' resolved to %s, which is missing Adapter "
+                    "adapter entry-point %r resolved to %s, which is missing Adapter "
                     "protocol members %s; skipping",
                     ep.name,
                     obj.__name__,
@@ -237,14 +236,14 @@ def _discover_adapters() -> dict[str, type[Adapter]]:
             # INFO, not DEBUG: which code answers a source type is provenance,
             # and nothing else on the operational surface reports it.
             log.info(
-                "discovered adapter entry-point '%s' -> %s (from '%s')",
+                "discovered adapter entry-point %r -> %s (from %r)",
                 ep.name,
                 obj.__name__,
                 _entry_point_distribution(ep),
             )
         except Exception:  # noqa: BLE001
             log.warning(
-                "failed to load adapter entry-point '%s' (%s); skipping",
+                "failed to load adapter entry-point %r (%s); skipping",
                 ep.name,
                 ep.value,
                 exc_info=True,
@@ -320,7 +319,7 @@ def _load_local_adapters(
 
             loaded[cfg.source_type] = cast("type[Adapter]", obj)
             log.info(
-                "loaded local adapter %s from %s as source type '%s'",
+                "loaded local adapter %s from %s as source type %r",
                 cfg.class_name,
                 module_path,
                 cfg.source_type,
@@ -796,10 +795,10 @@ class Broker:
             # but it is the single largest posture difference between a demo
             # and a deployment, so it is said out loud rather than inferred.
             log.warning(
-                "No 'agents:' are declared in %s, so every request declares its own "
+                "No 'agents:' are declared in %r, so every request declares its own "
                 "clearance, compartments and purpose and the broker enforces them "
                 "against the sources it knows. Declare agents to turn enforcement on.",
-                path,
+                str(path),
             )
 
         # Auto-generate base intent vocabulary from each source's declared
@@ -862,7 +861,7 @@ class Broker:
 
         audit_path = cls._resolve(base_dir, config.audit.path)
         audit_path.parent.mkdir(parents=True, exist_ok=True)
-        audit_logger = AuditLogger(sink=cls._build_audit_sink(config, audit_path, attestation))
+        audit_logger = AuditLogger(sink=build_audit_sink(config, audit_path, attestation))
 
         session_store = cls._build_session_store(config, base_dir=base_dir)
 
@@ -1114,54 +1113,6 @@ class Broker:
         # Must be NullSinkSpec by virtue of the pydantic discriminated union.
         assert isinstance(sink_spec, NullSinkSpec)
         return NullAttestationSink()
-
-    @staticmethod
-    def _build_audit_sink(
-        config: NautilusConfig,
-        audit_path: Path,
-        attestation: AttestationService | None,
-    ) -> Any:
-        """``FileSink``, or a hash-chained log when ``audit.chained`` is set.
-
-        ``ChainedAttestationLog.write`` satisfies the same ``AuditSink``
-        protocol ``FileSink`` does, so chaining is a swap of the sink rather
-        than a second write path. It signs each line, so it fails closed on a
-        config that asks for integrity without a key to sign with.
-        """
-        if not config.audit.chained:
-            return FileSink(path=audit_path)
-        if attestation is None:
-            msg = (
-                "audit.chained requires attestation.enabled with a signing key: "
-                "each chained line carries a JWS, and there is nothing to sign with"
-            )
-            raise ValueError(msg)
-        if not config.attestation.private_key_path and audit_path.exists():
-            msg = (
-                f"audit.chained cannot append to the existing chain at {audit_path} "
-                f"with an auto-generated signing key: attestation.private_key_path is "
-                f"unset, so this process signs with a key the lines already on disk "
-                f"were not signed by, and every request would fail closed on a log "
-                f"that reads as corrupt. Set attestation.private_key_path to the key "
-                f"that wrote them, or start a new chain at a new audit.path."
-            )
-            raise ValueError(msg)
-        if not config.attestation.private_key_path:
-            log.warning(
-                "audit.chained is on with an auto-generated attestation key: this "
-                "chain is signed by this process only and the next boot will refuse "
-                "to append to it. Set attestation.private_key_path to keep it.",
-            )
-        from fathom.chained_log import ChainedAttestationLog
-
-        return SingleWriterAuditSink(
-            ChainedAttestationLog(
-                audit_path,
-                attestation,
-                checkpoint_interval=config.audit.checkpoint_interval,
-            ),
-            audit_path,
-        )
 
     @staticmethod
     def _build_attestation(config: NautilusConfig, base_dir: Path) -> AttestationService | None:
@@ -3279,7 +3230,7 @@ class Broker:
             schema = await adapter.get_schema()  # type: ignore[union-attr]
         except Exception:  # noqa: BLE001
             log.warning(
-                "schema fetch failed for adapter '%s'; skipping fingerprint check",
+                "schema fetch failed for adapter %r; skipping fingerprint check",
                 source_id,
             )
             return False
@@ -3299,7 +3250,7 @@ class Broker:
         # as major (fail closed, AC-21.e). An operator clears it with
         # ``nautilus adapters schema-ack``, which re-baselines the adapter.
         log.warning(
-            "schema drift detected for adapter '%s' (previous=%s current=%s severity=major)",
+            "schema drift detected for adapter %r (previous=%s current=%s severity=major)",
             source_id,
             stored_fp[:16],
             current_fp[:16],
@@ -3364,7 +3315,7 @@ class Broker:
         if self._fingerprint_store.get(source_id) != schema.fingerprint():
             return False
         self._quarantined_adapters.discard(source_id)
-        log.info("quarantine lifted for adapter '%s'; baseline now matches", source_id)
+        log.info("quarantine lifted for adapter %r; baseline now matches", source_id)
         self.emit_adapter_event("adapter_unquarantined", source_id)
         return True
 

@@ -111,7 +111,7 @@ curl -s "$NAUTILUS/v1/audit" -H 'X-API-Key: query-key'
 
 ## `This credential is bound to agent_id={bound!r}, so it cannot ask as {body.agent_id!r}`
 
-**HTTP 403.** `nautilus/transport/fastapi_app.py:594-601`. The MCP transport raises the same
+**HTTP 403.** `nautilus/transport/fastapi_app.py:661-668`. The MCP transport raises the same
 sentence as a tool error (`nautilus/transport/mcp_server.py:369-373`, with `{agent_id!r}` in
 place of `{body.agent_id!r}`). Rendered example:
 
@@ -137,7 +137,7 @@ curl -s -X POST "$NAUTILUS/v1/request" \
 
 ## `This credential is bound to agent_id={bound!r}, so it cannot mint a session token for {requested_agent!r}`
 
-**HTTP 403.** `nautilus/transport/fastapi_app.py:858-865`, on `POST /v1/sessions`.
+**HTTP 403.** `nautilus/transport/fastapi_app.py:925-932`, on `POST /v1/sessions`.
 
 **Means.** Same binding rule, applied to token minting. Without it a key bound to a low-clearance
 agent could mint a broker-valid token naming a high-clearance one, and the token verifies against
@@ -179,7 +179,7 @@ request, including health-check and retry paths.
 
 ## `X-Nautilus-Reviewer header required`
 
-**HTTP 400.** `_require_reviewer`, `nautilus/transport/fastapi_app.py:1173-1179`.
+**HTTP 400.** `_require_reviewer`, `nautilus/transport/fastapi_app.py:1240-1246`.
 
 **Means.** A governance route needs a human identity to write into the audit record and the
 credential could not supply one. The header is only consulted when the `api.keys` entry has no
@@ -218,17 +218,17 @@ These are `ConfigError`s wrapping pydantic validation; see [config.md](config.md
 
 ### `api.auth.mode 'proxy_trust' requires api.auth.trusted_proxies. Without it, X-Forwarded-User is settable by anyone who can reach the port, so every caller can assert every identity.`
 
-`nautilus/config/models.py:486-490`. Set `api.auth.trusted_proxies` to the ingress addresses, or
+`nautilus/config/models.py:492-496`. Set `api.auth.trusted_proxies` to the ingress addresses, or
 return to `api.auth.mode: api_key`.
 
 ### `api.auth.trusted_proxies entry {entry!r} is not an address or CIDR block: {exc}`
 
-`nautilus/config/models.py:495-499`. `{exc}` is the `ipaddress` parse failure. Use
+`nautilus/config/models.py:501-505`. `{exc}` is the `ipaddress` parse failure. Use
 `10.0.0.0/8`, `192.168.1.7`, or an IPv6 equivalent — hostnames are not resolved.
 
 ### `api.keys entry declares unknown capabilities {unknown}. Known capabilities: {list(CAPABILITIES)}`
 
-`nautilus/config/models.py:460-464`. Rendered example:
+`nautilus/config/models.py:466-470`. Rendered example:
 
 ```text
 api.keys entry declares unknown capabilities ['bogus'].

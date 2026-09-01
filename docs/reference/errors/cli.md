@@ -33,6 +33,78 @@ except SystemExit as exc:
 PY
 ```
 
+### `ERROR: this decision cannot be recorded, so it will not be taken: {problem}`
+
+`refuse_unless_writable`, `nautilus/cli/_common.py`. Exit **2**. Raised from
+`open_audit_logger`, so it reaches every command that records a decision
+locally: `rule retract`, `rule rollback`, `rkm queue submit` and
+`rkm queue reject`. `{problem}`, in parentheses at the end of the line, is the
+`SinkAlreadyLockedError` text, which names the pid holding the lock.
+`adapters schema-ack` meets the same lock and is refused by the same function,
+in the same shape and with the same exit code, but
+[in its own words](#error-this-acknowledgement-cannot-be-recorded-so-it-will-not-be-made-problem).
+
+**Means.** `audit.chained: true` makes the audit log a hash chain, and a chain
+admits exactly one writer. A running `nautilus serve` holds that lock, so this
+process cannot append to the log. The lock is probed while the logger is being
+opened — before the rule is promoted, the lineage row inserted or the proposal
+marked — so the decision is refused rather than taken and left unrecorded.
+
+**Fix.** Take the decision through the running broker's governance API, or stop
+the broker and re-run the command. With `audit.chained: false` there is no lock
+and no refusal: plain appends are atomic.
+
+<!-- not-executed: needs a second process serving the same chained audit log -->
+```bash
+# terminal 1
+nautilus serve --config nautilus.yaml --bind 127.0.0.1:8811
+# terminal 2
+NAUTILUS_REVIEWER=ops@example.com \
+  nautilus rkm queue reject prop_ed07c440e3134477b64c452fa48a3072 \
+  --reason superseded --config nautilus.yaml; echo "exit=$?"
+```
+
+```text
+ERROR: this decision cannot be recorded, so it will not be taken: another process is writing the chained audit log. Take the decision through the running server's governance API, or stop the server first. (chained audit log audit.jsonl is already open for writing by pid 2692396. A hash chain admits exactly one writer: a second one interleaves into corruption that verify_chain cannot distinguish from tampering. Give each replica its own audit.path, or use audit.chained: false (plain appends are atomic).)
+exit=2
+```
+
+### `ERROR: this acknowledgement cannot be recorded, so it will not be made: {problem}`
+
+`refuse_unless_writable`, called from `_cmd_schema_ack` in
+`nautilus/cli/adapters.py`. Exit **2**. The only command that raises it is
+`adapters schema-ack`, which is not taking a governance decision and has no
+server-side route to take one through — the two clauses that differ from the
+governance refusal above. Everything else about it is identical, including the
+`{problem}` text naming the pid.
+
+**Means.** Acknowledging drift writes an audit line (the
+`schema_drift_severity_overridden` event), so with `audit.chained: true` it
+needs the same single writer lock a running `nautilus serve` is holding. The
+lock is probed *before* the fingerprint baseline is rewritten: the ack that
+cannot be recorded is not made at all, rather than made on disk and missing
+from the log.
+
+**Fix.** Stop the server and re-run it. The baseline `schema-ack` writes is
+read back at the next startup, and the drift quarantine lifts with it, so
+nothing is lost by acknowledging while the server is down. With
+`audit.chained: false` there is no lock and no refusal.
+
+<!-- not-executed: needs a second process serving the same chained audit log -->
+```bash
+# terminal 1
+nautilus serve --config nautilus.yaml --bind 127.0.0.1:8811
+# terminal 2
+NAUTILUS_REVIEWER=ops@example.com \
+  nautilus adapters schema-ack orders --config nautilus.yaml \
+  --reason "upstream added a nullable column" --yes; echo "exit=$?"
+```
+
+```text
+ERROR: this acknowledgement cannot be recorded, so it will not be made: another process is writing the chained audit log. Stop the server first; the baseline this writes is read back when it restarts, and the quarantine lifts with it. (chained audit log audit.jsonl is already open for writing by pid 2692396. A hash chain admits exactly one writer: a second one interleaves into corruption that verify_chain cannot distinguish from tampering. Give each replica its own audit.path, or use audit.chained: false (plain appends are atomic).)
+exit=2
+```
+
 ## `nautilus serve`
 
 `nautilus/cli/__init__.py:209-280` and `nautilus/cli/serve.py`. All of these exit **2**.
@@ -219,8 +291,15 @@ See [sessions.md](sessions.md).
 ## A missing subcommand
 
 Every command group answers a bare invocation with its own sentence naming the subcommands it
-accepts. The exit code is **not** uniform, and the split is worth knowing if you script these:
-`rkm`, `rule`, `rules` and `adapters` exit **2**; `key`, `attestation` and `events` exit **1**.
+accepts, and every one of them exits **2** — `rkm`, `rkm queue`, `rule`, `rules`, `adapters`,
+`key`, `attestation` and `events` alike. One code covers the whole class, so a script can test
+for it without a per-group table:
+
+```bash
+for g in rkm "rkm queue" rule rules adapters key attestation events; do
+  nautilus $g >/dev/null 2>&1; echo "$g -> $?"
+done
+```
 
 ### `ERROR: rkm: no subcommand given (try: queue, lineage)`
 
@@ -556,7 +635,7 @@ interchangeable.
 
 ### `ERROR: invalid adapter name {name!r} (expected lowercase-dashed, e.g. my-csv-adapter)`
 
-`nautilus/cli/adapters.py:226`. Exit **1**. `{name}` is the positional argument, `repr()`-quoted.
+`nautilus/cli/adapters.py:236`. Exit **1**. `{name}` is the positional argument, `repr()`-quoted.
 The name becomes a Python distribution name and a package directory, so uppercase, underscores
 and leading digits are refused.
 
@@ -566,7 +645,7 @@ nautilus adapters new My_Adapter; echo "exit=$?"
 
 ### `ERROR: destination already exists and is not empty: {dest}`
 
-`nautilus/cli/adapters.py:231`. Exit **1**. `{dest}` is `Path(--dir) / name` with `str()`.
+`nautilus/cli/adapters.py:241`. Exit **1**. `{dest}` is `Path(--dir) / name` with `str()`.
 An *empty* directory of that name is fine — scaffolding proceeds into it.
 
 ```bash
@@ -576,7 +655,7 @@ nautilus adapters new my-csv-adapter --dir /tmp/n-ad; echo "exit=$?"
 
 ### `ERROR: copier is required for 'adapters new' — install it with: pip install copier`
 
-`nautilus/cli/adapters.py:237`. Exit **1**. No interpolation. `copier` renders the bundled
+`nautilus/cli/adapters.py:247`. Exit **1**. No interpolation. `copier` renders the bundled
 template and is not a runtime dependency of Nautilus, so it is absent from a normal install.
 
 ```bash
@@ -585,9 +664,10 @@ pip install copier && nautilus adapters new my-csv-adapter --dir /tmp/n-ad
 
 ### `ERROR: no config found: pass --config PATH, or run from a directory containing nautilus.yaml`
 
-`nautilus/cli/adapters.py:278-281` and `:457`. Exit **1**. No interpolation. The implicit lookup
+`nautilus/cli/adapters.py:288-291` and `:497`. Exit **1**. No interpolation. The implicit lookup
 is `./nautilus.yaml` in the process's working directory — not the config the broker is serving
-with, and not `$NAUTILUS_CONFIG`.
+with, and not `$NAUTILUS_CONFIG`. It is the whole answer: `schema` and `schema-fingerprint` stop
+here rather than going on to report the missing config a second time as a missing schema.
 
 ```bash
 cd /tmp && nautilus adapters list; echo "exit=$?"
@@ -596,7 +676,7 @@ cd /tmp/nautilus-errors && nautilus adapters list; echo "exit=$?"
 
 ### `ERROR: --status {status_filter!r} needs --url: quarantine state lives in the serving process, so a config file cannot answer it. Reporting an empty list here would look like 'nothing is quarantined'.`
 
-`nautilus/cli/adapters.py:270-274`. Exit **1**. `{status_filter}` is the `--status` value,
+`nautilus/cli/adapters.py:280-284`. Exit **1**. `{status_filter}` is the `--status` value,
 `repr()`-quoted.
 
 **Means.** Quarantine is decided at runtime by the broker as adapters fail. A config file
@@ -611,12 +691,22 @@ nautilus adapters list --status quarantined --config /tmp/nautilus-errors/nautil
 
 ### `ERROR: could not load {config_path}: {exc}`
 
-`nautilus/cli/adapters.py:317`. Exit **1**. `{config_path}` is the resolved config path;
-`{exc}` is the `ConfigError` or `OSError` from the loader — look that sentence up in
-[config.md](config.md).
+`nautilus/cli/adapters.py:327` (`adapters list`, via `_configured_adapters`) and `:175` (the four
+schema subcommands, via `_live_adapter_schema`). Exit **1** from all five, with the same sentence:
+one helper per path, one code. `{config_path}` is the resolved config path; `{exc}` is the
+`ConfigError` or `OSError` from the loader — look that sentence up in [config.md](config.md).
 
 ```bash
-: > /tmp/n-bad.yaml && nautilus adapters list --config /tmp/n-bad.yaml; echo "exit=$?"
+: > /tmp/n-bad.yaml
+nautilus adapters list --config /tmp/n-bad.yaml; echo "exit=$?"
+nautilus adapters schema-fingerprint notes --config /tmp/n-bad.yaml; echo "exit=$?"
+```
+
+```text
+ERROR: could not load /tmp/n-bad.yaml: Config root must be a mapping, got NoneType
+exit=1
+ERROR: could not load /tmp/n-bad.yaml: Config root must be a mapping, got NoneType
+exit=1
 ```
 
 ### `ERROR: {url} refused the credential (401). Pass a valid --api-key.`
@@ -628,7 +718,7 @@ errors — which sent operators to DNS, the firewall and `systemctl status` for 
 
 ### `ERROR: could not reach {url}: {exc}`
 
-`nautilus/cli/adapters.py:337`. Exit **1**. `{url}` is the `--url` value; `{exc}` is the
+`nautilus/cli/adapters.py:346`. Exit **1**. `{url}` is the `--url` value; `{exc}` is the
 `httpx.HTTPError`.
 
 ```bash
@@ -637,7 +727,7 @@ nautilus adapters list --url http://127.0.0.1:1; echo "exit=$?"
 
 ### `ERROR: no schema available for adapter {name!r}`
 
-`nautilus/cli/adapters.py:346` (`adapters schema`) and `:364`
+`nautilus/cli/adapters.py:368` (`adapters schema`) and `:386`
 (`adapters schema-fingerprint`). Exit **1**. `{name}` is `repr()`-quoted. With `--json`, `null`
 is still printed on stdout before the non-zero exit, so a JSON consumer gets valid JSON either
 way.
@@ -657,7 +747,7 @@ cd /tmp/nautilus-errors && nautilus adapters schema no_such_source --config naut
 
 ### `ERROR: no schema available for adapter {name!r}; cannot ack`
 
-`nautilus/cli/adapters.py:428`. Exit **1**. The same condition reached from `schema-ack`: there
+`nautilus/cli/adapters.py:450`. Exit **1**. The same condition reached from `schema-ack`: there
 is no current fingerprint to record an acknowledgement against. Checked **after** `--yes` and
 after `NAUTILUS_REVIEWER`.
 
@@ -669,7 +759,7 @@ cd /tmp/nautilus-errors && NAUTILUS_REVIEWER=you@example.com \
 
 ### `ERROR: schema-ack requires --yes to confirm`
 
-`nautilus/cli/adapters.py:420`. Exit **1**. No interpolation. Acknowledging drift writes a new
+`nautilus/cli/adapters.py:442`. Exit **1**. No interpolation. Acknowledging drift writes a new
 fingerprint, which silences `schema-diff` for that adapter until the schema changes again.
 
 ```bash
@@ -678,12 +768,60 @@ nautilus adapters schema-ack notes --config /tmp/nautilus-errors/nautilus.yaml -
 
 ### `WARN: could not read schema for {name!r}: {exc}`
 
-`nautilus/cli/adapters.py:179`. **Exit 0**. `adapters list` reports every adapter it can and warns
-about the ones whose schema it could not read, rather than failing the whole listing.
+`nautilus/cli/adapters.py:189`, inside `_live_adapter_schema` — so it comes from the four schema
+subcommands (`schema`, `schema-fingerprint`, `schema-diff`, `schema-ack`), never from
+`adapters list`, which reads the config's `sources` through `_configured_adapters` and never asks
+an adapter anything. `{name}` is `repr()`-quoted; `{exc}` is whatever `connect()` or
+`get_schema()` raised.
+
+It is a `WARN` because the schema read is the part that failed, not the command; **the exit code
+comes from what the caller does next.** `schema` and `schema-fingerprint` follow it with
+`ERROR: no schema available for adapter {name!r}` and exit **1**; `schema-ack` follows it with
+`; cannot ack` and exits **1**; `schema-diff` downgrades it to
+`WARN: no schema available for adapter {name!r}` and exits **0**, because an adapter it cannot
+reach is not evidence of drift.
+
+The scratch broker cannot reproduce this — its `notes` source is static and answers from the
+config file. Point a source at a port nothing is listening on instead:
+
+```bash
+cat > /tmp/n-deadpg.yaml <<'YAML'
+sources:
+  - id: deadpg
+    type: postgres
+    classification: unclassified
+    data_types: [note]
+    allowed_purposes: [research]
+    connection: postgresql://nobody@127.0.0.1:1/none
+    table: public.notes
+agents:
+  analyst:
+    id: analyst
+    clearance: unclassified
+    default_purpose: research
+YAML
+nautilus adapters schema deadpg --config /tmp/n-deadpg.yaml; echo "exit=$?"
+nautilus adapters schema-diff deadpg --config /tmp/n-deadpg.yaml; echo "exit=$?"
+nautilus adapters list --config /tmp/n-deadpg.yaml; echo "exit=$?"
+```
+
+```text
+WARN: could not read schema for 'deadpg': PostgresAdapter failed to connect to source 'deadpg': [Errno 111] Connect call failed ('127.0.0.1', 1)
+ERROR: no schema available for adapter 'deadpg'
+exit=1
+WARN: could not read schema for 'deadpg': PostgresAdapter failed to connect to source 'deadpg': [Errno 111] Connect call failed ('127.0.0.1', 1)
+WARN: no schema available for adapter 'deadpg'
+exit=0
+  deadpg  type=postgres  status=configured
+exit=0
+```
+
+The third line is the control: `adapters list` reports the same unreachable source with no
+warning at all, because it never asks it for a schema.
 
 ### `WARN: no stored fingerprint for {name!r}; treating as new`
 
-`nautilus/cli/adapters.py:383`. **Exit 0**, from `schema-diff`. There is nothing to compare
+`nautilus/cli/adapters.py:405`. **Exit 0**, from `schema-diff`. There is nothing to compare
 against yet — the first `schema-diff` for an adapter always says this. Run `schema-ack` to store
 the baseline.
 

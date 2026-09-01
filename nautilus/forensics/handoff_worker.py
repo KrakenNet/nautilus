@@ -25,16 +25,15 @@ from __future__ import annotations
 import argparse
 import asyncio
 import hashlib
-import json
 import logging
 from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import fathom
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
-from nautilus.audit.logger import NAUTILUS_METADATA_KEY
+from nautilus.audit.logger import decode_audit_line
 from nautilus.core.models import AuditEntry, InferredHandoff
 from nautilus.forensics.offsets import ProcessedOffsets
 from nautilus.forensics.sinks import (
@@ -47,25 +46,6 @@ if TYPE_CHECKING:
     from datetime import datetime
 
 log = logging.getLogger(__name__)
-
-
-def _parse_audit_line(raw: bytes) -> AuditEntry:
-    """Parse one audit line, unwrapping the fathom envelope when present.
-
-    ``AuditLogger.emit`` writes a fathom ``AuditRecord`` and nests the Nautilus
-    entry as a JSON string under ``metadata.nautilus_audit_entry``; the
-    governance and test paths write a bare ``AuditEntry``. Both shapes reach
-    the same file, so the reader accepts both -- validating only the outer
-    object made every broker-written line look malformed.
-    """
-    payload: Any = json.loads(raw)
-    if isinstance(payload, dict):
-        metadata = payload.get("metadata")
-        if isinstance(metadata, dict):
-            nested = metadata.get(NAUTILUS_METADATA_KEY)
-            if isinstance(nested, str):
-                return AuditEntry.model_validate_json(nested)
-    return AuditEntry.model_validate(payload)
 
 
 # Paths to the authoritative Fathom assets are resolved relative to the
@@ -264,13 +244,18 @@ def _process_segment(
                 offsets.mark_seen(sha)
                 lines_processed += 1
                 try:
-                    entry = _parse_audit_line(stripped)
-                except (ValidationError, ValueError) as exc:
+                    entry = decode_audit_line(stripped)
+                except ValueError as exc:
                     log.warning(
                         "handoff_worker: skipping malformed audit line at offset %d: %s",
                         new_offset,
                         exc,
                     )
+                    continue
+                if entry is None:
+                    # A readable line that carries no audit entry: the chain's
+                    # own genesis and checkpoint records, a hot-reload event.
+                    # Not malformed, and not a handoff.
                     continue
 
                 if segment_max_ts is None or entry.timestamp > segment_max_ts:

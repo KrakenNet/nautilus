@@ -10,7 +10,7 @@ serialised per caller, and it lives in the session store — so most failures he
 
 **`SessionNotOwnedError`** (`nautilus/core/__init__.py:32`), raised at
 `nautilus/core/broker.py:2357-2362`. **HTTP 403** via
-`nautilus/transport/fastapi_app.py:632-638`.
+`nautilus/transport/fastapi_app.py:699-705`.
 
 **Interpolates.** `{state.session_id!r}` — the session named in the request.
 `{agent_id!r}` — the caller that tried to use it.
@@ -32,7 +32,7 @@ data_classifications=[…])` (`nautilus/core/broker.py:1644`, keyword-only and a
 
 **`BrokerBusyError`** (`nautilus/core/__init__.py:46`), built by `_busy_message`
 (`nautilus/core/broker.py:342-360`) and raised at `:2075` and `:2079`. **HTTP 503** with
-`Retry-After: 1` (`nautilus/transport/fastapi_app.py:623-630`).
+`Retry-After: 1` (`nautilus/transport/fastapi_app.py:690-697`).
 
 **Interpolates.** `{budget}` — `session_store.lock_timeout_s`. `{what!r}` — which ledger was
 being taken (the session key or the principal key).
@@ -122,7 +122,7 @@ nautilus session version --sqlite-path /tmp/nautilus-errors/sessions.db; echo "e
 
 ### `session_store.backend: redis has no implementation. It used to load and serve sessions from memory instead, which gives replicas a per-process view of cumulative exposure and no signal that this is happening. Use postgres for a store shared across replicas, or sqlite for a durable single-node one.`
 
-`nautilus/config/models.py:587-591`, refused at startup.
+`nautilus/config/models.py:593-597`, refused at startup.
 
 ### `session_store.backend=postgres requires 'dsn' or TEST_PG_DSN env var`
 

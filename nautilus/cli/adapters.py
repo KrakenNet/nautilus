@@ -17,7 +17,7 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from nautilus.cli._common import err, ok, require_reviewer, warn
+from nautilus.cli._common import err, ok, refuse_unless_writable, require_reviewer, warn
 
 if TYPE_CHECKING:
     from nautilus.adapters.schema import AdapterSchema
@@ -158,12 +158,22 @@ def _live_adapter_schema(config_path: str, name: str) -> tuple[Any, AdapterSchem
 
     ``schema`` is ``None`` when the adapter is unknown, cannot connect, or
     does not introspect its schema.
+
+    A config that will not load is the operator's answer, not a bug: it is
+    reported the way ``_configured_adapters`` reports it and raised as
+    ``SystemExit(1)``, which ``dispatch`` turns into the exit code. Every
+    caller here needs a live broker, so there is nothing to hand back --
+    and returning without one only moved the traceback one frame out.
     """
     import asyncio
 
     from nautilus.core.broker import Broker
 
-    broker = Broker.from_config(config_path)
+    try:
+        broker = Broker.from_config(config_path)
+    except Exception as exc:  # noqa: BLE001 — a bad config is the operator's answer
+        err(f"could not load {config_path}: {exc}")
+        raise SystemExit(1) from exc
     adapter = broker._adapters.get(name)  # pyright: ignore[reportPrivateUsage]
     if adapter is None or not hasattr(adapter, "get_schema"):
         asyncio.run(broker.aclose())
@@ -440,6 +450,21 @@ def _cmd_schema_ack(args: argparse.Namespace) -> int:
         err(f"no schema available for adapter {args.name!r}; cannot ack")
         return 1
 
+    # ``record_ack`` rewrites the baseline on disk, and only then is the
+    # override audited. Reaching the writer lock at that point crashed with a
+    # traceback *after* the drift had been accepted, leaving the acknowledgement
+    # in force with nothing in the log that says who made it -- the same failure
+    # ``open_audit_logger`` refuses for a governance decision, so it is refused
+    # the same way here, before anything is written.
+    refuse_unless_writable(
+        broker.audit_logger.sink,
+        act="this acknowledgement cannot be recorded, so it will not be made",
+        remedy=(
+            "Stop the server first; the baseline this writes is read back "
+            "when it restarts, and the quarantine lifts with it."
+        ),
+    )
+
     current_fp = current_schema.fingerprint()
     broker.fingerprint_store.record_ack(
         args.name,
@@ -466,8 +491,11 @@ def _get_adapter_schema(args: argparse.Namespace) -> AdapterSchema | None:
     """
     config_path = _resolve_config(args)
     if config_path is None:
+        # Not ``return None``: the callers answer that with "no schema available
+        # for adapter '<n>'", so a missing config was reported twice, the second
+        # time as a claim about the adapter rather than about the config.
         err("no config found: pass --config PATH, or run from a directory containing nautilus.yaml")
-        return None
+        raise SystemExit(1)
     _, schema = _live_adapter_schema(config_path, args.name)
     return schema
 

@@ -137,7 +137,13 @@ class SourceConfig(_Strict):
     additive fields for elasticsearch/rest/neo4j/servicenow adapters.
     """
 
-    id: str
+    # A source id is not free text. It is interpolated into text log lines, it
+    # becomes the OpenTelemetry span name ``adapter.<id>``, and it is the
+    # ``{name}`` segment of ``GET /v1/adapters/{name}/schema``. A newline in it
+    # split one broker warning into two log records, the second forging a line
+    # the operator reads as the broker's own -- so the character set is bounded
+    # here, at the boundary, once, for every consumer rather than per call site.
+    id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
     # Open string (not a closed Literal) so entry-point-discovered and
     # local-path adapters (#17) can be referenced from source blocks.
     # Unknown types still fail closed: the loader pre-validates against

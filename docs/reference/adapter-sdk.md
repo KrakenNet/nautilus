@@ -156,21 +156,73 @@ schema, because drift then goes undetected.
 ### `SourceConfig`
 
 `nautilus.config.models.SourceConfig`, one per `sources:` entry, `extra="forbid"`.
-The fields a custom adapter normally reads:
+All 25 fields, in declaration order. "Required" is what the model itself
+demands; the conditional rules below add more for specific `type:` values.
 
-| Field | Type | Meaning for you |
+| Field | Type | Required | Default | Meaning for you |
+| --- | --- | --- | --- | --- |
+| `id` | `str` | yes | — | The key the broker files your rows under. Put it in `AdapterResult.source_id`. |
+| `type` | `str` | yes | — | Matches your `source_type`. An open `str`, not a `Literal`, so entry-point and `adapters:` types are accepted; unknown ones still fail at load (row 5 of the [catalogue](#failure-catalogue)). |
+| `description` | `str` | no | `""` | Free text for whoever reads the config. Nothing in `nautilus/` reads it. |
+| `classification` | `str` | yes | — | Policy input; you do not enforce it. |
+| `data_types` | `list[str]` | yes | — | What the router matches against the intent. |
+| `allowed_purposes` | `list[str] \| None` | no | `None` | Policy input. |
+| `max_response_bytes` | `int \| None` | no | `8388608` | Must be `> 0`; `null` removes the bound. The broker trims to it after you return. See [Truncation](#truncation). |
+| `connection` | `str` | no | `""` | DSN / base URL / path, after `${ENV}` interpolation. Required non-empty for the built-in types that dial out (below). |
+| `rows` | `list[dict[str, Any]]` | no | `[]` | Inline rows, straight from the YAML. `static` only. |
+| `table` | `str \| None` | no | `None` | Table or collection name. |
+| `embedding_column` | `str \| None` | no | `None` | pgvector only: the vector column. Unset, the adapter uses `"embedding"`. |
+| `metadata_column` | `str \| None` | no | `None` | pgvector only: the metadata column. Unset, the adapter uses `"metadata"`. |
+| `distance_operator` | `Literal["<=>", "<->", "<#>"] \| None` | no | `"<=>"` | pgvector only: the operator spliced into `ORDER BY <embedding_column> <op> $E`. Re-checked against the same three in the adapter, so it is never interpolated unchecked; `null` falls back to `<=>`. |
+| `top_k` | `int` | no | `10` | pgvector only: the `LIMIT` on the nearest-neighbour query. |
+| `embedder` | `Literal["default"] \| None` | no | `None` | Only `default` (the broker-wide embedder) resolves; there is no embedder registry, so any other name is rejected at config load rather than failing every request with `EmbeddingUnavailableError`. |
+| `index` | `str \| None` | no | `None` | elasticsearch only: the index, validated in `connect`. |
+| `label` | `str \| None` | no | `None` | neo4j only: the node label, validated against `^[A-Z][A-Za-z0-9_]*$` in `connect`. |
+| `endpoints` | `list[EndpointSpec] \| None` | no | `None` | rest / servicenow endpoint descriptors — see the table below. `[]` is refused; the REST adapter reads `endpoints[0]` only. |
+| `auth` | `BearerAuth \| BasicAuth \| MtlsAuth \| NoneAuth \| None` | no | `None` | Discriminated on `type` — see the table below. `mtls_context(config.auth, config.id)` turns an `MtlsAuth` into an `ssl.SSLContext`. |
+| `compartments` | `str` | no | `""` | Pipe-delimited compartment list, asserted verbatim as the source's `compartments` fact by the router. Policy input; you do not enforce it. |
+| `sub_category` | `str` | no | `""` | Declared classification metadata. Nothing in `nautilus/` reads it. |
+| `purpose_field` | `str` | no | `""` | Column a purpose-scoping rule constrains on. Left empty, a pack that scopes by purpose denies the source rather than over-returning it. |
+| `like_style` | `Literal["starts_with", "regex"]` | no | `"starts_with"` | How a `LIKE` constraint is rendered by an adapter that reads it. The neo4j adapter emits `STARTS WITH $p` for `starts_with` and `=~ $p` for `regex` (and logs a WARN at `connect` for `regex`); no other built-in adapter reads the field. See [Honouring a `ScopeConstraint`](#honouring-a-scopeconstraint). |
+| `model` | `str \| None` | no | `None` | llm only: the model name sent to the OpenAI-compatible endpoint at `connection`. |
+| `timeout_s` | `float \| None` | no | `15.0` | Per-source wall-clock budget for one connect+execute. The broker enforces it around `execute`; `null` waits indefinitely. |
+
+Two conditional rules run in a `model_validator` on this model, so they are load
+errors, not runtime ones:
+
+- **Mandatory field by type.** `table` for `postgres`, `pgvector`, `servicenow`;
+  `index` for `elasticsearch`; `label` for `neo4j`; `model` for `llm`; `rows`
+  for `static`. Missing → `source '<id>' has type '<type>' but no '<field>'. The
+  <type> adapter requires it, so every request to this source would fail at
+  runtime.` (`rest` is deliberately absent: `endpoints` is optional by design.)
+- **Non-empty `connection`** for `postgres`, `pgvector`, `elasticsearch`,
+  `rest`, `neo4j`, `servicenow`, `influxdb`, `s3`, `llm`. Missing → `source
+  '<id>' has type '<type>' but no 'connection'. The <type> adapter has nothing
+  to dial, so every request to this source would fail at runtime.`
+
+Neither rule covers a third-party `type`: the model cannot know what your
+adapter needs, so validate it in `connect` and raise `AdapterError`.
+
+**`EndpointSpec`** (`nautilus.config.models.EndpointSpec`, `extra="forbid"`) —
+one entry of `endpoints`:
+
+| Field | Type | Required | Default | Meaning |
+| --- | --- | --- | --- | --- |
+| `path` | `str` | yes | — | Appended to `connection`. The REST adapter uses `""` when no endpoint is declared. |
+| `method` | `Literal["GET", "POST", "PUT", "PATCH", "DELETE"]` | no | `"GET"` | HTTP method for the request. |
+| `path_params` | `list[str]` | no | `[]` | Declared; no adapter in `nautilus/` reads it. |
+| `query_params` | `list[str]` | no | `[]` | Declared; no adapter in `nautilus/` reads it. |
+| `operator_templates` | `dict[str, str]` | no | `{}` | Per-operator query templates. Opts an endpoint into operators the REST adapter otherwise refuses (`NOT IN`: `Operator 'NOT IN' is not supported by the REST adapter unless explicitly declared in EndpointSpec.operator_templates (AC-9.3).`). Keys are checked against the operator allowlist at `connect`: `EndpointSpec.operator_templates declares unknown operator '<op>' for source '<id>'`. |
+
+**`auth`** — `AuthConfig`, a union discriminated on `type`, all four
+`extra="forbid"`:
+
+| `type` | Class | Fields |
 | --- | --- | --- |
-| `id` | `str` | The key the broker files your rows under. Put it in `AdapterResult.source_id`. |
-| `type` | `str` | Matches your `source_type`. |
-| `classification` | `str` | Policy input; you do not enforce it. |
-| `data_types` | `list[str]` | What the router matches against the intent. |
-| `allowed_purposes` | `list[str] \| None` | Policy input. |
-| `connection` | `str` | DSN / base URL / path, after `${ENV}` interpolation. Default `""`. |
-| `table` | `str \| None` | Optional table or collection name. |
-| `rows` | `list[dict[str, Any]]` | Inline rows (used by the `static` type). |
-| `timeout_s` | `float \| None` | Per-source budget, default `15.0`. The broker enforces it around `execute`. |
-| `max_response_bytes` | `int \| None` | Default `8_388_608`. The broker trims to it after you return. See [Truncation](#truncation). |
-| `purpose_field` | `str` | Column a purpose-scoping rule constrains on. |
+| `bearer` | `BearerAuth` | `token: str` (required) |
+| `basic` | `BasicAuth` | `username: str`, `password: str` (both required) |
+| `mtls` | `MtlsAuth` | `cert_path: str`, `key_path: str` (both required); `ca_path: str \| None`, default `None` |
+| `none` | `NoneAuth` | none — the explicit no-auth marker |
 
 Anything a custom adapter needs that is not on this model has no place to live
 in `nautilus.yaml` — `SourceConfig` rejects unknown keys.
@@ -289,6 +341,25 @@ it. Records that arrive with a `trace_id` already set are left alone.
 `fetched_at` is excluded from the fingerprint, so re-reading an unchanged
 schema is not drift.
 
+`tables` holds `AdapterTable` (frozen dataclass), each holding `AdapterField`
+(frozen dataclass). Both are positional dataclasses, not models — nothing
+validates them, so what you construct is what gets fingerprinted:
+
+| Class | Member | Type | Required | Default |
+| --- | --- | --- | --- | --- |
+| `AdapterTable` | `name` | `str` | yes | — |
+| `AdapterTable` | `fields` | `tuple[AdapterField, ...]` | yes | — |
+| `AdapterTable` | `indexes` | `tuple[str, ...]` | no | `()` |
+| `AdapterTable` | `primary_key` | `tuple[str, ...]` | no | `()` |
+| `AdapterField` | `name` | `str` | yes | — |
+| `AdapterField` | `type` | `str` | yes | — |
+| `AdapterField` | `nullable` | `bool` | yes | — |
+| `AdapterField` | `description` | `str` | no | `""` |
+
+`AdapterField.type` is the backend's own type name as a string — nothing parses
+it, but `classify_drift` compares it, and a change is `major` drift at
+`tables.<table>.<field>.type`.
+
 ## Exceptions
 
 | Class | Base | Raise it when |
@@ -385,6 +456,12 @@ adapters:
     source_type: my-csv
 ```
 
+| YAML key | Field | Type | Required | Default | Meaning |
+| --- | --- | --- | --- | --- | --- |
+| `module_path` | `module_path` | `str` | yes | — | Path to the `.py` file, resolved relative to the config file. |
+| `class` | `class_name` | `str` | yes | — | Attribute in that module holding the adapter class. `class` is a Python keyword, hence the alias. |
+| `source_type` | `source_type` | `str` | yes | — | Must equal the class's `source_type` ClassVar (row 8 of the [catalogue](#failure-catalogue)). |
+
 Unlike entry points, these are explicit operator config and **fail closed**:
 a missing file, an import error, a missing or non-class attribute, a protocol
 gap, or a `source_type` mismatch raises `ConfigError` and the broker does not
@@ -404,8 +481,11 @@ public API. Its ten keys: `postgres`, `pgvector`, `elasticsearch`, `neo4j`,
 
 Precedence when the same `source_type` is declared more than once:
 **built-ins < entry points < local paths.** Built-ins whose driver extra is not
-installed sit in the table as stand-ins carrying `missing_extra`, so startup
-fails with an install hint rather than an import error mid-request.
+installed sit in the table as stand-ins carrying two extra ClassVars —
+`missing_extra: ClassVar[str]` (the extra to install) and
+`import_error: ClassVar[str]` (the original `ImportError`, stringified) — so
+startup fails with an install hint (row 24 of the
+[catalogue](#failure-catalogue)) rather than an import error mid-request.
 
 ## Compliance suite
 
@@ -476,10 +556,10 @@ where marked required.
 | --- | --- | --- | --- |
 | `nautilus adapters new NAME` | `--dir DIR` (default `.`) | Copier-scaffolds a package at `DIR/NAME` and prints the source type, class and next steps | `ERROR: invalid adapter name '<n>' (expected lowercase-dashed, e.g. my-csv-adapter)` — the pattern is `^[a-z][a-z0-9]*(-[a-z0-9]+)*$`; `ERROR: destination already exists and is not empty: <path>`; `ERROR: copier is required for 'adapters new' — install it with: pip install copier` |
 | `nautilus adapters list` | `--config`, `--url`, `--api-key`, `--status {active,quarantined}`, `--json` | Without `--url`: loads the config and prints `  <id>  type=<type>  status=configured` per source. With `--url`: `GET /v1/adapters` for live status | `ERROR: could not load <path>: <ConfigError>`; `ERROR: no config found: pass --config PATH, or run from a directory containing nautilus.yaml`; `ERROR: --status '<s>' needs --url: quarantine state lives in the serving process…` |
-| `nautilus adapters schema NAME` | `--config`, `--json` | Connects the source named by `NAME` (a source `id`) and prints its `AdapterSchema` field by field | `ERROR: no schema available for adapter '<n>'` |
+| `nautilus adapters schema NAME` | `--config`, `--json` | Connects the source named by `NAME` (a source `id`) and prints its `AdapterSchema` field by field | `ERROR: could not load <path>: <ConfigError>`; `ERROR: no schema available for adapter '<n>'` |
 | `nautilus adapters schema-fingerprint NAME` | `--config` | Prints `sha256:<hex>` for the live schema | same as above |
-| `nautilus adapters schema-diff NAME` | `--config` (required), `--json` | Compares live fingerprint against the stored baseline. Prints `OK: no drift for '<n>' (fingerprint matches)`, or `WARN: no stored fingerprint for '<n>'; treating as new`, or the stored/current pair followed by `DRIFT DETECTED`. JSON `status` is one of `clean`, `no_baseline`, `drift` | — (drift is reported, not an error exit) |
-| `nautilus adapters schema-ack NAME` | `--config` (required), `--reason` (required), `--yes` (required) | Records the current fingerprint as the accepted baseline and emits a `schema_drift_severity_overridden` event. Prints `OK: schema-ack recorded for '<n>' by <reviewer>: <reason>` | `ERROR: schema-ack requires --yes to confirm`; missing `NAUTILUS_REVIEWER` env; `ERROR: no schema available for adapter '<n>'; cannot ack` |
+| `nautilus adapters schema-diff NAME` | `--config` (required), `--json` | Compares live fingerprint against the stored baseline. Prints `OK: no drift for '<n>' (fingerprint matches)`, or `WARN: no stored fingerprint for '<n>'; treating as new`, or the stored/current pair followed by `DRIFT DETECTED`. JSON `status` is one of `clean`, `no_baseline`, `drift` | `ERROR: could not load <path>: <ConfigError>` — its only non-zero exit once argparse is satisfied. Drift itself is reported, not an error exit |
+| `nautilus adapters schema-ack NAME` | `--config` (required), `--reason` (required), `--yes` (required) | Records the current fingerprint as the accepted baseline and emits a `schema_drift_severity_overridden` event. Prints `OK: schema-ack recorded for '<n>' by <reviewer>: <reason>` | `ERROR: schema-ack requires --yes to confirm`; missing `NAUTILUS_REVIEWER` env; `ERROR: could not load <path>: <ConfigError>`; `ERROR: no schema available for adapter '<n>'; cannot ack`; `ERROR: this acknowledgement cannot be recorded, so it will not be made: …` (exit `2`) when `audit.chained: true` and a running server holds the log's writer lock — the baseline is left untouched |
 
 `status=configured`, never `active`: the CLI process is not the one serving
 requests, so it cannot know whether an adapter is connected or quarantined.

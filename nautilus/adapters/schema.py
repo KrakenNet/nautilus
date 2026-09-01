@@ -365,7 +365,7 @@ class SchemaFingerprintStore:
             # value cannot be compared to today's, so reporting a mismatch
             # would quarantine every source on upgrade with no migration path.
             log.info(
-                "re-baselining adapter '%s': its fingerprint was recorded in format %r, "
+                "re-baselining adapter %r: its fingerprint was recorded in format %r, "
                 "this release uses format %d",
                 adapter_id,
                 record.get("format"),

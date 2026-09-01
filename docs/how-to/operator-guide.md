@@ -391,9 +391,9 @@ nautilus serve --config /etc/nautilus/nautilus.yaml \
 | `--transport` | `rest` | `rest`, `mcp`, or `both` |
 | `--mcp-mode` | `stdio` | MCP transport when `mcp`/`both`: `stdio` or `http` |
 | `--bind` | `127.0.0.1:8000` | REST bind address (`both` puts MCP http on port+1) |
-
 | `--air-gapped` | — | See below |
 | `--log-format` | `text` | `text` or `json` (structured logs for SIEM ingestion) |
+| `--log-level` | `info` | `debug`, `info`, `warning`, `error`, `critical` — see below |
 
 Probe it:
 
@@ -456,6 +456,70 @@ OTel `trace_id`/`span_id` are attached when a span is active. The broker's
 *decision* record is the audit log (below) — application logs are for the
 surrounding operational events.
 
+### Log verbosity
+
+`--log-level` sets one threshold for both halves of the stream: the root
+logger every `nautilus.*` module writes to, and uvicorn's own logger, which
+owns the `Started server process` / `Application startup complete` /
+`Uvicorn running on` lines and the per-request access line. It takes
+`debug`, `info` (default), `warning`, `error` or `critical`, and it composes
+with `--log-format`.
+
+There is no environment variable and no config key for this — the flag is the
+whole mechanism, exactly as for `--log-format`. Set it in the same place you
+set `--bind`: the `args:` list of the Deployment, or the unit file's
+`ExecStart`.
+
+At the default, a boot plus one readiness probe plus one request against a
+broker holding a single bare API key produces this, start to finish:
+
+```console
+$ nautilus serve --config nautilus.yaml --bind 127.0.0.1:8802
+INFO:nautilus.core.broker:discovered adapter entry-point 'influxdb' -> InfluxDBAdapter (from 'nautilus-rkm')
+INFO:nautilus.core.broker:discovered adapter entry-point 's3' -> S3Adapter (from 'nautilus-rkm')
+INFO:     Started server process [2278776]
+INFO:     Waiting for application startup.
+WARNING:nautilus.transport.fastapi_app:api.keys[0] is a bare string: bound to no agent_id, so it can ask as any agent and call every governance route. Use the {key, agent_id, capabilities} form to scope it.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8802 (Press CTRL+C to quit)
+INFO:     127.0.0.1:55412 - "GET /readyz HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55424 - "POST /v1/request HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [2278776]
+```
+
+`--log-level warning` reduces that same run to one line, because everything
+else in it is `INFO`:
+
+```console
+$ nautilus serve --config nautilus.yaml --bind 127.0.0.1:8802 --log-level warning
+WARNING:nautilus.transport.fastapi_app:api.keys[0] is a bare string: bound to no agent_id, so it can ask as any agent and call every governance route. Use the {key, agent_id, capabilities} form to scope it.
+```
+
+**That is a real trade, not a cosmetic one.** The startup lines this page and
+the rest of the how-to guides tell you to read — the bare-key warning, the
+"no `agents:` block" warning, the adapter entry-point discoveries, the
+rule-pack collision errors — are `INFO` and `WARNING`. At `warning` you keep
+the warnings and errors and lose the discoveries and the access log; at
+`error` you lose the bare-key warning too. Prefer `--log-format json` and
+filter downstream over raising the threshold, unless the access log is what
+you are trying to silence.
+
+`--log-level debug` adds `DEBUG` from every library on the root logger, not
+only from `nautilus.*` — the first extra line on a normal boot is
+`DEBUG:asyncio:Using selector: EpollSelector`. It is a debugging setting, not
+a "more detail about routing" setting: the broker's own reasoning is not on
+this stream at all, it is in the audit entry's `rule_trace`.
+
+The two flags compose. `--log-format json --log-level warning` emits the
+warning above as one object:
+
+```json
+{"ts": "2026-09-01T11:17:50.207273+00:00", "level": "WARNING", "logger": "nautilus.transport.fastapi_app", "module": "fastapi_app", "msg": "api.keys[0] is a bare string: bound to no agent_id, so it can ask as any agent and call every governance route. Use the {key, agent_id, capabilities} form to scope it."}
+```
+
 ## 4. Monitor
 
 - `GET /healthz` — liveness; `GET /readyz` — readiness (verifies the audit
@@ -473,11 +537,112 @@ surrounding operational events.
     `reason: session_store_timeout`. A store that is *down* fails fast; one
     that is reachable but frozen — a paused container, a saturated primary —
     would otherwise never answer the probe at all.
-- `GET /metrics` — Prometheus exposition (request counts, durations,
-  denials, adapter errors).
+- `GET /metrics` — Prometheus text exposition. Request counts, end-to-end and
+  per-adapter durations, denials and adapter errors are all there, but **only
+  on an install that has the `otel` extra** — see
+  [What `/metrics` exports](#what-metrics-exports) for the exact list, and for
+  the two configurations in which most of it disappears.
 - `examples/full-showcase/` ships a docker-compose stack with Prometheus,
   Grafana (provisioned dashboards), and Tempo — see
   [Monitor with Grafana](monitor-with-grafana.md).
+
+### What `/metrics` exports
+
+**First: install the extra.** The endpoint is served by `prometheus_client`,
+which ships in the `otel` extra and nowhere else. On a base
+`pip install nautilus-rkm` the route's import of it fails, and the scrape
+answers **HTTP 500** (`Internal Server Error`) with the `ImportError` traceback
+in the broker's log. The broker keeps serving traffic normally — only the
+scrape target is dead, and nothing warns you at startup:
+
+```bash
+pip install "nautilus-rkm[otel]"     # opentelemetry-sdk, the Prometheus
+                                     # exporter, prometheus-client
+```
+
+With the extra installed, `nautilus serve` needs no further configuration:
+the meter provider and the Prometheus reader are installed during app startup
+and `GET /metrics` is ungated (no `X-API-Key`, excluded from the OpenAPI
+schema).
+
+**Application metrics** — recorded by the broker, exported through the
+OpenTelemetry Prometheus exporter. The exporter appends the unit to each
+histogram name, which is why the `_seconds` suffix does not appear in the
+source:
+
+| Series | Type | Labels | What it answers |
+|---|---|---|---|
+| `nautilus_requests_total` | counter | — | Request rate. One per broker request whichever transport it arrived on — `POST /v1/request`, `POST /v1/query`, the MCP `nautilus_request` tool — incremented *before* the pipeline runs, so denied and errored requests are counted too. |
+| `nautilus_routing_decisions_total` | counter | — | How much work a request is doing: incremented by the number of sources the router selected, not by one. A request denied at every source adds nothing, so this is not a copy of `requests_total`. |
+| `nautilus_scope_denials_total` | counter | `rule_name` | Which policy is doing the denying. One increment per denial record, so a request denied across three sources adds three. |
+| `nautilus_attestation_total` | counter | `outcome` = `emitted` \| `sink_error` | Whether the signed receipt actually reached the sink. `sink_error` climbing while `emitted` is flat means the attestation trail is being lost. |
+| `nautilus_adapter_errors_total` | counter | `source_id`, `error_type` | Which upstream is failing and how. `error_type` is the same string the response's `error_records[].error_type` carries: usually the exception class name (`SSRFBlockedError`, `ScopeEnforcementError`), plus the literal `AdapterError` for an unregistered source or one inside its 30-second connect cooldown, and `ADAPTER_QUARANTINED` for one held out on schema drift. |
+| `nautilus_session_exposure_flags_total` | counter | — | How often cumulative-exposure facts are being asserted, i.e. how close callers are running to the escalation packs. |
+| `nautilus_request_duration_seconds` | histogram | — | End-to-end latency, broker-side. This is the one to build the p50/p90/p99 panel on. |
+| `nautilus_adapter_latency_seconds` | histogram | `source_id` | Which source is the slow one. |
+| `nautilus_fathom_evaluation_duration_seconds` | histogram | — | Time in the CLIPS engine alone. Subtract it from `request_duration` to separate "policy is slow" from "the data is slow". |
+
+All three histograms share explicit bucket boundaries in **seconds** —
+`0.001 0.005 0.01 0.05 0.1 0.25 0.5 1 2.5 5 10 30` plus `+Inf`. The SDK
+default boundaries are millisecond-shaped, so without this every observation
+would land in the first bucket and no quantile would mean anything.
+
+**Two exposition details that will otherwise cost you an afternoon:**
+
+- *Counters exist at zero from startup; histograms do not.* The six counters
+  are published at `0` before any traffic, so
+  `rate(nautilus_scope_denials_total[5m]) > 0` matches a real series on a
+  broker that has never denied anything. The three histograms are not primed —
+  a `_bucket`/`_sum`/`_count` series only appears after the **first request**.
+  A fresh replica with a "no data" latency panel is normal; a replica that has
+  served traffic and still has none is not.
+- *Priming leaves an empty-label series behind.* Because the zero is published
+  with no attributes, a labelled counter carries one extra sample with the
+  label empty:
+
+    ```text
+    nautilus_scope_denials_total{rule_name=""} 0.0
+    nautilus_scope_denials_total{rule_name="purpose-not-permitted"} 1.0
+    ```
+
+    It sums to nothing, but it does show up as a phantom entry in a
+    `by (rule_name)` breakdown. Filter it with `{rule_name!=""}`.
+
+**Broker-state gauges** — read at scrape time by collectors registered
+directly on `prometheus_client`, so these survive `OTEL_SDK_DISABLED=true`
+when nothing else does:
+
+| Series | Type | Labels | What it answers |
+|---|---|---|---|
+| `nautilus_ruleset_info` | gauge | `ruleset_hash` | Which policy this replica loaded. Always `1`; the value carries no information, the label does. Alert on `count(count by (ruleset_hash) (nautilus_ruleset_info)) > 1` to catch a split fleet mid-rollout. |
+| `nautilus_rkm_queue_depth` | gauge | — | Pending rule proposals waiting on a reviewer. |
+| `nautilus_rkm_queue_oldest_age_seconds` | gauge | — | How long the oldest one has waited. Page on this, not on depth: a queue of one that is three days old is the failure. |
+
+Both `rkm_queue` families are declared (`# HELP` / `# TYPE`) from the first
+scrape but carry **no sample** until the review queue has been touched in this
+process — a `GET /v1/rkm/queue` is enough. That is not the same as a depth of
+zero, and a dashboard that plots the absence as zero will be wrong.
+
+**Runtime metrics you did not ask for but will see:**
+`process_resident_memory_bytes`, `process_cpu_seconds_total`,
+`process_open_fds`, `process_max_fds`, `process_virtual_memory_bytes`,
+`process_start_time_seconds`, `python_info`, `python_gc_objects_collected_total`,
+`python_gc_objects_uncollectable_total`, `python_gc_collections_total` — the
+`prometheus_client` defaults. Plus `target_info{service_name="nautilus", ...}`
+and the OTel SDK's own `otel_sdk_span_started_total`, `otel_sdk_span_live` and
+`otel_sdk_metric_reader_collection_duration_seconds`.
+`process_resident_memory_bytes` is the series to check against the plateau in
+[Memory under sustained load](#memory-under-sustained-load).
+
+**`OTEL_SDK_DISABLED=true` is not a way to quiet the tracer.** It short-circuits
+the whole observability setup, so the meter provider is never installed and
+every one of the nine `nautilus_*` application series above disappears from the
+exposition. What is left is `nautilus_ruleset_info`, the two `rkm_queue`
+gauges, and the `process_*` / `python_*` defaults — `/metrics` still answers
+`200`, which is what makes this hard to spot. To stop exporting *traces* while
+keeping metrics, simply leave `OTEL_EXPORTER_OTLP_ENDPOINT` unset; that is the
+supported off-switch (see
+[Traces are exported only when you say where](#which-rules-are-in-force)).
 
 ## 5. Query the audit trail
 
@@ -509,16 +674,42 @@ audit:
 
 It signs each line, so it requires `attestation.enabled` with a signing key
 and is refused at startup without one. A chain is a total order: one writer
-per file, exactly as for `attestation.sink`. Verify with the same
-`fathom.chained_log.verify_chain` the admin audit view uses. Checkpoints
-anchor the tail, which is what makes a *truncation* — as opposed to an edit —
-detectable, so set `checkpoint_interval` if that is part of your threat model.
+per file, exactly as for `attestation.sink`. Verify it offline with
+`nautilus attestation verify <path>`, which reads `<path>.pub.pem` from beside
+the log and runs `fathom.chained_log.verify_chain` over it — the admin
+console's chain badge runs that same check, but over the chained
+`attestation.sink` rather than this file. Checkpoints anchor the tail, which
+is what makes a *truncation* — as opposed to an edit — detectable, so set
+`checkpoint_interval` if that is part of your threat model.
 
-**Backup:** the audit file is append-only JSONL — rotate and archive it
-like any log (e.g. `logrotate` with `copytruncate` disabled; move the file
-and HUP is *not* needed since the broker holds the path, so prefer
-copy-then-trim during a maintenance window, or ship lines continuously
-with a follower like `filebeat`).
+**Chaining does not cost you this API.** A chained line is an envelope —
+`{"v", "seq", "prev_sha256", "record", "jws", "iat"}` — and the reader unwraps
+it, so `GET /v1/audit`, `GET /v1/audit/{request_id}` and the admin audit view
+answer from a chained log exactly as they do from a plain one. One file gives
+you the browser and offline-verifiable integrity, from one `/v1/request`:
+
+```console
+$ curl -s -H "X-API-Key: $NAUTILUS_API_KEY" "http://127.0.0.1:8000/v1/audit?limit=50" \
+    | jq -c '{n: (.entries|length), first: .entries[0].event_type}'
+{"n":2,"first":"request"}
+$ nautilus attestation verify /var/lib/nautilus/audit.jsonl
+OK: chain valid — 2 records, head b2f74121bb605dfaba94882e874dd6e48d8aaa6a295f52925c772d584fc97363
+```
+
+Two shapes in the file carry no audit entry and are skipped without comment:
+the chain's genesis record and its periodic checkpoints. So
+`Skipping corrupt audit line:` in the broker's log still means what it says — a
+line that could not be read — rather than being the normal noise of a chained
+log.
+
+**Backup:** the audit file is append-only JSONL, so it is the one piece of
+durable state that tolerates a copy from a running broker — rotate and archive
+it like any log (`logrotate` with `copytruncate` disabled; a HUP is *not*
+needed since the broker holds the path, so prefer copy-then-trim during a
+maintenance window, or ship lines continuously with a follower like
+`filebeat`). It is not the only durable state there is — see
+[Back up and restore](#9-back-up-and-restore) for the full list and the
+stop-archive-restore procedure.
 
 ## 6. Rotate signing keys
 
@@ -572,6 +763,14 @@ The broker fingerprints each adapter's schema when it first connects;
 unexpected drift quarantines the source (it stops receiving routed
 requests, including the request that discovered the drift) until an
 operator acknowledges the change with `schema-ack`.
+
+With `audit.chained: true`, make that acknowledgement while the server is
+down. `schema-ack` audits the override it records, a chained log admits one
+writer, and the running broker holds it — so beside a live server the command
+refuses with exit `2` and rewrites nothing, rather than accepting the drift
+into a baseline the log has no line for. Stop the broker, run `schema-ack`,
+start it again: the baseline is read back at startup and the quarantine lifts
+with it. An unchained audit log has no such lock and no such restriction.
 
 Baselines live under `.nautilus/adapters/fingerprints/` next to the
 config file, so they survive a restart. `schema-diff` and `schema-ack`
@@ -714,3 +913,259 @@ have is caught here rather than at the next broker start.
 See the [rule-authoring guide](authoring-rules.md) for the full workflow,
 including shadow detection and sandbox replay against production audit
 history.
+
+## 9. Back up and restore
+
+There is no backup command, no snapshot endpoint, and no incremental or
+point-in-time restore. Nautilus keeps its durable state as ordinary files in
+one directory (plus, optionally, a Postgres database it does not own), so the
+whole procedure is: **stop the process, archive the directory, and put it
+back**. That is the honest shape of it, and the rest of this section is the
+file list, the one ordering constraint that will bite you, and the commands
+that prove a restore worked.
+
+### What is durable
+
+Every path below is resolved **relative to the config file's own directory**
+unless it is absolute (see [Relative paths](#relative-paths)) — with one
+exception, called out in the table.
+
+| Thing | Where | Set by | Lose it and… |
+|---|---|---|---|
+| Decision record | `audit.jsonl` | `audit.path` | The compliance trail is gone. Nothing else breaks; the broker starts a new file. |
+| Audit chain public key | `audit.jsonl.pub.pem` | derived — written beside `audit.path` | Recoverable, not critical: delete it and the next broker start re-exports a byte-identical file from the private key. It is in the archive so a third party can verify the log offline without ever touching the key. |
+| Attestation signing key | `attestation.pem` | `attestation.private_key_path` | **Every chained log signed with it becomes unappendable.** See [the ordering constraint](#restore-the-key-with-the-log-not-after-it). |
+| Attestation envelopes | e.g. `attestations.jsonl` (+ `.pub.pem`) | `attestation.sink.path`, when `type: file` | The independent receipt trail is gone. |
+| Session-token signing ring | `keyring.json` | `session_tokens.key_ring_path` | Every outstanding session token fails with `unknown_kid` — a forced logout, not corruption. Only exists if you set the path; otherwise the ring is in-process and there is nothing to back up. |
+| Exposure ledger (SQLite) | `sessions.db` | `session_store.sqlite_path` | Cumulative-exposure counts reset to empty, so escalation rules stop firing until callers re-accumulate. |
+| Exposure ledger (Postgres) | tables `nautilus_session_state` and `nautilus_schema_version` in the database at `session_store.dsn` | — | As above. This is an ordinary Postgres database Nautilus does not own: back it up with `pg_dump` on your existing schedule, and restore it before the broker starts. |
+| Adapter schema baselines | `<state_dir>/.nautilus/adapters/fingerprints/*.json` | `state_dir` | Every source re-baselines on first connect, which means a drift that was already there is silently accepted as the new normal. Quarantine itself is in-memory and re-derived from these files. |
+| Rule review queue and lineage | `.nautilus/rkm/queue/`, `.nautilus/rkm/lineage/` | **not configurable** — always relative to the broker's *working directory* | Pending proposals and promoted-rule history are gone. |
+| Your own rule files | whatever `rules.user_rules_dirs` lists | `rules.user_rules_dirs` | `POST /v1/rules/{name}/retract` rewrites these files, so they are state, not just input. |
+| The config, and the secrets it interpolates | `nautilus.yaml` | — | Everything. `${VAR}` references are resolved from the environment at load; the file records *which* variables, not their values. |
+
+The RKM row is the one that surprises people: those two directories are **not**
+under `state_dir` and **not** next to the config file. Give the broker a
+working directory equal to its state directory and the problem goes away —
+`WorkingDirectory=/var/lib/nautilus` in the unit file, or a `workingDir` on the
+container — after which one archive covers everything.
+
+If you have not set `attestation.private_key_path` yet, there is nothing in
+that row to back up — the broker mints a throwaway keypair per process, and a
+restart already invalidates every token it signed. Generating a persistent one
+is a single command; Nautilus reads a standard PKCS#8 Ed25519 PEM:
+
+```console
+$ openssl genpkey -algorithm ed25519 -out "$STATE/attestation.pem" && chmod 600 "$STATE/attestation.pem"
+$ ls -l "$STATE/attestation.pem" | awk '{print $1, $NF}'
+-rw------- /var/lib/nautilus/attestation.pem
+```
+
+Nothing else needs backing up. `session_store.backend: memory`, the in-process
+key ring when `key_ring_path` is unset, MCP transport sessions, and the
+connect-failure cooldowns are all deliberately per-process and are meant to be
+lost on restart.
+
+### Back up
+
+Stop first. This is not paranoia about a torn tarball: `sessions.db` is
+SQLite in WAL mode, so while the broker runs there is a `sessions.db-wal`
+holding committed transactions that are not yet in the main file, and copying
+`sessions.db` alone gives you a database missing its most recent writes.
+A clean shutdown checkpoints and removes the `-wal`, which is why it is absent
+from the archive listing below.
+
+```bash
+export CONFIG=/etc/nautilus/nautilus.yaml
+export STATE=/var/lib/nautilus          # state_dir, and the broker's cwd
+export BACKUP=/srv/backups/nautilus
+
+systemctl stop nautilus                 # or: kubectl scale deploy/nautilus --replicas=0
+
+tar -C "$(dirname "$STATE")" --exclude='*.lock' \
+    -czf "$BACKUP/nautilus-$(date -u +%Y%m%dT%H%M%SZ).tgz" "$(basename "$STATE")"
+cp "$CONFIG" "$BACKUP/"
+
+systemctl start nautilus
+```
+
+The `--exclude='*.lock'` matters. `audit.jsonl.lock` and
+`.nautilus/rkm/queue/.lock` are the `flock` files that enforce one-writer-per
+chained-log and one-writer-per-queue. They carry no data, and restoring a
+stale one onto a live host is a way to confuse yourself, not a way to lose
+data.
+
+What is on disk before the archive, and what comes out of it — a broker with a
+chained audit log, a SQLite session store, a persisted key ring and one
+connected source:
+
+```console
+$ ls -A "$STATE"
+.nautilus
+attestation.pem
+audit.jsonl
+audit.jsonl.lock
+audit.jsonl.pub.pem
+keyring.json
+keyring.json.lock
+sessions.db
+$ tar tzf /srv/backups/nautilus/nautilus-20260901T112616Z.tgz
+nautilus/
+nautilus/keyring.json
+nautilus/.nautilus/
+nautilus/.nautilus/adapters/
+nautilus/.nautilus/adapters/fingerprints/
+nautilus/.nautilus/adapters/fingerprints/orders.json
+nautilus/audit.jsonl.pub.pem
+nautilus/sessions.db
+nautilus/attestation.pem
+nautilus/audit.jsonl
+```
+
+Note what is *not* there: no `sessions.db-wal` and no `sessions.db-shm`. The
+clean shutdown checkpointed them into `sessions.db`. If you see those two in
+an archive, it was taken from a running broker and the database in it is a
+torn copy.
+
+**The archive contains a private key.** `attestation.pem` and `keyring.json`
+are both key material, so the archive is as sensitive as the broker's own
+secrets — encrypt it at rest and give it the same access control as
+`/etc/nautilus`.
+
+If you cannot take an outage, the one piece that tolerates a hot copy is the
+audit log: it is append-only, so `cp` gives you a valid prefix, and a partial
+final line is the worst case. Use `logrotate` with `copytruncate` **disabled**
+and copy-then-trim in a maintenance window, or ship lines continuously with a
+follower like `filebeat`. Everything else in the table wants the process
+stopped.
+
+### Restore
+
+```bash
+systemctl stop nautilus                  # if anything is running
+rm -rf "$STATE"                          # a restore replaces, it does not merge
+tar -C "$(dirname "$STATE")" -xzf "$BACKUP/nautilus-20260901T112616Z.tgz"
+chmod 600 "$STATE/attestation.pem" "$STATE/keyring.json"
+systemctl start nautilus
+```
+
+`tar` restores the file modes it recorded, but the `chmod` is not
+superstition: an archive unpacked as a different user, or copied through a
+tool that normalises permissions, will hand you a world-readable
+`attestation.pem`. Both files are private keys.
+
+`rm -rf` rather than extracting over the top is deliberate: `tar` will not
+remove a file the archive lacks, so an in-place extract leaves yesterday's
+fingerprints and yesterday's proposals mixed in with today's, and the
+adapter-drift check then compares against a baseline that never existed. There
+is no merge mode and no partial restore — the directory is the unit.
+
+For a Postgres session store, restore the database with your Postgres tooling
+**before** starting the broker. It refuses to start against a schema version
+it does not understand rather than migrating anything, so a mismatched restore
+fails at startup with a readable error instead of corrupting rows.
+
+### Verify the restore
+
+Four checks, none of which need a client. Run them against the restored state
+directory; the outputs below are from a real stop-destroy-restore cycle.
+
+```console
+$ nautilus attestation verify "$STATE/audit.jsonl"
+OK: chain valid — 9 records, head b9a0e5c3a31ba8de690729cbf2c706f414200ad8445cc9b8c9270b027596af67
+$ curl -s http://127.0.0.1:8000/v1/keys/jwks.json
+{"keys":[{"kty":"OKP","crv":"Ed25519","kid":"4bac7e75-ea87-4905-80eb-42ab20c6d755","x":"ODvf1pTI9fD6iUTsfiV5htfLCX3IZvp3C_WBnXh_oLE","use":"sig"}]}
+$ nautilus session version --sqlite-path "$STATE/sessions.db"
+store schema version: 1
+this build understands: 1
+$ nautilus adapters schema-diff orders --config "$CONFIG"
+OK: no drift for 'orders' (fingerprint matches)
+```
+
+Read them as: the audit chain is intact and its **head hash is byte-identical
+to the one recorded before the backup** — that is the check that proves the
+trail survived, and it is worth writing the head down when you take the
+backup. The `kid` is the one that was live before the restore, so the key ring
+came back and outstanding session tokens still verify — a fresh ring would
+show a new random `kid`. The session store carries a schema this build reads.
+The adapter baseline is the one that was captured, so a source that was
+already drifting still reports as drifting rather than being silently
+re-baselined.
+
+Then prove it is live, and that the chain still accepts appends:
+
+```console
+$ curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:8000/v1/request \
+    -H "X-API-Key: $NAUTILUS_API_KEY" -H 'Content-Type: application/json' \
+    -d '{"agent_id":"analyst","intent":"orders please","context":{"purpose":"analytics"}}'
+200
+$ nautilus attestation verify "$STATE/audit.jsonl"
+OK: chain valid — 12 records, head 1f1eb2410e804b6d36245ee8fe80a94bc37bbf9457c95cb22f8879580e772b8e
+```
+
+The record count grew and the head moved: the restored chain is not a
+read-only artefact, it is the live log again.
+
+**Governance writes are in the chain too**, so that first check covers them.
+`POST /v1/rkm/queue` records `proposal_emitted` and `proposal_validated`
+through the broker's own audit logger rather than a sink of its own, which
+means a rule submission moves the head like any other write and leaves the log
+verifiable:
+
+```console
+$ nautilus attestation verify "$STATE/audit.jsonl"
+OK: chain valid — 4 records, head 8b7df8593f68f34fc919c7c312dc324a5245f80af6765fc10dd320bd24dc97e8
+$ curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:8000/v1/rkm/queue \
+    -H "X-API-Key: $NAUTILUS_API_KEY" -H 'Content-Type: application/json' \
+    -d "{\"rule_yaml\": $(jq -Rs . < proposed-rule.yaml)}"
+201
+$ nautilus attestation verify "$STATE/audit.jsonl"
+OK: chain valid — 6 records, head 5653557bf8de8474498a1ff94d423876728b1d3f5ff42b53010c0ab894752a6b
+```
+
+The same holds for the CLI's governance decisions — `rule retract`,
+`rule rollback`, `rkm queue submit`, `rkm queue reject` — which write through
+the configured sink rather than opening a plain one. What they cannot do is
+write while a server holds the chain's single writer lock; see
+[`ERROR: this decision cannot be recorded, so it will not be taken`](../reference/errors/cli.md#error-this-decision-cannot-be-recorded-so-it-will-not-be-taken-problem).
+
+### Restore the key with the log, not after it
+
+A chained log pins the fingerprint of the key that opened it, in its genesis
+record. Restore `audit.jsonl` next to a *different* `attestation.pem` — a key
+that was regenerated because the old one was not in the backup — and the
+broker starts, passes its readiness probe, and then fails **every request**:
+
+```console
+$ curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/readyz
+200
+$ curl -s -X POST http://127.0.0.1:8000/v1/request -H "X-API-Key: $NAUTILUS_API_KEY" ...
+Internal Server Error
+```
+
+The reason is only in the broker's log, not in the response:
+
+```text
+fathom.errors.AttestationError: chained log /var/lib/nautilus/audit.jsonl is corrupt; refusing append: signing key fingerprint 7e3297e543ef8f4d1227aa1a5dde42e755a1e5eb6109045526baf0fc0130e71e does not match log genesis key fingerprint 555933b595e027c61b025df81bf15c149f00ba064f44d92f29ae3eca92fc57e0
+```
+
+`/readyz` does not cover this — it checks that the audit sink is *writable*,
+and the refusal happens later, at append time, so the replica joins the
+Service and then fails everything. Put the matching `attestation.pem` back
+and the next request is a `200` again; the chain resumes where it stopped:
+
+```console
+$ curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:8000/v1/request ...
+200
+$ nautilus attestation verify "$STATE/audit.jsonl"
+OK: chain valid — 15 records, head 910b60b0ad7516a11730466d3a6416ad977a283c05fafe1438f8985df3fb6769
+```
+
+If the key is genuinely lost, that log can never be appended to again and its
+signatures can never be checked: move it aside as a dead archive and let the
+broker open a new chain with a new key. Nothing recovers it — which is why
+`attestation.pem` is the one row in the table above set in bold.
+
+Run the whole cycle — stop, archive, destroy, restore, verify — against a
+staging copy before you need it. A backup nobody has restored is a file, not
+a backup.

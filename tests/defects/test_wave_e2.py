@@ -12,10 +12,12 @@ line of fix was written:
    never got the same treatment.
 
    The lock belongs at the first write, not at construction: W7 gate 5 pins
-   that a read-only ``nautilus adapters list`` / ``schema-ack`` must still
-   build a Broker while the server runs, and ``schema-ack`` is the documented
-   recovery from a drift quarantine. So both brokers still start; the second
-   one refuses to serve.
+   that the read-only CLI surfaces -- ``nautilus adapters list``, ``schema``,
+   ``schema-fingerprint``, ``schema-diff`` -- must still build a Broker while
+   the server runs. So both brokers still start; the second one refuses to
+   serve. (``schema-ack`` builds one too, but it is not read-only: it audits
+   the override it records, so it meets this lock at the write and is refused
+   with exit 2 -- see WAVE E26.)
 
 2. A session token minted by replica A is rejected by replica B with
    ``broker_instance_mismatch``, even when both share the documented

@@ -202,6 +202,7 @@ def _cmd_queue_submit(args: argparse.Namespace) -> int:
         rule_path,
         queue=_open_queue(),
         audit_log=audit_path_for(config_path),
+        audit_logger=open_audit_logger(config_path),
         **settings,
     )
     confidence = proposal.validation.get("confidence", 0.0)

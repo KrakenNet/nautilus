@@ -79,8 +79,8 @@ through: `GET`, approve and reject all answer **404** with
 
 ### `{"error": "already_decided", "current_status": …}`
 
-**HTTP 409**, a JSON object rather than a string. `nautilus/transport/fastapi_app.py:1336-1341`
-and `:1382-1387`, from `AlreadyDecidedError` (`nautilus/rkm/review.py:39`). `current_status` is
+**HTTP 409**, a JSON object rather than a string. `nautilus/transport/fastapi_app.py:1429-1433`
+and `:1492-1496`, from `AlreadyDecidedError` (`nautilus/rkm/review.py:39`). `current_status` is
 the status the proposal already holds — `approved`, `rejected` or `retracted`. Decisions are not
 idempotent replays: a second one is refused, not silently ignored.
 
@@ -92,9 +92,12 @@ state machine has no edge between those two states.
 ### `lock contention timeout on proposal queue`
 
 **`ProposalQueueLocked`** (`nautilus/rkm/queue.py:52`), raised at `:103` and `:114` after a
-5-second `lockf` backoff. Maps to HTTP 503. Another process holds the queue file lock — a
-concurrent `nautilus rkm` command, or a stale lock from a killed process. Retry; if it persists,
-find the process holding the lock on the queue file.
+5-second `lockf` backoff. Maps to HTTP 503. Another *live* process holds the queue file lock —
+a concurrent `nautilus rkm` command, or a server serving a governance route. There is no such
+thing as a stale one: `lockf` locks are held by the process, and the kernel drops them when it
+exits however it exits, so a `.lock` file left behind by a `kill -9` blocks nothing and must not
+be deleted to "clear" it. Retry; if it persists, find the process still running
+(`fuser <queue_dir>/.lock`).
 
 ### Governance request-body validation
 

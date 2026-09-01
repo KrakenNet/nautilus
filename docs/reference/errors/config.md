@@ -123,16 +123,32 @@ The `path` is a dotted route into the YAML: `sources.0.classification` is the `c
 key of the first source. `Field required [type=missing]` means the key is absent; every source
 needs at least `id`, `type`, `classification` and `data_types`.
 
+### `sources.{i}.id: String should match pattern '^[A-Za-z0-9][A-Za-z0-9._-]*$' [type=string_pattern_mismatch]`
+
+`nautilus/config/models.py:146`. A source id is letters, digits, `.`, `_` and `-`, starting with
+a letter or a digit. The bound is there because the id is *reproduced*: it is interpolated into
+application log lines, it becomes the OpenTelemetry span name `adapter.<id>`, and it is the
+`{name}` segment of `GET /v1/adapters/{name}/schema`. A newline in it used to split one log
+record into two, the second reading as a line the broker wrote itself.
+
+```text
+Config validation failed:
+  sources.0.id: String should match pattern '^[A-Za-z0-9][A-Za-z0-9._-]*$' [type=string_pattern_mismatch]
+```
+
+The anchors are exact rather than lenient: a *trailing* newline is refused too. Rename the source;
+nothing downstream stores the old id except the audit entries already written, which keep it.
+
 Nautilus's own validators appear here as `Value error, <message>`:
 
 ### `source '{self.id}' has type '{self.type}' but no '{required}'. The {self.type} adapter requires it, so every request to this source would fail at runtime.`
 
-`nautilus/config/models.py:205-210`. `{required}` is the per-type key — `table` for `postgres`
+`nautilus/config/models.py:211-216`. `{required}` is the per-type key — `table` for `postgres`
 and `pgvector`, `index` for `elasticsearch`, `label` for `neo4j`, `model` for `llm`.
 
 ### `source '{self.id}' has type '{self.type}' but no 'connection'. The {self.type} adapter has nothing to dial, so every request to this source would fail at runtime.`
 
-`nautilus/config/models.py:212-216`.
+`nautilus/config/models.py:218-222`.
 
 ### `analysis.mode={analysis.mode!r} requires analysis.provider to be set`
 
@@ -141,7 +157,7 @@ block. Either add one, or return to `analysis.mode: pattern`.
 
 ### `rkm.auto_promote.enabled: auto-promotion is not implemented.` …
 
-`nautilus/config/models.py:679-683`. Startup refuses rather than silently ignoring the key. In
+`nautilus/config/models.py:685-689`. Startup refuses rather than silently ignoring the key. In
 full:
 
 ```text

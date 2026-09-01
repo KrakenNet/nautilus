@@ -9,12 +9,10 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 import yaml
-from fathom.audit import FileSink
 
-from nautilus.audit.logger import AuditLogger
 from nautilus.rkm.audit_emitter import emit_lifecycle_event
 from nautilus.rkm.queue import ProposalQueue
 from nautilus.rkm.types import Proposal
@@ -28,6 +26,9 @@ from nautilus.rkm.validator.scoring import score
 from nautilus.rkm.validator.shadow import shadow_check
 from nautilus.rkm.validator.static import validate_static
 from nautilus.rules import BUILT_IN_RULES_DIR
+
+if TYPE_CHECKING:
+    from nautilus.audit.logger import AuditLogger
 
 
 def load_proposed_rules(rule_yaml: Path) -> list[dict[str, Any]]:
@@ -61,6 +62,7 @@ def run_pipeline(
     *,
     queue: ProposalQueue,
     audit_log: Path,
+    audit_logger: AuditLogger,
     min_entries: int = 100,
     rule_packs: list[str] | None = None,
     user_rules_dirs: list[Path] | None = None,
@@ -82,7 +84,17 @@ def run_pipeline(
     ruleset the site does not run makes every pack-gated entry fail the drift
     guard, so a proposal scores clean against a ruleset nobody deployed.
 
-    Appends ``proposal_emitted`` + ``proposal_validated`` to ``audit_log``.
+    ``audit_log`` is the replay corpus this reads; ``audit_logger`` is where
+    the two lifecycle events are written. Both name the deployment's audit log,
+    and the writer is passed in rather than opened here on purpose: under
+    ``audit.chained`` that file is a hash chain with exactly one writer, and
+    this function opening its own ``FileSink`` over it appended two unchained
+    lines into the middle of the chain and destroyed offline verification of
+    the log permanently. Callers hand over the logger they already have —
+    ``Broker.audit_logger`` for the REST route, ``open_audit_logger`` for the
+    CLI — which is the only construction that cannot fork the chain.
+
+    Appends ``proposal_emitted`` + ``proposal_validated`` to ``audit_logger``.
     """
     static_result = validate_static(rule_yaml)
     proposed_rules = load_proposed_rules(rule_yaml)
@@ -166,11 +178,10 @@ def run_pipeline(
     )
     queue.submit(proposal)
 
-    # The proposal and its verdict are governance facts, and ``audit_log`` is
-    # already the log this pipeline reads to score against, so the record goes
-    # back to the same place. Replay is unaffected: an event line carries no
-    # ``input_facts`` and the sandbox skips it.
-    audit_logger = AuditLogger(sink=FileSink(path=audit_log))
+    # The proposal and its verdict are governance facts, and the caller's
+    # logger already writes the log this pipeline reads to score against, so
+    # the record goes back to the same place. Replay is unaffected: an event
+    # line carries no ``input_facts`` and the sandbox skips it.
     emit_lifecycle_event(
         audit_logger,
         "proposal_emitted",

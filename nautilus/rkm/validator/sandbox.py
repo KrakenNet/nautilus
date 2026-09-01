@@ -20,15 +20,14 @@ existed carry no engine input and cannot be replayed; they are counted in
 
 from __future__ import annotations
 
-import json
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 import yaml
 
-from nautilus.audit.logger import NAUTILUS_METADATA_KEY
+from nautilus.audit.logger import decode_audit_line
 from nautilus.core.fathom_router import FathomRouter
 from nautilus.core.models import AuditEntry, InputFact, RouteResult
 from nautilus.rules import BUILT_IN_RULES_DIR
@@ -166,28 +165,25 @@ def _replay_entry(
 
 
 def _load_entries(audit_log_path: Path, replay_n: int) -> list[AuditEntry]:
-    """Read up to ``replay_n`` Nautilus audit entries from a JSONL log (newest-last)."""
+    """Read up to ``replay_n`` Nautilus audit entries from a JSONL log (newest-last).
+
+    Decoding goes through :func:`decode_audit_line` rather than reaching for
+    ``metadata`` at the top level of each line. Under ``audit.chained`` the
+    metadata is one level down, inside the signed envelope, so this read
+    returned nothing at all and every proposal was scored ``insufficient_history``
+    against an empty corpus while the log it was pointed at was full.
+    """
     if not audit_log_path.exists():
         return []
     lines = [ln for ln in audit_log_path.read_text(encoding="utf-8").splitlines() if ln.strip()]
     entries: list[AuditEntry] = []
     for raw in lines[-replay_n:]:
         try:
-            record: Any = json.loads(raw)
-        except json.JSONDecodeError:
+            entry = decode_audit_line(raw)
+        except ValueError:
             continue
-        if not isinstance(record, dict):
-            continue
-        metadata = cast("dict[str, Any]", record).get("metadata")
-        if not isinstance(metadata, dict):
-            continue
-        payload = cast("dict[str, Any]", metadata).get(NAUTILUS_METADATA_KEY)
-        if not isinstance(payload, str):
-            continue
-        try:
-            entries.append(AuditEntry.model_validate(json.loads(payload)))
-        except (json.JSONDecodeError, ValueError):
-            continue
+        if entry is not None:
+            entries.append(entry)
     return entries
 
 

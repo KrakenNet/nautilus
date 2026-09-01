@@ -373,6 +373,69 @@ async def _send_busy(send: Any, limit: int) -> None:
     await send({"type": "http.response.body", "body": body})
 
 
+# The console's own assets: htmx, the stylesheet, the favicon. Public bytes with
+# no caller in them, served by Starlette's ``StaticFiles``, which already emits
+# ``etag`` and ``last-modified`` -- so a shared cache stores them and revalidates
+# them correctly on its own. This is the only prefix on the surface where
+# caching is a win, so it is the only exemption.
+_CACHEABLE_PREFIX = "/admin/static/"
+
+
+class _CacheControl:
+    """Deny-by-default ``Cache-Control``, because absence means *cacheable*.
+
+    A 200 with no ``Cache-Control`` is heuristically cacheable (RFC 9111
+    §4.2.2): a shared cache -- a CDN, a corporate forward proxy, a sidecar --
+    may store it and hand it to the next caller. Measured against nginx with a
+    URI-only cache key, ``GET /v1/audit`` went MISS then HIT, and the third
+    request, carrying no credential at all, was answered from the cache with
+    94 838 bytes of the decision trail. The broker had refused that caller
+    correctly; nothing in the response it had already sent told the cache so.
+
+    So the default is ``no-store`` and it is the *default*, not a route list:
+    a route added next month is covered without anyone remembering to add it.
+
+    Two exemptions, each earned:
+
+    - ``/admin/static/`` (see :data:`_CACHEABLE_PREFIX`) is left alone.
+    - :data:`_UNGATED_PATHS` -- ``/healthz``, ``/readyz``, ``/metrics`` -- get
+      ``no-cache``, not ``no-store``. They hold nothing about a caller, so
+      forbidding storage is over-broad; but each answers a question about a
+      live process, and a cached ``readyz: ok`` from a draining pod or a
+      flat-lined scrape is a wrong answer, not a stale one. ``no-cache``
+      permits the copy and forbids serving it without revalidating.
+
+    Nothing else is set. ``Pragma: no-cache`` is an HTTP/1.0 *request* header
+    (RFC 9111 §5.4) that no 1.1 cache reads off a response, ``Expires: 0`` is
+    overridden by ``Cache-Control`` wherever both appear, and ``Vary`` has
+    nothing to key on once the response may not be stored.
+
+    A handler that set the header itself wins: ``sse_starlette`` marks its own
+    ``EventSourceResponse``, and a handler that thought about this knows more
+    than the middleware does.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        path = scope.get("path", "")
+        if scope.get("type") != "http" or path.startswith(_CACHEABLE_PREFIX):
+            await self.app(scope, receive, send)
+            return
+        directive = b"no-cache" if path in _UNGATED_PATHS else b"no-store"
+
+        async def stamped(message: Any) -> None:
+            if message.get("type") == "http.response.start":
+                headers = list(message.get("headers") or [])
+                if not any(name.lower() == b"cache-control" for name, _ in headers):
+                    headers.append((b"cache-control", directive))
+                    message["headers"] = headers
+            await send(message)
+
+        await self.app(scope, receive, stamped)
+
+
 def _max_request_bytes(
     config_path: str | Path | None, existing_broker: Broker | None
 ) -> int | None:
@@ -493,6 +556,10 @@ def create_app(
         app.add_middleware(_BodySizeLimit, max_bytes=max_request_bytes)
     if max_concurrent_requests is not None:
         app.add_middleware(_ConcurrencyLimit, max_in_flight=max_concurrent_requests)
+    # Added last, so it is outermost: the 413 and the 503 the two middlewares
+    # above write themselves are responses too, and a cache that stored the
+    # busy signal would serve it to everyone.
+    app.add_middleware(_CacheControl)
     # Pre-populate defaults so routes don't AttributeError before lifespan
     # fires (e.g. startup-phase health checks during ASGI boot).
     app.state.broker = None
@@ -1225,6 +1292,11 @@ def create_app(
         rule_path.write_text(rule_yaml, encoding="utf-8")
 
         broker = getattr(request.app.state, "broker", None)
+        if broker is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Broker not ready",
+            )
         audit_log = getattr(broker, "audit_path", None) or _Path("audit.jsonl")
         config = getattr(broker, "config", None)
         settings: dict[str, Any] = {}
@@ -1233,7 +1305,16 @@ def create_app(
                 "min_entries": config.rkm.sandbox.min_entries,
                 "rule_packs": list(config.rules.packs),
             }
-        proposal = run_pipeline(rule_path, queue=queue, audit_log=audit_log, **settings)
+        # The broker's own logger, not a second one over the same path: under
+        # ``audit.chained`` the log is a hash chain with a single writer, and
+        # a second sink here corrupted it beyond repair.
+        proposal = run_pipeline(
+            rule_path,
+            queue=queue,
+            audit_log=audit_log,
+            audit_logger=broker.audit_logger,
+            **settings,
+        )
         return {
             "proposal_id": proposal.proposal_id,
             "status": proposal.status,

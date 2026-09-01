@@ -420,10 +420,16 @@ class SingleWriterAuditSink:
     atomic and survive concurrency.
 
     The lock is taken at the first write, not in the constructor. A ``Broker``
-    is also built by read-only surfaces (``nautilus adapters list``,
-    ``schema-ack``, the config validators) that never write an audit line, and
-    locking on construction is what made the documented recovery from a drift
-    quarantine impossible while the server it recovers was running.
+    is also built by read-only surfaces — ``nautilus adapters list``,
+    ``schema``, ``schema-fingerprint`` and ``schema-diff`` — which never write
+    an audit line, and locking on construction stopped all four while a server
+    was running.
+
+    ``schema-ack`` is not one of them. It audits the override it records, so it
+    reaches this lock like any other writer; ``nautilus/cli/adapters.py`` probes
+    the lock before re-baselining the adapter and refuses with exit 2 rather
+    than crashing halfway, which is how an operator who cannot record the
+    acknowledgement is stopped from making it.
     """
 
     def __init__(self, sink: Any, path: Path) -> None:

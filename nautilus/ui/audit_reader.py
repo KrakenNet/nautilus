@@ -1,9 +1,10 @@
 """Seek-based JSONL audit reader for the Admin UI (design SS 9.1, FR-6/7/8).
 
 Provides O(1) page access on GB-sized audit files by encoding byte offsets
-as opaque base64 cursors.  Each JSONL line is an outer Fathom
-:class:`AuditRecord`; the inner Nautilus :class:`AuditEntry` is extracted
-via :func:`decode_nautilus_entry` (double-parse).
+as opaque base64 cursors.  A line is decoded by
+:func:`nautilus.audit.logger.decode_audit_line`, which knows every shape a
+writer of this file produces — including the signed chain envelope
+``audit.chained`` wraps each line in.
 
 Filters (agent_id, source_id, event_type, start/end) are applied in-memory
 after reading a page of lines.  This is acceptable because page sizes are
@@ -13,7 +14,6 @@ small (default 50) and the seek avoids scanning from the start of the file.
 from __future__ import annotations
 
 import base64
-import json
 import logging
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -21,9 +21,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from fathom.models import AuditRecord
-
-from nautilus.audit.logger import decode_nautilus_entry
+from nautilus.audit.logger import decode_audit_line
 from nautilus.core.models import AuditEntry
 
 log = logging.getLogger(__name__)
@@ -281,12 +279,21 @@ class AuditReader:
 
     @staticmethod
     def _parse_line(line: str) -> AuditEntry | None:
-        """Parse a JSONL line: outer AuditRecord -> inner AuditEntry."""
+        """One JSONL line → :class:`AuditEntry`, or ``None`` to skip it.
+
+        Two different things used to arrive here as "corrupt". A torn write is
+        corruption and the operator needs to hear about it. A line whose shape
+        this reader has no entry in — the genesis and checkpoint records
+        fathom's own chained log writes, a hot-reload event — is a normal
+        inhabitant of the file, and warning once per line per read over a
+        perfectly intact log is how ``audit.chained`` came to look like data
+        loss. :func:`decode_audit_line` separates them: ``None`` for a shape
+        that carries no entry, an exception only for a line that cannot be
+        read.
+        """
         try:
-            raw = json.loads(line)
-            record = AuditRecord.model_validate(raw)
-            return decode_nautilus_entry(record)
-        except (json.JSONDecodeError, KeyError, Exception):
+            return decode_audit_line(line)
+        except ValueError:
             log.warning("Skipping corrupt audit line: %.120s", line)
             return None
 

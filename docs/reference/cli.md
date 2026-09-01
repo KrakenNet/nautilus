@@ -1,8 +1,8 @@
 # CLI Reference
 
 Complete reference for the `nautilus` command line: **13 top-level commands, 41
-parsers in total, 102 arguments** (17 positional, 85 optional). Everything here
-is read out of the argparse tree in `nautilus/cli/`; every default is the
+subcommand parsers under the root, 102 arguments** (17 positional, 85 optional).
+Everything here is read out of the argparse tree in `nautilus/cli/`; every default is the
 literal `default=` the parser carries, and every transcript below was produced
 by running the command shown.
 
@@ -71,8 +71,8 @@ literal.
 | Code | Meaning | Returned by |
 |------|---------|-------------|
 | `0` | Success. | Every command. |
-| `1` | User error — a file that is not there, a missing `--yes`, a missing `NAUTILUS_REVIEWER`, a rule that fails static validation, a proposal or rule that does not exist. | Everything except the read-only listers and the two long-running commands. Never returned by `serve`, `demo`, `rkm queue list`, `rkm lineage`, `rule list`, `rule lineage`, `rule history`, `adapters schema-diff`, `key list`, `rules history` or `events list`. |
-| `2` | Validation / policy failure — a config that will not load, a score below `--threshold`, a chain that does not verify, a required `--url` that was omitted, a non-200 from the broker. Also argparse's own code for a bad flag, a bad choice, or a missing required argument. | Command code: `serve`, `session version`, `rules test`, `rkm queue approve`, `attestation verify`, `key list`/`rotate`/`revoke`, and the missing-subcommand hints of `rkm`, `rkm queue`, `rule`, `adapters` and `rules`. Argparse: all 41 parsers. Nothing else returns `2` — `rules validate`, for instance, returns `2` only when argparse rejects a flag. |
+| `1` | User error — a file that is not there, a missing `--yes`, a missing `NAUTILUS_REVIEWER`, a rule that fails static validation, a proposal or rule that does not exist. | Everything except the read-only listers and the two long-running commands. Never returned by `serve`, `demo`, `rkm queue list`, `rkm lineage`, `rule list`, `rule lineage`, `rule history`, `key list`, `rules history` or `events list`. For `adapters schema-diff` it is the *only* non-zero return other than argparse's `2`, and it means one thing: a `--config` that would not load — see [its section](#nautilus-adapters-schema-diff). |
+| `2` | Validation / policy failure — a config that will not load (`serve`'s reading of it; the `adapters` group treats the same input as a user error and returns `1`), a score below `--threshold`, a chain that does not verify, a required `--url` that was omitted, a non-200 from the broker. Also argparse's own code for a bad flag, a bad choice, or a missing required argument. | Command code: `serve`, `session version`, `rules test`, `rkm queue approve`, `attestation verify`, `key list`/`rotate`/`revoke`, and the missing-subcommand hint of **every** group that handles one itself — `rkm`, `rkm queue`, `rule`, `rules`, `adapters`, `key`, `events` and `attestation`. Argparse: the root parser and all 41 subcommand parsers. One more source, common to several commands: a chained audit log whose writer lock another process holds refuses the write with `2` — `rule retract`, `rule rollback`, `rkm queue submit`, `rkm queue reject` and `adapters schema-ack`. Nothing else returns `2` — `rules validate`, for instance, returns `2` only when argparse rejects a flag. |
 | `3` | **Reserved. Never returned by any command** (OQ5 LOCKED). `grep -rn 'return 3\|exit(3)' nautilus/` matches nothing; a `3` from the process is your shell or a wrapper, not Nautilus. | Nothing. |
 
 Each command's section below states the codes **that command** can return and
@@ -182,10 +182,17 @@ session_tokens:
 ```bash
 nautilus serve --config nautilus.yaml --bind 127.0.0.1:8766 &
 until nautilus health --url http://127.0.0.1:8766/readyz; do sleep 1; done
-curl -s -o /dev/null -X POST http://127.0.0.1:8766/v1/request \
-  -H "X-API-Key: $NAUTILUS_API_KEY" -H 'Content-Type: application/json' \
-  -d '{"agent_id":"agent-alpha","intent":"list recent orders for support","context":{"session_id":"s1","purpose":"support"}}'
+for i in 1 2 3; do
+  curl -s -o /dev/null -X POST http://127.0.0.1:8766/v1/request \
+    -H "X-API-Key: $NAUTILUS_API_KEY" -H 'Content-Type: application/json' \
+    -d '{"agent_id":"agent-alpha","intent":"list recent orders for support","context":{"session_id":"s1","purpose":"support"}}'
+done
 ```
+
+Three requests, because the counts the attestation and sandbox transcripts quote
+are counts of them: `attest.jsonl` ends up with 3 attested records (5 lines — a
+checkpoint every `checkpoint_interval: 2`), and `audit.jsonl` with 9 entries, 3
+of which carry engine input facts and are replayable.
 
 **Setup D — A, plus a writable rules directory, on `127.0.0.1:8767`.** Approving
 a proposal needs somewhere durable to put the promoted rule. Append to
@@ -237,6 +244,28 @@ rules:
 EOF
 ```
 
+The failure transcripts need a rule file that does not compile. `broken.yaml`
+is that file — a name argparse never sees but the compiler rejects (`bad rule`
+is not a CLIPS identifier) next to an action that is not one of the five:
+
+```bash
+cat > broken.yaml <<'EOF'
+module: nautilus-routing
+ruleset: broken-rules
+version: "1.0"
+rules:
+  - name: bad rule
+    when:
+      - template: agent
+        conditions:
+          - slot: purpose
+            bind: ?purpose
+    then:
+      action: nope
+      reason: "this rule does not compile"
+EOF
+```
+
 API keys, proposal IDs, key IDs, hashes and timestamps differ on every run; the
 shapes do not. Kill the background brokers with `kill %1` when you are done.
 
@@ -275,7 +304,7 @@ shapes do not. Kill the background brokers with `kill %1` when you are done.
 | | `test` | Run the full validator pipeline and score it. |
 | | `history` | List rule lineage history by module. |
 | [`events`](#nautilus-events) | `list` | List every known `event_type` value. |
-| [`attestation`](#nautilus-attestation) | `verify` | Offline-verify a chained attestation log. |
+| [`attestation`](#nautilus-attestation) | `verify` | Offline-verify a chained log. |
 
 Each subcommand has its own section below with its arguments, a transcript, its
 exit codes, and its failure strings.
@@ -457,6 +486,7 @@ Load a config, construct a `Broker`, and run the transports. `--bind` wins over
 | `--bind` | `str` | `None` | — | `HOST:PORT` for the REST (and MCP-over-http) listener. Overrides `api.host` / `api.port`. |
 | `--air-gapped` | flag (`store_true`) | `False` | — | Force `analysis.mode='pattern'`, drop any `type: llm` source whose `connection` host is not loopback, and refuse an `analysis.provider` (NFR-1, #43). A `WARN:` line names each field it overrode. |
 | `--log-format` | `str` | `text` | `text`, `json` | Application log format. `json` emits SIEM-ingestable structured lines on stdout. |
+| `--log-level` | `str` | `info` | `debug`, `info`, `warning`, `error`, `critical` | Threshold for the root logger every `nautilus.*` module writes to and for uvicorn's own logger, which owns the startup and access lines. |
 
 Setup A. This runs until interrupted; everything below `Started server process`
 is uvicorn's:
@@ -491,7 +521,7 @@ error: `serve` treats "I could not stand this up" as one class.
 | Exit | When |
 |------|------|
 | `0` | The server ran and shut down cleanly (including after `Ctrl-C`, which `_cmd_serve` catches). |
-| `2` | Anything that stops it before or during the bind: config missing, config invalid, malformed `--bind`, air-gap violation, broker construction failure, or a lifespan that failed to start. Also argparse's code for a bad `--transport` / `--mcp-mode` / `--log-format` choice. |
+| `2` | Anything that stops it before or during the bind: config missing, config invalid, malformed `--bind`, air-gap violation, broker construction failure, or a lifespan that failed to start. Also argparse's code for a bad `--transport` / `--mcp-mode` / `--log-format` / `--log-level` choice. |
 
 **Failure modes**
 
@@ -537,6 +567,7 @@ nautilus serve --transport bogus
 usage: nautilus serve [-h] [--config CONFIG] [--transport {rest,mcp,both}]
                       [--mcp-mode {stdio,http}] [--bind BIND] [--air-gapped]
                       [--log-format {text,json}]
+                      [--log-level {debug,info,warning,error,critical}]
 nautilus serve: error: argument --transport: invalid choice: 'bogus' (choose from rest, mcp, both)
 ```
 
@@ -547,7 +578,7 @@ nautilus serve: error: argument --transport: invalid choice: 'bogus' (choose fro
 | `ERROR: --bind port must be an integer, got '<value>'` | `2` | The part after the last `:` is not a number. |
 | `ERROR: invalid config: Config validation failed:` + one indented `  <key>: <detail>` line per problem | `2` | The YAML parsed but failed model validation. The config models reject unknown keys, so a typo shows up here as `Extra inputs are not permitted`. |
 | `ERROR: broker construction failed: <detail>` | `2` | Wiring failed after validation — most often a source whose driver is not installed. The message names the extra to install. |
-| `nautilus serve: error: argument --transport: invalid choice: '<value>' (choose from rest, mcp, both)` | `2` | argparse rejected the value before anything ran. `--mcp-mode` and `--log-format` produce the same shape. |
+| `nautilus serve: error: argument --transport: invalid choice: '<value>' (choose from rest, mcp, both)` | `2` | argparse rejected the value before anything ran. `--mcp-mode`, `--log-format` and `--log-level` produce the same shape. |
 | `WARNING:nautilus.transport.fastapi_app:api.keys[0] is a bare string: bound to no agent_id, so it can ask as any agent and call every governance route. Use the {key, agent_id, capabilities} form to scope it.` | — | Startup warning, not a failure. `nautilus init` writes a bare key so the first run works; before exposing the port, replace it with the `{key, agent_id, capabilities}` form. |
 | `WARN: --air-gapped overrides analysis.mode from '<mode>' to 'pattern' (NFR-1)` | — | Informational. Remove `analysis.mode` from the config, or drop `--air-gapped`. |
 | `WARN: --air-gapped refuses analysis.provider (type='<type>'); dropping it (NFR-1)` | — | Informational. An air-gapped run has no LLM provider. |
@@ -788,15 +819,22 @@ directory; without `--config` the default `./audit.jsonl` is used.
 | `--min-confidence` | `float` | `0.0` | Minimum confidence score, 0.0–1.0. |
 | `--json` | flag (`store_true`) | `False` | Emit JSON to stdout. |
 
+Rows are sorted by proposal ID. The queue below is the one the three
+[`queue submit`](#nautilus-rkm-queue-submit) runs in this page leave behind —
+`my-rules.yaml` twice and `broken.yaml` once — listed before anything is
+approved or rejected:
+
 ```bash
+nautilus rkm queue submit --file my-rules.yaml --config nautilus.yaml >/dev/null 2>&1
+nautilus rkm queue submit --file broken.yaml >/dev/null 2>&1
+nautilus rkm queue submit --file my-rules.yaml --config nautilus.yaml >/dev/null 2>&1
 nautilus rkm queue list
 ```
 
 ```text
-  prop_66a1dd99794f42059f7101be51671119  status=pending  confidence=0.9
-  prop_a5720da395cf46819de640a393e6baa9  status=rejected  confidence=0.9
-  prop_ba936dca5d7b40149b7855befbcf34f0  status=pending  confidence=0.9
-  prop_daf5e4ab73814c1cbeec62a7b85ddb0e  status=pending  confidence=0.9
+  prop_3284ea6d9c3345cdb966ed4868eb5910  status=rejected  confidence=0.9
+  prop_7cb8f5a2751c466792f9cac600a2d2c4  status=pending  confidence=0.9
+  prop_9dc8b635ee6241b2a9bf2ce3cf20f77b  status=pending  confidence=0.9
 ```
 
 ```bash
@@ -804,8 +842,8 @@ nautilus rkm queue list --status pending
 ```
 
 ```text
-  prop_ba936dca5d7b40149b7855befbcf34f0  status=pending  confidence=0.9
-  prop_daf5e4ab73814c1cbeec62a7b85ddb0e  status=pending  confidence=0.9
+  prop_7cb8f5a2751c466792f9cac600a2d2c4  status=pending  confidence=0.9
+  prop_9dc8b635ee6241b2a9bf2ce3cf20f77b  status=pending  confidence=0.9
 ```
 
 `--json` prints the full proposal objects, not the summary line — the same shape
@@ -831,16 +869,17 @@ nautilus rkm queue submit --file my-rules.yaml --config nautilus.yaml
 ```
 
 ```text
-OK: proposal prop_66a1dd99794f42059f7101be51671119 queued pending (confidence 0.90)
+OK: proposal prop_9dc8b635ee6241b2a9bf2ce3cf20f77b queued pending (confidence 0.90)
 ```
 
-**Exit codes** — returns `0` or `1`. Never returns `2` (except from argparse)
-and never returns `3`.
+**Exit codes** — returns `0`, `1` or `2`, and never returns `3`. `2` is
+argparse's code and the code for a decision that could not be recorded.
 
 | Exit | When |
 |------|------|
 | `0` | Queued with status `pending`. |
-| `1` | The rule file was not found, or the proposal was queued with status `rejected` — the queue keeps the rejected proposal as a record; each validation error is printed as a `WARN:` line first. |
+| `1` | The rule file was not found, or the proposal was queued with status `rejected` — the queue keeps the rejected proposal as a record; each validation error follows on its own `WARN:` line. |
+| `2` | `audit.chained: true` and another process — normally a running `nautilus serve` — holds the log's single writer lock, so the decision could not be recorded and was therefore not taken. |
 
 **Failure modes**
 
@@ -852,14 +891,16 @@ nautilus rkm queue submit --file /dev/null
 ERROR: rule file not found: /dev/null
 ```
 
-A file that does not compile is queued and then rejected — note the `OK:` line
-on stdout *and* exit `1`:
+`broken.yaml` (written in [Reproducing the transcripts](#reproducing-the-transcripts))
+is queued and then rejected. Everything below is on stderr — the `ERROR:` verdict
+first, then one `WARN:` per static error — and the exit code is `1`:
 
 ```bash
 nautilus rkm queue submit --file broken.yaml
 ```
 
 ```text
+ERROR: proposal prop_3284ea6d9c3345cdb966ed4868eb5910 queued rejected (confidence 0.90)
 WARN: Rule file does not compile: [fathom.compiler] parse rules failed: invalid ruleset in broken.yaml — 2 validation errors for RulesetDefinition
 rules.0.name
   Value error, RuleDefinition.name name 'bad rule' is not a valid CLIPS identifier (must match [A-Za-z_][A-Za-z0-9_-]*) [type=value_error, input_value='bad rule', input_type=str]
@@ -867,14 +908,14 @@ rules.0.name
 rules.0.then.action
   Input should be 'allow', 'deny', 'escalate', 'scope' or 'route' [type=enum, input_value='nope', input_type=str]
     For further information visit https://errors.pydantic.dev/2.13/v/enum
-ERROR: proposal prop_a5720da395cf46819de640a393e6baa9 queued rejected (confidence 0.90)
 ```
 
 | Message | Exit | What to do |
 |---------|------|------------|
 | `ERROR: rule file not found: <path>` | `1` | Check `--file`. The path is printed exactly as you passed it. |
-| `WARN: Rule file does not compile: ...` then `ERROR: proposal <id> queued rejected (confidence <c>)` | `1` | Static validation failed. Fix the rule and resubmit; the rejected proposal stays in the queue as the record that you tried. |
+| `ERROR: proposal <id> queued rejected (confidence <c>)` then one `WARN: Rule file does not compile: ...` per error | `1` | Static validation failed. Fix the rule and resubmit; the rejected proposal stays in the queue as the record that you tried. |
 | `WARN: Rule file does not compile: ... duplicate rule name '<module>::<name>'` | `1` | A rule of that name is already promoted or shipped in a pack. Rename yours, or retract the existing one first. |
+| `ERROR: this decision cannot be recorded, so it will not be taken: another process is writing the chained audit log. …` | `2` | A running broker owns the chained log's writer lock. Take the decision through its governance API, or stop the broker first. |
 | `WARN: could not read rkm settings from '<path>' (<err>); using defaults` | — | `--config` could not be parsed; the submission still ran, on default sandbox settings. |
 
 ### `nautilus rkm queue show`
@@ -885,30 +926,30 @@ ERROR: proposal prop_a5720da395cf46819de640a393e6baa9 queued rejected (confidenc
 | `--json` | flag (`store_true`) | `False` | Emit JSON to stdout. |
 
 ```bash
-nautilus rkm queue show prop_66a1dd99794f42059f7101be51671119
+nautilus rkm queue show prop_9dc8b635ee6241b2a9bf2ce3cf20f77b
 ```
 
 ```text
-  proposal_id: prop_66a1dd99794f42059f7101be51671119
+  proposal_id: prop_9dc8b635ee6241b2a9bf2ce3cf20f77b
   schema_version: 2
   status: pending
   proposer: pipeline
-  proposed_at: 2026-09-01T01:50:04.970757+00:00
+  proposed_at: 2026-09-01T10:05:23.113679+00:00
   target_module: curator
   artifact_type: rule
   artifact: {'yaml_path': 'my-rules.yaml', 'name': 'deny-finance-after-hours', 'module': 'nautilus-routing'}
-  validation: {'static_ok': True, 'static_errors': [], 'sandbox': {'replayed_n': 1000, 'replayed_n_actual': 0, 'regressions': 0, 'relaxations': 0, 'fired': 0, 'cascade_max': 0, 'insufficient_history': True, 'skipped_no_input_facts': 3, 'skipped_drifted': 0, 'top_triggers': [], 'error': None}, 'confidence': 0.9, 'confidence_breakdown': {'base': 1.0, 'regression_penalty': -0.0, 'relaxation_penalty': -0.0, 'shadow_penalty': -0.0, 'fire_rate_penalty': -0.1, 'cascade_penalty': 0.0, 'drift_penalty': 0.0, 'total': 0.9}}
+  validation: {'static_ok': True, 'static_errors': [], 'sandbox': {'replayed_n': 1000, 'replayed_n_actual': 0, 'regressions': 0, 'relaxations': 0, 'fired': 0, 'cascade_max': 0, 'insufficient_history': True, 'skipped_no_input_facts': 0, 'skipped_drifted': 0, 'top_triggers': [], 'error': None}, 'confidence': 0.9, 'confidence_breakdown': {'base': 1.0, 'regression_penalty': -0.0, 'relaxation_penalty': -0.0, 'shadow_penalty': -0.0, 'fire_rate_penalty': -0.1, 'cascade_penalty': 0.0, 'drift_penalty': 0.0, 'total': 0.9}}
   lineage: {'derived_from': None}
   decisions: []
   shadow_flags: []
 ```
 
 ```bash
-nautilus rkm queue show prop_66a1dd99794f42059f7101be51671119 --json
+nautilus rkm queue show prop_9dc8b635ee6241b2a9bf2ce3cf20f77b --json
 ```
 
 ```text
-{"proposal_id": "prop_66a1dd99794f42059f7101be51671119", "schema_version": 2, "status": "pending", "proposer": "pipeline", "proposed_at": "2026-09-01T01:50:04.970757+00:00", "target_module": "curator", "artifact_type": "rule", "artifact": {"yaml_path": "my-rules.yaml", "name": "deny-finance-after-hours", "module": "nautilus-routing"}, "validation": {"static_ok": true, "static_errors": [], "sandbox": {"replayed_n": 1000, "replayed_n_actual": 0, "regressions": 0, "relaxations": 0, "fired": 0, "cascade_max": 0, "insufficient_history": true, "skipped_no_input_facts": 3, "skipped_drifted": 0, "top_triggers": [], "error": null}, "confidence": 0.9, "confidence_breakdown": {"base": 1.0, "regression_penalty": -0.0, "relaxation_penalty": -0.0, "shadow_penalty": -0.0, "fire_rate_penalty": -0.1, "cascade_penalty": 0.0, "drift_penalty": 0.0, "total": 0.9}}, "lineage": {"derived_from": null}, "decisions": [], "shadow_flags": []}
+{"proposal_id": "prop_9dc8b635ee6241b2a9bf2ce3cf20f77b", "schema_version": 2, "status": "pending", "proposer": "pipeline", "proposed_at": "2026-09-01T10:05:23.113679+00:00", "target_module": "curator", "artifact_type": "rule", "artifact": {"yaml_path": "my-rules.yaml", "name": "deny-finance-after-hours", "module": "nautilus-routing"}, "validation": {"static_ok": true, "static_errors": [], "sandbox": {"replayed_n": 1000, "replayed_n_actual": 0, "regressions": 0, "relaxations": 0, "fired": 0, "cascade_max": 0, "insufficient_history": true, "skipped_no_input_facts": 0, "skipped_drifted": 0, "top_triggers": [], "error": null}, "confidence": 0.9, "confidence_breakdown": {"base": 1.0, "regression_penalty": -0.0, "relaxation_penalty": -0.0, "shadow_penalty": -0.0, "fire_rate_penalty": -0.1, "cascade_penalty": 0.0, "drift_penalty": 0.0, "total": 0.9}}, "lineage": {"derived_from": null}, "decisions": [], "shadow_flags": []}
 ```
 
 **Exit codes** — returns `0` or `1`. Never returns `2` (except from argparse)
@@ -948,38 +989,42 @@ Setup D (the broker needs `rules.user_rules_dirs`, or promotion fails — see th
 failure table):
 
 ```bash
-NAUTILUS_REVIEWER=alice nautilus rkm queue approve prop_2a1492909ca94498afcdd8aa9a4b314c \
+NAUTILUS_REVIEWER=alice nautilus rkm queue approve prop_7cb8f5a2751c466792f9cac600a2d2c4 \
   --url http://127.0.0.1:8767 --api-key "$NAUTILUS_API_KEY" \
   --config nautilus.yaml --note 'reviewed with the data owner'
 ```
 
 ```text
-OK: proposal prop_2a1492909ca94498afcdd8aa9a4b314c approved by alice (promoted=True)
+OK: proposal prop_7cb8f5a2751c466792f9cac600a2d2c4 approved by alice (promoted=True)
 ```
 
-Approving twice is idempotent, not an error:
+Approving twice is safe — the second call decides nothing and reports the
+decision that stands. Under Setup D that standing status is `promoted`, not
+`approved`, so the second call exits `1`: the answer is not the one you asked
+for. Only a proposal left at `approved` (promotion failed, see below) exits `0`
+on re-approval.
 
 ```bash
-NAUTILUS_REVIEWER=alice nautilus rkm queue approve prop_2a1492909ca94498afcdd8aa9a4b314c \
+NAUTILUS_REVIEWER=alice nautilus rkm queue approve prop_7cb8f5a2751c466792f9cac600a2d2c4 \
   --url http://127.0.0.1:8767 --api-key "$NAUTILUS_API_KEY" --json
 ```
 
 ```text
-{"status": "already_decided", "current_status": "approved", "proposal_id": "prop_2a1492909ca94498afcdd8aa9a4b314c"}
+{"status": "already_decided", "current_status": "promoted", "proposal_id": "prop_7cb8f5a2751c466792f9cac600a2d2c4"}
 ```
 
 **Exit codes** — returns `0`, `1` or `2`. Never returns `3`.
 
 | Exit | When |
 |------|------|
-| `0` | Approved and promoted, or already approved. |
-| `1` | `NAUTILUS_REVIEWER` unset (checked *first*, before `--url`), or the proposal does not exist on that broker. |
+| `0` | Approved and promoted, or re-approved while the standing status is exactly `approved`. |
+| `1` | `NAUTILUS_REVIEWER` unset (checked *first*, before `--url`), the proposal does not exist on that broker, or a decision already stands that is not `approved` (`promoted`, `rejected`). |
 | `2` | `--url` omitted, the broker was unreachable, or it answered with a non-200 that was not 404 — including the 422 that means "approved, but the rule could not be promoted". |
 
 **Failure modes**
 
 ```bash
-NAUTILUS_REVIEWER=alice nautilus rkm queue approve prop_a5720da395cf46819de640a393e6baa9
+NAUTILUS_REVIEWER=alice nautilus rkm queue approve prop_3284ea6d9c3345cdb966ed4868eb5910
 ```
 
 ```text
@@ -987,19 +1032,32 @@ ERROR: rkm queue approve: --url is required. Approving promotes the rule into th
 ```
 
 ```bash
-NAUTILUS_REVIEWER=alice nautilus rkm queue approve prop_a5720da395cf46819de640a393e6baa9 \
+NAUTILUS_REVIEWER=alice nautilus rkm queue approve prop_3284ea6d9c3345cdb966ed4868eb5910 \
   --url http://127.0.0.1:9 --api-key k
 ```
 
 ```text
-ERROR: rkm queue approve: cannot reach http://127.0.0.1:9/v1/rkm/queue/prop_a5720da395cf46819de640a393e6baa9/approve: [Errno 111] Connection refused
+ERROR: rkm queue approve: cannot reach http://127.0.0.1:9/v1/rkm/queue/prop_3284ea6d9c3345cdb966ed4868eb5910/approve: [Errno 111] Connection refused
 ```
 
-Against a broker with no `rules.user_rules_dirs` (Setup C), the proposal is
-approved but the rule cannot be made durable:
+Against a broker with no `rules.user_rules_dirs` (Setup C) the proposal is
+approved but the rule cannot be made durable. Queue one in that directory first:
+
+```bash
+nautilus rkm queue submit --file my-rules.yaml --config nautilus.yaml
+```
 
 ```text
-ERROR: rkm queue approve: server returned 422: {"detail":{"error":"promotion_failed","message":"FathomRouter.reload_rule failed for proposal 'prop_4d7a427788264351bf82e401ae3a2dbb': cannot promote rule 'prop_4d7a427788264351bf82e401ae3a2dbb': no rules.user_rules_dirs is configured, so the rule would live only in this process and be gone at the next restart while the proposal reads 'promoted'. Configure a writable rules directory and retry the approval.","current_status":"approved","recovery":"fix the rule and re-approve to retry the promotion, or reject the proposal"}}
+OK: proposal prop_8f5d18742f3f42779e41a158cac5fc35 queued pending (confidence 0.90)
+```
+
+```bash
+NAUTILUS_REVIEWER=alice nautilus rkm queue approve prop_8f5d18742f3f42779e41a158cac5fc35 \
+  --url http://127.0.0.1:8766 --api-key "$NAUTILUS_API_KEY" --config nautilus.yaml
+```
+
+```text
+ERROR: rkm queue approve: server returned 422: {"detail":{"error":"promotion_failed","message":"FathomRouter.reload_rule failed for proposal 'prop_8f5d18742f3f42779e41a158cac5fc35': cannot promote rule 'prop_8f5d18742f3f42779e41a158cac5fc35': no rules.user_rules_dirs is configured, so the rule would live only in this process and be gone at the next restart while the proposal reads 'promoted'. Configure a writable rules directory and retry the approval.","current_status":"approved","recovery":"fix the rule and re-approve to retry the promotion, or reject the proposal"}}
 ```
 
 | Message | Exit | What to do |
@@ -1023,26 +1081,28 @@ Requires `NAUTILUS_REVIEWER`.
 | `--json` | flag (`store_true`) | `False` | Emit JSON to stdout. |
 
 ```bash
-NAUTILUS_REVIEWER=alice nautilus rkm queue reject prop_66a1dd99794f42059f7101be51671119 \
+NAUTILUS_REVIEWER=alice nautilus rkm queue reject prop_9dc8b635ee6241b2a9bf2ce3cf20f77b \
   --reason 'too broad'
 ```
 
 ```text
-OK: proposal prop_66a1dd99794f42059f7101be51671119 rejected by alice: too broad
+OK: proposal prop_9dc8b635ee6241b2a9bf2ce3cf20f77b rejected by alice: too broad
 ```
 
-**Exit codes** — returns `0` or `1`. Never returns `2` (except from argparse,
-which is what a missing `--reason` produces) and never returns `3`.
+**Exit codes** — returns `0`, `1` or `2`, and never returns `3`. `2` is
+argparse's code — a missing `--reason` produces it — and the code for a
+decision that could not be recorded.
 
 | Exit | When |
 |------|------|
 | `0` | Rejected. |
 | `1` | `NAUTILUS_REVIEWER` unset, the proposal does not exist, or it was already decided. |
+| `2` | `audit.chained: true` and another process — normally a running `nautilus serve` — holds the log's single writer lock, so the decision could not be recorded and was therefore not taken. |
 
 **Failure modes**
 
 ```bash
-nautilus rkm queue reject prop_a5720da395cf46819de640a393e6baa9 --reason x
+nautilus rkm queue reject prop_3284ea6d9c3345cdb966ed4868eb5910 --reason x
 ```
 
 ```text
@@ -1050,12 +1110,12 @@ ERROR: NAUTILUS_REVIEWER env var required for this command. Set it to your opera
 ```
 
 ```bash
-NAUTILUS_REVIEWER=alice nautilus rkm queue reject prop_66a1dd99794f42059f7101be51671119 \
+NAUTILUS_REVIEWER=alice nautilus rkm queue reject prop_9dc8b635ee6241b2a9bf2ce3cf20f77b \
   --reason 'too broad'
 ```
 
 ```text
-OK: proposal prop_66a1dd99794f42059f7101be51671119 was already rejected
+OK: proposal prop_9dc8b635ee6241b2a9bf2ce3cf20f77b was already rejected
 ```
 
 | Message | Exit | What to do |
@@ -1063,6 +1123,7 @@ OK: proposal prop_66a1dd99794f42059f7101be51671119 was already rejected
 | `ERROR: NAUTILUS_REVIEWER env var required for this command. Set it to your operator identity.` | `1` | `export NAUTILUS_REVIEWER=<you>`. |
 | `ERROR: proposal <id> not found` | `1` | Check the ID with `nautilus rkm queue list`. |
 | `ERROR: proposal <id> cannot be rejected: it is <status>` | `1` | A different decision stands. `rkm queue show <id>` names the decider. Re-rejecting an already-rejected proposal is `OK:` and exit `0`. |
+| `ERROR: this decision cannot be recorded, so it will not be taken: another process is writing the chained audit log. …` | `2` | A running broker owns the chained log's writer lock. Take the decision through its governance API, or stop the broker first. |
 | `nautilus rkm queue reject: error: the following arguments are required: --reason` | `2` | argparse; `--reason` is `required=True`. |
 
 ### `nautilus rkm queue diff`
@@ -1078,11 +1139,11 @@ of rule names, then `no peer`.
 No `--json` on this one.
 
 ```bash
-nautilus rkm queue diff prop_66a1dd99794f42059f7101be51671119
+nautilus rkm queue diff prop_9dc8b635ee6241b2a9bf2ce3cf20f77b
 ```
 
 ```text
-  proposal : prop_66a1dd99794f42059f7101be51671119
+  proposal : prop_9dc8b635ee6241b2a9bf2ce3cf20f77b
   peer     : no peer
   artifact : {
   "yaml_path": "my-rules.yaml",
@@ -1230,13 +1291,15 @@ NAUTILUS_REVIEWER=alice nautilus rule retract deny-finance-after-hours \
 OK: rule 'deny-finance-after-hours' v2 retracted by alice
 ```
 
-**Exit codes** — returns `0` or `1`. Never returns `2` (except from argparse,
-which is what a missing `--reason` produces) and never returns `3`.
+**Exit codes** — returns `0`, `1` or `2`, and never returns `3`. `2` is
+argparse's code — a missing `--reason` produces it — and the code for a
+decision that could not be recorded.
 
 | Exit | When |
 |------|------|
 | `0` | Retracted. Affected descendants, if any, follow on a `WARN: affected descendants: ...` line. |
 | `1` | `--yes` missing, both cascade flags given, `NAUTILUS_REVIEWER` unset, or the rule is not in the lineage store. |
+| `2` | `audit.chained: true` and another process — normally a running `nautilus serve` — holds the log's single writer lock, so the decision could not be recorded and was therefore not taken. |
 
 **Failure modes**
 
@@ -1268,9 +1331,11 @@ ERROR: rule 'deny-finance-after-hours' not found in lineage
 | Message | Exit | What to do |
 |---------|------|------------|
 | `ERROR: --yes required for destructive op` | `1` | Add `--yes`. |
+| `ERROR: --reason required for retract` | `1` | argparse accepts `--reason '   '`; the command does not. Give a reason with a non-space character in it. |
 | `ERROR: --cascade and --orphan-children are mutually exclusive` | `1` | Pick one: retire the descendants, or mark them orphaned. |
 | `ERROR: rule '<name>' not found in lineage` | `1` | `nautilus rule list` shows the names that exist. Nothing is promoted until a proposal is approved. |
 | `ERROR: NAUTILUS_REVIEWER env var required for this command. Set it to your operator identity.` | `1` | `export NAUTILUS_REVIEWER=<you>`. |
+| `ERROR: this decision cannot be recorded, so it will not be taken: another process is writing the chained audit log. …` | `2` | A running broker owns the chained log's writer lock. Take the decision through its governance API, or stop the broker first. |
 | `nautilus rule retract: error: the following arguments are required: --reason` | `2` | argparse; `--reason` is `required=True`. |
 
 ### `nautilus rule lineage`
@@ -1357,14 +1422,15 @@ NAUTILUS_REVIEWER=alice nautilus rule rollback deny-finance-after-hours \
 OK: rule 'deny-finance-after-hours' rolled back to v1 as v2 by alice: v2 salience broke ordering
 ```
 
-**Exit codes** — returns `0` or `1`. Never returns `2` (except from argparse,
-which is what a missing or non-integer `--to-version` produces) and never
-returns `3`.
+**Exit codes** — returns `0`, `1` or `2`, and never returns `3`. `2` is
+argparse's code — a missing or non-integer `--to-version` produces it — and the
+code for a decision that could not be recorded.
 
 | Exit | When |
 |------|------|
 | `0` | Rolled back; the restored content is written as the next version number. |
 | `1` | `--yes` missing, `NAUTILUS_REVIEWER` unset, or that name/version pair is not in the lineage store. |
+| `2` | `audit.chained: true` and another process — normally a running `nautilus serve` — holds the log's single writer lock, so the decision could not be recorded and was therefore not taken. |
 
 **Failure modes**
 
@@ -1382,6 +1448,7 @@ ERROR: rule 'deny-finance-after-hours' v2 not found in lineage
 | `ERROR: rule '<name>' v<n> not found in lineage` | `1` | `nautilus rule history <name>` lists the versions that exist. |
 | `ERROR: --yes required for destructive op` | `1` | Add `--yes`. |
 | `ERROR: NAUTILUS_REVIEWER env var required for this command. Set it to your operator identity.` | `1` | `export NAUTILUS_REVIEWER=<you>`. |
+| `ERROR: this decision cannot be recorded, so it will not be taken: another process is writing the chained audit log. …` | `2` | A running broker owns the chained log's writer lock. Take the decision through its governance API, or stop the broker first. |
 | `nautilus rule rollback: error: argument --to-version: invalid int value: 'x'` | `2` | argparse; `--to-version` is `type=int`. |
 
 ---
@@ -1413,6 +1480,31 @@ ERROR: no config found: pass --config PATH, or run from a directory containing n
 ```
 
 Exit `1`.
+
+A config that *is* there but will not load is reported the same way by every
+subcommand that reads one — `list`, `schema`, `schema-fingerprint`,
+`schema-diff` and `schema-ack`: one `ERROR: could not load <path>: <err>` line
+on stderr, exit `1`, no traceback. `list` catches it in
+`nautilus.cli.adapters._configured_adapters`; the four schema subcommands catch
+it in `nautilus.cli.adapters._live_adapter_schema`, the one helper all four
+route through.
+
+```bash
+printf 'sources: []\nnot_a_key: 1\n' > bad.yaml
+nautilus adapters schema-fingerprint orders --config bad.yaml
+```
+
+```text
+ERROR: could not load bad.yaml: Config validation failed:
+  not_a_key: Extra inputs are not permitted [type=extra_forbidden]
+```
+
+Exit `1`. The `<err>` half is the loader's own message, so a `--config` naming a
+file that is not there reads:
+
+```text
+ERROR: could not load missing.yaml: Unable to read config file 'missing.yaml': [Errno 2] No such file or directory: 'missing.yaml'
+```
 
 ### `nautilus adapters new`
 
@@ -1605,6 +1697,7 @@ ERROR: no schema available for adapter 'nope'
 | Message | Exit | What to do |
 |---------|------|------------|
 | `ERROR: no schema available for adapter '<name>'` | `1` | The id is not in the config's `sources`, or its adapter could not introspect. `nautilus adapters list` shows the ids. In `--json` mode a `null` is printed on stdout first. |
+| `ERROR: could not load <path>: <err>` | `1` | The config is present but will not parse, or is not there at all. |
 
 ### `nautilus adapters schema-fingerprint`
 
@@ -1632,6 +1725,7 @@ and never returns `3`.
 | Message | Exit | What to do |
 |---------|------|------------|
 | `ERROR: no schema available for adapter '<name>'` | `1` | Same as `adapters schema` — check the id. |
+| `ERROR: could not load <path>: <err>` | `1` | The config is present but will not parse, or is not there at all. |
 
 ### `nautilus adapters schema-diff`
 
@@ -1655,13 +1749,16 @@ WARN: no stored fingerprint for 'orders'; treating as new
   current: sha256:c48627e080df819eaad265fab62fe513958afa03da7c7ee1465dbe74ea8ef49c
 ```
 
-After `schema-ack` has stored one:
+After [`schema-ack`](#nautilus-adapters-schema-ack) has stored one:
 
 ```bash
+NAUTILUS_REVIEWER=alice nautilus adapters schema-ack orders \
+  --config nautilus.yaml --reason 'upstream added a nullable column' --yes
 nautilus adapters schema-diff orders --config nautilus.yaml
 ```
 
 ```text
+OK: schema-ack recorded for 'orders' by alice: upstream added a nullable column
 OK: no drift for 'orders' (fingerprint matches)
 ```
 
@@ -1673,10 +1770,11 @@ nautilus adapters schema-diff orders --config nautilus.yaml --json
 {"status": "clean", "fingerprint": "sha256:c48627e080df819eaad265fab62fe513958afa03da7c7ee1465dbe74ea8ef49c"}
 ```
 
-And with drift — add a `region: emea` field to the first row of the `orders`
-source in `nautilus.yaml` to reproduce it:
+And with drift — give the first row of the `orders` source in `nautilus.yaml` a
+field the baseline did not have:
 
 ```bash
+sed -i 's/- {order_id: 1001, user_id: 42, total: 19.99}/- {order_id: 1001, user_id: 42, total: 19.99, region: emea}/' nautilus.yaml
 nautilus adapters schema-diff orders --config nautilus.yaml
 ```
 
@@ -1695,10 +1793,14 @@ nautilus adapters schema-diff orders --config nautilus.yaml --json
 {"status": "drift", "stored": "sha256:c48627e080df819eaad265fab62fe513958afa03da7c7ee1465dbe74ea8ef49c", "current": "sha256:35f1f95945544ca08508c5ae9be964f55f043e5f513d64ed594adfd2c5bd611c"}
 ```
 
-**Exit codes** — returns `0` **in every case**, including when it finds drift.
-Never returns `1`, `2` (except from argparse, which is what a missing `--config`
-produces) or `3`. Branch on the `status` field in `--json` mode — it is exactly
-one of `no_baseline`, `clean` or `drift` — never on `$?`.
+**Exit codes** — once the config loads it returns `0` **in every case**,
+including when it finds drift, and never `2` (except from argparse, which is
+what a missing `--config` produces) or `3`. The one `1` it returns is a
+`--config` that is missing or will not load: `ERROR: could not load <path>:
+<err>` on stderr, nothing on stdout (see
+[the group intro](#nautilus-adapters)). Given a config that loads, branch on the
+`status` field in `--json` mode — it is exactly one of `no_baseline`, `clean` or
+`drift` — never on `$?`.
 
 | Message | Exit | What to do |
 |---------|------|------------|
@@ -1706,6 +1808,7 @@ one of `no_baseline`, `clean` or `drift` — never on `$?`.
 | `  DRIFT DETECTED` (after the stored and current digests) | `0` | The upstream schema changed. Review the diff, then `schema-ack` with a reason to accept it. |
 | `WARN: no schema available for adapter '<name>'` | `0` | The id is not in the config's `sources` — a `WARN`, not an `ERROR`, because a missing adapter is not drift. |
 | `nautilus adapters schema-diff: error: the following arguments are required: --config` | `2` | argparse; `--config` is `required=True` here even though it is optional on `schema` and `schema-fingerprint`. |
+| `ERROR: could not load <path>: <detail>` | `1` | `--config` points at a file that is absent or invalid. Once argparse is satisfied this is the only non-zero exit `schema-diff` has. Nothing reaches stdout, so a `--json` consumer gets no payload. |
 
 ### `nautilus adapters schema-ack`
 
@@ -1729,8 +1832,10 @@ NAUTILUS_REVIEWER=alice nautilus adapters schema-ack orders \
 OK: schema-ack recorded for 'orders' by alice: upstream added a nullable column
 ```
 
-**Exit codes** — returns `0` or `1`. Never returns `2` (except from argparse,
-which is what a missing `--config` or `--reason` produces) and never returns `3`.
+**Exit codes** — returns `0`, `1`, or `2` when `audit.chained: true` and
+another process holds the audit log's writer lock (the acknowledgement is
+audited, so it needs to write). Argparse also returns `2`, which is what a
+missing `--config` or `--reason` produces. Never returns `3`.
 
 **Failure modes**
 
@@ -1748,6 +1853,8 @@ ERROR: schema-ack requires --yes to confirm
 | `ERROR: schema-ack requires --yes to confirm` | `1` | Add `--yes`. |
 | `ERROR: NAUTILUS_REVIEWER env var required for this command. Set it to your operator identity.` | `1` | `export NAUTILUS_REVIEWER=<you>`; the identity is written into the audit event. |
 | `ERROR: no schema available for adapter '<name>'; cannot ack` | `1` | Check the id with `nautilus adapters list`. |
+| `ERROR: could not load <path>: <err>` | `1` | The config is present but will not parse, or is not there at all. |
+| `ERROR: this acknowledgement cannot be recorded, so it will not be made: another process is writing the chained audit log. …` | `2` | A running broker owns the chained log's writer lock. Stop it and re-run: the baseline is read back at the next startup and the quarantine lifts with it. Nothing is written before this check, so a refused ack is not a half-made one. |
 
 ---
 
@@ -1772,9 +1879,10 @@ nautilus key
 ERROR: key: no subcommand given (try: list, rotate, revoke)
 ```
 
-Exit `1` — the only group whose missing-subcommand hint is a `1` rather than a
-`2`. (`events` and `attestation` do the same; `rkm`, `rule`, `adapters` and
-`rules` return `2`.)
+Exit `2`, like every other group that handles a missing subcommand itself —
+`rkm`, `rkm queue`, `rule`, `rules`, `adapters`, `events` and `attestation` all
+print their own `ERROR: ... no subcommand given` hint and return `2`. There is no
+group that answers this case with a `1`.
 
 All three subcommands share `--url`, `--api-key` and `--json`
 (`nautilus.cli.key._add_target_args`):
@@ -1875,8 +1983,8 @@ them returns `3`.
 | Exit | When |
 |------|------|
 | `0` | The broker answered 200 (`list` also returns `0` for an empty ring). |
-| `1` | `--yes` missing on `rotate`/`revoke`, or `NAUTILUS_REVIEWER` unset. Also the `key` group's own missing-subcommand error. |
-| `2` | `--url` omitted, the broker was unreachable, or it answered non-200. |
+| `1` | `--yes` missing on `rotate`/`revoke`, or `NAUTILUS_REVIEWER` unset. |
+| `2` | `--url` omitted, the broker was unreachable, or it answered non-200. Also the `key` group's own missing-subcommand error. |
 
 The order matters, and it is the opposite of `rkm queue approve`: here a missing
 `--yes` is reported first, then `--url`, then `NAUTILUS_REVIEWER`.
@@ -1929,7 +2037,7 @@ ERROR: key revoke: server returned 400: {"detail":"kid must be a UUID"}
 
 | Message | Exit | What to do |
 |---------|------|------------|
-| `ERROR: key: no subcommand given (try: list, rotate, revoke)` | 2 | Name one of the three. |
+| `ERROR: key: no subcommand given (try: list, rotate, revoke)` | `2` | Name one of the three. |
 | `ERROR: rotate requires --yes to confirm.` | `1` | Add `--yes`. |
 | `ERROR: revoke requires --yes to confirm.` | `1` | Add `--yes`. |
 | `ERROR: NAUTILUS_REVIEWER env var required for this command. Set it to your operator identity.` | `1` | `export NAUTILUS_REVIEWER=<you>`. Not required by `key list`. |
@@ -1989,7 +2097,7 @@ nautilus rules validate my-rules.yaml --json
 ```
 
 With `--sandbox`, one summary line per rule is printed before the verdict. This
-needs an audit log with entries in it — Setup C's broker wrote 14:
+needs an audit log with entries in it — Setup C's broker wrote 9:
 
 ```bash
 nautilus rules validate my-rules.yaml --sandbox --replay-n 1000
@@ -2000,7 +2108,7 @@ rule 'deny-finance-after-hours': replayed=3 fired=0 relaxations=0
 OK: my-rules.yaml
 ```
 
-(`replayed=3` of 14 lines: only entries carrying engine input facts can be
+(`replayed=3` of 9 lines: only entries carrying engine input facts can be
 replayed.)
 
 **Exit codes** — the command returns `0` or `1`; argparse can return `2`. Never
@@ -2087,7 +2195,7 @@ nautilus rules test --file my-rules.yaml --audit-log ./audit.jsonl \
 
 ```text
 WARN: rule 'deny-finance-after-hours': insufficient audit history (replayed 3 entries)
-WARN: rule 'deny-finance-after-hours': 11 audit entries carry no engine input and were not replayed
+WARN: rule 'deny-finance-after-hours': 6 audit entries carry no engine input and were not replayed
 rule 'deny-finance-after-hours': score=0.90 fired=0/3 relaxations=0 shadow_flags=0
 OK: my-rules.yaml score=0.90 (threshold 0.60)
 ```
@@ -2097,7 +2205,7 @@ nautilus rules test --file my-rules.yaml --audit-log ./audit.jsonl --config naut
 ```
 
 ```text
-{"file": "my-rules.yaml", "threshold": 0.6, "score": 0.9, "passed": true, "rules": [{"name": "deny-finance-after-hours", "score": 0.9, "breakdown": {"base": 1.0, "regression_penalty": -0.0, "relaxation_penalty": -0.0, "shadow_penalty": -0.0, "fire_rate_penalty": -0.1, "cascade_penalty": 0.0, "drift_penalty": 0.0}, "shadow_flags": [], "sandbox": {"replayed_n_actual": 3, "fired": 0, "regressions": 0, "relaxations": 0, "cascade_max": 0, "insufficient_history": true, "skipped_no_input_facts": 11, "skipped_drifted": 0}}]}
+{"file": "my-rules.yaml", "threshold": 0.6, "score": 0.9, "passed": true, "rules": [{"name": "deny-finance-after-hours", "score": 0.9, "breakdown": {"base": 1.0, "regression_penalty": -0.0, "relaxation_penalty": -0.0, "shadow_penalty": -0.0, "fire_rate_penalty": -0.1, "cascade_penalty": 0.0, "drift_penalty": 0.0}, "shadow_flags": [], "sandbox": {"replayed_n_actual": 3, "fired": 0, "regressions": 0, "relaxations": 0, "cascade_max": 0, "insufficient_history": true, "skipped_no_input_facts": 6, "skipped_drifted": 0}}]}
 ```
 
 **Exit codes** — returns `0`, `1` or `2`. Never returns `3`. This is the one
@@ -2106,7 +2214,7 @@ command where `2` is an ordinary outcome rather than an operator mistake.
 | Exit | When |
 |------|------|
 | `0` | The lowest per-rule score is at or above `--threshold`. |
-| `1` | File not found, audit log not found, static validation failed, or a rule would not compile. |
+| `1` | File not found, audit log not found, static validation failed, a rule would not compile, or the `--config` naming the deployed ruleset would not load. |
 | `2` | **The rule is valid but scored below `--threshold`.** This is the CI-failure code. |
 
 **Failure modes**
@@ -2128,7 +2236,7 @@ ERROR: score 0.90 below threshold 0.99: my-rules.yaml
 | `WARN: rule '<name>': insufficient audit history (replayed <n> entries)` | — | The score is computed but weakly grounded. Pass `--audit-log` pointing at at least `--min-entries` entries. |
 | `WARN: rule '<name>': <n> audit entries carry no engine input and were not replayed` | — | Governance events (approvals, retractions) hold no request facts. Only `request` and `handoff_declared` entries are replayable. |
 | `WARN: no rules found in <file>` | — | The `rules:` list is empty. |
-| `ERROR: cannot read rules config from <path>: <err>` | — | `--config` would not load; the run continues against the built-in ruleset only. |
+| `ERROR: cannot read rules config from <path>: <err>` | `1` | `--config` would not load, and the run **stops** — `nautilus/cli/rules.py` raises `SystemExit(1)` here rather than returning, because replaying against a ruleset the site does not deploy would score the candidate against the wrong baseline. Fix the config, or drop `--config`. |
 
 ### `nautilus rules history`
 
@@ -2181,7 +2289,7 @@ nautilus events
 ERROR: events: no subcommand given (try: list)
 ```
 
-Exit `1`.
+Exit `2`.
 
 ### `nautilus events list`
 
@@ -2243,33 +2351,34 @@ nautilus attestation
 ERROR: attestation: no subcommand given (try: verify)
 ```
 
-Exit `1`.
+Exit `2`.
 
 ### `nautilus attestation verify`
 
-Check hash linkage and every line's EdDSA JWS in a log written by
-`ChainedFileAttestationSink` (`attestation.sink.chained: true`). With
+Check hash linkage and every line's EdDSA JWS in either chained log a broker
+writes — the attestation sink (`attestation.sink.chained: true`) and the audit
+log (`audit.chained: true`) share one format and one verifier. With
 `--expected-head` or `--anchor-token` it also detects tail truncation against an
 out-of-band anchor — the one attack a self-consistent chain cannot see, because
 deleting the last N lines leaves a shorter chain that still verifies.
 
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
-| `log` | `str` (positional) | — | **Required.** Chained attestation JSONL log path. |
+| `log` | `str` (positional) | — | **Required.** Path to the chained JSONL log — the attestation sink's, or `audit.path` under `audit.chained`. |
 | `--pubkey` | `str` | `None` | Ed25519 public key PEM. Default: `<log>.pub.pem` beside the log, which is where the sink writes it. |
 | `--expected-head` | `str` | `None` | Out-of-band mirrored line hash. Verification fails if that hash is absent from the log. |
-| `--anchor-token` | `str` | `None` | Checkpoint JWS token; its checkpoint line must appear in the log. Checkpoints are written every `attestation.sink.checkpoint_interval` emissions. |
+| `--anchor-token` | `str` | `None` | Checkpoint JWS token; its checkpoint line must appear in the log. Checkpoints are written every `attestation.sink.checkpoint_interval` (or, for the audit log, `audit.checkpoint_interval`) emissions. |
 | `--json` | flag (`store_true`) | `False` | Emit JSON to stdout. |
 
-Setup C, after the broker has been stopped (the sink holds an exclusive lock
-while it runs):
+Setup C. Verification only reads the log — it never takes the writer lock — so
+the broker may be up; this run is from after it was stopped:
 
 ```bash
 nautilus attestation verify ./attest.jsonl
 ```
 
 ```text
-OK: chain valid — 3 records, head 00d6f54408364b0632d2d7bedc2dc8e405aae3a676274e6550ea53930d57593e
+OK: chain valid — 3 records, head 5ee9ccdd57e7199d19b9d94b49af1b66365497883e72e39377787fe2287ac20d
 ```
 
 ```bash
@@ -2277,18 +2386,18 @@ nautilus attestation verify ./attest.jsonl --json
 ```
 
 ```text
-{"ok": true, "count": 3, "head_seq": 4, "head_sha256": "00d6f54408364b0632d2d7bedc2dc8e405aae3a676274e6550ea53930d57593e", "error": null, "error_line": null, "anchor_ok": null, "log_id": "5efc6f69a2584cb28f0dcd5519549ca2"}
+{"ok": true, "count": 3, "head_seq": 4, "head_sha256": "5ee9ccdd57e7199d19b9d94b49af1b66365497883e72e39377787fe2287ac20d", "error": null, "error_line": null, "anchor_ok": null, "log_id": "442f9f51bb0241d9b8b73efb31d16486"}
 ```
 
 Pin the head you mirrored elsewhere; `(anchor ok)` is appended when it matches:
 
 ```bash
 nautilus attestation verify ./attest.jsonl \
-  --expected-head 00d6f54408364b0632d2d7bedc2dc8e405aae3a676274e6550ea53930d57593e
+  --expected-head 5ee9ccdd57e7199d19b9d94b49af1b66365497883e72e39377787fe2287ac20d
 ```
 
 ```text
-OK: chain valid — 3 records, head 00d6f54408364b0632d2d7bedc2dc8e405aae3a676274e6550ea53930d57593e (anchor ok)
+OK: chain valid — 3 records, head 5ee9ccdd57e7199d19b9d94b49af1b66365497883e72e39377787fe2287ac20d (anchor ok)
 ```
 
 **Exit codes** — returns `0`, `1` or `2`. Never returns `3`. The split is
@@ -2319,15 +2428,25 @@ nautilus attestation verify ./attest.jsonl --pubkey ./nope.pem
 ERROR: attestation verify: pubkey not found: nope.pem
 ```
 
-Edit any line of the log and the chain breaks at the line *after* it, because
-each line commits to the hash of the whole previous line:
+Rewrite any line of the log and the chain breaks at the line *after* it, because
+each line commits to the sha256 of the whole previous line — its bytes, not its
+meaning. Re-serialising line 2 is enough: same six fields, same values, same JWS,
+different bytes. The public key is read from `<log>.pub.pem`, so copy it beside
+the file you are checking:
 
 ```bash
+python - <<'EOF'
+import json
+lines = open("attest.jsonl").read().splitlines()
+lines[1] = json.dumps(json.loads(lines[1]))
+open("attest-tampered.jsonl", "w").write("\n".join(lines) + "\n")
+EOF
+cp attest.jsonl.pub.pem attest-tampered.jsonl.pub.pem
 nautilus attestation verify ./attest-tampered.jsonl
 ```
 
 ```text
-ERROR: attestation verify: broken chain at line 3: prev_sha256 'a6fc90aa7aa1788d3430045671cada67a27b881f874cd879cf25bfe7038623d6' does not match previous line hash 'aee538a0202ce346533bebf016b171a2013822f2888154bce143fb1715cfe83b'
+ERROR: attestation verify: broken chain at line 3: prev_sha256 '57eb681d791a3abd567cbb1e005d77c0d0277f615d1d3bc5308f39719e048255' does not match previous line hash 'd820e6180037af9d213c6ac450c1a14418cfc5addb4c0e026a232b880734ef72'
 ```
 
 ```bash
@@ -2353,7 +2472,8 @@ ERROR: attestation verify: expected head '00000000000000000000000000000000000000
 ## Argparse-level errors
 
 Errors argparse raises itself, before any command code runs, go to stderr and
-exit `2`. This is true of every one of the 41 parsers.
+exit `2`. This is true of the root parser and of every one of the 41 subcommand
+parsers below it.
 
 ```bash
 nautilus bogus
@@ -2389,4 +2509,5 @@ their subparsers, so those two produce argparse's `the following arguments are
 required` for a missing subcommand. The other groups (`rkm`, `rkm queue`,
 `rule`, `adapters`, `key`, `rules`, `events`, `attestation`) handle a missing
 subcommand in their own dispatch and emit the `ERROR:` hints documented in each
-section — `1` for `key`, `events` and `attestation`, `2` for the rest.
+section — all eight return `2`, the same code argparse would have used, so
+`$?` does not tell you which of the two paths answered.

@@ -34,6 +34,14 @@ Conventions for the runnable blocks:
 - Blocks assume `nautilus` is on `PATH` (`pip install nautilus-broker`) and a
   config at `/etc/nautilus/nautilus.yaml`. Substitute your own path in `--config`.
 
+Two sections are deliberately **not** key entries, because the questions they
+answer belong to no single key:
+[Sessions](#sessions-lifetime-parallelism-and-termination) — how many a
+credential may hold, what ends them, how to see them — and
+[What the deployment discloses without being asked](#what-the-deployment-discloses-without-being-asked)
+— what a scanner gets from a stock install. Both carry their own runnable config
+and their own transcripts.
+
 ## The complete configuration surface
 
 `nautilus.yaml` is validated by a Pydantic model tree rooted at
@@ -51,10 +59,10 @@ PY
 
 Of those 121, 22 are container blocks (`api`, `api.auth`, `attestation.sink`,
 `rkm.sandbox` and the like) that hold no value of their own, leaving 99 leaf
-keys. **81 of them are security-relevant and have their own entry below.** The
-other 18 are marked *query shape* in the index: they change which rows an
-adapter fetches, not who may fetch them, so they are listed with their type and
-default and nothing more — the JSON Schema above is their complete reference.
+keys. **Every leaf key has its own entry below**, including the 18 query-shape
+keys that decide which rows an adapter fetches rather than who may fetch them:
+a bound on what a source returns is a bound on what leaves the broker, and a
+key documented only as a table row is a key nobody can reason about.
 
 The index maps every key to the entry that documents it.
 
@@ -105,7 +113,7 @@ blocks work.
 
 | Key | Type | Default | Documented in |
 |---|---|---|---|
-| `sources[].id` | `str` | required | [`sources[].id`](#sourcesid) |
+| `sources[].id` | `str`, `^[A-Za-z0-9][A-Za-z0-9._-]*$` | required | [`sources[].id`](#sourcesid) |
 | `sources[].type` | `str` | required | [`sources[].type`](#sourcestype) |
 | `sources[].classification` | `str` | required | [`sources[].classification`](#sourcesclassification) |
 | `sources[].compartments` | `str` | `""` | [`sources[].compartments`](#sourcescompartments) |
@@ -122,24 +130,24 @@ blocks work.
 | `sources[].auth.ca_path` | `str \| None` | `None` | [`sources[].auth.ca_path`](#sourcesauthcert_path-sourcesauthkey_path-sourcesauthca_path) |
 | `sources[].timeout_s` | `float \| None` | `15.0` | [`sources[].timeout_s`](#sourcestimeout_s) |
 | `sources[].max_response_bytes` | `int \| None` | `8388608` | [`sources[].max_response_bytes`](#sourcesmax_response_bytes) |
-| `sources[].description` | `str` | `""` | query shape |
-| `sources[].label` | `str \| None` | `None` | query shape |
-| `sources[].sub_category` | `str` | `""` | query shape |
-| `sources[].table` | `str \| None` | `None` | query shape |
-| `sources[].index` | `str \| None` | `None` | query shape |
-| `sources[].model` | `str \| None` | `None` | query shape |
-| `sources[].rows` | `list[dict]` | `[]` | query shape (`type: static`) |
-| `sources[].top_k` | `int` | `10` | query shape |
-| `sources[].embedder` | `"default" \| None` | `None` | query shape |
-| `sources[].embedding_column` | `str \| None` | `None` | query shape |
-| `sources[].metadata_column` | `str \| None` | `None` | query shape |
-| `sources[].distance_operator` | `"<=>" \| "<->" \| "<#>"` | `"<=>"` | query shape |
-| `sources[].like_style` | `"starts_with" \| "regex"` | `"starts_with"` | query shape |
-| `sources[].endpoints[].path` | `str` | required | query shape (`type: rest`) |
-| `sources[].endpoints[].method` | `"GET" \| "POST" \| "PUT" \| "PATCH" \| "DELETE"` | `"GET"` | query shape |
-| `sources[].endpoints[].path_params` | `list[str]` | `[]` | query shape |
-| `sources[].endpoints[].query_params` | `list[str]` | `[]` | query shape |
-| `sources[].endpoints[].operator_templates` | `dict[str, str]` | `{}` | query shape |
+| `sources[].description` | `str` | `""` | [`sources[].description`](#sourcesdescription) |
+| `sources[].label` | `str \| None` | `None` | [`sources[].label`](#sourceslabel) |
+| `sources[].sub_category` | `str` | `""` | [`sources[].sub_category`](#sourcessub_category) |
+| `sources[].table` | `str \| None` | `None` | [`sources[].table`](#sourcestable) |
+| `sources[].index` | `str \| None` | `None` | [`sources[].index`](#sourcesindex) |
+| `sources[].model` | `str \| None` | `None` | [`sources[].model`](#sourcesmodel) |
+| `sources[].rows` | `list[dict[str, Any]]` | `[]` | [`sources[].rows`](#sourcesrows) |
+| `sources[].top_k` | `int` | `10` | [`sources[].top_k`](#sourcestop_k) |
+| `sources[].embedder` | `"default" \| None` | `None` | [`sources[].embedder`](#sourcesembedder) |
+| `sources[].embedding_column` | `str \| None` | `None` | [`sources[].embedding_column`](#sourcesembedding_column) |
+| `sources[].metadata_column` | `str \| None` | `None` | [`sources[].metadata_column`](#sourcesmetadata_column) |
+| `sources[].distance_operator` | `"<=>" \| "<->" \| "<#>" \| None` | `"<=>"` | [`sources[].distance_operator`](#sourcesdistance_operator) |
+| `sources[].like_style` | `"starts_with" \| "regex"` | `"starts_with"` | [`sources[].like_style`](#sourceslike_style) |
+| `sources[].endpoints[].path` | `str` | required | [`sources[].endpoints[].path`](#sourcesendpointspath) |
+| `sources[].endpoints[].method` | `"GET" \| "POST" \| "PUT" \| "PATCH" \| "DELETE"` | `"GET"` | [`sources[].endpoints[].method`](#sourcesendpointsmethod) |
+| `sources[].endpoints[].path_params` | `list[str]` | `[]` | [`sources[].endpoints[].path_params`](#sourcesendpointspath_params) |
+| `sources[].endpoints[].query_params` | `list[str]` | `[]` | [`sources[].endpoints[].query_params`](#sourcesendpointsquery_params) |
+| `sources[].endpoints[].operator_templates` | `dict[str, str]` | `{}` | [`sources[].endpoints[].operator_templates`](#sourcesendpointsoperator_templates) |
 
 ### Index — `attestation` and `audit`
 
@@ -179,6 +187,10 @@ blocks work.
 | `session_store.pool_min_size` | `int` | `1` | [`session_store` pool sizes](#session_storepool_min_size-pool_max_size-lock_pool_max_size) |
 | `session_store.pool_max_size` | `int` | `10` | [`session_store` pool sizes](#session_storepool_min_size-pool_max_size-lock_pool_max_size) |
 | `session_store.lock_pool_max_size` | `int` | `32` | [`session_store` pool sizes](#session_storepool_min_size-pool_max_size-lock_pool_max_size) |
+
+The two `ttl_seconds` above measure different clocks and must be ordered against
+each other; that, the absent session limit, and the absent termination endpoint
+are in [Sessions](#sessions-lifetime-parallelism-and-termination).
 
 ### Index — governance, transports and analysis
 
@@ -865,13 +877,22 @@ agents:
 
 ### `sources[].id`
 
-`str` · required · unique across the file
+`str` · required · unique across the file · `^[A-Za-z0-9][A-Za-z0-9._-]*$`
 
 **Defends** the integrity of every rule and every audit record: rules select by
 `source_id`, denial records name it, and the exposure ledger accumulates by it.
 Two sources with one id would silently merge policy.
 
-**Costs** nothing.
+The pattern defends the places the id is *reproduced*. It is interpolated into
+application log lines, it becomes the OpenTelemetry span name `adapter.<id>`,
+and it is the `{name}` segment of `GET /v1/adapters/{name}/schema`. Bounding it
+here bounds all three, and everything added later, instead of each consumer
+having to escape it — see
+[Log injection](#log-injection-what-the-two-log-formats-escape).
+
+**Costs** you the exotic id. Letters, digits, `.`, `_` and `-`, starting with a
+letter or a digit. Every id in every shipped example already conforms; a config
+that does not will refuse to start rather than load and misbehave later.
 
 **Fails with** a refusal to start:
 
@@ -879,7 +900,13 @@ Two sources with one id would silently merge policy.
 ERROR: invalid config: Duplicate source id='customers'
 ```
 
-and, when the key is absent, `Each source entry must have a string 'id'`.
+when the key is absent, `Each source entry must have a string 'id'`, and when
+the value is outside the pattern:
+
+```
+ERROR: invalid config: Config validation failed:
+  sources.0.id: String should match pattern '^[A-Za-z0-9][A-Za-z0-9._-]*$' [type=string_pattern_mismatch]
+```
 
 **Example**
 
@@ -1416,6 +1443,680 @@ sources:
     max_response_bytes: 1048576
 ```
 
+### `sources[].description`
+
+`str` · default `""`
+
+**Defends** nothing — this field is *disclosed*, and that is the only reason it
+belongs in a hardening guide. The string is returned verbatim by
+`GET /v1/sources` and by the MCP `list_sources` tool — both gated on the
+`query` capability, but only the REST route filters by clearance
+(`Broker.sources_visible_to`); the MCP tool iterates `broker.sources` and shows
+every source to any caller holding the capability. `Broker._source_info` copies
+the same string into the `source_info` block of every decision receipt. Write
+it as if every agent that can reach an MCP session will read it, because it
+can.
+
+**Costs** you nothing to set and a disclosure to set badly: a hostname, a
+schema name or an internal ticket reference here reaches callers who are
+allowed to see that the source exists and nothing more.
+
+**Fails with** no error at any layer — it is free text and always validates.
+The leak is silent, so check it rather than waiting for it:
+
+```console
+$ curl -s http://127.0.0.1:8000/v1/sources -H "X-API-Key: $NAUTILUS_KEY_REPORTING"
+{"sources":[{"id":"customers","type":"postgres","description":"Billing contacts, EU region","classification":"cui","data_types":["pii"],"allowed_purposes":[]}]}
+```
+
+**Example**
+
+```yaml
+sources:
+  - id: customers
+    type: postgres
+    connection: "${CUSTOMERS_DSN}"
+    table: customers
+    classification: cui
+    data_types: [pii]
+    description: "Billing contacts, EU region"   # visible to every caller who may list it
+```
+
+### `sources[].label`
+
+`str | None` · default `None` · required for `type: neo4j`
+
+**Defends** the one identifier the Neo4j adapter interpolates into Cypher.
+Every scope *value* is bound as a `$pN` parameter; the node label is not, so
+`Neo4jAdapter.connect` runs it through `_validate_label` against
+`^[A-Z][A-Za-z0-9_]*$` and backticks it before it reaches
+`MATCH (n:Person)`, with the label backticked. Validation runs before the
+driver is built, so a malformed label never opens a connection.
+
+**Costs** you one node label per source: the adapter matches exactly this
+label, so a second label means a second source block with its own
+classification.
+
+**Fails with**, when the field is missing entirely, a startup error:
+
+```console
+$ nautilus serve --config nautilus.yaml
+ERROR: invalid config: Config validation failed:
+  sources.0: Value error, source 'graph' has type 'neo4j' but no 'label'. The neo4j adapter requires it, so every request to this source would fail at runtime. [type=value_error]
+$ echo $?
+2
+```
+
+and, when it is present but malformed, a `ScopeEnforcementError` at connect
+that lands in `sources_errored`:
+`Invalid Neo4j label 'person-node': must match ^[A-Z][A-Za-z0-9_]*$`.
+
+**Example**
+
+```yaml
+sources:
+  - id: graph
+    type: neo4j
+    connection: "${GRAPH_URI}"
+    label: Person
+    classification: cui
+    data_types: [pii]
+```
+
+### `sources[].sub_category`
+
+`str` · default `""`
+
+**Defends** nothing today, and the reason matters if you are writing policy.
+No module under `nautilus/` reads `SourceConfig.sub_category`. The `source`
+rule template in `nautilus/rules/templates/nautilus.yaml` does declare a
+`sub_category` slot, but `FathomRouter` asserts a source fact built from `id`,
+`type`, `classification`, `data_types`, `allowed_purposes`, `compartments` and
+`purpose_field` only — so a rule branching on `?src-sub` always sees the
+template default `""`, whatever the YAML says.
+
+**Costs** you a false sense of segmentation. Use
+[`sources[].compartments`](#sourcescompartments) for isolation that the engine
+actually enforces.
+
+**Fails with** no error — it validates, it is stored on the model, and it
+changes no decision. Nothing prints it, so the check is the negative one:
+
+```console
+$ curl -s http://127.0.0.1:8000/v1/sources -H "X-API-Key: $NAUTILUS_KEY_REPORTING"
+{"sources":[{"id":"customers","type":"postgres","description":"Billing contacts, EU region","classification":"cui","data_types":["pii"],"allowed_purposes":[]}]}
+```
+
+**Example**
+
+```yaml
+sources:
+  - id: customers
+    type: postgres
+    connection: "${CUSTOMERS_DSN}"
+    table: customers
+    classification: cui
+    data_types: [pii]
+    compartments: "billing"      # enforced
+    sub_category: billing        # documentation only
+```
+
+### `sources[].table`
+
+`str | None` · default `None` · required for `type: postgres`, `pgvector` and `servicenow`
+
+**Defends** which table the query actually reads. The Postgres and pgvector
+adapters render it through `quote_table` (`nautilus/adapters/base.py`), which
+splits on `.`, passes each segment through `quote_identifier` → `validate_field`
+(`^[A-Za-z_][A-Za-z0-9_]*$` per segment) and re-joins them quoted: a source
+declaring `table: restricted.customers` emits
+`SELECT * FROM "restricted"."customers"`, not a bare `"customers"` that
+`search_path` could resolve to a different table. More than one qualifier is
+refused. ServiceNow validates its own table name against `^[a-z][a-z0-9_]*$` at
+connect, before the HTTP client exists.
+
+**Costs** you one table per source block, which is the point: the
+classification, data types and compartments attached to the source are only
+true of one table.
+
+**Fails with**, when the adapter's type requires it and it is absent:
+
+```console
+$ nautilus serve --config nautilus.yaml
+ERROR: invalid config: Config validation failed:
+  sources.0: Value error, source 'customers' has type 'postgres' but no 'table'. The postgres adapter requires it, so every request to this source would fail at runtime. [type=value_error]
+$ echo $?
+2
+```
+
+and, for a ServiceNow table that does not match the regex, a
+`ScopeEnforcementError` at connect:
+`ServiceNowAdapter source 'incidents' has invalid table 'Incident' (expected regex '^[a-z][a-z0-9_]*$')`.
+
+**Example**
+
+```yaml
+sources:
+  - id: customers
+    type: postgres
+    connection: "${CUSTOMERS_DSN}"
+    table: restricted.customers   # schema-qualified; both segments are quoted
+    classification: cui
+    data_types: [pii]
+```
+
+### `sources[].index`
+
+`str | None` · default `None` · required for `type: elasticsearch`
+
+**Defends** the index the search is issued against. `_validate_index` checks it
+against `^[a-z0-9][a-z0-9._-]*$` at connect, before the
+`AsyncElasticsearch` client is constructed, so a name carrying a wildcard or a
+comma — either of which would widen one source into many indices — is refused
+rather than sent.
+
+**Costs** you one index per source; alias or wildcard fan-out has to be
+declared as separate source blocks with their own classifications.
+
+**Fails with**, when absent:
+
+```console
+$ nautilus serve --config nautilus.yaml
+ERROR: invalid config: Config validation failed:
+  sources.0: Value error, source 'logs' has type 'elasticsearch' but no 'index'. The elasticsearch adapter requires it, so every request to this source would fail at runtime. [type=value_error]
+$ echo $?
+2
+```
+
+and, when malformed, a `ScopeEnforcementError` in `sources_errored`:
+`Invalid Elasticsearch index 'Logs-2024': must match ^[a-z0-9][a-z0-9._-]*$`.
+
+**Example**
+
+```yaml
+sources:
+  - id: logs
+    type: elasticsearch
+    connection: "${ES_URL}"
+    index: app-logs-2026
+    classification: cui
+    data_types: [pii]
+```
+
+### `sources[].model`
+
+`str | None` · default `None` · required for `type: llm`
+
+**Defends** the choice of model the prompt reaches. `LLMAdapter.connect`
+refuses an empty value and then sends this exact string as the `"model"` field
+of every request body to the OpenAI-compatible endpoint at
+[`sources[].connection`](#sourcesconnection) — so the source's classification
+and data types are a statement about *this* model at *that* endpoint, and
+changing either is a config change with a restart, not a runtime negotiation.
+
+**Costs** you a restart to move a source to another model, and it does not
+bound what the model does with the rows: everything sent is out of the trust
+boundary. Classify the source accordingly.
+
+**Fails with**, when absent:
+
+```console
+$ nautilus serve --config nautilus.yaml
+ERROR: invalid config: Config validation failed:
+  sources.0: Value error, source 'summariser' has type 'llm' but no 'model'. The llm adapter requires it, so every request to this source would fail at runtime. [type=value_error]
+$ echo $?
+2
+```
+
+**Example**
+
+```yaml
+sources:
+  - id: summariser
+    type: llm
+    connection: "${LLM_BASE_URL}"    # OpenAI-compatible /v1 endpoint
+    model: llama-3.1-8b-instruct
+    classification: public
+    data_types: [derived]
+```
+
+### `sources[].rows`
+
+`list[dict[str, Any]]` · default `[]` · required for `type: static`
+
+**Defends** nothing on its own — it *is* the data. A `static` source has no
+connection and no credential: `StaticAdapter.connect` copies these rows into
+the process and `execute` filters the copy by the scope the engine produced.
+Everything you put here inherits the file permissions of `nautilus.yaml`, not a
+database's access control, and it is read by anyone who can read the config,
+including whatever backs it up.
+
+**Costs** you memory proportional to the rows and a restart to change one. Keep
+it to fixtures, lookup tables and reference data; anything you would have put
+behind a grant belongs in a real source.
+
+**Fails with**, when a `static` source declares none:
+
+```console
+$ nautilus serve --config nautilus.yaml
+ERROR: invalid config: Config validation failed:
+  sources.0: Value error, source 'regions' has type 'static' but no 'rows'. The static adapter requires it, so every request to this source would fail at runtime. [type=value_error]
+$ echo $?
+2
+```
+
+**Example**
+
+```yaml
+sources:
+  - id: regions
+    type: static
+    classification: public
+    data_types: [reference]
+    rows:
+      - { code: eu, name: "Europe" }
+      - { code: na, name: "North America" }
+```
+
+### `sources[].top_k`
+
+`int` · default `10`
+
+**Defends** the size of a similarity answer: `PgVectorAdapter._build_vector_sql`
+binds it as the `LIMIT $L` parameter of the `ORDER BY … LIMIT` tail, so it caps
+how many neighbours one request can pull out of the index. It is a row bound,
+not a byte bound — [`sources[].max_response_bytes`](#sourcesmax_response_bytes)
+is the one that bounds memory.
+
+**Costs** you recall: too low and a legitimate question misses the row that
+answers it, with no signal that it did.
+
+**Fails with** no config-time error for a nonsensical value — the field carries
+no bound, so `top_k: -5` validates and is passed straight through to the
+`LIMIT` parameter. If you want a ceiling, it has to be a review of the config,
+not a startup check.
+
+**Example**
+
+```yaml
+sources:
+  - id: docs
+    type: pgvector
+    connection: "${DOCS_DSN}"
+    table: doc_chunks
+    classification: cui
+    data_types: [pii]
+    top_k: 5
+```
+
+### `sources[].embedder`
+
+`"default" | None` · default `None`
+
+**Defends** against a silent misconfiguration rather than an attacker. `default`
+is the only accepted value: there is no embedder registry, so any other name
+used to load cleanly and then fail every request with
+`EmbeddingUnavailableError` at query time. The `Literal` moves that to startup.
+Setting `default` and leaving it unset behave identically today — `Broker`
+constructs the pgvector adapter with `broker_default_embedder` only and passes
+no per-source embedder.
+
+**Costs** you nothing, and buys you nothing either: with the shipped
+`NoopEmbedder(strict=True)`, a pgvector request that carries no
+`context["embedding"]` fails with
+`NoopEmbedder(strict=True) cannot produce embeddings. …` whichever way this key
+is set.
+
+**Fails with**, for any other value:
+
+```console
+$ nautilus serve --config nautilus.yaml
+ERROR: invalid config: Config validation failed:
+  sources.0.embedder: Input should be 'default' [type=literal_error]
+$ echo $?
+2
+```
+
+**Example**
+
+```yaml
+sources:
+  - id: docs
+    type: pgvector
+    connection: "${DOCS_DSN}"
+    table: doc_chunks
+    classification: cui
+    data_types: [pii]
+    embedder: default
+```
+
+### `sources[].embedding_column`
+
+`str | None` · default `None` (the adapter then uses `embedding`)
+
+**Defends** the identifier spliced into the `SELECT` list and the
+`ORDER BY <col> <op> $E` tail of the pgvector query. It is not a bound
+parameter, so `PgVectorAdapter.execute` routes it through `quote_identifier`,
+which calls `validate_field` first: anything outside
+`^[A-Za-z_][A-Za-z0-9_]*$` (a leading digit, an embedded quote) is rejected
+before the SQL is built.
+
+**Costs** you nothing beyond naming the column correctly; leave it unset and
+the adapter reads `embedding`.
+
+**Fails with** no config-time error — the value is a free string until the
+adapter uses it — and then a `ScopeEnforcementError` in `sources_errored`
+naming the identifier: `Invalid field identifier '1bad'`.
+
+**Example**
+
+```yaml
+sources:
+  - id: docs
+    type: pgvector
+    connection: "${DOCS_DSN}"
+    table: doc_chunks
+    classification: cui
+    data_types: [pii]
+    embedding_column: chunk_vector
+```
+
+### `sources[].metadata_column`
+
+`str | None` · default `None` (the adapter then uses `metadata`)
+
+**Defends** the second interpolated identifier in the same query: pgvector
+selects `id`, this column and the embedding column, so this is the column whose
+contents are returned to the agent as the row payload. Point it at a column
+that carries more than you classified the source for and the classification is
+no longer true of what comes back. Same guard as the embedding column —
+`quote_identifier` → `validate_field` before the SQL exists.
+
+**Costs** you nothing to set; unset it reads `metadata`.
+
+**Fails with** no config-time error and then, at query time, a
+`ScopeEnforcementError` in `sources_errored`: `Invalid field identifier '1bad'`.
+
+**Example**
+
+```yaml
+sources:
+  - id: docs
+    type: pgvector
+    connection: "${DOCS_DSN}"
+    table: doc_chunks
+    classification: cui
+    data_types: [pii]
+    metadata_column: chunk_meta
+```
+
+### `sources[].distance_operator`
+
+`"<=>" | "<->" | "<#>" | None` · default `"<=>"` (`None` also resolves to `"<=>"`)
+
+**Defends** the one operator that reaches SQL as a literal rather than a
+parameter, which is why it is guarded twice: the `Literal` on `SourceConfig`
+rejects anything else at startup, and `PgVectorAdapter._build_vector_sql`
+re-checks against `_ALLOWED_DISTANCE_OPERATORS` before interpolating, so a
+hand-constructed config cannot smuggle one past the loader.
+
+**Costs** you a correctness choice, not a security one, once it is inside the
+allowlist: `<=>` is cosine distance, `<->` L2, `<#>` negative inner product, and
+the wrong one returns confidently ranked nonsense.
+
+**Fails with**, at startup:
+
+```console
+$ nautilus serve --config nautilus.yaml
+ERROR: invalid config: Config validation failed:
+  sources.0.distance_operator: Input should be '<=>', '<->' or '<#>' [type=literal_error]
+$ echo $?
+2
+```
+
+and, from the adapter's second check, an `AdapterError`:
+`distance_operator '<%>' not in allowlist: ['<#>', '<->', '<=>']`.
+
+**Example**
+
+```yaml
+sources:
+  - id: docs
+    type: pgvector
+    connection: "${DOCS_DSN}"
+    table: doc_chunks
+    classification: cui
+    data_types: [pii]
+    distance_operator: "<=>"
+```
+
+### `sources[].like_style`
+
+`"starts_with" | "regex"` · default `"starts_with"` · Neo4j only
+
+**Defends** against ReDoS on a graph source. It decides how the Neo4j adapter
+renders a scope constraint whose operator is `LIKE`: the default emits
+`n.prop STARTS WITH $pN`, which is bounded; `regex` emits
+`n.prop =~ $pN`, whose evaluation is not. The value still arrives as a
+bound parameter either way — the exposure is the cost of matching it, not
+injection.
+
+**Costs** you prefix-only matching. Turning on `regex` buys expressiveness and
+hands anything that can influence a scope value an unbounded matcher on the
+database's CPU.
+
+**Fails with** no failure when you opt in — it succeeds, loudly. `connect()`
+logs at WARN:
+
+```
+CONFIG WARN: Neo4j source 'graph' uses like_style='regex'; regex evaluation is unbounded and may enable ReDoS. Prefer 'starts_with' unless explicitly required (AC-10.3).
+```
+
+An unrecognised value is a startup error:
+
+```console
+$ nautilus serve --config nautilus.yaml
+ERROR: invalid config: Config validation failed:
+  sources.0.like_style: Input should be 'starts_with' or 'regex' [type=literal_error]
+$ echo $?
+2
+```
+
+**Example**
+
+```yaml
+sources:
+  - id: graph
+    type: neo4j
+    connection: "${GRAPH_URI}"
+    label: Person
+    classification: cui
+    data_types: [pii]
+    like_style: starts_with
+```
+
+### `sources[].endpoints[].path`
+
+`str` · required within an `endpoints` entry (the `endpoints` list itself is optional)
+
+**Defends** the URL the REST adapter is allowed to call. `RestAdapter.connect`
+takes `config.endpoints[0]` as the single call target and `execute` issues the
+request against exactly this path relative to
+[`sources[].connection`](#sourcesconnection); nothing derived from an intent or
+a scope value contributes to it. Omit `endpoints` entirely and the adapter
+falls back to the base URL with an empty path — which is a wider target, not a
+narrower one.
+
+**Costs** you one endpoint per source: entries after the first are validated and
+never called.
+
+**Fails with**, when an entry omits it:
+
+```console
+$ nautilus serve --config nautilus.yaml
+ERROR: invalid config: Config validation failed:
+  sources.0.endpoints.0.path: Field required [type=missing]
+$ echo $?
+2
+```
+
+and, when the list is present but empty, a `ScopeEnforcementError` at connect:
+`RestAdapter source 'tickets' declares endpoints=[] (must list at least one EndpointSpec or omit the field)`.
+
+**Example**
+
+```yaml
+sources:
+  - id: tickets
+    type: rest
+    connection: "${TICKETS_BASE_URL}"
+    classification: cui
+    data_types: [pii]
+    endpoints:
+      - path: /api/v1/tickets
+```
+
+### `sources[].endpoints[].method`
+
+`"GET" | "POST" | "PUT" | "PATCH" | "DELETE"` · default `"GET"`
+
+**Defends** the verb the adapter may use. `execute` passes this string to
+`httpx.AsyncClient.stream(method, path, …)` and nothing else can change it, so
+a source that should only read stays read-only by declaration. The default is
+`GET`; the `Literal` means a typo is a startup failure rather than a fallback.
+
+**Costs** you nothing for read sources. Anything other than `GET` makes the
+source a write path with the broker's credential behind it — the scope
+constraints the engine produced are sent as query parameters, not as a body, so
+a non-`GET` verb here changes state without carrying the policy's filter.
+
+**Fails with**, for an unlisted verb:
+
+```console
+$ nautilus serve --config nautilus.yaml
+ERROR: invalid config: Config validation failed:
+  sources.0.endpoints.0.method: Input should be 'GET', 'POST', 'PUT', 'PATCH' or 'DELETE' [type=literal_error]
+$ echo $?
+2
+```
+
+**Example**
+
+```yaml
+sources:
+  - id: tickets
+    type: rest
+    connection: "${TICKETS_BASE_URL}"
+    classification: cui
+    data_types: [pii]
+    endpoints:
+      - path: /api/v1/tickets
+        method: GET
+```
+
+### `sources[].endpoints[].path_params`
+
+`list[str]` · default `[]`
+
+**Defends** nothing, and you should know that before you rely on it. The field
+is declared on `EndpointSpec`, validated as a list of strings and stored — and
+no module under `nautilus/` reads it. `RestAdapter.execute` sends
+[`path`](#sourcesendpointspath) as written; there is no path templating, so
+declaring names here neither permits nor forbids anything.
+
+**Costs** you a wrong assumption if you treat it as an allowlist. The real
+constraint on what reaches the source is the scope the engine produced plus
+[`operator_templates`](#sourcesendpointsoperator_templates).
+
+**Fails with** no error in either direction: a declared name is not required to
+appear, and an undeclared one is not rejected, because nothing consumes the
+list.
+
+**Example**
+
+```yaml
+sources:
+  - id: tickets
+    type: rest
+    connection: "${TICKETS_BASE_URL}"
+    classification: cui
+    data_types: [pii]
+    endpoints:
+      - path: /api/v1/tickets
+        path_params: []          # inert; documented so it is not mistaken for a guard
+```
+
+### `sources[].endpoints[].query_params`
+
+`list[str]` · default `[]`
+
+**Defends** nothing, for the same reason as `path_params`: declared, validated,
+stored, and read by no module under `nautilus/`. The query string the REST
+adapter sends is built entirely by `_build_params` from the scope constraints
+the engine produced — every key comes from a `ScopeConstraint.field` that has
+passed `validate_field`, and this list neither adds to that set nor restricts
+it.
+
+**Costs** you the same wrong assumption. If you need a parameter to be sent,
+it has to come from a rule that puts it in scope.
+
+**Fails with** no error in either direction; nothing consumes the list.
+
+**Example**
+
+```yaml
+sources:
+  - id: tickets
+    type: rest
+    connection: "${TICKETS_BASE_URL}"
+    classification: cui
+    data_types: [pii]
+    endpoints:
+      - path: /api/v1/tickets
+        query_params: []         # inert; the scope decides the query string
+```
+
+### `sources[].endpoints[].operator_templates`
+
+`dict[str, str]` · default `{}`
+
+**Defends** the one operator the REST adapter refuses by default. Its *keys* are
+an opt-in allowlist marker, checked at `connect()` against the adapter's
+`_OPERATOR_ALLOWLIST` so a typo fails at startup rather than at query time. The
+only key that changes behaviour is `NOT IN`: without it, a scope constraint
+using that operator is refused, because there is no safe default rendering for a
+negated set in a query string. The *values* are deliberately never consumed —
+the encoder builds every parameter from its own builders, so no string from YAML
+is interpolated into a request.
+
+**Costs** you a widened source when you declare `NOT IN`: the constraint is
+emitted as a repeated `{field}__nin` key and enforcement moves to the upstream
+service, which is outside the trust boundary. Leave it empty unless the upstream
+is known to honour it.
+
+**Fails with**, for a key outside the allowlist, a `ScopeEnforcementError` at
+connect:
+`EndpointSpec.operator_templates declares unknown operator 'REGEX' for source 'tickets'`,
+
+and, when a rule produces `NOT IN` without the declaration, a
+`ScopeEnforcementError` in `sources_errored`:
+`Operator 'NOT IN' is not supported by the REST adapter unless explicitly declared in EndpointSpec.operator_templates (AC-9.3).`
+
+**Example**
+
+```yaml
+sources:
+  - id: tickets
+    type: rest
+    connection: "${TICKETS_BASE_URL}"
+    classification: cui
+    data_types: [pii]
+    endpoints:
+      - path: /api/v1/tickets
+        operator_templates:
+          "NOT IN": "{field}__nin"   # presence opts in; the string is not consumed
+```
+
 ## `attestation` — signing the receipts
 
 ### `attestation.enabled`
@@ -1907,9 +2608,14 @@ $ curl -s -X POST http://127.0.0.1:8000/v1/request \
 {"detail":"Invalid session token: bad_signature"}
 ```
 
-The reason code is one of `missing`, `bad_signature`, `expired`, `unknown_kid`,
-`wrong_broker` (`nautilus/attestation/session_token.py`). `unknown_kid` across a
-fleet means your replicas do not share `key_ring_path`.
+The reason code is one of `missing`, `bad_signature`, `expired`, `unknown_kid`
+and `broker_instance_mismatch` (`nautilus/attestation/session_token.py`), plus
+`agent_mismatch` from the broker (`nautilus/core/broker.py`) when a valid token
+is presented by an agent it was not minted for. The first five are refused in the
+transport dependency and read `Invalid session token: <code>`; `agent_mismatch`
+is refused inside the broker and reads
+`Invalid session token (<code>): <message>`. `unknown_kid` across a fleet means
+your replicas do not share `key_ring_path`.
 
 **Example**
 
@@ -2005,9 +2711,18 @@ falls back to a per-process id, which is correct for a single broker only.
 
 **Fails with** HTTP 401 and:
 
-```json
-{"detail":"Invalid session token: wrong_broker"}
+```console
+$ curl -s -X POST http://127.0.0.1:8000/v1/request -H "X-API-Key: $NAUTILUS_KEY_REPORTING" \
+    -H "X-Nautilus-Session-Token: <A_TOKEN_MINTED_BY_THE_OTHER_DEPLOYMENT>" \
+    -H 'Content-Type: application/json' \
+    -d '{"agent_id":"reporting","intent":"list customers","context":{}}'
+{"detail":"Invalid session token: broker_instance_mismatch"}
 ```
+
+`<A_TOKEN_MINTED_BY_THE_OTHER_DEPLOYMENT>` is a compact JWS from a broker with a
+different `broker_instance_id` and the same ring; the two-broker version of this
+check is in
+[Ending one session](#ending-one-session-and-ending-every-session-after-a-credential-change).
 
 **Example**
 
@@ -2287,6 +3002,582 @@ session_store:
   lock_pool_max_size: 32
   acquire_timeout_s: 5.0
 ```
+
+## Sessions: lifetime, parallelism and termination
+
+Every entry above documents one key. A *session* is the one thing on this page
+that several keys decide jointly, and the joint answer is not what any of them
+says on its own. This section answers, with the transcript for each: how many
+sessions one credential may hold, what ends one, what ends all of them at once,
+how to see the ones that are open, and what changes when an identity provider —
+not Nautilus — authenticated the caller.
+
+Every block below runs against this config, which needs no database:
+
+```yaml
+# /tmp/session-lab.yaml — a broker that needs no database, for the checks below.
+api:
+  host: 127.0.0.1
+  port: 8000
+  keys:
+    - key: "${NAUTILUS_KEY_REPORTING}"
+      agent_id: reporting
+      capabilities: [query, audit_read, keys]
+    - key: "${NAUTILUS_KEY_ONCALL}"
+      agent_id: incident-response
+      capabilities: [query]
+agents:
+  reporting:
+    id: reporting
+    clearance: unclassified
+    default_purpose: quarterly-reporting
+    allowed_purposes: [quarterly-reporting, audit-response]
+  incident-response:
+    id: incident-response
+    clearance: unclassified
+    default_purpose: incident-response
+    allowed_purposes: [incident-response]
+sources:
+  - id: customers
+    type: static
+    classification: unclassified
+    data_types: [contact]
+    allowed_purposes: [quarterly-reporting, incident-response]
+    rows:
+      - {customer_id: 1, email: "a@example.com"}
+  - id: tickets
+    type: static
+    classification: unclassified
+    data_types: [tickets]
+    allowed_purposes: [quarterly-reporting, incident-response]
+    rows:
+      - {ticket_id: 9, status: open}
+audit:
+  path: /tmp/session-lab/audit.jsonl
+attestation:
+  enabled: false
+session_tokens:
+  enabled: true
+  ttl_seconds: 900
+  key_ring_path: /tmp/session-lab/session-keys.json
+  broker_instance_id: nautilus-prod-eu-west-1
+session_store:
+  backend: sqlite
+  sqlite_path: /tmp/session-lab/sessions.db
+  ttl_seconds: 3600
+ui:
+  enabled: true
+analysis:
+  mode: pattern
+  keyword_map:
+    contact: [customer, customers, contact]
+    tickets: [ticket, tickets]
+state_dir: /tmp/session-lab/state
+```
+
+```bash
+export NAUTILUS_KEY_REPORTING=$(python -c 'import secrets; print(secrets.token_hex(32))')
+export NAUTILUS_KEY_ONCALL=$(python -c 'import secrets; print(secrets.token_hex(32))')
+mkdir -p /tmp/session-lab
+nautilus serve --config /tmp/session-lab.yaml &
+```
+
+Two things in the outputs below will differ on your machine and nothing else
+will: the epoch seconds in `issued_at` / `expires_at`, and the
+`principal:<digest>` — that digest is a truncated SHA-256 over the agent id and
+the credential the transport authenticated, so it is a function of the keys you
+just generated.
+
+### How many sessions one credential may hold at once
+
+**Nothing limits it.** There is no `max_sessions` key, no per-agent session
+counter, and no code path that refuses to mint because an earlier session for
+the same agent is still valid. Two mints seconds apart both succeed and both
+stay valid for the full `session_tokens.ttl_seconds`:
+
+```console
+$ for s in sess-c sess-d; do
+    curl -s -X POST http://127.0.0.1:8000/v1/sessions \
+      -H "X-API-Key: $NAUTILUS_KEY_REPORTING" -H 'Content-Type: application/json' \
+      -d "{\"session_id\":\"$s\",\"agent_id\":\"reporting\",\"purpose\":\"quarterly-reporting\"}" \
+    | python -c 'import json, sys; d = json.load(sys.stdin); print(d["session_id"], d["issued_at"], d["expires_at"])'
+  done
+sess-c 1788259326 1788260226
+sess-d 1788259326 1788260226
+```
+
+**What is bounded is the exposure, not the count**, and that is the reason the
+missing limit is not the hole it looks like. Cumulative exposure accumulates
+twice: once under the declared `session_id`, and once under a
+`principal:<sha256-prefix>` key derived in `nautilus/core/principal.py` from the
+`agent_id` plus the credential the transport authenticated (the API key, or
+`X-Forwarded-User` under `proxy_trust`). Neither input is settable from the
+request body, so opening a second session does not open a second budget. Two
+sessions, one credential, one source each:
+
+```console
+$ curl -s -o /dev/null -X POST http://127.0.0.1:8000/v1/request \
+    -H "X-API-Key: $NAUTILUS_KEY_REPORTING" -H 'Content-Type: application/json' \
+    -d '{"agent_id":"reporting","intent":"list customers","context":{"session_id":"sess-a"}}'
+$ curl -s -o /dev/null -X POST http://127.0.0.1:8000/v1/request \
+    -H "X-API-Key: $NAUTILUS_KEY_REPORTING" -H 'Content-Type: application/json' \
+    -d '{"agent_id":"reporting","intent":"list tickets","context":{"session_id":"sess-b"}}'
+$ python - <<'PY'
+import json, sqlite3
+db = sqlite3.connect("/tmp/session-lab/sessions.db")
+for sid, state in db.execute(
+    "SELECT session_id, state FROM nautilus_session_state ORDER BY session_id"
+):
+    print(sid, "->", json.loads(state)["sources_visited"])
+PY
+principal:be1035fc289982777f312b24dc279964 -> ['customers', 'tickets']
+sess-a -> ['customers']
+sess-b -> ['tickets']
+```
+
+The union is what the rules see. `sess-b` had visited nothing of its own when it
+ran, and the `session` fact it was judged against already carried `customers`,
+which only `sess-a` had touched:
+
+```console
+$ curl -s "http://127.0.0.1:8000/v1/audit?limit=200" -H "X-API-Key: $NAUTILUS_KEY_REPORTING" \
+  | python -c 'import json, sys
+for e in json.load(sys.stdin)["entries"]:
+    if e["session_id"] == "sess-b" and e["event_type"] == "request":
+        for f in e["input_facts"]:
+            if f["template"] == "session":
+                print(json.dumps(f["slots"], indent=2))
+        break'
+{
+  "id": "sess-b",
+  "pii_sources_accessed": 0,
+  "purpose_start_ts": 0.0,
+  "purpose_ttl_seconds": 0.0,
+  "data_types_seen": "contact",
+  "sources_visited": "customers",
+  "pii_sources_accessed_list": ""
+}
+```
+
+So a caller that wants a clean escalation ledger cannot get one by opening a new
+session. It gets one by presenting a **different credential**, which is why one
+key per caller ([`api.keys[].key`](#apikeyskey)) is the control that actually
+bounds this, and why a shared key is a shared budget.
+
+### A session id is not a credential
+
+A `session_id` is a string the caller picks, so the first principal to touch one
+owns it and no other principal may write to it. A second agent naming an open
+session id is refused with HTTP 403 before any source is queried:
+
+```console
+$ curl -s -X POST http://127.0.0.1:8000/v1/request \
+    -H "X-API-Key: $NAUTILUS_KEY_ONCALL" -H 'Content-Type: application/json' \
+    -d '{"agent_id":"incident-response","intent":"list tickets","context":{"session_id":"sess-a"}}'
+{"detail":"session_not_yours: session 'sess-a' belongs to another principal. A session id is not a credential — either use your own, or have its owner declare a handoff to agent_id='incident-response' in it first."}
+```
+
+Presenting the *token* instead of the id is refused too, with a different code —
+a signed token names the agent it was minted for, and verifying the signature is
+not the same as being that agent:
+
+```console
+$ TOKEN=$(curl -s -X POST http://127.0.0.1:8000/v1/sessions \
+      -H "X-API-Key: $NAUTILUS_KEY_REPORTING" -H 'Content-Type: application/json' \
+      -d '{"session_id":"sess-a","agent_id":"reporting","purpose":"quarterly-reporting"}' \
+    | python -c 'import json, sys; print(json.load(sys.stdin)["token"])')
+$ curl -s -X POST http://127.0.0.1:8000/v1/request \
+    -H "X-API-Key: $NAUTILUS_KEY_ONCALL" \
+    -H "X-Nautilus-Session-Token: $TOKEN" \
+    -H 'Content-Type: application/json' \
+    -d '{"agent_id":"incident-response","intent":"list tickets","context":{}}'
+{"detail":"Invalid session token (agent_mismatch): session token was minted for agent 'reporting', presented by 'incident-response'"}
+```
+
+The supported way a session spans two agents is a declared handoff, which writes
+the joining agent into the session's own `handoff_agents` list; see
+[`mcp.expose_declare_handoff`](#mcpexpose_declare_handoff).
+
+### The two clocks, and the order they must be in
+
+Two keys carry `ttl_seconds` and they measure different things. Getting the
+relationship wrong is silent.
+
+| Key | Clock | Starts at | Reset by activity | What it ends |
+|---|---|---|---|---|
+| [`session_tokens.ttl_seconds`](#session_tokensttl_seconds) | **absolute** | the mint | no | the credential — the token stops verifying |
+| [`session_store.ttl_seconds`](#session_storettl_seconds) | **idle** | the last write | yes | the ledger — accumulated exposure is dropped |
+
+**There is no inactivity timeout on the credential.** A session token issued to
+an agent that then goes quiet for the whole TTL is still accepted on its last
+second. The only bound is `expires_at`, written at mint time from
+`session_tokens.ttl_seconds`, and the only way to shorten it is to lower that key
+and restart — it is read once at startup like every other key on this page.
+
+`session_store.ttl_seconds` *is* an idle timeout, but on the exposure ledger, not
+on the token: each backend restricts reads to rows whose `updated_at` is inside
+the window (`AND updated_at > datetime('now', '-N seconds')` for sqlite,
+`AND updated_at > now() - interval 'N seconds'` for Postgres) and deletes the
+rest on the next write. **The consequence is worth spelling out: a session idle
+for longer than `session_store.ttl_seconds` keeps a valid token and gets a fresh
+exposure budget.** Set `session_store.ttl_seconds: 5` in `/tmp/session-lab.yaml`
+and restart — neither key is re-read while the broker runs — leaving the token's
+own `ttl_seconds: 900` alone:
+
+```console
+$ T=$(curl -s -X POST http://127.0.0.1:8000/v1/request \
+      -H "X-API-Key: $NAUTILUS_KEY_REPORTING" -H 'Content-Type: application/json' \
+      -d '{"agent_id":"reporting","intent":"list customers","context":{"session_id":"idle-1"}}' \
+    | python -c 'import json, sys; print(json.load(sys.stdin)["session_token"])')
+$ curl -s -o /dev/null -X POST http://127.0.0.1:8000/v1/request \
+    -H "X-API-Key: $NAUTILUS_KEY_REPORTING" -H "X-Nautilus-Session-Token: $T" \
+    -H 'Content-Type: application/json' \
+    -d '{"agent_id":"reporting","intent":"list tickets","context":{}}'
+$ python - <<'PY'
+import json, sqlite3
+db = sqlite3.connect("/tmp/session-lab/sessions.db")
+for sid, state in db.execute(
+    "SELECT session_id, state FROM nautilus_session_state WHERE session_id = 'idle-1'"
+):
+    print(sid, "->", json.loads(state)["sources_visited"])
+PY
+idle-1 -> ['customers', 'tickets']
+$ sleep 8
+$ curl -s -o /dev/null -w 'HTTP %{http_code}\n' -X POST http://127.0.0.1:8000/v1/request \
+    -H "X-API-Key: $NAUTILUS_KEY_REPORTING" -H "X-Nautilus-Session-Token: $T" \
+    -H 'Content-Type: application/json' \
+    -d '{"agent_id":"reporting","intent":"list tickets","context":{}}'
+HTTP 200
+```
+
+The same token, still accepted, and the ledger it accumulates into has been
+emptied:
+
+```console
+$ python - <<'PY'
+import json, sqlite3
+db = sqlite3.connect("/tmp/session-lab/sessions.db")
+for sid, state in db.execute(
+    "SELECT session_id, state FROM nautilus_session_state WHERE session_id = 'idle-1'"
+):
+    print(sid, "->", json.loads(state)["sources_visited"])
+PY
+idle-1 -> ['tickets']
+```
+
+**Set `session_store.ttl_seconds` greater than or equal to
+`session_tokens.ttl_seconds`.** Anything else hands a paused agent an escalation
+reset that no rule can see, because by the time the rules run the history is
+already gone. The shipped defaults (`3600` and `3600`) satisfy this; the
+[hardened configuration](#a-hardened-configuration-end-to-end) below uses
+`ttl_seconds: 900` for the token against `3600` for the store, which also does.
+
+### A new token is minted per session, not per authentication
+
+Nautilus has no login step on the data path — an API key is a static bearer
+credential presented on every request — so "regenerate the session identifier at
+authentication" has no event to hang on. What happens instead, exactly:
+
+**A request carrying no token mints a fresh session.** Two authenticated requests
+with no `session_id` and no token get two unrelated sessions, never a shared or
+predictable one:
+
+```console
+$ for i in 1 2; do
+    curl -s -X POST http://127.0.0.1:8000/v1/request -H "X-API-Key: $NAUTILUS_KEY_REPORTING" \
+      -H 'Content-Type: application/json' -d '{"agent_id":"reporting","intent":"list customers","context":{}}' \
+    | python -c 'import base64, json, sys
+claims = sys.stdin.read()
+payload = json.loads(claims)["session_token"].split(".")[1]
+print(json.loads(base64.urlsafe_b64decode(payload + "=" * (-len(payload) % 4)))["session_id"])'
+  done
+fd3defc9-4085-4d14-b04d-88dfdce17afe
+88d71187-b56d-4cab-b27c-ed963fe35871
+```
+
+**A request carrying a token keeps that session**, and the token's `session_id`
+claim overrides any `session_id` in the body. That is the whole point of the
+token: exposure cannot be reset by declaring a new id.
+
+**The broker re-signs a token in place** when the signing key has rotated under
+it, or when the request's purpose or clearance no longer matches what the token
+asserts. The re-signed token carries the **original** `expires_at`, so neither a
+key rotation nor a purpose change extends a session's life. Take the
+`session_token` from each response; it is the one that will still verify after
+the next rotation.
+
+**The console does not issue a session identifier at all.** `POST /admin/login`
+verifies the submitted key against `api.keys` and then sets the cookie *to that
+key*. There is nothing new minted, so there is nothing to regenerate:
+
+```console
+$ curl -s -D - -o /dev/null -X POST http://127.0.0.1:8000/admin/login \
+    -d "api_key=$NAUTILUS_KEY_REPORTING" \
+  | grep -iE '^(HTTP/|location:|set-cookie:)' \
+  | sed "s/$NAUTILUS_KEY_REPORTING/<the key you typed>/"
+HTTP/1.1 302 Found
+location: /admin/sources
+set-cookie: nautilus_key=<the key you typed>; HttpOnly; Max-Age=86400; Path=/; SameSite=lax
+```
+
+Log in again over TLS and the value is identical; only the `Secure` attribute
+changes, and it is conditioned on the scheme (see
+[`Cookie: nautilus_key`](#cookie-nautilus_key)):
+
+```console
+$ curl -s -D - -o /dev/null -X POST http://127.0.0.1:8000/admin/login \
+    -H 'X-Forwarded-Proto: https' -d "api_key=$NAUTILUS_KEY_REPORTING" \
+  | grep -i '^set-cookie:' | sed "s/$NAUTILUS_KEY_REPORTING/<the key you typed>/"
+set-cookie: nautilus_key=<the key you typed>; HttpOnly; Max-Age=86400; Path=/; SameSite=lax; Secure
+```
+
+So the remedy for a console session you believe is compromised is **not** a
+logout; it is [rotating the API key](#the-api-keys). `GET /admin/logout` clears
+the browser's copy and nothing else — the key it held is still live:
+
+```console
+$ curl -s -D - -o /dev/null http://127.0.0.1:8000/admin/logout \
+  | grep -iE '^(HTTP/|location:|set-cookie:)'
+HTTP/1.1 302 Found
+location: /admin/login
+set-cookie: nautilus_key=""; expires=Tue, 01 Sep 2026 10:50:02 GMT; Max-Age=0; Path=/; SameSite=lax
+$ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8000/v1/sources \
+    -H "X-API-Key: $NAUTILUS_KEY_REPORTING"
+200
+```
+
+### Ending one session, and ending every session after a credential change
+
+There is **no session-termination endpoint**. Nothing in the REST surface, the
+CLI or the console deletes a session or invalidates one token. A session token
+stops being accepted in exactly four ways, and only the bottom two are things an
+operator can make happen:
+
+| What ends it | Scope | Refusal the caller then sees |
+|---|---|---|
+| `expires_at` passes | that token | `{"detail":"Invalid session token: expired"}` (401) |
+| the token is presented to a broker with a different `broker_instance_id` | that deployment boundary | `{"detail":"Invalid session token: broker_instance_mismatch"}` (401) |
+| `nautilus key revoke <kid>` | **every** token that kid signed | `{"detail":"Invalid session token: unknown_kid"}` (401) |
+| the key ring is lost or replaced (unset `key_ring_path`, restart) | every token the process ever signed | `{"detail":"Invalid session token: unknown_kid"}` (401) |
+
+The third row is the one to use after a credential change, and it is the closest
+thing to "terminate all other sessions". Rotate first — the current primary
+cannot be revoked, because revoking it would make the ring silently mint an
+unaudited replacement:
+
+```console
+$ export NAUTILUS_REVIEWER=ops@example.com
+$ nautilus key list --url http://127.0.0.1:8000 --api-key "$NAUTILUS_KEY_REPORTING"
+  fb240484-af2b-416a-8d5d-92f8a2a0c5b4  kty=OKP  use=sig
+$ nautilus key rotate --yes --url http://127.0.0.1:8000 --api-key "$NAUTILUS_KEY_REPORTING"
+OK: rotated: new primary kid=fef88529-c16b-4f61-883c-63494a032030  reviewer=ops@example.com
+$ nautilus key revoke fef88529-c16b-4f61-883c-63494a032030 --reason "x" --yes \
+    --url http://127.0.0.1:8000 --api-key "$NAUTILUS_KEY_REPORTING"
+ERROR: key revoke: server returned 409: {"detail":"kid 'fef88529-c16b-4f61-883c-63494a032030' is the current primary; rotate first, then revoke"}
+$ nautilus key revoke fb240484-af2b-416a-8d5d-92f8a2a0c5b4 --reason "credential change" --yes \
+    --url http://127.0.0.1:8000 --api-key "$NAUTILUS_KEY_REPORTING"
+OK: revoked: kid=fb240484-af2b-416a-8d5d-92f8a2a0c5b4  reason='credential change'  reviewer=ops@example.com
+$ curl -s -X POST http://127.0.0.1:8000/v1/request -H "X-API-Key: $NAUTILUS_KEY_REPORTING" \
+    -H "X-Nautilus-Session-Token: $TOKEN" -H 'Content-Type: application/json' \
+    -d '{"agent_id":"reporting","intent":"list customers","context":{}}'
+{"detail":"Invalid session token: unknown_kid"}
+```
+
+**Rotate and revoke back to back, or the sweep is incomplete.** Between the two
+commands the rotated-out key is in its grace window: it still verifies, and any
+agent that makes a request in that window is handed a token re-signed with the
+*new* primary, which the revoke will not touch. That is deliberate — it is how
+agents converge on a new key with no push channel — but it means a session that
+was active during the window survives a revoke aimed at it. Repeat the pair to
+catch it.
+
+Both commands are audited, with the reviewer and the kid linkage, so the sweep is
+provable after the fact:
+
+```console
+$ python - <<'PY'
+import json
+for line in open("/tmp/session-lab/audit.jsonl"):
+    entry = json.loads(json.loads(line)["metadata"]["nautilus_audit_entry"])
+    if entry.get("event_type", "").startswith("signing_key"):
+        print(entry["event_type"], entry["rule_trace"])
+PY
+signing_key_rotated ['reviewer=ops@example.com', 'previous_kid=fb240484-af2b-416a-8d5d-92f8a2a0c5b4', 'new_kid=fef88529-c16b-4f61-883c-63494a032030']
+signing_key_revoked ['reviewer=ops@example.com', 'kid=fb240484-af2b-416a-8d5d-92f8a2a0c5b4', 'reason=credential change']
+```
+
+Revoking the ring does **not** revoke the API key, and rotating the API key does
+not end the session tokens minted under it. A full credential change is both:
+the [two-restart key procedure](#the-api-keys), then `rotate` + `revoke` here.
+
+### Listing the sessions a broker is holding
+
+There is **no endpoint and no CLI subcommand that lists sessions**, and no page
+in the console that shows them: `nautilus session version` reads the store's
+schema stamp and nothing else. What exists is the store itself, and its schema is
+stable and documented — one table, `nautilus_session_state`, with `session_id`,
+`state` and `updated_at` (`nautilus/core/session_sqlite.py`,
+`nautilus/core/session_pg.py`). Query it directly:
+
+```console
+$ python - <<'PY'
+import json, sqlite3
+db = sqlite3.connect("/tmp/session-lab/sessions.db")
+for sid, updated, state in db.execute(
+    "SELECT session_id, updated_at, state FROM nautilus_session_state ORDER BY updated_at DESC"
+):
+    s = json.loads(state)
+    print(f"{updated}  {sid:48}  {s.get('owner_principal', '')}  {s.get('sources_visited')}")
+PY
+2026-09-01 10:43:21  sess-a                                            principal:be1035fc289982777f312b24dc279964  ['customers']
+2026-09-01 10:43:21  principal:be1035fc289982777f312b24dc279964          ['customers', 'tickets']
+2026-09-01 10:42:21  fd3defc9-4085-4d14-b04d-88dfdce17afe              principal:be1035fc289982777f312b24dc279964  ['customers']
+2026-09-01 10:42:21  88d71187-b56d-4cab-b27c-ed963fe35871              principal:be1035fc289982777f312b24dc279964  ['customers']
+2026-09-01 10:42:06  sess-b                                            principal:be1035fc289982777f312b24dc279964  ['tickets']
+```
+
+The same query against Postgres is `SELECT session_id, updated_at, state FROM
+nautilus_session_state ORDER BY updated_at DESC;`. Three things to know before
+you read the output as a session list:
+
+- Rows keyed `principal:<hash>` are the per-credential exposure ledgers, not
+  sessions. Filter them out with `WHERE session_id NOT LIKE 'principal:%'`.
+- A token minted by `POST /v1/sessions` has no row until its first request; the
+  mint writes a signature, not state.
+- `session_store.backend: memory` (the default) has nothing to query at all. The
+  state lives in one process's heap, dies with it, and is invisible to every
+  other replica. If you need to see sessions, you need `sqlite` or `postgres`.
+
+For what a session *did*, the audit log is the record, and it carries the session
+id on both the mint and the request:
+
+```console
+$ curl -s "http://127.0.0.1:8000/v1/audit?limit=200" -H "X-API-Key: $NAUTILUS_KEY_REPORTING" \
+  | python -c 'import json, sys
+for e in json.load(sys.stdin)["entries"]:
+    if e["session_id"] == "audit-demo":
+        print(e["timestamp"], e["event_type"], e["agent_id"], e["sources_queried"])'
+2026-09-01T10:45:14.906144Z request reporting ['customers']
+2026-09-01T10:45:14.888466Z session_token_issued reporting []
+```
+
+Refused presentations are recorded too, under
+`session_token_verification_failed`, with the reason code in `error_records`.
+Note the empty `agent_id` on three of them: a token rejected for signature,
+expiry, kid or broker id is rejected in the transport dependency, before the
+broker knows who was asking.
+
+```console
+$ curl -s "http://127.0.0.1:8000/v1/audit?limit=200" -H "X-API-Key: $NAUTILUS_KEY_REPORTING" \
+  | python -c 'import json, sys
+for e in json.load(sys.stdin)["entries"]:
+    if e["event_type"] == "session_token_verification_failed":
+        print(e["timestamp"], repr(e["agent_id"]), [r["error_type"] for r in e["error_records"]])'
+2026-09-01T10:45:14.911402Z 'incident-response' ['agent_mismatch']
+2026-09-01T10:44:33.185137Z 'incident-response' ['agent_mismatch']
+2026-09-01T10:43:31.674228Z '' ['unknown_kid']
+2026-09-01T10:43:13.794928Z '' ['expired']
+2026-09-01T10:43:09.787313Z '' ['broker_instance_mismatch']
+```
+
+### Sessions under a federated identity provider
+
+Under [`api.auth.mode: proxy_trust`](#apiauthmode) Nautilus is a relying party:
+the ingress ran the OIDC, SPIFFE or mTLS exchange and asserts the result in
+`X-Forwarded-User`, which `agents.<id>.subject` maps to an agent. Add to
+`/tmp/session-lab.yaml`:
+
+```yaml
+api:
+  auth:
+    mode: proxy_trust
+    trusted_proxies: ["127.0.0.1/32"]
+agents:
+  reporting:
+    subject: "spiffe://cluster.local/ns/agents/sa/reporting"
+  incident-response:
+    subject: "spiffe://cluster.local/ns/agents/sa/oncall"
+session_tokens:
+  broker_instance_id: nautilus-fed
+```
+
+Four properties follow, and the fourth is the one to plan around. Mint a token
+under an asserted identity first — the claim set it hands back is itself the
+evidence for the fourth:
+
+```console
+$ curl -s -X POST http://127.0.0.1:8000/v1/sessions \
+    -H "X-Forwarded-User: spiffe://cluster.local/ns/agents/sa/reporting" \
+    -H 'Content-Type: application/json' \
+    -d '{"session_id":"fed-1","agent_id":"reporting","purpose":"quarterly-reporting"}' \
+  | python -c 'import json, sys; d = json.load(sys.stdin); del d["token"]; print(json.dumps(d, indent=2))'
+{
+  "session_id": "fed-1",
+  "agent_id": "reporting",
+  "purpose": "quarterly-reporting",
+  "clearance": "unclassified",
+  "issued_at": 1788259854,
+  "expires_at": 1788260754,
+  "broker_instance_id": "nautilus-fed",
+  "kid": "fef88529-c16b-4f61-883c-63494a032030"
+}
+```
+
+**The forwarded identity is re-checked on every request.** It is a per-request
+dependency, not a session established at first contact, so the moment your proxy
+stops forwarding a subject the caller is anonymous again — even holding a valid
+Nautilus session token:
+
+```console
+$ T=$(curl -s -X POST http://127.0.0.1:8000/v1/sessions \
+      -H "X-Forwarded-User: spiffe://cluster.local/ns/agents/sa/reporting" \
+      -H 'Content-Type: application/json' \
+      -d '{"session_id":"fed-1","agent_id":"reporting","purpose":"quarterly-reporting"}' \
+    | python -c 'import json, sys; print(json.load(sys.stdin)["token"])')
+$ curl -s -X POST http://127.0.0.1:8000/v1/request \
+    -H "X-Nautilus-Session-Token: $T" -H 'Content-Type: application/json' \
+    -d '{"agent_id":"reporting","intent":"list customers","context":{}}'
+{"detail":"Missing X-Forwarded-User"}
+```
+
+**A token does not travel between subjects.** It names the agent it was minted
+for, and the forwarded subject resolves to an agent, so the two must agree:
+
+```console
+$ curl -s -X POST http://127.0.0.1:8000/v1/request \
+    -H "X-Forwarded-User: spiffe://cluster.local/ns/agents/sa/oncall" \
+    -H "X-Nautilus-Session-Token: $T" -H 'Content-Type: application/json' \
+    -d '{"agent_id":"incident-response","intent":"list tickets","context":{}}'
+{"detail":"Invalid session token (agent_mismatch): session token was minted for agent 'reporting', presented by 'incident-response'"}
+```
+
+**A subject no agent claims is refused, not admitted unbound:**
+
+```console
+$ curl -s -X POST http://127.0.0.1:8000/v1/request \
+    -H "X-Forwarded-User: spiffe://cluster.local/ns/agents/sa/ghost" \
+    -H 'Content-Type: application/json' \
+    -d '{"agent_id":"reporting","intent":"list customers","context":{}}'
+{"detail":"Forwarded identity rejected: no agent is bound to this subject. Add it as agents.<id>.subject, or the caller would run unbound with every capability."}
+```
+
+**There is no back-channel logout and no awareness of the provider's session
+lifetime.** Look again at the claim set above: eight fields, and not one of them
+names the identity provider, the subject or the upstream session. Nothing in the
+token can be invalidated by the provider, and Nautilus registers no
+front-channel or back-channel logout endpoint for a provider to call.
+
+Two consequences, both operational:
+
+1. **Terminating a user at the provider does not terminate the Nautilus session
+   token it minted.** What it does terminate is the caller's ability to present
+   a subject — which is enough, because every request needs one. The token alone
+   buys nothing. Confirm that your proxy actually stops forwarding, rather than
+   caching the assertion.
+2. **Set `session_tokens.ttl_seconds` no longer than the provider's session
+   lifetime.** Nautilus cannot read that number and will not shorten itself to
+   match. `900` against a 1-hour IdP session is fine; `86400` is a token that
+   outlives twenty-three hours of an identity that no longer exists.
 
 ## `rules`, `rkm` — what governs the broker
 
@@ -3244,7 +4535,10 @@ $ curl -s -X POST http://127.0.0.1:8000/v1/request \
 ```
 
 Reason codes: `missing`, `bad_signature`, `expired`, `unknown_kid`,
-`wrong_broker`.
+`broker_instance_mismatch`, `agent_mismatch`. The last one is raised by the
+broker rather than the transport dependency, so its body carries the message
+too — see
+[A session id is not a credential](#a-session-id-is-not-a-credential).
 
 ### `X-Nautilus-Reviewer` (and the legacy `X-Reviewer`)
 
@@ -3412,7 +4706,7 @@ applies to it identically.
 ```console
 $ nautilus serve --config /etc/nautilus/nautilus.yaml --transport grpc
 usage: nautilus serve [-h] [--config CONFIG] [--transport {rest,mcp,both}] ...
-nautilus serve: error: argument --transport: invalid choice: 'grpc' (choose from 'rest', 'mcp', 'both')
+nautilus serve: error: argument --transport: invalid choice: 'grpc' (choose from rest, mcp, both)
 $ echo $?
 2
 ```
@@ -3670,6 +4964,567 @@ only public key material (`kty`, `crv`, `kid`, `x`, `use`). Do not "fix" this by
 authenticating it — you would break offline verification, which is the point of
 the receipts.
 
+## Response headers, byte for byte
+
+The section above says which routes exist and what gates them. This one is the
+other axis: what comes back on the wire, header by header, on every response
+shape the broker produces. It is measured, not derived from the
+middleware — `create_app` installs exactly three
+(`grep -c add_middleware nautilus/transport/fastapi_app.py` → `3`):
+[`api.max_request_bytes`](#apimax_request_bytes) and
+[`api.max_concurrent_requests`](#apimax_concurrent_requests), each of which
+writes headers only on its *own* refusal (`content-type: application/json` plus
+`content-length`, and `retry-after: 1` on the 503); and `_CacheControl`, which
+is unconditional and is the only one that touches a response it lets through.
+It sets `Cache-Control` and nothing else — see
+[`Cache-Control`](#cache-control-set-on-every-response-except-the-console-assets)
+below. Everything else in the table is whatever FastAPI, Starlette and uvicorn
+emit. Reproduce the whole table against your own build with the
+[`session-lab` config](#sessions-lifetime-parallelism-and-termination):
+
+```bash
+hdr() {   # hdr <label> <curl args...>
+  printf '%-32s' "$1"; shift
+  curl -s -D- -o /dev/null "$@" | tr -d '\r' \
+    | awk 'BEGIN{ct="-";cc="-"} /^HTTP\//{st=substr($0,index($0," ")+1)}
+           tolower($1)=="content-type:"{$1="";sub(/^ /,"");ct=$0}
+           tolower($1)=="cache-control:"{$1="";sub(/^ /,"");cc=$0}
+           END{printf "|%-26s|%-40s|%s\n", st, ct, cc}'
+}
+B=http://127.0.0.1:8000
+hdr 'GET /healthz'  $B/healthz
+hdr 'GET /v1/audit' -H "X-API-Key: $NAUTILUS_KEY_REPORTING" $B/v1/audit
+hdr 'GET /metrics'  $B/metrics
+```
+
+Every row below is that command's output. `-` means the header was absent, not
+empty.
+
+| Response | Status | `Content-Type` | `Cache-Control` |
+|---|---|---|---|
+| `GET /healthz` | `200 OK` | `application/json` | `no-cache` |
+| `GET /readyz` | `200 OK` | `application/json` | `no-cache` |
+| `GET /metrics` | `200 OK` | `text/plain; version=1.0.0; charset=utf-8` | `no-cache` |
+| `GET /` | `302 Found` | - *(no body)* | `no-store` |
+| `GET /openapi.json` | `200 OK` | `application/json` | `no-store` |
+| `GET /docs` | `200 OK` | `text/html; charset=utf-8` | `no-store` |
+| `POST /v1/request` | `200 OK` | `application/json` | `no-store` |
+| `POST /v1/request` (no key) | `401 Unauthorized` | `application/json` | `no-store` |
+| `POST /v1/request` (malformed body) | `422 Unprocessable Content` | `application/json` | `no-store` |
+| `GET /v1/audit` | `200 OK` | `application/json` | `no-store` |
+| `GET /v1/sources` | `200 OK` | `application/json` | `no-store` |
+| `GET /v1/keys/jwks.json` | `200 OK` | `application/json` | `no-store` |
+| `GET /v1/nope` | `404 Not Found` | `application/json` | `no-store` |
+| `DELETE /healthz` | `405 Method Not Allowed` | `application/json` | `no-cache` |
+| `GET /admin/login` | `200 OK` | `text/html; charset=utf-8` | `no-store` |
+| `POST /admin/login` | `302 Found` | - *(no body)* | `no-store` |
+| `GET /admin/playground` | `200 OK` | `text/html; charset=utf-8` | `no-store` |
+| `GET /admin/audit` | `200 OK` | `text/html; charset=utf-8` | `no-store` |
+| `GET /admin/decisions` | `200 OK` | `text/html; charset=utf-8` | `no-store` |
+| `GET /admin/static/htmx.min.js` | `200 OK` | `text/javascript; charset=utf-8` | - |
+| `GET /admin/static/styles.css` | `200 OK` | `text/css; charset=utf-8` | - |
+| `GET /admin/sources/events` | `200 OK` | `text/event-stream; charset=utf-8` | `no-store` |
+| `POST /v1/request` (1.1 MB body) | `413 Content Too Large` | `application/json` | `no-store` |
+| `POST /v1/request` (over `max_concurrent_requests`) | `503 Service Unavailable` | `application/json` | `no-store` |
+| malformed framing (see [Message framing](#message-framing-every-hop-must-count-the-body-the-same-way)) | `400 Bad Request` | `text/plain; charset=utf-8` | - |
+
+The last row is the one exception you cannot change from the config: uvicorn's
+HTTP parser rejects the framing before the request becomes an ASGI scope, so no
+middleware — Nautilus's or anyone's — ever sees it. Everything above it is the
+application's answer.
+
+Four controls read straight off that table. Each gets its own entry below.
+`Cache-Control` is now Nautilus's own; the other three are still *Nautilus does
+not set this and cannot be configured to*, and an operator needs the stanza that
+does.
+
+### `Content-Type` on every body, and the character set
+
+**Every response with a body carries a `Content-Type` that matches the bytes,
+and every one of them is UTF-8.** There is no row in the table above with a
+missing type, no `application/octet-stream` fallback, and no type that
+disagrees with its body. That is a property of how each response is built, not
+a middleware: JSON routes return Pydantic models that FastAPI renders through
+`JSONResponse`, the console returns `HTMLResponse` from Jinja templates,
+`/metrics` returns `Response(content=data, media_type=CONTENT_TYPE_LATEST)`
+with the constant `prometheus_client` publishes, and `/admin/static` is
+Starlette's `StaticFiles`, which types by extension.
+
+The two rows worth reading twice:
+
+- **`text/html`, `text/css`, `text/javascript`, `text/event-stream` and
+  `text/plain` all carry `charset=utf-8` explicitly.** They are `text/*`, whose
+  default charset is US-ASCII, so the parameter has to be there and it is.
+- **`application/json` carries no `charset` parameter, and must not.** RFC 8259
+  §11 defines no charset parameter for that media type; UTF-8 is mandatory and
+  a `charset=` on it is at best ignored and at worst treated as a parse error.
+  So "no charset on the JSON routes" is the correct behaviour, and the question
+  that actually matters is whether the bytes really are UTF-8.
+
+They are, and you can see it rather than trust it. Ask for an audit entry whose
+id is non-ASCII; the id is echoed back in the error, so the wire bytes are
+yours to inspect:
+
+```console
+$ curl -s 'http://127.0.0.1:8000/v1/audit/r%C3%A9porting-%CE%A9' \
+    -H "X-API-Key: $NAUTILUS_KEY_REPORTING" -o /tmp/naut-ct.bin -D- | grep -i content-type
+content-type: application/json
+$ xxd /tmp/naut-ct.bin | head -3
+00000000: 7b22 6465 7461 696c 223a 2261 7564 6974  {"detail":"audit
+00000010: 2065 6e74 7279 2027 72c3 a970 6f72 7469   entry 'r..porti
+00000020: 6e67 2dce a927 206e 6f74 2066 6f75 6e64  ng-..' not found
+$ python - <<'PY'
+b = open("/tmp/naut-ct.bin", "rb").read()
+print("as utf-8  :", b.decode("utf-8"))
+print("as latin-1:", b.decode("latin-1"))
+PY
+as utf-8  : {"detail":"audit entry 'réporting-Ω' not found"}
+as latin-1: {"detail":"audit entry 'rÃ©porting-Î©' not found"}
+```
+
+`c3 a9` and `ce a9` are `é` and `Ω` in UTF-8 — two bytes each, not one — and
+the two decodings differ, which is the whole point: had the body been Latin-1
+the first line would have failed to decode at all. Nothing here needs a proxy.
+
+The one gap the table does leave is **sniffing**: none of these responses
+carries `X-Content-Type-Options: nosniff`, so a browser that dislikes a
+declared type may still guess. Nautilus sends no such header on any route and
+has no key for it. Add it at the proxy — the stanza is in
+[Option B](#option-b-terminate-in-front-and-tell-nautilus-who-did-it) — and
+confirm it took:
+
+```console
+$ curl -sk -D- -o /dev/null https://nautilus.example.com:8443/v1/audit \
+    -H "X-API-Key: $NAUTILUS_KEY_REPORTING" | grep -i x-content-type
+x-content-type-options: nosniff
+```
+
+### `Cache-Control` — set on every response except the console assets
+
+**Nautilus sets it, deny-by-default, in `_CacheControl`
+(`nautilus/transport/fastapi_app.py`), and there is no key to turn it off.**
+A response with no `Cache-Control` and a `200` status is *heuristically
+cacheable* (RFC 9111 §4.2.2): a shared cache is permitted to store it and serve
+it to somebody else. That is not a theoretical reading. Put an nginx cache in
+front of the broker with a deliberately key-blind cache key — which is what a
+CDN, a corporate forward proxy or a sidecar cache is:
+
+```nginx
+# The shared cache, for the demonstration. Do not deploy this.
+proxy_cache_path /var/cache/naut levels=1:2 keys_zone=naut:1m max_size=64m inactive=10m;
+server {
+    listen 8082;
+    location / {
+        proxy_pass        http://127.0.0.1:8000;
+        proxy_cache       naut;
+        proxy_cache_valid 200 10m;
+        proxy_cache_key   "$request_uri";
+        add_header        X-Cache-Status $upstream_cache_status always;
+    }
+}
+```
+
+Against a build with no `Cache-Control` on the response — which is what every
+release before this one shipped — that cache stores the audit trail on the
+first authenticated request and hands it to the next caller regardless of who
+they are:
+
+```console
+$ curl -s -D- -o/dev/null -H "X-API-Key: $NAUTILUS_KEY_REPORTING" \
+    http://127.0.0.1:8082/v1/audit | grep -i x-cache-status
+X-Cache-Status: MISS
+$ curl -s -D- -o/dev/null -H "X-API-Key: $NAUTILUS_KEY_REPORTING" \
+    http://127.0.0.1:8082/v1/audit | grep -i x-cache-status
+X-Cache-Status: HIT
+
+$ # now with no credential at all:
+$ curl -s -D- -o/dev/null http://127.0.0.1:8082/v1/audit | grep -iE '^HTTP|x-cache'
+HTTP/1.1 200 OK
+X-Cache-Status: HIT
+$ curl -s http://127.0.0.1:8082/v1/audit | wc -c
+94838
+```
+
+Ninety-four kilobytes of the decision trail, to a caller holding nothing. The
+broker refused that caller correctly; the cache in front of it did not, because
+nothing in the response told it not to.
+
+Same cache, same requests, against this release:
+
+```console
+$ curl -s -D- -o/dev/null -H "X-API-Key: $NAUTILUS_KEY_REPORTING" \
+    http://127.0.0.1:8082/v1/audit | grep -iE 'cache-control|x-cache-status'
+cache-control: no-store
+X-Cache-Status: MISS
+$ curl -s -D- -o/dev/null -H "X-API-Key: $NAUTILUS_KEY_REPORTING" \
+    http://127.0.0.1:8082/v1/audit | grep -iE 'cache-control|x-cache-status'
+cache-control: no-store
+X-Cache-Status: MISS
+
+$ # and with no credential:
+$ curl -s -D- -o/dev/null http://127.0.0.1:8082/v1/audit | grep -iE '^HTTP|x-cache-status'
+HTTP/1.1 401 Unauthorized
+X-Cache-Status: MISS
+$ curl -s http://127.0.0.1:8082/v1/audit
+{"detail":"Not authenticated"}
+```
+
+`MISS` on the second request is the assertion: the cache was offered the
+response and declined to store it. Thirty bytes instead of 94 838.
+
+#### What is set where, and why it is not one directive everywhere
+
+The default is `no-store` and it is a *default*, not a route list — a route
+added next release is covered without anyone remembering to add it. Two
+exemptions, each of which had to earn itself:
+
+| Responses | `Cache-Control` | Why |
+|---|---|---|
+| `/admin/static/**` | *(nothing — the mount is left alone)* | Public bytes with no caller in them, served by Starlette's `StaticFiles`, which already emits `etag` and `last-modified`. A shared cache stores them and revalidates correctly on its own. This is the only place on the surface where caching is a win. |
+| `/healthz`, `/readyz`, `/metrics` | `no-cache` | They carry nothing about a caller, so forbidding *storage* would be over-broad. But each answers a question about a live process, and a cached `readyz: ok` from a draining pod, or a flat-lined scrape, is a wrong answer rather than a stale one. `no-cache` permits the copy and forbids serving it without revalidating. |
+| everything else | `no-store` | `/v1/audit` and `/v1/audit/{id}` are the audit trail; `/v1/request` and `/v1/query` carry brokered rows; `/v1/sources` and `/v1/adapters` enumerate what you connect to; every `/admin/` page renders one of those into a browser, where the back button, the disk cache and a shared proxy are three separate ways for the next person at that terminal to read them. `/v1/keys/jwks.json` is public key material and would be safe to cache anywhere else, but this broker can revoke a `kid` — a cached key set is a revoked key still verifying. |
+
+The exemption is real, and the same cache shows it:
+
+```console
+$ for i in 1 2 3; do
+    curl -s -D- -o/dev/null http://127.0.0.1:8082/admin/static/styles.css \
+    | grep -i x-cache-status
+  done
+X-Cache-Status: MISS
+X-Cache-Status: HIT
+X-Cache-Status: HIT
+```
+
+`MISS` then `HIT` then `HIT` on the stylesheet, while `/v1/audit` above stayed
+`MISS` forever, through one cache in one run.
+
+Two more things the middleware deliberately does *not* do:
+
+- **It sets `Cache-Control` and nothing else.** `Pragma: no-cache` is an
+  HTTP/1.0 *request* header (RFC 9111 §5.4) that no 1.1 cache reads off a
+  response, `Expires: 0` is overridden by `Cache-Control` wherever both appear,
+  and `Vary` has nothing to key on once the response may not be stored. A
+  longer header list here would be decoration.
+- **A handler that set the header itself wins.** `/admin/sources/events` says
+  `no-store` because `sse_starlette.EventSourceResponse` does
+  `_headers.setdefault("Cache-Control", "no-store")` in its own constructor, and
+  the middleware leaves it alone. A handler that thought about caching knows
+  more than a path prefix does.
+
+One caveat worth stating plainly: **`no-store` is an instruction, not an
+enforcement.** It binds a cache that implements RFC 9111 — nginx, Varnish,
+Squid, every browser — and it does nothing about a proxy configured with
+`proxy_ignore_headers Cache-Control`, or about an appliance that logs response
+bodies. If your tier does either, that is a tier setting to change; the
+`add_header Cache-Control "no-store" always;` lines in
+[Option B](#option-b-terminate-in-front-and-tell-nautilus-who-did-it) are now
+belt-and-braces rather than the only thing standing between the audit trail and
+a shared cache, and they are kept because a proxy that rewrites or strips
+upstream headers is a real deployment.
+
+### `Access-Control-*` — there is no CORS layer, and that is the control
+
+**Nautilus never sends an `Access-Control-Allow-Origin`, on any route, under any
+configuration.** `CORSMiddleware` is not imported anywhere in the tree and there
+is no config key that would add it:
+
+```console
+$ grep -rn 'CORSMiddleware\|Access-Control' nautilus/ --include='*.py' | wc -l
+0
+$ for p in /healthz /readyz /metrics /v1/audit /v1/sources /admin/playground /openapi.json; do
+    curl -s -D- -o/dev/null -H 'Origin: https://evil.example' \
+      -H "X-API-Key: $NAUTILUS_KEY_REPORTING" "http://127.0.0.1:8000$p" \
+    | tr -d '\r' | grep -i 'access-control'
+  done
+$ echo "exit $?"
+exit 1
+```
+
+No output, on any of the seven. The preflight has no handler either — `OPTIONS`
+is not a declared method on `/v1/request`, so it gets the router's 405:
+
+```console
+$ curl -s -D- -o/dev/null -X OPTIONS http://127.0.0.1:8000/v1/request \
+    -H 'Origin: https://evil.example' -H 'Access-Control-Request-Method: POST' \
+    | grep -iE '^HTTP|^allow'
+HTTP/1.1 405 Method Not Allowed
+allow: POST
+```
+
+That is the safe answer and it is the answer you want to keep. A page on
+`https://evil.example` can still *send* a cross-origin `POST /v1/request` — the
+browser will not block a simple request from leaving — but it cannot read the
+reply, and it cannot attach a credential: `X-API-Key` and
+`X-Nautilus-Session-Token` are not CORS-safelisted request headers, so adding
+either turns the request into a preflighted one, and the preflight gets a 405.
+
+The console cookie is the exception worth naming, because a cookie *is* sent
+cross-origin by the browser without any header being set. `nautilus_key` is
+issued `SameSite=lax`, which is what stops a cross-site `POST` from carrying it:
+
+```console
+$ # the cookie value is the API key itself -- asserted without printing it:
+$ curl -s -D- -o/dev/null -X POST -d "api_key=$NAUTILUS_KEY_REPORTING" \
+    http://127.0.0.1:8000/admin/login \
+  | grep -c "nautilus_key=$NAUTILUS_KEY_REPORTING"
+1
+$ curl -s -D- -o/dev/null -X POST -d "api_key=$NAUTILUS_KEY_REPORTING" \
+    http://127.0.0.1:8000/admin/login | tr -d '\r' | grep -i set-cookie \
+  | sed "s/$NAUTILUS_KEY_REPORTING/<REDACTED>/"
+set-cookie: nautilus_key=<REDACTED>; HttpOnly; Max-Age=86400; Path=/; SameSite=lax
+```
+
+`grep -c` returning `1` is the assertion: the console does not mint a session
+identifier, it stores the credential. `HttpOnly` keeps script off it and
+`SameSite=lax` keeps a cross-site `POST` from carrying it, but anything that
+reads that cookie holds a working API key — which is why every `/admin/`
+response, the login form and its `401` included, carries `no-store` and why
+that is not configurable.
+
+If you put a CORS layer in front of Nautilus yourself, do not answer
+`Access-Control-Allow-Origin: *` together with
+`Access-Control-Allow-Credentials: true` — browsers reject that pair, and the
+version of it that browsers *accept*, reflecting the request's `Origin` back,
+is the one that turns every authenticated console session into a
+cross-origin read. If the console must be reachable from another origin, name
+that origin literally.
+
+### `Strict-Transport-Security` — not sent, and it cannot be
+
+Nautilus does not terminate TLS
+([Transport](#transport-tls-nautilus-does-not-do-it)), so it is not the right
+component to declare a TLS policy, and it does not:
+
+```console
+$ grep -rn 'Strict-Transport' nautilus/ --include='*.py' | wc -l
+0
+```
+
+It belongs on the tier that holds the certificate. The stanza is in
+[Option B](#option-b-terminate-in-front-and-tell-nautilus-who-did-it); confirm
+it is on the response and not just in the file:
+
+```console
+$ curl -sk -D- -o /dev/null https://nautilus.example.com:8443/v1/audit \
+    -H "X-API-Key: $NAUTILUS_KEY_REPORTING" | grep -i strict-transport
+strict-transport-security: max-age=63072000; includeSubDomains
+```
+
+Two caveats specific to this deployment shape. `includeSubDomains` binds every
+sibling name under the registered domain, including hosts you do not operate —
+check that before you ship it, because a browser will honour it for two years.
+And `preload` is deliberately absent above: submitting to the preload list is
+irreversible on a human timescale, and a broker that a customer might later want
+to reach over plain HTTP on an internal name is the wrong candidate for it.
+
+## What the deployment discloses without being asked
+
+The routes above are what Nautilus serves on purpose. This section is the other
+half: what a scanner or a curious caller gets out of a stock deployment without
+holding a credential, and which of those answers are settings you can change
+versus properties of the shipped artifact. Each check runs against your own
+build; none of them needs a key.
+
+### Source-control metadata in the image
+
+**Not present, and the reason is structural rather than a setting you could
+forget.** `.dockerignore` excludes `.git/`, `.github/` and `.gitignore` from the
+build context, and — the part that matters more — the published `runtime` stage
+is a fresh `gcr.io/distroless/cc-debian13` that copies in only `/app` from the
+builder, which itself received exactly `pyproject.toml`, `uv.lock`, `README.md`
+and the `nautilus` package. Nothing else from the working tree can reach the
+image, whatever is in the context.
+
+Verify it on the image you are actually shipping, not on the Dockerfile:
+
+```bash
+docker build -t nautilus:local .
+```
+
+```console
+$ cid=$(docker create nautilus:local)
+$ docker export "$cid" | tar -t | grep -cE '(^|/)\.(git|svn|hg)/'
+0
+$ docker export "$cid" | tar -t | grep -E '^app/[^/]+/?$'
+app/.venv/
+app/README.md
+app/nautilus/
+app/nautilus_rkm.egg-info/
+app/pyproject.toml
+app/uv.lock
+$ docker rm "$cid" > /dev/null
+```
+
+`grep -c` returning `0` is the assertion. Run the same check after any change to
+`.dockerignore`, and after adding a build stage that copies more than the two
+`COPY` lines above — a `COPY . /app` would put the whole repository, `.git`
+included, into a layer that `docker history` will still show even if a later
+stage deletes it.
+
+If you build the image some other way (a CI recipe, a base image of your own),
+this guarantee is yours to keep, not ours.
+
+### Debug modes
+
+**Nothing is in a debug mode by default, and no config file can put it there.**
+That is a stronger claim than "remember to turn it off", so here is each place
+one would normally live and the check for each.
+
+**The application.** The FastAPI app is constructed with `title`, `description`,
+`version` and `lifespan` only — `debug` is never passed, so it is `False`, and
+Starlette answers an unhandled exception with a plain `Internal Server Error`
+and no traceback. There is no config key and no environment variable that flips
+it. Any config that loads will do — the answer does not depend on one:
+
+```console
+$ python - <<'PY'
+from nautilus.transport.fastapi_app import create_app
+
+app = create_app("/tmp/session-lab.yaml")
+print("debug:", app.debug)
+PY
+debug: False
+```
+
+**The server.** `nautilus serve` builds its uvicorn config with host, port and
+the `--log-level` value, which is `info` unless the command line says
+otherwise. There is no `--reload` and no `--debug`:
+
+```console
+$ nautilus serve --help | grep -cE -- '--reload|--debug'
+0
+$ nautilus serve --reload
+usage: nautilus [-h] command ...
+nautilus: error: unrecognized arguments: --reload
+$ echo $?
+2
+```
+
+Reaching DEBUG therefore takes an explicit `--log-level debug` on the command
+line, which makes it a grep of the unit files and the Deployment's `args:`,
+exactly as for `--bind`. Raising the threshold the other way has its own cost —
+[Log verbosity](operator-guide.md#log-verbosity) lists the startup lines this
+page tells you to read that `warning` and above take away.
+
+If you run uvicorn yourself — one of the two supported TLS answers,
+[Option A](#option-a-run-uvicorn-yourself-with-certificates) — then `--reload` is
+yours to not pass. It re-imports source on change and has no place on a
+production listener.
+
+**Application logging.** `configure_logging` takes both the log *format* and
+the log *level* from the CLI and from nowhere else. There is no
+`NAUTILUS_LOG_LEVEL` and no config key — the flag is the whole mechanism — and
+[`--log-format json`](#nautilus-serve-log-format-textjson) changes the
+encoding, not the verbosity.
+
+**The image.** The Dockerfile declares a `debug` target carrying `bash` and a
+package manager, alongside the `runtime` target that carries neither. `runtime`
+is declared last, so a bare `docker build .` selects it and `debug` is reachable
+only through an explicit `--target debug`. Which one you are holding is a
+one-line check, because a distroless runtime image has no shell at all:
+
+```console
+$ cid=$(docker create nautilus:local)
+$ docker export "$cid" | tar -t | grep -cE '^(bin|usr/bin|usr/local/bin)/(sh|bash|dash)$'
+0
+$ docker rm "$cid" > /dev/null
+```
+
+Anything other than `0` means a shell is in the image you are about to run.
+
+What *is* disclosed by design, and is not a debug mode: `/docs`, `/redoc`,
+`/openapi.json`, `/metrics` and the `GET /` route index are unauthenticated and
+have no off switch. They are covered in
+[Routes and what gates them](#routes-and-what-gates-them); the control for them
+is the reverse proxy, not a config key.
+
+### Directory listings
+
+**None are served.** The only static mount is `/admin/static`, it exists only
+when `ui.enabled: true`, and it is a plain `StaticFiles(directory=...)` — the
+`html=True` mode that would render an index is not used. A request for the
+directory is a 404, and only named files resolve:
+
+```console
+$ curl -s -w '\n%{http_code}\n' http://127.0.0.1:8000/admin/static/
+{"detail":"Not Found"}
+404
+$ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8000/admin/static/styles.css
+200
+```
+
+No route resolves a caller-supplied path to a file. The audit log is served as
+parsed entries through `GET /v1/audit` under the `audit_read` capability, never
+as bytes off disk, and the key ring, the session database and the state
+directory are not on the HTTP surface at all. That also means the filesystem
+permissions in [Lay down the filesystem](#lay-down-the-filesystem) are the whole
+of their access control, and there is no route from which to test them.
+
+### HTTP TRACE and the other methods a route does not serve
+
+**`TRACE` is not implemented on any route, and there is nothing to disable.**
+Starlette's router dispatches only the methods a route declares; everything else
+is refused before any handler runs. On a path that exists the answer is 405 with
+an `Allow` header naming what the route does serve:
+
+```console
+$ curl -s -D - -o /dev/null -X TRACE http://127.0.0.1:8000/healthz \
+  | grep -iE '^(HTTP/|allow:)'
+HTTP/1.1 405 Method Not Allowed
+allow: GET
+$ curl -s -X TRACE http://127.0.0.1:8000/healthz
+{"detail":"Method Not Allowed"}
+```
+
+On a path that does not exist it is a 404, so `TRACE` is never a discriminator
+between "route present" and "route absent" either:
+
+```console
+$ curl -s -w '\n%{http_code}\n' -X TRACE http://127.0.0.1:8000/no-such-path
+{"detail":"Not Found"}
+404
+```
+
+Every other method a scanner reaches for lands in the same place, on the one
+route that is unauthenticated on every deployment:
+
+```console
+$ for m in HEAD OPTIONS PUT PATCH DELETE TRACE TRACK; do
+    printf '%-8s %s\n' "$m" "$(curl -s -o /dev/null -w '%{http_code}' -X "$m" http://127.0.0.1:8000/healthz)"
+  done
+HEAD     405
+OPTIONS  405
+PUT      405
+PATCH    405
+DELETE   405
+TRACE    405
+TRACK    400
+```
+
+`TRACK` is the odd one: uvicorn's HTTP parser rejects it before the application
+is reached at all, with a plain-text body and no JSON envelope, which is what
+that shape means whenever you see it:
+
+```console
+$ curl -s -D - -X TRACK http://127.0.0.1:8000/healthz | head -1
+HTTP/1.1 400 Bad Request
+$ curl -s -X TRACK http://127.0.0.1:8000/healthz
+Invalid HTTP request received.
+```
+
+Two caveats that are yours, not Nautilus's:
+
+- **A reverse proxy in front is a second implementation of this.** The 405 above
+  is what *Nautilus* answers; what your ingress answers is its own behaviour and
+  its own configuration. Run the same `curl -X TRACE` against the public name,
+  not against `127.0.0.1`, in the same way
+  [Confirm the gate is closed](#confirm-the-gate-is-closed) tests the other
+  controls from outside.
+- **The 405 body and the `Allow` header confirm a route exists.** That is
+  ordinary REST behaviour and not a leak of anything the unauthenticated
+  `GET /docs` and `/openapi.json` do not already publish in full.
+
 ## Transport: TLS, Nautilus does not do it
 
 There is no TLS config key, so there is no entry above for one. Two supported
@@ -3712,42 +5567,117 @@ $ curl -sv https://nautilus.example.com:8443/healthz 2>&1 | grep -i 'SSL connect
 ### Option B — terminate in front, and tell Nautilus who did it
 
 Keep `nautilus serve` on loopback and put nginx (or your mesh) in front. This is
-also how you scope `/metrics` and `/admin`.
+also how you scope `/metrics` and `/admin`, how the response headers Nautilus
+does not send get sent, and how the whole chain is made to agree on message
+length. It is one file, and every transcript on this page that involves TLS was
+taken against exactly it:
 
 ```nginx
 # /etc/nginx/conf.d/nautilus.conf
+# Ports are 8080/8443 so the file runs unprivileged and the transcripts below
+# are literal; production is 80/443 with $host and no :port in the redirect.
+
+# V4.1.2 -- only the surface a human reaches by typing a URL redirects.
 server {
-    listen 443 ssl;
+    listen 8080;
     server_name nautilus.example.com;
+    charset utf-8;
+
+    # The console: a browser followed a bookmark. Send it to HTTPS.
+    location /admin { return 301 https://$host:8443$request_uri; }
+
+    # The API: no redirect, on purpose. A 301 teaches an agent that a plaintext
+    # request is recoverable. It is not -- the key was already on the wire in
+    # clear, and a retry over TLS does not un-send it.
+    location /v1/ {
+        # nginx appends the charset only to the types named here, and
+        # application/json is not in the stock charset_types list.
+        default_type  application/json;
+        charset       utf-8;
+        charset_types application/json;
+        add_header Cache-Control "no-store" always;
+        return 403 '{"detail":"Plaintext HTTP is not accepted on /v1/. Use https://; rotate any key sent over this connection."}';
+    }
+
+    location / { return 403; }
+}
+
+server {
+    listen 8443 ssl;
+    http2 on;
+    server_name nautilus.example.com;
+    charset utf-8;
 
     ssl_certificate     /etc/nginx/tls/nautilus.crt;
     ssl_certificate_key /etc/nginx/tls/nautilus.key;
-    ssl_protocols       TLSv1.2 TLSv1.3;
+
+    # V12.1.2 -- recommended suites only, strongest first, server order wins.
+    ssl_protocols             TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_conf_command          Ciphersuites TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:TLS_AES_128_GCM_SHA256;
+    ssl_ciphers               ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256;
+    ssl_ecdh_curve            X25519:prime256v1;
+    ssl_session_tickets       off;
+
+    # V4.2.1 -- one framing rule for the whole chain. Nautilus takes small JSON
+    # bodies and never needs a chunked upload, so the encoding the two ends
+    # frame differently is refused at the edge; 444 closes the connection so no
+    # trailing bytes can be re-read as a second request. client_max_body_size
+    # is api.max_request_bytes to the byte.
+    proxy_http_version      1.1;
+    proxy_set_header        Connection "";
+    proxy_request_buffering on;
+    client_max_body_size    1048576;
+    if ($http_transfer_encoding) { return 444; }
+
+    add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
 
     # The data surface.
     location /v1/ {
         proxy_pass http://127.0.0.1:8000;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
         # proxy_trust only: set it, never pass a client-supplied value through.
-        proxy_set_header X-Forwarded-User $ssl_client_s_dn;
+        proxy_set_header X-Forwarded-User  $ssl_client_s_dn;
+        # V14.3.2 -- brokered rows and the audit trail are not cacheable.
+        add_header Cache-Control "no-store" always;
+        add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+        add_header X-Content-Type-Options "nosniff" always;
     }
 
-    location = /healthz { proxy_pass http://127.0.0.1:8000; }
-    location = /readyz  { proxy_pass http://127.0.0.1:8000; }
+    # The console, if you enable it at all. Operator subnet only.
+    location /admin/ {
+        allow 10.30.0.0/16;
+        allow 127.0.0.1;
+        deny  all;
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header Cache-Control "no-store" always;
+        add_header Strict-Transport-Security "max-age=63072000; includeSubDomains" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+
+    location = /admin {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        add_header Cache-Control "no-store" always;
+    }
 
     # Scrapes come from the monitoring subnet and nowhere else.
     location = /metrics {
         allow 10.20.0.0/16;
-        deny all;
+        allow 127.0.0.1;
+        deny  all;
         proxy_pass http://127.0.0.1:8000;
     }
 
-    # The console, if you enable it at all.
-    location /admin/ {
-        allow 10.30.0.0/16;
-        deny all;
-        proxy_pass http://127.0.0.1:8000;
-    }
+    location = /healthz { proxy_pass http://127.0.0.1:8000; }
+    location = /readyz  { proxy_pass http://127.0.0.1:8000; }
 }
 ```
 
@@ -3758,6 +5688,227 @@ api:
   auth:
     mode: proxy_trust
     trusted_proxies: ["127.0.0.1/32"]
+```
+
+Load it and prove it parsed before you rely on any of the checks below:
+
+```console
+$ nginx -t
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+```
+
+### Cipher suites: what the pin above actually refuses
+
+`ssl_protocols` alone is not the control. Within TLS 1.2, nginx's compiled
+default is `HIGH:!aNULL:!MD5`, which is wide enough to negotiate a suite with a
+SHA-1 MAC in CBC mode and, worse, one with no forward secrecy at all — a
+recorded session that a future key compromise decrypts retroactively. The two
+directives that close it are `ssl_ciphers` (which suites exist) and
+`ssl_prefer_server_ciphers on` (whose preference order decides), plus
+`ssl_conf_command Ciphersuites` for the separate TLS 1.3 list, which
+`ssl_ciphers` does not govern.
+
+The difference is one scan wide. Run the same vhost twice — once on nginx's
+stock TLS defaults, once with the block above — and enumerate what each will
+actually negotiate, with a scanner that carries its own TLS stack rather than
+your local libssl (a modern `openssl` has dropped the old suites itself, so a
+refusal from *it* proves nothing about the server):
+
+```console
+$ # stock nginx defaults -- the first six of twenty-five TLS 1.2 suites:
+$ nmap --script ssl-enum-ciphers -p 8444 127.0.0.1 \
+    | sed -n '/TLSv1.2/,/compressors/p' | head -6
+|   TLSv1.2: 
+|     ciphers: 
+|       TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA (secp256r1) - A
+|       TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256 (secp256r1) - A
+|       TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 (secp256r1) - A
+|       TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA (secp256r1) - A
+$ nmap --script ssl-enum-ciphers -p 8444 127.0.0.1 | grep -c 'TLS_RSA_WITH'
+14
+
+$ # the same vhost with ssl_ciphers pinned -- the whole scan:
+$ nmap --script ssl-enum-ciphers -p 8443 127.0.0.1 \
+    | sed -n '/ssl-enum/,/least strength/p'
+| ssl-enum-ciphers: 
+|   TLSv1.2: 
+|     ciphers: 
+|       TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384 (ecdh_x25519) - A
+|       TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256 (ecdh_x25519) - A
+|       TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 (ecdh_x25519) - A
+|     compressors: 
+|       NULL
+|     cipher preference: server
+|   TLSv1.3: 
+|     ciphers: 
+|       TLS_AKE_WITH_AES_256_GCM_SHA384 (ecdh_x25519) - A
+|       TLS_AKE_WITH_CHACHA20_POLY1305_SHA256 (ecdh_x25519) - A
+|       TLS_AKE_WITH_AES_128_GCM_SHA256 (ecdh_x25519) - A
+|     cipher preference: server
+|_  least strength: A
+```
+
+The `grep -c` is the sharpest line in that pair: fourteen of the twenty-five
+stock suites are `TLS_RSA_WITH_*` — static RSA key exchange, no ECDHE, no
+forward secrecy — and a recording of any session negotiated with one of them is
+decrypted retroactively the day that certificate's private key leaks.
+
+Three numbers off those two scans are the whole control:
+
+```console
+$ for p in 8444 8443; do
+    nmap --script ssl-enum-ciphers -p $p 127.0.0.1 > /tmp/scan-$p.txt
+    printf 'port %s: %s TLS1.2 suites, %s of them without forward secrecy, preference %s\n' \
+      "$p" \
+      "$(sed -n '/TLSv1.2/,/compressors/p' /tmp/scan-$p.txt | grep -c 'TLS_')" \
+      "$(sed -n '/TLSv1.2/,/compressors/p' /tmp/scan-$p.txt | grep -c 'TLS_RSA_')" \
+      "$(grep -m1 'cipher preference' /tmp/scan-$p.txt | sed 's/.*preference: //')"
+  done
+port 8444: 25 TLS1.2 suites, 14 of them without forward secrecy, preference client
+port 8443: 3 TLS1.2 suites, 0 of them without forward secrecy, preference server
+```
+
+`nmap` grades every one of those twenty-five `A`, and reports
+`least strength: A` for both ports — which is exactly why the grade is not the
+assertion and the counts are. `cipher preference` is the other half: `server`
+means `ssl_prefer_server_ciphers on` took effect, `client` means the peer
+chooses, and a downgrading client chooses badly.
+
+If you have no scanner, the same two assertions come out of `openssl s_client`,
+one suite at a time:
+
+```console
+$ echo Q | openssl s_client -connect 127.0.0.1:8444 -servername nautilus.example.com \
+    -tls1_2 -cipher 'AES256-GCM-SHA384' 2>&1 | grep -oE 'Cipher is [^ ]+'
+Cipher is AES256-GCM-SHA384
+$ echo Q | openssl s_client -connect 127.0.0.1:8443 -servername nautilus.example.com \
+    -tls1_2 -cipher 'AES256-GCM-SHA384' 2>&1 | grep -oE 'handshake failure'
+handshake failure
+$ echo Q | openssl s_client -connect 127.0.0.1:8443 -servername nautilus.example.com \
+    -tls1_2 -cipher 'ECDHE-RSA-AES256-SHA' 2>&1 | grep -oE 'handshake failure'
+handshake failure
+$ echo Q | openssl s_client -connect 127.0.0.1:8443 -servername nautilus.example.com \
+    -tls1_2 -cipher 'ECDHE-RSA-AES128-GCM-SHA256' 2>&1 | grep -oE 'Cipher is [^ ]+'
+Cipher is ECDHE-RSA-AES128-GCM-SHA256
+```
+
+The last one matters as much as the refusals: the pinned vhost still negotiates
+a 128-bit AEAD suite, so "refuses everything" is not what happened.
+
+**Strongest preferred** gets its own probe — offer the weaker suite *first* and
+see which comes back:
+
+```console
+$ echo Q | openssl s_client -connect 127.0.0.1:8443 -servername nautilus.example.com \
+    -tls1_2 -cipher 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384' 2>&1 \
+  | grep -oE 'Cipher is [^ ]+'
+Cipher is ECDHE-RSA-AES256-GCM-SHA384
+$ echo Q | openssl s_client -connect 127.0.0.1:8443 -servername nautilus.example.com \
+    -tls1_3 2>&1 | grep -oE 'Cipher is [^ ]+'
+Cipher is TLS_AES_256_GCM_SHA384
+```
+
+The client asked for AES-128 first and got AES-256. That is
+`ssl_prefer_server_ciphers on` against an `ssl_ciphers` list written
+strongest-first; drop either and the client's order wins. The TLS 1.3 line comes
+from `ssl_conf_command Ciphersuites`, whose first entry is
+`TLS_AES_256_GCM_SHA384` — `ssl_ciphers` does not govern TLS 1.3 at all, which
+is why both directives are in the block.
+
+None of this is a Nautilus setting. There is no `api.tls` key, `nautilus serve`
+forwards no TLS options, and `grep -rn 'ssl_ciphers\|SSLContext\|set_ciphers'
+nautilus/` returns nothing. Under [Option A](#option-a-run-uvicorn-yourself-with-certificates)
+the equivalent knob is uvicorn's `--ssl-ciphers`, whose default is the literal
+OpenSSL cipher string `TLSv1` — every TLSv1-era suite, static RSA included, and
+far wider than the list above. Confirm the default for the uvicorn you have
+rather than trusting this page:
+
+```console
+$ python -c "import inspect; from uvicorn.config import Config; \
+print(inspect.signature(Config.__init__).parameters['ssl_ciphers'].default)"
+TLSv1
+```
+
+Pass `--ssl-ciphers` explicitly, or terminate in front.
+
+### Which requests redirect to HTTPS, and which must not
+
+**Nautilus never redirects HTTP to HTTPS.** It terminates no TLS, binds no
+second listener, and has no config key that would add a redirect — the `301` in
+the block above is nginx's, scoped to `/admin` and nothing else. That
+scoping is the control, and it is deliberate:
+
+```console
+$ # the console: a human typed it, so send them somewhere useful
+$ curl -sS -D- -o/dev/null http://nautilus.example.com:8080/admin/audit \
+  | grep -iE '^HTTP|^location'
+HTTP/1.1 301 Moved Permanently
+Location: https://nautilus.example.com:8443/admin/audit
+
+$ # the API: no redirect, and the reason is in the body
+$ curl -sS -D- http://nautilus.example.com:8080/v1/audit \
+  | grep -iE '^HTTP|^location|content-type|cache-control|^\{'
+HTTP/1.1 403 Forbidden
+Content-Type: application/json; charset=utf-8
+Cache-Control: no-store
+{"detail":"Plaintext HTTP is not accepted on /v1/. Use https://; rotate any key sent over this connection."}
+```
+
+An agent that sent `X-API-Key` to port 80 has already leaked it to every hop on
+the path. Redirecting it to HTTPS makes the client library retry, the retry
+succeed, and the incident invisible — the operator sees a healthy 200 and no
+sign that a credential was disclosed. A refusal that names the consequence is
+the honest answer, and it shows up as a 403 in the metrics you already scrape.
+There is no `Location` in that response, which is the assertion: `grep -i
+'^location'` prints nothing.
+
+**The other half of this control is the redirect Nautilus *does* emit.**
+Starlette's `redirect_slashes` answers `/admin` with a `307` to `/admin/`, and
+FastAPI builds that `Location` as an absolute URL from the request scheme. Which
+scheme it believes depends on whether uvicorn trusted your proxy's
+`X-Forwarded-Proto`, and uvicorn trusts `127.0.0.1` and nothing else unless you
+say otherwise. Same broker, same request, one environment variable apart:
+
+```console
+$ # proxy on loopback -- uvicorn's default trust list
+$ curl -sS -D- -o/dev/null -H 'X-Forwarded-Proto: https' \
+    -H 'Host: nautilus.example.com' http://127.0.0.1:8000/admin \
+  | grep -iE '^HTTP|^location'
+HTTP/1.1 307 Temporary Redirect
+location: https://nautilus.example.com/admin/
+
+$ # the same broker started with FORWARDED_ALLOW_IPS=10.9.9.9
+$ curl -sS -D- -o/dev/null -H 'X-Forwarded-Proto: https' \
+    -H 'Host: nautilus.example.com' http://127.0.0.1:8001/admin \
+  | grep -iE '^HTTP|^location'
+HTTP/1.1 307 Temporary Redirect
+location: http://nautilus.example.com/admin/
+```
+
+`http://` in a `Location` sent to a browser that reached you over TLS is a
+downgrade: the browser follows it in clear, and the console cookie — which
+Nautilus marks `Secure` precisely because it holds an API key — is then
+withheld, so the operator lands on a login page over plaintext and types the key
+again. Two ways to be sure it cannot happen:
+
+- **Run the proxy on loopback**, which is the shape this page recommends
+  (`api.host: 127.0.0.1`) and which uvicorn already trusts.
+- **If the proxy is on another host**, set `FORWARDED_ALLOW_IPS` to its address
+  in the unit's `EnvironmentFile`. It is uvicorn's variable, not Nautilus's —
+  `nautilus serve` constructs `uvicorn.Config(app, host=..., port=...,
+  log_level=...)` and passes no `forwarded_allow_ips`, so uvicorn's own default
+  (`127.0.0.1`, overridable by that variable) is what is in force.
+
+Never set it to `*`. That trusts the scheme, and the client IP, from anyone who
+can reach the port.
+
+Check which way your deployment resolved it, from outside, in one line:
+
+```console
+$ curl -sk -D- -o/dev/null -H 'X-Forwarded-Proto: https' \
+    https://nautilus.example.com:8443/admin | grep -i '^location'
+location: https://nautilus.example.com/admin/
 ```
 
 ### TLS on the way out, to your sources
@@ -3790,6 +5941,491 @@ complete answer:
 - `/metrics` — monitoring subnet only, 403 to everyone else;
 - `/admin/` — operator subnet only, and preferably not enabled at all;
 - `/healthz`, `/readyz` — reachable by your orchestrator.
+
+## Message framing: every hop must count the body the same way
+
+If the proxy and the broker disagree about where one request ends and the next
+begins, an attacker writes bytes that the proxy reads as one request and the
+broker reads as two. The second one is *smuggled*: it never passed the proxy's
+`location` blocks, so `deny all` on `/admin/` and `/metrics` did not apply to
+it, and it arrives on a connection the proxy already authenticated for someone
+else. This is not a header you can set. It is an agreement you have to test.
+
+Nautilus's half of the agreement is uvicorn's HTTP parser, and **which parser
+that is depends on what is installed**, not on any Nautilus setting.
+`nautilus serve` builds `uvicorn.Config(app, host=..., port=..., log_level=...)`
+and leaves `http="auto"`, so uvicorn picks `httptools` when the package is
+present and falls back to `h11` when it is not. Print which one your process
+resolved to before trusting any result below:
+
+```console
+$ python - <<'PY'
+from uvicorn.config import Config
+async def app(scope, receive, send): ...
+c = Config(app=app); c.load()
+print(c.http, "->", c.http_protocol_class.__name__)
+PY
+auto -> HttpToolsProtocol
+```
+
+### What Nautilus refuses on its own
+
+Five framing primitives, spoken straight at the broker over a raw socket. Save
+this as `smuggle.py`; it is the same script used against every hop below.
+
+```python
+# smuggle.py <port> -- the five ways to make two parsers disagree.
+import socket, sys
+
+CASES = {
+ "Content-Length + Transfer-Encoding":
+  b"POST /v1/request HTTP/1.1\r\nHost: nautilus.example.com\r\n"
+  b"Content-Length: 6\r\nTransfer-Encoding: chunked\r\n\r\n0\r\n\r\n",
+ "two Content-Length headers":
+  b"POST /v1/request HTTP/1.1\r\nHost: nautilus.example.com\r\n"
+  b"Content-Length: 6\r\nContent-Length: 0\r\n\r\nGET /x HTTP/1.1\r\nHost: n\r\n\r\n",
+ "Transfer-Encoding: chunked, identity":
+  b"POST /v1/request HTTP/1.1\r\nHost: nautilus.example.com\r\n"
+  b"Transfer-Encoding: chunked, identity\r\n\r\n0\r\n\r\n",
+ "Transfer-Encoding<SP>: chunked":
+  b"POST /v1/request HTTP/1.1\r\nHost: nautilus.example.com\r\n"
+  b"Transfer-Encoding : chunked\r\nContent-Length: 0\r\n\r\n",
+ "bare-LF chunk terminator":
+  b"POST /v1/request HTTP/1.1\r\nHost: nautilus.example.com\r\n"
+  b"Transfer-Encoding: chunked\r\n\r\n0\n\n"
+  b"GET /admin/audit HTTP/1.1\r\nHost: nautilus.example.com\r\n\r\n",
+}
+
+for name, payload in CASES.items():
+    s = socket.create_connection(("127.0.0.1", int(sys.argv[1])), 3)
+    s.sendall(payload); s.settimeout(2.5); buf = b""
+    try:
+        while True:
+            chunk = s.recv(4096)
+            if not chunk:
+                break
+            buf += chunk
+    except TimeoutError:
+        pass
+    s.close()
+    first = buf.split(b"\r\n")[0].decode("latin1") if buf else "(closed, no response)"
+    print(f"  {name:<38} {first:<28} requests_parsed={buf.count(b'HTTP/1.1 ')}")
+```
+
+```console
+$ python smuggle.py 8000
+  Content-Length + Transfer-Encoding     HTTP/1.1 400 Bad Request     requests_parsed=1
+  two Content-Length headers             HTTP/1.1 400 Bad Request     requests_parsed=1
+  Transfer-Encoding: chunked, identity   HTTP/1.1 400 Bad Request     requests_parsed=1
+  Transfer-Encoding<SP>: chunked         HTTP/1.1 400 Bad Request     requests_parsed=1
+  bare-LF chunk terminator               HTTP/1.1 400 Bad Request     requests_parsed=1
+```
+
+`requests_parsed=1` on every row is the assertion, not the `400`. Two of those
+five payloads — `two Content-Length headers` and `bare-LF chunk terminator` —
+carry a whole second request in the tail, and the broker parsed neither. The 400
+body is uvicorn's, not Nautilus's — `Invalid HTTP request received.`,
+`text/plain; charset=utf-8`, `connection: close` — so it will not appear in the
+audit trail and there is no Nautilus error string to search for. Look for the
+uvicorn line instead:
+
+```console
+$ journalctl -u nautilus --since "-1h" | grep -c 'Invalid HTTP request received'
+```
+
+### What happens when a proxy joins the chain
+
+Now the same script against nginx from
+[Option B](#option-b-terminate-in-front-and-tell-nautilus-who-did-it), with
+the `if ($http_transfer_encoding) { return 444; }` line commented out, so you
+can see what the guard is for:
+
+```console
+$ python smuggle.py 8081          # nginx -> broker, no framing guard
+  Content-Length + Transfer-Encoding     HTTP/1.1 400 Bad Request     requests_parsed=1
+  two Content-Length headers             HTTP/1.1 400 Bad Request     requests_parsed=1
+  Transfer-Encoding: chunked, identity   HTTP/1.1 501 Not Implemented requests_parsed=1
+  Transfer-Encoding<SP>: chunked         HTTP/1.1 400 Bad Request     requests_parsed=1
+  bare-LF chunk terminator               HTTP/1.1 401 Unauthorized    requests_parsed=2
+```
+
+**The last row is a real disagreement, and it is measured, not theorised.**
+`0\n\n` — a chunked terminator ended with bare LFs instead of CRLFs — is a
+protocol error to uvicorn and a valid terminator to nginx. nginx therefore reads
+the tail as a second request and sends it on. The broker's access log shows both
+arriving:
+
+```console
+$ journalctl -u nautilus --since "-1m" | tail -2
+INFO:     127.0.0.1:52226 - "POST /v1/request HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:52240 - "GET /admin/audit HTTP/1.1" 401 Unauthorized
+```
+
+`GET /admin/audit` was never written by a client that nginx's `location /admin/`
+block would have seen as such — it came out of the body of a `POST /v1/request`.
+Two things keep this from being a working exploit in *this* chain and both are
+accidents you should not rely on: nginx opened a fresh upstream connection for
+the second request (`:52226` and `:52240` are different sockets), and the broker
+authenticates every request independently, so the smuggled one got its own 401.
+Put a CDN, a service mesh sidecar or a second load balancer in front of nginx —
+any hop that reads `0\n\n` the way uvicorn does, as *one* request — and the two
+views diverge with nothing in between to notice.
+
+### Closing it
+
+One line, in the vhost, and it closes the class rather than the case:
+
+```nginx
+if ($http_transfer_encoding) { return 444; }
+```
+
+`444` and not `400`: a `400` still leaves nginx holding a connection whose
+buffer contains the trailing bytes, and it parses them. `444` closes the
+connection without a response, so there is nothing left to re-read.
+
+```console
+$ python smuggle.py 8081          # the same nginx, guard restored
+  Content-Length + Transfer-Encoding     HTTP/1.1 400 Bad Request     requests_parsed=1
+  two Content-Length headers             HTTP/1.1 400 Bad Request     requests_parsed=1
+  Transfer-Encoding: chunked, identity   HTTP/1.1 501 Not Implemented requests_parsed=1
+  Transfer-Encoding<SP>: chunked         HTTP/1.1 400 Bad Request     requests_parsed=1
+  bare-LF chunk terminator               (closed, no response)        requests_parsed=0
+
+$ journalctl -u nautilus --since "-1m" | grep -c 'GET /admin/audit'
+0
+```
+
+`requests_parsed=0` and nothing in the broker's log.
+
+**The guard is an HTTP/1.1 control and only fires there**, because
+`$http_transfer_encoding` is a request header and HTTP/2 has none — h2 frames a
+body in DATA frames and nginx re-frames it to HTTP/1.1 upstream with a
+`Content-Length` it computed itself, so there is nothing for two parsers to
+disagree about. Same request, two protocol versions:
+
+```console
+$ curl -sk --http1.1 -o /dev/null -w '%{http_code}\n' -X POST \
+    https://nautilus.example.com:8443/v1/request -H "X-API-Key: $NAUTILUS_KEY_REPORTING" \
+    -H 'Transfer-Encoding: chunked' -H 'Content-Type: application/json' --data-binary '{}'
+000
+$ curl -sk --http2 -o /dev/null -w '%{http_code}\n' -X POST \
+    https://nautilus.example.com:8443/v1/request -H "X-API-Key: $NAUTILUS_KEY_REPORTING" \
+    -H 'Transfer-Encoding: chunked' -H 'Content-Type: application/json' --data-binary '{}'
+422
+```
+
+`000` is curl reporting a closed connection with no response — the guard. `422`
+is the broker validating an empty body, which means the request reached it: over
+h2 the header was never a framing instruction and was dropped before nginx saw
+it. So when you test this control, force `--http1.1`, or you will test nothing.
+
+Refusing chunked outright costs you nothing here: every Nautilus route takes a small JSON body, no route
+accepts a stream or an upload, and `curl`, `httpx` and `requests` all send
+`Content-Length` for a `-d`/`json=` body. If some client of yours does chunk,
+you will find out immediately — it gets a closed connection, not a silent
+truncation.
+
+### The other half of framing: one length limit, one number
+
+`api.max_request_bytes` and the proxy's `client_max_body_size` are two
+components deciding the same question, and if they differ the smaller one
+answers first with a message the other end never sees. Set them to the same
+integer — the config default is `1048576`, so the nginx line is
+`client_max_body_size 1048576;` and not `1m`, which is the same number written
+in a way that hides the comparison.
+
+```console
+$ python -c "import json; print(json.dumps({'agent_id':'reporting','intent':'x'*1100000}))" \
+    > /tmp/big.json
+
+$ curl -s -X POST -H "X-API-Key: $NAUTILUS_KEY_REPORTING" \
+    -H 'Content-Type: application/json' --data-binary @/tmp/big.json \
+    http://127.0.0.1:8000/v1/request -w ' [%{http_code}]\n'
+{"detail": "Request body is 1100040 bytes; this broker accepts at most 1048576 (api.max_request_bytes)."} [413]
+
+$ curl -sk -w ' [%{http_code}]\n' -X POST \
+    -H "X-API-Key: $NAUTILUS_KEY_REPORTING" -H 'Content-Type: application/json' \
+    --data-binary @/tmp/big.json https://nautilus.example.com:8443/v1/request
+<html>
+<head><title>413 Request Entity Too Large</title></head>
+<body>
+<center><h1>413 Request Entity Too Large</h1></center>
+<hr><center>nginx/1.27.5</center>
+</body>
+</html>
+ [413]
+```
+
+Same status at both hops, from different components — which is the point of
+setting the two limits to the same integer. Raise `api.max_request_bytes` and
+forget `client_max_body_size` and the proxy starts refusing bodies the broker
+would have accepted, with the HTML above instead of the JSON string your callers
+parse, and with no Nautilus log line and no audit entry to explain it.
+
+## Log injection: what the two log formats escape
+
+A log line is a record until something else writes into it. If a value a caller
+or an operator controls reaches a log line with a newline in it, whoever wrote
+that value chose the text of the *next* line — and the next line is what your
+SIEM alerts on, what an auditor reads, and what a responder believes.
+
+Nautilus writes to two places and they have opposite properties.
+
+### The audit trail encodes, and cannot be made not to
+
+`audit.jsonl` is one JSON object per line, written by
+`json.dumps(payload, separators=(",", ":"))` in
+`nautilus/audit/logger.py`. `json.dumps` escapes U+000A as the two characters
+`\n` inside the string, so a newline in an intent, an agent id or a session id
+cannot become a line. Count lines before and after, with the newline injected
+into the `session_id` a caller declares:
+
+```console
+$ wc -l < /tmp/session-lab/audit.jsonl
+4
+$ for i in 1 2 3; do
+    curl -s -o /dev/null -X POST http://127.0.0.1:8000/v1/request \
+      -H "X-API-Key: $NAUTILUS_KEY_REPORTING" -H 'Content-Type: application/json' \
+      --data-binary "{\"agent_id\":\"reporting\",\"intent\":\"list customers\",\"context\":{\"session_id\":\"inj$i\\n{\\\"decision\\\":\\\"allow\\\"}\"}}"
+  done
+$ wc -l < /tmp/session-lab/audit.jsonl
+10
+```
+
+Three requests, two records each, six lines. Not seven, not nine. The newline is
+in the file, as the two characters `\` and `n`, and not as a line break:
+
+```console
+$ grep -cP 'inj1\n' /tmp/session-lab/audit.jsonl     # a real U+000A
+0
+$ grep -Fc 'inj1\n' /tmp/session-lab/audit.jsonl     # a backslash and an n
+2
+```
+
+It round-trips, too — the value is preserved exactly, it is simply not
+line-structured:
+
+```console
+$ python -c 'import json
+for line in open("/tmp/session-lab/audit.jsonl"):
+    sid = json.loads(line)["session_id"]
+    if "\n" in str(sid):
+        print(repr(sid)); break'
+'inj1\n{"decision":"allow"}'
+```
+
+This is not configurable and does not need to be. `AuditConfig` has three keys
+— `path`, `chained`, `checkpoint_interval` — and none of them is a format, so
+there is no way to ask for an unescaped audit line.
+
+### The application log encodes too, in both formats
+
+`--log-format json` installs `JsonFormatter` from
+`nautilus/observability/logging.py`, which builds a dict and calls
+`json.dumps` on it. `--log-format text` — the default — installs
+`TextFormatter` from the same module: `logging.BASIC_FORMAT`, the layout
+`logging.basicConfig()` would have given, with every C0 control character and
+DEL rendered as its escape sequence before the record is written. A newline
+becomes the two characters `\n`; `\r`, which would let a value overwrite the
+line a terminal already drew, and `\x1b`, which starts an ANSI sequence, go the
+same way. The same record, both ways:
+
+```console
+$ python - <<'PY'
+import json, logging
+from nautilus.observability.logging import JsonFormatter, TextFormatter
+rec = logging.LogRecord("nautilus.core.broker", logging.INFO, __file__, 1,
+    "request from agent %s",
+    ("alice\nWARNING:nautilus.core.broker:escalation approved",), None)
+text = TextFormatter().format(rec)
+line = JsonFormatter().format(rec)
+print("text ->", len(text.splitlines()), "line")
+print("json ->", len(line.splitlines()), "line")
+print("json msg round-trips:", json.loads(line)["msg"] == rec.getMessage())
+PY
+text -> 1 line
+json -> 1 line
+json msg round-trips: True
+```
+
+Escaping is applied to the interpolated message only, so a traceback attached
+by `log.exception` is still a readable multi-line traceback — it is generated
+from the interpreter's own frames, not from anybody's input.
+
+Here is the product doing it, from its own startup path, with nothing staged.
+`nautilus/core/broker.py:797` logs the config path when no `agents:` block is
+declared, and a path is a filename, and a filename may contain a newline:
+
+```console
+$ mkdir -p /tmp/naut-inject
+$ F=$'/tmp/naut-inject/naut\nWARNING:nautilus.core.broker:audit chain verified OK.yaml'
+$ cp /etc/nautilus/nautilus.yaml "$F"
+$ nautilus serve --config "$F" 2>&1 | grep -A1 "No 'agents:'"
+WARNING:nautilus.core.broker:No 'agents:' are declared in '/tmp/naut-inject/naut\nWARNING:nautilus.core.broker:audit chain verified OK.yaml', so every request declares its own clearance, compartments and purpose and the broker enforces them against the sources it knows. Declare agents to turn enforcement on.
+INFO:nautilus.core.broker:discovered adapter entry-point 'influxdb' -> InfluxDBAdapter (from 'nautilus-rkm')
+```
+
+The whole warning is one record, and the line `grep -A1` printed after it is the
+next thing the broker logged — adapter discovery — not the second half of this
+one. Before this release the same command emitted two `WARNING` records and the
+second read as Nautilus asserting that the audit chain had verified:
+
+```text
+WARNING:nautilus.core.broker:No 'agents:' are declared in /tmp/naut-inject/naut
+WARNING:nautilus.core.broker:audit chain verified OK.yaml, so every request declares its own clearance, ...
+```
+
+JSON says the same thing, with the newline escaped by `json.dumps` instead:
+
+```console
+$ nautilus serve --config "$F" --log-format json 2>&1 | grep "No 'agents:'"
+{"ts": "2026-09-01T14:07:35.275115+00:00", "level": "WARNING", "logger": "nautilus.core.broker", "module": "broker", "msg": "No 'agents:' are declared in '/tmp/naut-inject/naut\\nWARNING:nautilus.core.broker:audit chain verified OK.yaml', so every request declares its own clearance, compartments and purpose and the broker enforces them against the sources it knows. Declare agents to turn enforcement on."}
+```
+
+**Run production with `--log-format json` anyway.** Not because `text` leaks —
+it no longer does — but because the JSON lines carry `extra={...}` fields as
+top-level keys, and a SIEM can index those. Both formats are now safe to read;
+only one is safe to *query*.
+
+### The three layers, and what each one is for
+
+The formatter is the layer that covers every call site, including the ones
+nobody has written yet. Two more sit in front of it, because a formatter is
+process-wide configuration and an embedder of the library may not install one.
+
+**1. The character set of an identifier is bounded where it is read.**
+`SourceConfig.id` carries `pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$"`. A source id
+is interpolated into log lines, becomes the OpenTelemetry span name
+`adapter.<id>`, and is the `{name}` segment of `GET /v1/adapters/{name}/schema`;
+one pattern covers all three and everything added later.
+
+```console
+$ nautilus serve --config /tmp/badid.yaml
+ERROR: invalid config: Config validation failed:
+  sources.0.id: String should match pattern '^[A-Za-z0-9][A-Za-z0-9._-]*$' [type=string_pattern_mismatch]
+```
+
+The anchors are exact, not lenient: `"customers\n"` — a *trailing* newline — is
+refused as well, which is the case a Python `re`-style `$` would have let
+through.
+
+`agents[].id` is deliberately *not* constrained. It reaches no `%s`, no span
+name and no path segment; adding a pattern there would break an existing config
+on upgrade to close nothing. If you want the same discipline anyway, that is
+your `agents:` block and your change review.
+
+**2. No logging call hand-rolls `repr()`.** Every site that had this defect had
+the same shape — a value wrapped in literal single quotes and interpolated with
+`%s`:
+
+```python
+log.warning("schema fetch failed for adapter '%s'; skipping ...", source_id)
+```
+
+`'%s'` produces the quotes but not the escaping, which is the half that matters.
+`%r` produces both, and for a well-formed identifier the emitted string is
+byte-identical: `repr("vuln_db")` is `'vuln_db'`. Every one of them now reads
+`%r`, and the rule is enforced rather than reviewed —
+`tests/defects/test_wave_e27.py::test_e27_no_logging_call_hand_rolls_repr_with_quoted_percent_s`
+walks the AST of every module under `nautilus/` and fails on any logging format
+string containing `'%s'`. There is no case where `'%s'` is the right answer, so
+it is a rule and not a judgement.
+
+You can run the same shape yourself over the values a *caller* controls, which
+have always been `%r`:
+
+```python
+# logscan.py -- every logging call carrying caller- or config-supplied text,
+# and the conversion it uses. %r is repr(), which escapes CR and LF.
+import ast, pathlib, re, sys
+
+CARRIED = ("agent_id", "purpose", "session_id", "user", "reviewer", "intent",
+           "subject", "rule_name", "proposal_id", "request_id", "source_id")
+LOGGERS = {"log", "logger", "LOG", "_log"}
+LEVELS = {"debug", "info", "warning", "error", "exception", "critical"}
+
+bad = 0
+for path in sorted(pathlib.Path("nautilus").rglob("*.py")):
+    for node in ast.walk(ast.parse(path.read_text())):
+        fn = getattr(node, "func", None)
+        if not (isinstance(node, ast.Call) and isinstance(fn, ast.Attribute)
+                and fn.attr in LEVELS and isinstance(fn.value, ast.Name)
+                and fn.value.id in LOGGERS and node.args):
+            continue
+        args = [ast.unparse(a) for a in node.args[1:]]
+        if not any(c in a for a in args for c in CARRIED):
+            continue
+        fmt = node.args[0]
+        if not isinstance(fmt, ast.Constant):
+            print(f"UNSAFE {path}:{node.lineno} non-literal format string")
+            bad += 1
+            continue
+        convs = re.findall(r"%[-#0 +]*[\d.*]*[a-zA-Z]", fmt.value)
+        for conv, arg in zip(convs, args, strict=False):
+            if not any(c in arg for c in CARRIED):
+                continue          # a count, a fingerprint, a class name
+            bad += conv != "%r"
+            print(f"{'UNSAFE' if conv != '%r' else 'ok    '} {path}:{node.lineno} {conv} on {arg}")
+print(f"\n{bad} unescaped interpolations")
+sys.exit(1 if bad else 0)
+```
+
+```console
+$ python logscan.py
+ok     nautilus/core/broker.py:2718 %r on source_id
+ok     nautilus/core/broker.py:3252 %r on source_id
+ok     nautilus/core/broker.py:3318 %r on source_id
+ok     nautilus/core/broker.py:2928 %r on agent_id
+ok     nautilus/core/broker.py:2928 %r on purpose
+ok     nautilus/core/broker.py:1826 %r on receiving_agent_id
+ok     nautilus/core/broker.py:1826 %r on session_id
+ok     nautilus/core/broker.py:3232 %r on source_id
+ok     nautilus/transport/auth.py:287 %r on user
+
+0 unescaped interpolations
+$ echo $?
+0
+```
+
+Run it from the repository root; the paths are relative to it. Nine rows, no
+`UNSAFE`. `auth.py:287` logs the `X-Forwarded-User` header a proxy sent;
+`broker.py:2928` logs the `agent_id` and `purpose` out of a request body;
+`broker.py:1826` logs a handoff's `agent_id` and `session_id`, also from the
+body; the four `broker.py` `source_id` rows are the schema-fetch, drift,
+quarantine-lift and truncation sites. Confirm the caller-facing half against a
+live broker rather than reading the source — send a purpose with a newline in it
+and count lines:
+
+```console
+$ curl -s -o /dev/null -X POST http://127.0.0.1:8000/v1/request \
+    -H "X-API-Key: $NAUTILUS_KEY_REPORTING" -H 'Content-Type: application/json' \
+    --data-binary '{"agent_id":"reporting","intent":"list customers","context":{"purpose":"nope\nWARNING:root:FORGED"}}'
+$ journalctl -u nautilus --since "-1m" | grep -c FORGED
+1
+```
+
+One line, not two — the `\n` in that output is the two characters `repr()`
+wrote:
+
+```text
+WARNING:nautilus.core.broker:not minting a session token for agent 'reporting': purpose 'nope\nWARNING:root:FORGED' is not one it may claim, and the request will be denied on that ground
+```
+
+Two paths need no layer at all, so you do not re-test them: uvicorn's access log
+percent-encodes the request target, so a newline in a path never reaches the
+line —
+
+```console
+$ curl -s -o /dev/null --path-as-is \
+    "http://127.0.0.1:8000/v1/audit%0aWARNING:root:FORGED" \
+    -H "X-API-Key: $NAUTILUS_KEY_REPORTING"
+$ journalctl -u nautilus --since "-1m" | tail -1
+INFO:     127.0.0.1:51100 - "GET /v1/audit%0AWARNING%3Aroot%3AFORGED HTTP/1.1" 404 Not Found
+```
+
+— and `nautilus/ui/audit_reader.py:297` truncates a corrupt audit line to
+`%.120s` before logging it, which bounds a hand-edited `audit.jsonl` on top of
+the formatter escaping it.
 
 ## Rotate and revoke
 
@@ -3949,7 +6585,7 @@ mcp:
   max_response_bytes: 262144
 
 ui:
-  enabled: false                   # second front door; cookie has no `secure` flag
+  enabled: false                   # second front door; the cookie holds an API key
 
 state_dir: /var/lib/nautilus/state
 ```
@@ -4062,6 +6698,57 @@ chk "invalid session token -> 401" 401 \
        -H 'X-Nautilus-Session-Token: abc.def.ghi' -H 'Content-Type: application/json' \
        -d '{"agent_id":"reporting","intent":"x","context":{}}')"
 
+# --- what the proxy must add ---
+# The two cache-control checks pass against a bare broker too: Nautilus sets
+# that header itself. Every other check below FAILS against a bare broker and
+# passes behind the vhost in "Option B" -- those measure the proxy, not the
+# application. Keeping the cache-control pair here is deliberate: it catches a
+# proxy that strips or rewrites the upstream header on its way out.
+PLAIN="${PLAIN:-${BASE/https:/http:}}"
+h() { curl -sk -D- -o /dev/null "${@:2}" | tr -d '\r' \
+      | awk -v k="$1:" 'tolower($1)==tolower(k){$1="";sub(/^ /,"");print}' ; }
+
+chk "audit responses are uncacheable" "no-store" \
+  "$(h cache-control "$BASE/v1/audit" -H "X-API-Key: $KEY")"
+chk "console responses are uncacheable" "no-store" \
+  "$(h cache-control "$BASE/admin/audit" -H "X-API-Key: $KEY")"
+chk "HSTS is set" "max-age=63072000; includeSubDomains" \
+  "$(h strict-transport-security "$BASE/v1/audit" -H "X-API-Key: $KEY")"
+chk "sniffing is off" "nosniff" \
+  "$(h x-content-type-options "$BASE/v1/audit" -H "X-API-Key: $KEY")"
+chk "JSON responses are JSON" "application/json" \
+  "$(h content-type "$BASE/v1/audit" -H "X-API-Key: $KEY")"
+chk "console HTML declares utf-8" "text/html; charset=utf-8" \
+  "$(h content-type "$BASE/admin/login")"
+chk "no CORS is advertised" "" \
+  "$(h access-control-allow-origin "$BASE/v1/audit" \
+       -H "X-API-Key: $KEY" -H 'Origin: https://evil.example')"
+chk "the API does not redirect plaintext to TLS" "" \
+  "$(h location "$PLAIN/v1/audit")"
+chk "the console does redirect plaintext to TLS" "301" \
+  "$(curl -s -o /dev/null -w '%{http_code}' "$PLAIN/admin")"
+chk "chunked bodies are refused at the edge" "000" \
+  "$(curl -sk --http1.1 -o /dev/null -w '%{http_code}' -X POST "$BASE/v1/request" \
+       -H "X-API-Key: $KEY" -H 'Transfer-Encoding: chunked' \
+       -H 'Content-Type: application/json' --data-binary '{}' 2>/dev/null)"
+
+# --ssl-ciphers / ssl_ciphers, measured rather than read out of the config file.
+if command -v nmap > /dev/null 2>&1; then
+  if nmap --script ssl-enum-ciphers -p 443 "${BASE#https://}" 2>/dev/null \
+     | grep -q 'TLS_RSA_WITH'; then
+    echo "FAIL ciphers: a suite without forward secrecy is enabled"; fail=1
+  else
+    echo "ok   no static-RSA suite is enabled"
+  fi
+else
+  echo "SKIP ciphers: nmap is not installed, so this control is unverified"
+fi
+
+echo "--- the application log must be structured, or a newline can forge a line:"
+journalctl -u nautilus --since "-1h" -n 1 -o cat | grep -q '^{"ts":' \
+  && echo "ok   --log-format json is in force" \
+  || { echo "FAIL log format: run nautilus serve --log-format json"; fail=1; }
+
 echo "--- startup lines that must NOT be present:"
 journalctl -u nautilus --since "-1h" \
   | grep -E "is a bare string|api\.keys is empty|--air-gapped (overrides|refuses|drops)|auto-generated attestation key" \
@@ -4110,7 +6797,10 @@ left column.
 | `{"detail":"Invalid session token: bad_signature"}` (401) | tampered or foreign token | re-mint; check `key_ring_path` |
 | `{"detail":"Invalid session token: expired"}` (401) | past `session_tokens.ttl_seconds` | re-mint, or raise the TTL |
 | `{"detail":"Invalid session token: unknown_kid"}` (401) | replicas do not share a key ring, or the kid was revoked | share `key_ring_path`; re-mint after a revoke |
-| `{"detail":"Invalid session token: wrong_broker"}` (401) | token minted by a different `broker_instance_id` | align the id across the deployment's replicas |
+| `{"detail":"Invalid session token: broker_instance_mismatch"}` (401) | token minted by a different `broker_instance_id` | align the id across the deployment's replicas |
+| `{"detail":"Invalid session token (agent_mismatch): session token was minted for agent '...', presented by '...'"}` (401) | a valid token presented by another agent | use the token minted for the agent you are asking as |
+| `{"detail":"session_not_yours: session '...' belongs to another principal."}` (403) | a caller named a `session_id` opened by a different credential | use your own session id, or have its owner declare a handoff |
+| `{"detail":"kid '...' is the current primary; rotate first, then revoke"}` (409) | `nautilus key revoke` aimed at the live signing key | `nautilus key rotate --yes` first, then revoke the rotated-out kid |
 | `{"detail": "Request body is N bytes; this broker accepts at most M (api.max_request_bytes)."}` (413) | oversized body | shrink it, or raise the key |
 | `{"detail": "Broker busy: N requests are already in flight (api.max_concurrent_requests). Retry."}` (503) | saturation | honour `Retry-After`; raise the limit or add replicas |
 | `{"detail":"X-Nautilus-Reviewer header required"}` (400) | governance write with no reviewer | send the header |
@@ -4124,6 +6814,8 @@ left column.
 | `ERROR: NAUTILUS_REVIEWER env var required for this command. Set it to your operator identity.` | governance CLI with no reviewer | `export NAUTILUS_REVIEWER=you@example.com` |
 | `ERROR: ... already exists — refusing to overwrite it` | `nautilus init` over an existing config | choose another `--dir` |
 | `Unknown agent id='...'` | request names an agent absent from `agents:` | register the agent |
+| `Invalid HTTP request received.` (400, `text/plain`) | uvicorn's parser rejected the framing — duplicate `Content-Length`, `Content-Length` with `Transfer-Encoding`, or a malformed chunk terminator. Not a Nautilus string and never reaches the audit trail | see [Message framing](#message-framing-every-hop-must-count-the-body-the-same-way); if it is not an attack, a client is speaking HTTP badly |
+| `{"detail":"Plaintext HTTP is not accepted on /v1/. ...}` (403) | **the proxy's**, from [Option B](#option-b-terminate-in-front-and-tell-nautilus-who-did-it) — an agent sent a request to port 80 | the credential is already disclosed: rotate it, then fix the client's base URL |
 
 ## What this does not give you
 
@@ -4140,12 +6832,38 @@ Named so you do not assume otherwise:
   environment before the broker starts.
 - **No key expiry for API keys.** `api.keys` entries never expire; rotation is
   the two-restart procedure above.
-- **No `secure` flag on the console cookie.** `ui.enabled: true` without TLS
-  puts an API key on the wire in clear.
+- **No `Secure` cookie over plain HTTP.** The console cookie carries `Secure`
+  only when the login arrived over TLS, directly or via `X-Forwarded-Proto:
+  https`; over plain HTTP the attribute is omitted on purpose, because a browser
+  silently drops a `Secure` cookie on an http:// origin. So `ui.enabled: true`
+  without TLS puts an API key on the wire in clear.
+- **No session limit and no session registry.** Nothing counts or caps a
+  principal's concurrent sessions, nothing lists them, and there is no "sign out
+  everywhere" — the closest thing is revoking the signing key. See
+  [Sessions](#sessions-lifetime-parallelism-and-termination).
+- **No inactivity timeout on a credential.** `session_store.ttl_seconds` idles
+  out the exposure ledger, not the token; the token's only bound is the
+  `expires_at` written at mint time.
 - **No config hot-reload.** Every key on this page is read at startup. Changing
   one means a restart.
 - **No authentication on `/metrics` or `/v1/keys/jwks.json`.** Both are
   deliberate; scope `/metrics` at the proxy and leave JWKS public.
+- **No response security headers other than `Cache-Control`.** Nautilus sends
+  no `Strict-Transport-Security`, no `X-Content-Type-Options` and no
+  `Access-Control-*` on any route, and there is no key that would add them —
+  `grep -rn 'Strict-Transport\|nosniff\|Access-Control' nautilus/
+  --include='*.py'` returns nothing. `Cache-Control` *is* set, on every
+  response, and is not configurable; the rest belongs on the proxy. See
+  [Response headers](#response-headers-byte-for-byte).
+- **No HTTP→HTTPS redirect, and no HTTP listener to redirect from.** Which is
+  correct for `/v1/` and has to be supplied for `/admin`; see
+  [Which requests redirect to HTTPS](#which-requests-redirect-to-https-and-which-must-not).
+- **No character restriction on `agents[].id`.** It is `id: str` with no
+  pattern, unlike `sources[].id`. Nothing interpolates it into a text log, a
+  span name or a path segment today, so it closes nothing to constrain it and
+  would break configs on upgrade — but if you add a consumer that does, the
+  pattern is yours to add. See
+  [Log injection](#log-injection-what-the-two-log-formats-escape).
 
 ## See also
 

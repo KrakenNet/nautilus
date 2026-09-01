@@ -16,10 +16,13 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from fathom.attestation import AttestationService
+
     from nautilus.audit.logger import AuditLogger
+    from nautilus.config.models import NautilusConfig
 
 
 def require_reviewer() -> str:
@@ -52,12 +55,99 @@ def open_audit_logger(config_path: str | None = None) -> AuditLogger:
 
     A config that cannot be loaded is not fatal to the decision, but the
     operator must see where the record actually went, so the fallback warns.
+
+    The sink comes from :func:`nautilus.audit.sink.build_audit_sink`, the same
+    function the broker builds its own with. Opening a plain ``FileSink`` here
+    ignored ``audit.chained``, so approving a rule from the CLI appended an
+    unchained line into a hash chain and destroyed offline verification of the
+    log — the one file the approval exists to be recorded in.
     """
     from fathom.audit import FileSink
 
     from nautilus.audit.logger import AuditLogger
+    from nautilus.audit.sink import build_audit_sink
 
-    return AuditLogger(sink=FileSink(path=audit_path_for(config_path)))
+    audit_path = audit_path_for(config_path)
+    config = _config_or_none(config_path)
+    if config is None:
+        return AuditLogger(sink=FileSink(path=audit_path))
+    sink = build_audit_sink(config, audit_path, _signing_key(config, config_path))
+    refuse_unless_writable(sink)
+    return AuditLogger(sink=sink)
+
+
+def refuse_unless_writable(
+    sink: Any,
+    *,
+    act: str = "this decision cannot be recorded, so it will not be taken",
+    remedy: str = (
+        "Take the decision through the running server's governance API, or stop the server first."
+    ),
+) -> None:
+    """Stop now if this process cannot record the act it is about to perform.
+
+    A chained log admits exactly one writer, and the lock is claimed at the
+    first write — which in :func:`nautilus.rkm.review.approve` is *after* the
+    rule has been promoted and the lineage row inserted. Failing there leaves a
+    governance act in force with nothing in the log that says it happened.
+    Probing here claims the lock before anything has been decided, so a refusal
+    is a refusal rather than an unrecorded change.
+
+    ``act`` and ``remedy`` are the two clauses that are not about the lock. The
+    defaults are the governance wording, and ``nautilus adapters schema-ack``
+    overrides both: it acknowledges a schema change rather than taking a
+    governance decision, and the server exposes no API to do it through, so the
+    default remedy would send an operator looking for a route that is not
+    there. Everything between them is one sentence for one situation, because
+    an operator meeting the audit writer lock should meet it once.
+    """
+    probe = getattr(sink, "probe", None)
+    if not callable(probe):
+        return
+    problem: object = probe()
+    if problem is None:
+        return
+    err(f"{act}: another process is writing the chained audit log. {remedy} ({problem})")
+    sys.exit(2)
+
+
+def _config_or_none(config_path: str | None) -> NautilusConfig | None:
+    """The loaded config, or ``None`` when there is none to load.
+
+    ``audit_path_for`` has already warned about an unreadable config by the
+    time this runs; a second warning for the same file would be noise.
+    """
+    if not config_path:
+        return None
+    from nautilus.config.loader import load_config
+
+    try:
+        return load_config(config_path)
+    except Exception:  # noqa: BLE001 — the decision still gets logged
+        return None
+
+
+def _signing_key(config: NautilusConfig, config_path: str) -> AttestationService | None:
+    """The key a chained line is signed with, or ``None`` if there is none.
+
+    Unlike the broker, a CLI process must never fall back to generating a
+    keypair: it would sign one line with a key the rest of the chain was not
+    signed by, which reads as corruption for the life of the file.
+    ``build_audit_sink`` raises ``audit.chained requires attestation.enabled
+    with a signing key`` when this returns ``None`` under ``audit.chained`` —
+    for the CLI the unmet half is the key, not the switch.
+    """
+    if not config.audit.chained or not config.attestation.enabled:
+        return None
+    key_path = config.attestation.private_key_path
+    if not key_path:
+        return None
+    from fathom.attestation import AttestationService
+
+    resolved = Path(key_path)
+    if not resolved.is_absolute():
+        resolved = Path(config_path).parent / resolved
+    return AttestationService.from_private_key_bytes(resolved.read_bytes())
 
 
 def audit_path_for(config_path: str | None = None) -> Path:
@@ -110,6 +200,7 @@ __all__ = [
     "fail",
     "ok",
     "open_audit_logger",
+    "refuse_unless_writable",
     "require_reviewer",
     "warn",
 ]

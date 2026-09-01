@@ -32,9 +32,10 @@ import os
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Protocol, get_args, runtime_checkable
+from typing import Any, Protocol, cast, get_args, runtime_checkable
 
 from fathom.models import AuditRecord
+from pydantic import ValidationError
 
 from nautilus.core.models import AuditEntry
 
@@ -317,6 +318,60 @@ def _event_entry(event: dict[str, Any]) -> AuditEntry:
     )
 
 
+#: Exactly the fields ``fathom.chained_log`` writes on every line of a
+#: hash-chained log. Its own scanner requires this set exactly, so a line
+#: carrying it is a chain envelope and nothing else is.
+_CHAINED_LINE_FIELDS: frozenset[str] = frozenset(
+    {"iat", "jws", "prev_sha256", "record", "seq", "v"}
+)
+
+
+def decode_audit_line(line: str | bytes) -> AuditEntry | None:
+    """One on-disk audit line → :class:`AuditEntry`, or ``None`` if it is not one.
+
+    The audit log holds more than one shape and always has:
+
+    - ``AuditLogger.emit`` writes a fathom :class:`AuditRecord` carrying the
+      Nautilus entry as JSON under ``metadata.nautilus_audit_entry``;
+    - governance and library paths write a bare :class:`AuditEntry`;
+    - under ``audit.chained`` every one of those is wrapped in a signed chain
+      envelope, and the chain's own genesis and checkpoint records share the
+      file with them;
+    - the transports' hot-reload events are plain mappings with no entry in
+      them at all.
+
+    Each reader used to know a different subset — the query API knew only the
+    first, the sandbox only its metadata key, the forensics worker the first
+    two — so switching a deployment to a chained log emptied the audit API,
+    404'd every lookup, and left the replay corpus at zero. One decoder means
+    a shape a writer can produce is a shape every reader accepts.
+
+    Returns ``None`` for a line that is readable but is not a Nautilus audit
+    entry: a chain genesis or checkpoint record, a hot-reload event, a fathom
+    evaluation record from some other producer. That is not corruption and
+    callers should not report it as such. Raises :class:`ValueError` (which
+    :class:`pydantic.ValidationError` is) only when the line cannot be read:
+    invalid JSON, or an envelope whose declared Nautilus entry is broken.
+    """
+    payload: Any = json.loads(line)
+    if not isinstance(payload, dict):
+        msg = f"audit line is a {type(payload).__name__}, not an object"
+        raise ValueError(msg)
+    if _CHAINED_LINE_FIELDS.issubset(payload):
+        payload = payload["record"]
+        if not isinstance(payload, dict):
+            return None
+    metadata = cast("dict[str, Any]", payload).get("metadata")
+    if isinstance(metadata, dict):
+        nested = cast("dict[str, Any]", metadata).get(NAUTILUS_METADATA_KEY)
+        if isinstance(nested, str):
+            return AuditEntry.model_validate_json(nested)
+    try:
+        return AuditEntry.model_validate(payload)
+    except ValidationError:
+        return None
+
+
 def decode_nautilus_entry(record: AuditRecord) -> AuditEntry:
     """Round-trip helper: extract the Nautilus ``AuditEntry`` from an ``AuditRecord``.
 
@@ -329,4 +384,10 @@ def decode_nautilus_entry(record: AuditRecord) -> AuditEntry:
     return AuditEntry.model_validate(json.loads(raw))
 
 
-__all__ = ["AuditLogger", "AuditSink", "NAUTILUS_METADATA_KEY", "decode_nautilus_entry"]
+__all__ = [
+    "AuditLogger",
+    "AuditSink",
+    "NAUTILUS_METADATA_KEY",
+    "decode_audit_line",
+    "decode_nautilus_entry",
+]

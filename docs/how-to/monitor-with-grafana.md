@@ -25,7 +25,12 @@ Three dashboards are provisioned out of the box
 ## Wiring your own deployment
 
 The broker exposes Prometheus metrics at `GET /metrics` on the REST
-transport (unauthenticated, excluded from the OpenAPI schema). Scrape it:
+transport (unauthenticated, excluded from the OpenAPI schema) — **provided the
+`otel` extra is installed**. On a base install the route has no
+`prometheus_client` to call and answers `500`. Install it with
+`pip install "nautilus-rkm[otel]"`; the full list of exported series, and the
+two configurations under which most of them vanish, is in
+[What `/metrics` exports](operator-guide.md#what-metrics-exports). Scrape it:
 
 ```yaml
 # prometheus.yml

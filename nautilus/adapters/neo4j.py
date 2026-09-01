@@ -179,7 +179,7 @@ class Neo4jAdapter:
         self._like_style = config.like_style
         if self._like_style == "regex":
             log.warning(
-                "CONFIG WARN: Neo4j source '%s' uses like_style='regex'; "
+                "CONFIG WARN: Neo4j source %r uses like_style='regex'; "
                 "regex evaluation is unbounded and may enable ReDoS. Prefer "
                 "'starts_with' unless explicitly required (AC-10.3).",
                 config.id,

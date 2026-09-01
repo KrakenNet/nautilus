@@ -22,6 +22,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+import logging
 import sys
 import urllib  # noqa: F401  # pyright: ignore[reportUnusedImport] - re-exported for test monkeypatching
 import urllib.request  # noqa: F401  # pyright: ignore[reportUnusedImport] - re-exported for test monkeypatching
@@ -137,6 +138,17 @@ def _build_parser() -> argparse.ArgumentParser:
             "'json' for SIEM-ingestable structured lines on stdout."
         ),
     )
+    p_serve.add_argument(
+        "--log-level",
+        choices=("debug", "info", "warning", "error", "critical"),
+        default="info",
+        help=(
+            "Threshold for application logs and for uvicorn's own logger "
+            "(default: info). 'warning' silences the startup and access lines "
+            "the how-to guides tell you to read; 'debug' adds them back plus "
+            "every library logger."
+        ),
+    )
 
     # demo ----------------------------------------------------------------
     from nautilus.cli import demo as _demo_mod
@@ -206,7 +218,11 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     # library modules keep plain ``logging.getLogger(__name__)``.
     from nautilus.observability.logging import configure_logging
 
-    configure_logging(getattr(args, "log_format", "text"))
+    log_level = getattr(args, "log_level", "info")
+    configure_logging(
+        getattr(args, "log_format", "text"),
+        logging.getLevelNamesMapping()[log_level.upper()],
+    )
 
     config_path = _Path(args.config)
     if not config_path.is_file():
@@ -264,11 +280,11 @@ def _cmd_serve(args: argparse.Namespace) -> int:
 
     try:
         if transport == "rest":
-            asyncio.run(_cli_module._run_rest(broker, host, port))  # pyright: ignore[reportPrivateUsage]
+            asyncio.run(_cli_module._run_rest(broker, host, port, log_level))  # pyright: ignore[reportPrivateUsage]
         elif transport == "mcp":
-            asyncio.run(_cli_module._run_mcp(broker, mcp_mode, host, port))  # pyright: ignore[reportPrivateUsage]
+            asyncio.run(_cli_module._run_mcp(broker, mcp_mode, host, port, log_level))  # pyright: ignore[reportPrivateUsage]
         else:
-            asyncio.run(_cli_module._run_both(broker, host, port, mcp_mode))  # pyright: ignore[reportPrivateUsage]
+            asyncio.run(_cli_module._run_both(broker, host, port, mcp_mode, log_level))  # pyright: ignore[reportPrivateUsage]
     except KeyboardInterrupt:
         pass
     except RuntimeError as exc:
