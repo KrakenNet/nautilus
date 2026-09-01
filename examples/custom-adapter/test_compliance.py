@@ -18,11 +18,16 @@ from nautilus.config.models import SourceConfig
 # Fixtures
 # ---------------------------------------------------------------------------
 
+# The last row is not filler. ``AdapterComplianceSuite`` probes ``id = "test"``
+# and checks that the constraint actually narrowed the rows; with no row that can
+# match, the check is vacuous and warns instead of proving anything. Its
+# department and name are chosen to leave the counts in TestCsvAdapter alone.
 SAMPLE_DATA = [
     {"id": "1", "name": "Alice", "department": "Engineering", "clearance": "cui-basic"},
     {"id": "2", "name": "Bob", "department": "Legal", "clearance": "cui-specified"},
     {"id": "3", "name": "Charlie", "department": "Engineering", "clearance": "unclassified"},
     {"id": "4", "name": "Dana", "department": "Security", "clearance": "cui-specified"},
+    {"id": "test", "name": "Probe Zero", "department": "Compliance", "clearance": "unclassified"},
 ]
 
 
@@ -158,5 +163,5 @@ class TestCsvAdapter:
             {},
         )
 
-        assert len(result.rows) == 4
+        assert len(result.rows) == len(SAMPLE_DATA)
         await adapter.close()
