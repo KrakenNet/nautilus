@@ -25,7 +25,7 @@ Headings on these pages are the exact string in the source. Where the source use
 the heading shows the template and the entry says what interpolates:
 
 - `{name}` — a value substituted with `str()`.
-- `{name!r}` — substituted with `repr()`, so a string arrives quoted: `rule not found: 'my_rule'`.
+- `{name!r}` — substituted with `repr()`, so a string arrives quoted: `rule 'my_rule' not found`.
 - `{exc}` — the text of a wrapped, lower-level exception. The sentence before the colon is
   Nautilus; the sentence after it is the driver, the OS, or a parser.
 
@@ -173,7 +173,7 @@ curl -s "$NAUTILUS/readyz"; echo
 | `Adapter '{name}' not found` | 404 |
 | `Adapter '{name}' does not support schema introspection` | 501 |
 | `Schema fetch failed: {exc}` | 503 |
-| `audit entry not found: {request_id!r}` | 404 |
+| `audit entry {request_id!r} not found` | 404 |
 | `{"status": "not_ready", "reason": "startup_incomplete"}` | 503 |
 | `{"status": "not_ready", "reason": "<audit probe text>"}` | 503 |
 | `{"status": "not_ready", "reason": "session_store_timeout"}` | 503 |
@@ -260,8 +260,8 @@ curl -s "$NAUTILUS/readyz"; echo
 | `cannot promote rule {rule_name!r}: no rules.user_rules_dirs is configured, …` |
 | `cannot promote rule {rule_name!r}: writing {target} failed: {exc}` |
 | `cannot retract rule {rule_name!r}: it is still in force after a rebuild, …` |
-| `rule not found: {rule_name!r}` |
-| `rule {rule_name!r} version {to_version} not found` |
+| `rule {rule_name!r} not found` |
+| `rule {rule_name!r} version {version} not found` |
 | `rule {rule_name!r} v{to_version} not found in lineage` |
 | `lineage record not found: {rule_name} v{version}` |
 | `invalid rule name {rule_name!r}: expected a bare rule name, optionally prefixed 'module::'` |

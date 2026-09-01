@@ -667,8 +667,8 @@ run and against the entries it produced.
 The lineage DAG for one rule: who proposed it, who approved it, every version
 and when each was promoted or retired. Capability `govern`.
 
-**Status codes:** `200` · `401` · `403` (`govern`) · `404 rule not found:
-'nope'` — the name has no lineage record, which is the answer for every
+**Status codes:** `200` · `401` · `403` (`govern`) · `404 rule 'nope' not
+found` — the name has no lineage record, which is the answer for every
 built-in: lineage exists only for rules promoted through the RKM queue.
 
 <!-- not-executed: promote a rule through POST /v1/rkm/queue first — the name below is the one that example promotes -->
@@ -724,7 +724,7 @@ Retire a rule version. Capability `govern`. Destructive, so it demands
 | `400` | `X-Nautilus-Reviewer header required` (bare key, no header) · `reason is required for retraction` |
 | `401` | `API key required` · `Invalid API key` |
 | `403` | `This credential does not hold the 'govern' capability (it holds ['query'])` |
-| `404` | `rule not found: 'nope'` — no lineage record for that name at all · `"lineage record not found: ve-expiring-scope-probe v7"` — the name exists but the `version` you asked for does not (doubled quoting: this one is a `KeyError` passed through `str()`) |
+| `404` | `rule 'nope' not found` — no lineage record for that name at all · `rule 've-expiring-scope-probe' version 7 not found` — the name exists but the `version` you asked for does not |
 | `412` | `yes=true required for destructive operation` |
 
 <!-- not-executed: names a rule you promoted through the RKM queue -->
@@ -938,7 +938,7 @@ curl -sS "$NAUTILUS/v1/rkm/queue?status=pending&limit=2" -H "X-API-Key: $KEY"
 One proposal with the full validation breakdown. Capability `govern`.
 
 **Status codes:** `200` · `401` · `403` (`govern`) ·
-`404 proposal not found: 'prop_deadbeef'`.
+`404 proposal 'prop_deadbeef' not found`.
 
 <!-- not-executed: PROPOSAL_ID comes from POST /v1/rkm/queue above -->
 ```bash
@@ -990,7 +990,7 @@ Capability `govern`. Body is optional (`{}`).
 | `400` | `X-Nautilus-Reviewer header required` — bare key with no reviewer header |
 | `401` | `API key required` · `Invalid API key` |
 | `403` | `This credential does not hold the 'govern' capability (it holds ['query'])` |
-| `404` | `"proposal not found: 'prop_deadbeef'"` — note the doubled quoting: the handler passes a `KeyError` through `str()`, so the whole message arrives inside a second pair of quotes |
+| `404` | `proposal 'prop_deadbeef' not found` |
 | `409` | `{"error": "already_decided", "current_status": "promoted"}` |
 | `422` | `{"error": "promotion_failed", "message": "…", "current_status": "approved", "recovery": "fix the rule and re-approve to retry the promotion, or reject the proposal"}` — full body below |
 
@@ -1051,7 +1051,7 @@ Reject a pending proposal. Capability `govern`.
 
 **Status codes:** `200` · `400 X-Nautilus-Reviewer header required` ·
 `400 reason is required for rejection` · `401` · `403` (`govern`) ·
-`404 "proposal not found: 'prop_deadbeef'"` (doubled quoting, as on approve) ·
+`404 proposal 'prop_deadbeef' not found` ·
 `409 {"error": "already_decided", "current_status": "<status>"}`.
 
 <!-- not-executed: PROPOSAL_ID comes from POST /v1/rkm/queue above -->
@@ -1141,7 +1141,7 @@ One audit entry by `request_id` — the value `POST /v1/request` returned.
 Capability `audit_read`. Scans newest to oldest until found.
 
 **Status codes:** `200` · `401` · `403` (`audit_read`) ·
-`404 audit entry not found: 'nope'` · `503 Broker not ready`.
+`404 audit entry 'nope' not found` · `503 Broker not ready`.
 
 <!-- not-executed: REQUEST_ID comes from a POST /v1/request response -->
 ```bash

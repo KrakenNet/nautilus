@@ -71,10 +71,11 @@ policy decision, so it goes through review with the regression named in the prop
 
 ### `proposal not found: {proposal_id!r}`
 
-**HTTP 404.** `nautilus/transport/fastapi_app.py:1284`; also `KeyError` from
-`nautilus/rkm/review.py:122,241`. The queue file has no such proposal. `GET /v1/rkm/queue` lists
-what is there. `nautilus/rkm/queue.py:230` uses the unquoted form,
-`proposal not found: {proposal_id}`.
+**`KeyError`** from `nautilus/rkm/review.py:122,241`; `nautilus/rkm/queue.py:230` uses the
+unquoted form, `proposal not found: {proposal_id}`. The queue file has no such proposal.
+`GET /v1/rkm/queue` lists what is there. Over HTTP the transport does not pass this string
+through: `GET`, approve and reject all answer **404** with
+`proposal {proposal_id!r} not found`.
 
 ### `{"error": "already_decided", "current_status": …}`
 
@@ -163,8 +164,8 @@ edit `rules.packs`.
 
 | Message | Where | Status |
 | --- | --- | --- |
-| `rule not found: {rule_name!r}` | `fastapi_app.py:1436,1502` | 404 |
-| `rule {rule_name!r} version {to_version} not found` | `fastapi_app.py:1593` | 404 |
+| `rule {rule_name!r} not found` | `fastapi_app.py` (lineage, retract) | 404 |
+| `rule {rule_name!r} version {version} not found` | `fastapi_app.py` (retract, rollback) | 404 |
 | `rule {rule_name!r} v{to_version} not found in lineage` | `rkm/review.py:351` | `KeyError` |
 | `lineage record not found: {rule_name} v{version}` | `rkm/lineage.py:249` | `KeyError` |
 

@@ -240,9 +240,9 @@ the condition is transient. `{exc}` carries the adapter's own message — for ex
 yet (adapters connect lazily), or a driver error for a source whose server is down. Look up
 `{exc}` in [adapters.md](adapters.md).
 
-### `audit entry not found: {request_id!r}`
+### `audit entry {request_id!r} not found`
 
-**HTTP 404.** `nautilus/transport/fastapi_app.py:1719-1724`. No audit entry carries that
+**HTTP 404.** `nautilus/transport/fastapi_app.py`. No audit entry carries that
 `request_id`. The id is the one in `BrokerResponse.request_id`. If it is recent, check that
 `audit.path` points at the same file this broker writes.
 

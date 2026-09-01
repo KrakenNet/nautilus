@@ -1287,7 +1287,7 @@ def create_app(
         if proposal is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"proposal not found: {proposal_id!r}",
+                detail=f"proposal {proposal_id!r} not found",
             )
         d = dataclasses.asdict(proposal)
         d["proposed_at"] = proposal.proposed_at.isoformat()
@@ -1463,7 +1463,7 @@ def create_app(
         if not versions:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"rule not found: {rule_name!r}",
+                detail=f"rule {rule_name!r} not found",
             )
         latest = versions[-1]
         serialized_versions: list[dict[str, Any]] = []
@@ -1529,7 +1529,7 @@ def create_app(
             if latest is None:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"rule not found: {rule_name!r}",
+                    detail=f"rule {rule_name!r} not found",
                 )
             version = latest.version
 
@@ -1544,9 +1544,13 @@ def create_app(
                 audit_logger=_get_audit_logger(request),
             )
         except KeyError as exc:
+            # The version is what is missing when the caller named one, and the
+            # message that came through ``str(exc)`` said so -- wrapped in a
+            # second layer of quotes by ``KeyError.__str__``. Keep the version,
+            # drop the quoting, and match the shape ``rollback`` already uses.
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"rule {rule_name!r} not found",
+                detail=f"rule {rule_name!r} version {version} not found",
             ) from exc
 
         # Lineage says the rule is retired; the engine is what decides
@@ -1748,7 +1752,7 @@ def create_app(
         if entry is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"audit entry not found: {request_id!r}",
+                detail=f"audit entry {request_id!r} not found",
             )
         return entry.model_dump(mode="json")
 

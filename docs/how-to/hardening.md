@@ -3616,7 +3616,7 @@ proxy) — an unauthenticated caller gets 401 before any 403.
 | `GET /v1/adapters/{name}/schema` | `query` | yes | 501 when the adapter has no introspection |
 | `GET /v1/rules` | `query` | yes | |
 | `GET /v1/audit` | `audit_read` | yes | |
-| `GET /v1/audit/{request_id}` | `audit_read` | yes | 404 `audit entry not found: '<id>'` |
+| `GET /v1/audit/{request_id}` | `audit_read` | yes | 404 `audit entry '<id>' not found` |
 | `POST /v1/rkm/queue` | `govern` | yes | 201 on accept |
 | `GET /v1/rkm/queue` | `govern` | yes | |
 | `GET /v1/rkm/queue/{proposal_id}` | `govern` | yes | |
@@ -4118,7 +4118,7 @@ left column.
 | `{"detail":"yes=true required for destructive operation"}` (412) | retract/rollback without confirmation | send `yes: true` |
 | `{"detail":{"error":"already_decided","current_status":"..."}}` (409) | proposal already approved or rejected | read `current_status`; no action needed |
 | `{"detail":{"error":"promotion_failed",...,"recovery":"fix the rule and re-approve to retry the promotion, or reject the proposal"}}` (422) | approved rule did not compile, or `rules.user_rules_dirs` is unset | fix the rule or set `user_rules_dirs`, then re-approve |
-| `{"detail":"audit entry not found: '...'"}` (404) | unknown `request_id` | check the id |
+| `{"detail":"audit entry '...' not found"}` (404) | unknown `request_id` | check the id |
 | `{"detail":"Adapter '...' does not support schema introspection"}` (501) | adapter has no schema surface | not an error; nothing to do |
 | `{"detail":"Broker not ready"}` (503) | request arrived before lifespan finished | wait for `/readyz` |
 | `ERROR: NAUTILUS_REVIEWER env var required for this command. Set it to your operator identity.` | governance CLI with no reviewer | `export NAUTILUS_REVIEWER=you@example.com` |
