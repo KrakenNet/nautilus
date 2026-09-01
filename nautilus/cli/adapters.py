@@ -332,9 +332,21 @@ def _remote_adapters(url: str, api_key: str | None) -> list[dict[str, str]] | No
     headers = {"X-API-Key": api_key} if api_key else {}
     try:
         response = httpx.get(f"{url.rstrip('/')}/v1/adapters", headers=headers, timeout=10)
-        response.raise_for_status()
     except Exception as exc:  # noqa: BLE001 — surfaced to the operator
         err(f"could not reach {url}: {exc}")
+        return None
+    # ``raise_for_status`` used to sit inside the block above, so a broker that
+    # answered perfectly well and refused the credential was reported as
+    # "could not reach {url}" -- sending the operator to check DNS, the firewall
+    # and whether the process was up, when the answer was that the key was wrong.
+    if response.status_code == 401:
+        err(f"{url} refused the credential (401). Pass a valid --api-key.")
+        return None
+    if response.status_code == 403:
+        err(f"{url} accepted the credential but it lacks the capability (403).")
+        return None
+    if response.status_code != 200:
+        err(f"{url} returned {response.status_code}: {response.text[:200]}")
         return None
     payload: Any = response.json()
     return list(payload.get("adapters", []))

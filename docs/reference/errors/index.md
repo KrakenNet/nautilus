@@ -335,7 +335,7 @@ curl -s "$NAUTILUS/readyz"; echo
 | `ERROR: rkm queue approve: cannot reach {endpoint}: {exc}` | 2 |
 | `ERROR: rkm queue approve: server returned {status_code}: {text}` | 2 |
 | `ERROR: proposal {proposal_id} not found` | 1 |
-| `ERROR: proposal {proposal_id} already decided: status={current_status}` | 1 |
+| `ERROR: proposal {proposal_id} cannot be rejected: it is {current_status}` | 1 |
 | `WARN: could not read rkm settings from {config_path!r} ({exc}); using defaults` | 0 |
 | `WARN: no lineage records for {id!r}` | 0 |
 | `ERROR: invalid adapter name {name!r} (expected lowercase-dashed, e.g. my-csv-adapter)` | 1 |
@@ -344,6 +344,7 @@ curl -s "$NAUTILUS/readyz"; echo
 | `ERROR: no config found: pass --config PATH, or run from a directory containing nautilus.yaml` | 1 |
 | `ERROR: --status {status_filter!r} needs --url: quarantine state lives in the serving process, …` | 1 |
 | `ERROR: could not load {config_path}: {exc}` | 1 |
+| `ERROR: {url} refused the credential (401). Pass a valid --api-key.` | 1 |
 | `ERROR: could not reach {url}: {exc}` | 1 |
 | `ERROR: no schema available for adapter {name!r}` | 1 |
 | `ERROR: no schema available for adapter {name!r}; cannot ack` | 1 |

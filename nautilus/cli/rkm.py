@@ -22,11 +22,13 @@ import argparse
 import dataclasses
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 from nautilus.cli._common import err, ok, open_audit_logger, require_reviewer, warn
 
 if TYPE_CHECKING:
+    import httpx
+
     from nautilus.rkm.queue import ProposalQueue
     from nautilus.rkm.types import Proposal
 
@@ -217,10 +219,19 @@ def _cmd_queue_submit(args: argparse.Namespace) -> int:
             )
         )
     else:
-        ok(
+        # ``OK:`` is the CLI's success prefix, and this printed it on the path
+        # that returns 1 -- so a rejected proposal read as
+        # ``OK: proposal p-1 queued rejected`` while the exit code said failure.
+        # A script grepping the prefix and a script checking ``$?`` disagreed
+        # about the same run.
+        summary = (
             f"proposal {proposal.proposal_id} queued {proposal.status} "
             f"(confidence {confidence:.2f})"
         )
+        if proposal.status == "rejected":
+            err(summary)
+        else:
+            ok(summary)
         for message in proposal.validation.get("static_errors", []):
             warn(message)
     return 1 if proposal.status == "rejected" else 0
@@ -297,6 +308,20 @@ def _cmd_queue_show(args: argparse.Namespace) -> int:
     return 0
 
 
+def _current_status(response: httpx.Response) -> str:
+    """The standing decision named in a 409 body, or ``"unknown"``."""
+    try:
+        body: object = json.loads(response.text)
+    except ValueError:
+        return "unknown"
+    if not isinstance(body, dict):
+        return "unknown"
+    detail: object = cast("dict[str, object]", body).get("detail")
+    if not isinstance(detail, dict):
+        return "unknown"
+    return str(cast("dict[str, object]", detail).get("current_status") or "unknown")
+
+
 def _cmd_queue_approve(args: argparse.Namespace) -> int:
     """Approve a proposal on a running broker.
 
@@ -337,12 +362,28 @@ def _cmd_queue_approve(args: argparse.Namespace) -> int:
         return 2
 
     if response.status_code == 409:
-        msg = f"proposal {args.proposal_id} already decided"
+        # Approve answered every 409 with ``already_approved`` and exit 0, even
+        # when the standing decision was a *rejection* -- so "approve this" and
+        # "it is rejected" reported success. Reject answered the mirror-image
+        # case with exit 1 unconditionally, so the same condition got opposite
+        # answers depending on which verb you used. Both now read the decision
+        # that stands: exit 0 when it is the one you asked for, 1 when it is not.
+        current = _current_status(response)
         if getattr(args, "json", False):
-            print(json.dumps({"status": "already_approved", "proposal_id": args.proposal_id}))
+            print(
+                json.dumps(
+                    {
+                        "status": "already_decided",
+                        "current_status": current,
+                        "proposal_id": args.proposal_id,
+                    }
+                )
+            )
+        elif current == "approved":
+            ok(f"proposal {args.proposal_id} was already approved")
         else:
-            ok(msg)
-        return 0
+            err(f"proposal {args.proposal_id} cannot be approved: it is {current}")
+        return 0 if current == "approved" else 1
     if response.status_code == 404:
         err(f"proposal {args.proposal_id} not found")
         return 1
@@ -381,7 +422,13 @@ def _cmd_queue_reject(args: argparse.Namespace) -> int:
             audit_logger=open_audit_logger(getattr(args, "config", None)),
         )
     except AlreadyDecidedError as exc:
-        err(f"proposal {args.proposal_id} already decided: status={exc.current_status}")
+        if exc.current_status == "rejected":
+            ok(f"proposal {args.proposal_id} was already rejected")
+            return 0
+        err(
+            f"proposal {args.proposal_id} cannot be rejected: "
+            f"it is {exc.current_status}"
+        )
         return 1
     except KeyError:
         err(f"proposal {args.proposal_id} not found")

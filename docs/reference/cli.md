@@ -867,13 +867,13 @@ rules.0.name
 rules.0.then.action
   Input should be 'allow', 'deny', 'escalate', 'scope' or 'route' [type=enum, input_value='nope', input_type=str]
     For further information visit https://errors.pydantic.dev/2.13/v/enum
-OK: proposal prop_a5720da395cf46819de640a393e6baa9 queued rejected (confidence 0.90)
+ERROR: proposal prop_a5720da395cf46819de640a393e6baa9 queued rejected (confidence 0.90)
 ```
 
 | Message | Exit | What to do |
 |---------|------|------------|
 | `ERROR: rule file not found: <path>` | `1` | Check `--file`. The path is printed exactly as you passed it. |
-| `WARN: Rule file does not compile: ...` then `OK: proposal <id> queued rejected (confidence <c>)` | `1` | Static validation failed. Fix the rule and resubmit; the rejected proposal stays in the queue as the record that you tried. |
+| `WARN: Rule file does not compile: ...` then `ERROR: proposal <id> queued rejected (confidence <c>)` | `1` | Static validation failed. Fix the rule and resubmit; the rejected proposal stays in the queue as the record that you tried. |
 | `WARN: Rule file does not compile: ... duplicate rule name '<module>::<name>'` | `1` | A rule of that name is already promoted or shipped in a pack. Rename yours, or retract the existing one first. |
 | `WARN: could not read rkm settings from '<path>' (<err>); using defaults` | — | `--config` could not be parsed; the submission still ran, on default sandbox settings. |
 
@@ -965,7 +965,7 @@ NAUTILUS_REVIEWER=alice nautilus rkm queue approve prop_2a1492909ca94498afcdd8aa
 ```
 
 ```text
-{"status": "already_approved", "proposal_id": "prop_2a1492909ca94498afcdd8aa9a4b314c"}
+{"status": "already_decided", "current_status": "approved", "proposal_id": "prop_2a1492909ca94498afcdd8aa9a4b314c"}
 ```
 
 **Exit codes** — returns `0`, `1` or `2`. Never returns `3`.
@@ -1055,14 +1055,14 @@ NAUTILUS_REVIEWER=alice nautilus rkm queue reject prop_66a1dd99794f42059f7101be5
 ```
 
 ```text
-ERROR: proposal prop_66a1dd99794f42059f7101be51671119 already decided: status=rejected
+OK: proposal prop_66a1dd99794f42059f7101be51671119 was already rejected
 ```
 
 | Message | Exit | What to do |
 |---------|------|------------|
 | `ERROR: NAUTILUS_REVIEWER env var required for this command. Set it to your operator identity.` | `1` | `export NAUTILUS_REVIEWER=<you>`. |
 | `ERROR: proposal <id> not found` | `1` | Check the ID with `nautilus rkm queue list`. |
-| `ERROR: proposal <id> already decided: status=<status>` | `1` | Someone got there first — a decision is not repeatable. `rkm queue show <id>` names the decider. |
+| `ERROR: proposal <id> cannot be rejected: it is <status>` | `1` | A different decision stands. `rkm queue show <id>` names the decider. Re-rejecting an already-rejected proposal is `OK:` and exit `0`. |
 | `nautilus rkm queue reject: error: the following arguments are required: --reason` | `2` | argparse; `--reason` is `required=True`. |
 
 ### `nautilus rkm queue diff`
@@ -1552,8 +1552,7 @@ nautilus adapters list --url http://127.0.0.1:8765 --api-key wrongkey
 ```
 
 ```text
-ERROR: could not reach http://127.0.0.1:8765: Client error '401 Unauthorized' for url 'http://127.0.0.1:8765/v1/adapters'
-For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/401
+ERROR: http://127.0.0.1:8765 refused the credential (401). Pass a valid --api-key.
 ```
 
 | Message | Exit | What to do |
@@ -1561,7 +1560,8 @@ For more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/St
 | `ERROR: --status '<value>' needs --url: quarantine state lives in the serving process, so a config file cannot answer it. Reporting an empty list here would look like 'nothing is quarantined'.` | `1` | Add `--url`. |
 | `ERROR: no config found: pass --config PATH, or run from a directory containing nautilus.yaml` | `1` | Pass `--config`, or `cd` to the config's directory. |
 | `ERROR: could not load <path>: <err>` | `1` | The config is present but will not parse. |
-| `ERROR: could not reach <url>: Client error '401 Unauthorized' for url '<url>/v1/adapters'` | `1` | The key is wrong. This is an auth failure wearing the transport error's message — the URL is fine. |
+| `ERROR: <url> refused the credential (401). Pass a valid --api-key.` | `1` | The key is wrong. The URL is fine. |
+| `ERROR: <url> accepted the credential but it lacks the capability (403).` | `1` | The key is valid and not scoped for this. |
 | `ERROR: could not reach <url>: <err>` | `1` | The server is down or the URL is wrong. |
 
 ### `nautilus adapters schema`

@@ -506,15 +506,19 @@ lookups in the audit log.
 cd /tmp/nautilus-errors && nautilus rkm queue show prop_notreal; echo "exit=$?"
 ```
 
-### `ERROR: proposal {proposal_id} already decided: status={current_status}`
+### `ERROR: proposal {proposal_id} cannot be rejected: it is {current_status}`
 
-`nautilus/cli/rkm.py:384`, from `AlreadyDecidedError`. Exit **1**. `{proposal_id}` is the
-positional argument; `{current_status}` is the proposal's status — `approved`, `rejected` or
-`superseded`. Decisions are terminal: there is no un-reject.
+From `AlreadyDecidedError`. Exit **1**. `{current_status}` is the decision that stands.
+`reject` accepts `pending` and `approved` — backing out an approval whose promotion failed is
+the only way out of that state — so this names a terminal status: `rejected` is idempotent (see
+below), and `promoted`, `expired` or `superseded` are refusals.
 
-Note the asymmetry with `approve`, which treats an already-decided proposal as success: a 409 from
-the broker prints `OK: proposal {id} already decided` and exits **0** (`nautilus/cli/rkm.py:339-345`),
-so re-running an approval is idempotent while re-running a rejection is an error.
+Both verbs read the decision that stands and answer the same way: **0** when it is the one you
+asked for, **1** when it is not. `nautilus rkm queue reject` on an already-rejected proposal
+prints `OK: proposal {id} was already rejected` and exits 0; `approve` on an already-approved one
+prints `OK: proposal {id} was already approved` and exits 0. Approve used to report *every* 409 as
+`already_approved` with exit 0 — including a proposal that stood rejected — while reject answered
+the mirror case with exit 1 unconditionally.
 
 ```bash
 cd /tmp/nautilus-errors && nautilus rkm queue reject prop_notreal --reason r; echo "exit=$?"
@@ -614,6 +618,13 @@ nautilus adapters list --status quarantined --config /tmp/nautilus-errors/nautil
 ```bash
 : > /tmp/n-bad.yaml && nautilus adapters list --config /tmp/n-bad.yaml; echo "exit=$?"
 ```
+
+### `ERROR: {url} refused the credential (401). Pass a valid --api-key.`
+
+The broker answered; it declined the key. This used to be reported as
+`could not reach {url}` — `raise_for_status()` sat inside the `except` that catches transport
+errors — which sent operators to DNS, the firewall and `systemctl status` for a wrong key.
+`403` and any other non-200 now get their own line too.
 
 ### `ERROR: could not reach {url}: {exc}`
 

@@ -1338,9 +1338,12 @@ def create_app(
                 audit_logger=_get_audit_logger(request),
             )
         except KeyError as exc:
+            # ``str(KeyError("p-1"))`` is ``"'p-1'"`` -- quotes included, no
+            # words. The 404 body was the id the caller already sent, wrapped in
+            # apostrophes, saying nothing about what was not found.
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=str(exc),
+                detail=f"proposal {proposal_id!r} not found",
             ) from exc
         except AlreadyDecidedError as exc:
             raise HTTPException(
@@ -1403,7 +1406,7 @@ def create_app(
         except KeyError as exc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=str(exc),
+                detail=f"proposal {proposal_id!r} not found",
             ) from exc
         except AlreadyDecidedError as exc:
             raise HTTPException(
@@ -1543,7 +1546,7 @@ def create_app(
         except KeyError as exc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=str(exc),
+                detail=f"rule {rule_name!r} not found",
             ) from exc
 
         # Lineage says the rule is retired; the engine is what decides
