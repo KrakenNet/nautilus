@@ -1075,6 +1075,19 @@ def create_app(
             )
         try:
             schema = await adapter.get_schema()
+        except NotImplementedError as exc:
+            # The 501 above is unreachable: ``BaseAdapter`` *defines*
+            # ``get_schema`` and raises here, so ``hasattr`` is true for every
+            # adapter and an unimplemented one arrived as 503 "Schema fetch
+            # failed" -- a transient-looking answer to a permanent condition,
+            # which is a caller retrying forever. The hasattr branch stays for a
+            # duck-typed object that has no such attribute at all.
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                detail=f"Adapter '{name}' does not support schema introspection",
+            ) from exc
         except Exception as exc:  # noqa: BLE001
             from fastapi import HTTPException
 
