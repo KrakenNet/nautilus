@@ -38,6 +38,9 @@ red until its fix lands.
   before believing a pin; a fixture bug looks identical to a defect in the
   summary line.
 - Container fixtures skip, never fail, when no Docker daemon is reachable.
+- The same goes for local-only material. `docs/comps/` is excluded in
+  `.git/info/exclude` and is absent from a clean clone, so a test over it
+  skips at module level rather than failing CI over files that never shipped.
 
 ## Verification
 

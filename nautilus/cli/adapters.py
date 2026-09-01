@@ -133,12 +133,6 @@ def dispatch(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
-def _open_store() -> object:  # pyright: ignore[reportUnusedFunction]
-    from nautilus.adapters.schema import SchemaFingerprintStore
-
-    return SchemaFingerprintStore(root=None)
-
-
 def _resolve_config(args: argparse.Namespace) -> str | None:
     """Config path from ``--config``, else ``./nautilus.yaml`` when it exists.
 
