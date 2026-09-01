@@ -32,7 +32,7 @@ curl -s "$API/readyz" | python3 -m json.tool
 section "2. List configured sources (metadata only — no DSNs exposed)"
 # -----------------------------------------------------------------------
 echo "GET /v1/sources"
-curl -s "$API/v1/sources" | python3 -m json.tool
+curl -s -H "X-API-Key: $KEY" "$API/v1/sources" | python3 -m json.tool
 
 # -----------------------------------------------------------------------
 section "3. Query as 'analyst' (clearance: cui)"

@@ -125,6 +125,32 @@ class SqliteSessionStore:
         conn.commit()
         return conn
 
+    async def averify_schema(self) -> None:
+        """Re-read the stored schema version, and refuse a store that moved.
+
+        The check in :meth:`setup` covers a replica *starting*. Replicas roll
+        one at a time, so the window the version stamp exists for is the one
+        where an old build is still serving while a new one has already
+        migrated — and a boot-only check never looks again. ``/readyz`` calls
+        this so the old pod drains instead of read-modify-writing rows under a
+        schema it does not understand.
+        """
+        async with self._lock:
+            await asyncio.to_thread(self._verify_schema_sync)
+
+    def _verify_schema_sync(self) -> None:
+        from nautilus.core.session_pg import SessionSchemaError
+
+        conn = self._require_conn()
+        found = int(conn.execute("PRAGMA user_version").fetchone()[0])
+        if found != _SCHEMA_VERSION:
+            raise SessionSchemaError(
+                f"session database {self._path} now carries schema version "
+                f"{found}; this build understands version {_SCHEMA_VERSION}. "
+                f"Another Nautilus migrated the store while this one was "
+                f"running."
+            )
+
     def _require_conn(self) -> sqlite3.Connection:
         if self._conn is None:
             from nautilus.core.session_pg import SessionStoreUnavailableError

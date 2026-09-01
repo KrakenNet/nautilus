@@ -40,7 +40,7 @@ curl -s -X POST http://127.0.0.1:8000/v1/request \
     "agent_id": "agent-alpha",
     "intent": "recent orders for customer 42",
     "context": {"clearance": "confidential", "purpose": "support", "session_id": "s1"}
-  }' | python -m json.tool
+  }' | python3 -m json.tool
 ```
 
 `sources_queried` should include `orders_db`. Scope constraints emitted

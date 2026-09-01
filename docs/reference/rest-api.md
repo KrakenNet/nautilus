@@ -75,8 +75,9 @@ Liveness probe. Returns `200 OK`.
 ### `GET /readyz`
 
 Readiness probe. Returns `200 OK` when the broker is fully initialized, the
-audit sink is writable, and the session store answers. `503` otherwise — the
-`reason` field names which one failed.
+audit sink is writable, and the session store answers with the schema version
+this build understands. `503` otherwise — the `reason` field names which one
+failed.
 
 ## Authentication
 
@@ -109,6 +110,14 @@ broker, the same audit trail and the same source catalogue as `/v1`, so it
 enforces the same capability. A key that `/v1/audit` refuses is refused at
 `/admin/audit` too. `ui.enabled` defaults to false and the routes are not
 registered at all when it is off.
+
+`/v1/request` and `/v1/query` answer `403 session_not_yours` when `context.session_id`
+names a session another principal owns. The first principal to use a session id
+owns it; another joins only after `declare_handoff` allowed a handoff to its
+agent in that session. An invalid `session_token` is `401` whether it arrived in
+`context` or in the `X-Nautilus-Session-Token` header. A `503` with `Retry-After`
+means Nautilus could not record the request — the audit sink stopped accepting
+writes — and it refuses to serve what it cannot account for.
 
 `POST /v1/sessions` answers `403` when the requested `purpose` is outside the
 agent's `allowed_purposes`. The token is a signed authorization assertion that

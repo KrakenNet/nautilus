@@ -67,8 +67,8 @@ from starlette.types import ASGIApp
 
 from nautilus.attestation.jwks import export_jwks
 from nautilus.attestation.key_ring import KeyRing
-from nautilus.attestation.session_token import SessionTokenService
-from nautilus.core import BrokerBusyError, PurposeNotPermittedError
+from nautilus.attestation.session_token import SessionTokenError, SessionTokenService
+from nautilus.core import BrokerBusyError, PurposeNotPermittedError, SessionNotOwnedError
 from nautilus.core.broker import Broker
 from nautilus.core.metrics import register_rkm_queue, register_ruleset
 from nautilus.core.models import BrokerRequest, BrokerResponse
@@ -617,15 +617,54 @@ def create_app(
                 fact_set_hash=body.fact_set_hash,
             )
         except BrokerBusyError as exc:
-            # Backpressure, not failure: the caller's own earlier request still
-            # holds the exposure ledger. A 500 says "something broke"; this says
-            # "come back", which is the only thing a client can act on.
+            # Backpressure, not failure: either the caller's own earlier request
+            # still holds the exposure ledger, or the store is slow. A 500 says
+            # "something broke"; this says "come back", which is the only thing
+            # a client can act on.
             from fastapi import HTTPException
 
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=str(exc),
                 headers={"Retry-After": "1"},
+            ) from exc
+        except SessionNotOwnedError as exc:
+            # The credential is real; the session it named is not its own.
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=str(exc),
+            ) from exc
+        except SessionTokenError as exc:
+            # A rejected token is a rejected credential wherever it was carried.
+            # ``verify_session_token`` already answers 401 for the header; a
+            # caller that put the same token in ``context`` got a 500, so the
+            # status reported which field was used rather than what was wrong,
+            # and every refused credential looked like a Nautilus fault.
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Invalid session token ({exc.reason_code}): {exc}",
+                headers={"WWW-Authenticate": "Bearer"},
+            ) from exc
+        except OSError as exc:
+            # The audit sink stopped accepting writes mid-request. Failing
+            # closed is right — an unrecorded decision must not be served — but
+            # this is our recorder being down, not a bad request, and the
+            # caller's only useful move is to retry once /readyz clears. It
+            # already reports the same sink, so the pod drains on its own.
+            from fastapi import HTTPException
+
+            log.error("audit write failed, refusing the request: %s", exc)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=(
+                    f"Nautilus could not record this request and will not "
+                    f"serve what it cannot account for: {exc}"
+                ),
+                headers={"Retry-After": "5"},
             ) from exc
         except ValueError as exc:
             # Malformed caller input inside ``context`` — notably
@@ -752,6 +791,15 @@ def create_app(
                 await asyncio.wait_for(store.aget(_READY_PROBE_KEY), _READY_PROBE_TIMEOUT_S)
             elif hasattr(store, "get"):
                 store.get(_READY_PROBE_KEY)
+            # The schema stamp is checked at boot, which covers the replica
+            # coming up and misses the one already serving: a rolling upgrade
+            # migrates the shared store under every pod that has not been
+            # replaced yet. Re-reading it here drains this pod instead of
+            # letting it read-modify-write rows it does not understand.
+            verify: Any = getattr(store, "averify_schema", None)
+            if callable(verify):
+                probe: Any = verify()
+                await asyncio.wait_for(probe, _READY_PROBE_TIMEOUT_S)
         except TimeoutError:
             response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
             return {"status": "not_ready", "reason": "session_store_timeout"}

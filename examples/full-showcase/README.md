@@ -73,7 +73,7 @@ curl http://localhost:8000/readyz
 
 ```bash
 # Lists configured sources — NEVER exposes connection DSNs
-curl http://localhost:8000/v1/sources | python3 -m json.tool
+curl -H "X-API-Key: demo-key-2024" http://localhost:8000/v1/sources | python3 -m json.tool
 ```
 
 Returns all five sources: `vuln_db` (postgres/cui), `server_metrics` (influxdb/unclassified), `compliance_docs` (s3/confidential), `app_logs` (elasticsearch/cui), and `threat_graph` (neo4j/cui).
@@ -185,7 +185,7 @@ After running demo.sh, open Tempo in Grafana (Explore > Tempo datasource). Searc
 The audit JSONL file is written to the `audit-data` Docker volume. To inspect:
 
 ```bash
-docker compose exec nautilus cat /data/audit/audit.jsonl | python3 -m json.tool
+docker compose exec nautilus cat /data/audit/audit.jsonl | python3 -m json.tool --json-lines
 ```
 
 Each entry contains:

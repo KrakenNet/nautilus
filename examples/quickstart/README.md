@@ -31,11 +31,14 @@ curl http://localhost:8000/healthz
 # {"status":"ok"}
 ```
 
-**List sources (no auth required):**
+**List sources:**
 
 ```bash
-curl http://localhost:8000/v1/sources
+curl -H "X-API-Key: my-secret-key" http://localhost:8000/v1/sources
 ```
+
+Every route that reads data or governance state needs the key from
+`nautilus.yaml`. Without it this answers `401`.
 
 **Make a broker request:**
 
@@ -60,7 +63,8 @@ The response includes:
 **View the audit trail:**
 
 ```bash
-cat audit.jsonl | python3 -m json.tool
+# One JSON object per line, so json.tool needs --json-lines.
+cat audit.jsonl | python3 -m json.tool --json-lines
 ```
 
 **Open the admin dashboard:**

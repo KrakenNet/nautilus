@@ -29,6 +29,20 @@ class PurposeNotPermittedError(Exception):
     """
 
 
+class SessionNotOwnedError(Exception):
+    """A caller named a session id that belongs to a different principal.
+
+    The cumulative-exposure ledger is a policy input, and a session id is a
+    string the caller picks. Without an owner, any credential could pour
+    exposure into any session by naming it — driving another caller's
+    escalation, and reading the result back through which rules fired.
+
+    The first principal to touch a session owns it. Another principal joins
+    only where the session carries a handoff declared to its agent, which is
+    the supported way a session spans agents. Transports answer 403.
+    """
+
+
 class BrokerBusyError(Exception):
     """Raised when the broker refuses a request rather than queue it further.
 
@@ -90,6 +104,7 @@ __all__ = [
     "Broker",
     "BrokerBusyError",
     "PurposeNotPermittedError",
+    "SessionNotOwnedError",
     "BrokerResponse",
     "ConsistencyError",
     "FileAttestationSink",

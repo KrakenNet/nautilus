@@ -232,6 +232,26 @@ under `proxy_trust`) — and a new session id inherits that principal's
 exposure. Different callers stay isolated from each other, and
 `ttl_seconds` still ages a ledger out.
 
+**A session belongs to a principal.** The first principal to use a
+`session_id` owns it; another principal that names the same id gets `403
+session_not_yours`. Without that, a session id was only a string, so any
+credential could add exposure to any session it could name — driving another
+caller's escalation until every source was denied, and reading the result back
+through which rules fired.
+
+A session that spans agents still works, through the path that declares it:
+after `declare_handoff` allows a handoff to agent B in that session, B's
+credential joins the session and inherits what it has already seen. That is
+the only way in. The handoff is recorded on the session row when it is
+allowed, so `declare_handoff` now writes to the session store — one row, no
+adapter calls.
+
+Ownership is enforced for callers that arrive over a transport, which always
+identifies them. `Broker.arequest` called directly from your own code presents
+no credential and no peer: there is no second caller for the boundary to be
+between, and one process running several of its own agents through one session
+is the supported shape.
+
 The built-in escalation pack
 (`nautilus/rules/escalation/default.yaml`) declares one entry:
 accumulating `email`, `phone`, `dob` and `ssn` within a session escalates
@@ -264,7 +284,17 @@ A token only ever claims a purpose the agent may claim. `allowed_purposes` on
 an agent record is a live authorization input — `fathom_router` denies every
 source when the request falls outside it — so the broker mints no token, and
 `POST /v1/sessions` answers `403`, rather than signing an assertion the policy
-refuses to act on. An agent that declares no `allowed_purposes` is
+refuses to act on.
+
+### Session store schema versions
+
+The store carries a schema version — `PRAGMA user_version` for sqlite, the
+`nautilus_schema_version` row for Postgres. A build that finds a version it
+does not understand refuses to start, and `/readyz` re-reads it on every probe,
+so a replica that is already serving when a rolling upgrade migrates the shared
+store drains instead of read-modify-writing rows under a schema it cannot read.
+`session_store.on_failure` does not cover this: a version mismatch is a
+deliberate refusal, not the store being unavailable. An agent that declares no `allowed_purposes` is
 unrestricted, which is the shape every config written before the field existed
 has.
 

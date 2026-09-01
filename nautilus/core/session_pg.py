@@ -326,6 +326,35 @@ class PostgresSessionStore:
             return {}
         return _decode_state(row["state"])
 
+    async def averify_schema(self) -> None:
+        """Re-read the stored schema version, and refuse a store that moved.
+
+        The check in :meth:`setup` covers a replica *starting*. Replicas roll
+        one at a time, so the window the version stamp exists for is the one
+        where an old build is still serving while a new one has already
+        migrated — and a boot-only check never looks again. ``/readyz`` calls
+        this so the old pod drains instead of read-modify-writing rows under a
+        schema it does not understand.
+
+        A degraded store is checked where it actually is: the sqlite fallback
+        has its own stamp, and the memory fallback has no shared schema to
+        disagree about.
+        """
+        if self._degraded_sqlite is not None:
+            await self._degraded_sqlite.averify_schema()
+            return
+        if self._degraded_memory is not None or self._pool is None:
+            return
+        async with self._acquire() as conn:
+            row = await conn.fetchrow("SELECT version FROM nautilus_schema_version")
+        if row is not None and int(row["version"]) != _SCHEMA_VERSION:
+            raise SessionSchemaError(
+                f"session store at {self._sanitized_dsn()} now carries schema "
+                f"version {int(row['version'])}; this build understands version "
+                f"{_SCHEMA_VERSION}. Another Nautilus migrated the store while "
+                f"this one was running."
+            )
+
     def _ttl_clause(self) -> str:
         """SQL fragment restricting a read to rows inside the TTL window."""
         if self._ttl_seconds <= 0:

@@ -75,7 +75,12 @@ from nautilus.config.models import (
     SourceConfig,
 )
 from nautilus.config.registry import SourceRegistry
-from nautilus.core import BrokerBusyError, PolicyEngineError, PurposeNotPermittedError
+from nautilus.core import (
+    BrokerBusyError,
+    PolicyEngineError,
+    PurposeNotPermittedError,
+    SessionNotOwnedError,
+)
 from nautilus.core.attestation_payload import (
     build_payload,
     canonical_input_hash,
@@ -326,12 +331,22 @@ if TYPE_CHECKING:
 
 
 def _busy_message(what: str, budget: float | None) -> str:
-    """What to tell a caller that lost the race for the exposure ledger."""
+    """What to tell a caller that could not take the exposure ledger in time.
+
+    Only what the timeout actually proves. The wait covers two things — the
+    in-process lock another request from this caller may be holding, and the
+    round trip to the session store that takes the shared advisory lock — and
+    nothing here distinguishes them. Naming only contention sent operators
+    looking for load that was not there: a single uncontended request against a
+    store that had stopped answering timed out with the same message.
+    """
     return (
-        f"Broker busy: waited {budget}s for the exposure ledger on {what!r} and "
-        f"another request from the same caller still holds it. Requests from one "
-        f"caller are served one at a time so cumulative exposure is counted "
-        f"once. Retry, or raise session_store.lock_timeout_s."
+        f"Broker busy: waited {budget}s to take the exposure ledger on {what!r} "
+        f"and did not get it. Either another request from this caller still "
+        f"holds it — requests from one caller are served one at a time so "
+        f"cumulative exposure is counted once — or the session store is slow or "
+        f"unreachable. Check /readyz to tell the two apart. Retry, or raise "
+        f"session_store.lock_timeout_s."
     )
 
 
@@ -351,6 +366,13 @@ class _RequestState:
     # Session-store key the caller's cumulative exposure accumulates under, so
     # a caller-chosen ``session_id`` cannot start a clean ledger (§4.15).
     principal_id: str = ""
+    # Set by ``_gate_session_ownership`` when this caller reached a session it
+    # does not own through a declared handoff, so the write path records the
+    # join instead of re-checking the handoff on every later request.
+    session_joining: bool = False
+    # Whether this request arrived over a transport that identified its caller.
+    # Only those are gated by session ownership; see ``arequest``.
+    caller_bound: bool = False
     routing_decisions: list[RoutingDecision] = field(default_factory=list[RoutingDecision])
     scope_by_source: dict[str, list[ScopeConstraint]] = field(
         default_factory=dict[str, list[ScopeConstraint]]
@@ -1529,6 +1551,11 @@ class Broker:
             auth_principal=(caller or {}).get("auth"),
             peer=(caller or {}).get("peer"),
         )
+        # Session ownership is a boundary between callers, and an in-library
+        # call has no other caller on the far side of it: no credential, no
+        # peer, one process orchestrating its own agents. Transports always
+        # pass one of the two, so the HTTP and MCP surfaces are always gated.
+        state.caller_bound = bool((caller or {}).get("auth") or (caller or {}).get("peer"))
         # Session-provenance gate (#18) — verify a presented token (fail-closed
         # with its own audit entry) or mint one for a fresh session, BEFORE the
         # pipeline runs so adapters see the token in ``context`` (AC-18.b).
@@ -1578,8 +1605,13 @@ class Broker:
     ) -> HandoffDecision:
         """Declare an agent-to-agent handoff and evaluate the handoff rule pack.
 
-        Pure reasoning-only path (design §3.6, FR-8, FR-10, AC-4.1): zero
-        adapter calls, zero session-store mutation. Flow:
+        Reasoning-only path (design §3.6, FR-8, FR-10, AC-4.1): zero adapter
+        calls. One session-store write, and only on ``action="allow"``: the
+        receiving agent is recorded on the session row so
+        :meth:`_gate_session_ownership` lets it continue a session another
+        principal owns. Without that record a declared handoff was a statement
+        with nothing behind it — the two parties merely agreed on a string, and
+        so did anyone else who guessed the same one. Flow:
 
         1. Resolve both agents via :class:`AgentRegistry`. An unknown id
            short-circuits to ``action="deny"`` with a synthetic
@@ -1741,6 +1773,8 @@ class Broker:
             denial_records=denials,
             rule_trace=rule_trace,
         )
+        if action == "allow" and session_id:
+            await self._record_handoff_partner(session_id, receiving_agent_id)
         self._emit_handoff_audit(
             source_agent_id=source_agent_id,
             receiving_agent_id=receiving_agent_id,
@@ -1750,6 +1784,37 @@ class Broker:
             started=started,
         )
         return decision
+
+    async def _record_handoff_partner(self, session_id: str, receiving_agent_id: str) -> None:
+        """Let the receiving agent of an allowed handoff into the session.
+
+        Read-merge-write on the session row's ``handoff_agents``. Best effort:
+        a store that cannot take the note must not turn an allowed handoff into
+        a denial — the receiving agent is refused later by the ownership gate,
+        which is the safe direction to fail.
+        """
+        try:
+            row = await self._session_get(session_id)
+            prior: Any = row.get("handoff_agents")
+            partners: list[str] = (
+                [str(a) for a in cast("list[Any]", prior)] if isinstance(prior, list) else []
+            )
+            if receiving_agent_id in partners:
+                return
+            entry = {"handoff_agents": [*partners, receiving_agent_id]}
+            if hasattr(self._session_store, "aupdate"):
+                await self._session_store.aupdate(session_id, entry)  # type: ignore[attr-defined]
+            else:
+                sync_store: SessionStore = self._session_store  # type: ignore[assignment]
+                sync_store.update(session_id, entry)
+        except Exception:  # noqa: BLE001 — the gate refuses on its own if this is lost
+            log.warning(
+                "could not record the handoff to agent_id=%r on session %r; the "
+                "receiving agent will be refused that session until the store "
+                "accepts the note",
+                receiving_agent_id,
+                session_id,
+            )
 
     def _emit_handoff_audit(
         self,
@@ -2167,6 +2232,7 @@ class Broker:
         if state.session_id:
             session_state.setdefault("id", state.session_id)
         state.session_row = dict(session_state)
+        self._gate_session_ownership(agent_id, state)
         # Fold the caller's principal-wide exposure in before the rules see it.
         # Without this a caller escaped cumulative escalation by declaring a
         # session id it had never used -- the ledger is the control, and the
@@ -2203,6 +2269,49 @@ class Broker:
         )
         state.skip_records = self._skip_records(state)
         state.denial_records = [self._annotate_denial(d, state) for d in state.denial_records]
+
+    def _gate_session_ownership(self, agent_id: str, state: _RequestState) -> None:
+        """Refuse a session that belongs to somebody else (§4.15 follow-on).
+
+        §4.15 closed the *reset* — a caller could not wipe its own history by
+        picking a new session id, because exposure also accumulates under a
+        principal key it does not choose. The per-session record stayed
+        write-shared: a session id is a name, and any credential that knew one
+        could add to its ledger. That is a denial of service against another
+        caller on the same broker (pour PII in, and cumulative escalation
+        denies them every source) and a side channel out of it (which rules
+        fire reports back what the ledger now holds).
+
+        So the first principal to touch a session owns it. A session
+        legitimately spans agents — a handoff is keyed on
+        ``(session_id, source_agent, receiving_agent)`` — so the receiving
+        agent of a handoff that was *declared and allowed in this session*
+        joins, and inherits what the session has seen. Everyone else is
+        refused before the router runs and before any adapter is touched.
+
+        Only requests that arrived with a caller identity are gated. An
+        in-library call presents no credential and no peer: there is no second
+        caller for the boundary to be between, and one process running several
+        of its own agents through one session is the supported shape.
+        """
+        if not state.caller_bound:
+            return
+        owner = str(state.session_row.get("owner_principal") or "")
+        if not owner or owner == state.principal_id:
+            return
+        joined = state.session_row.get("joined_principals")
+        if isinstance(joined, list) and state.principal_id in joined:
+            return
+        partners = state.session_row.get("handoff_agents")
+        if isinstance(partners, list) and agent_id in partners:
+            state.session_joining = True
+            return
+        raise SessionNotOwnedError(
+            f"session_not_yours: session {state.session_id!r} belongs to "
+            f"another principal. A session id is not a credential — either use "
+            f"your own, or have its owner declare a handoff to "
+            f"agent_id={agent_id!r} in it first."
+        )
 
     def _annotate_denial(self, denial: DenialRecord, state: _RequestState) -> DenialRecord:
         """Say whether a refusal concerned the request, and what would work.
@@ -2274,6 +2383,22 @@ class Broker:
         # new session id. Writing the merged union to both made every session
         # row claim the caller's whole history.
         session_entry = common | self._accumulate_exposure(state, context, state.session_row)
+        # Claim on first touch, and record a handoff partner that joined, so
+        # the gate above has an owner to compare against next time. Written
+        # only after the request survived, so a refused one claims nothing.
+        if not state.caller_bound:
+            pass
+        elif not state.session_row.get("owner_principal"):
+            session_entry["owner_principal"] = state.principal_id
+        elif state.session_joining:
+            prior_joined: Any = state.session_row.get("joined_principals")
+            joined: list[str] = (
+                [str(p) for p in cast("list[Any]", prior_joined)]
+                if isinstance(prior_joined, list)
+                else []
+            )
+            if state.principal_id not in joined:
+                session_entry["joined_principals"] = [*joined, state.principal_id]
         principal_entry = common | self._accumulate_exposure(state, context, state.principal_row)
         if hasattr(self._session_store, "aupdate"):
             await self._session_store.aupdate(state.session_id, session_entry)  # type: ignore[attr-defined]
