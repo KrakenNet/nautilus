@@ -7,3 +7,4 @@ API and configuration reference for Nautilus.
 - [CLI](cli.md) — command-line interface
 - [Rule Packs](rule-packs.md) — pre-built routing rules
 - [Adapter SDK](adapter-sdk.md) — build third-party adapters
+- [Errors](errors/index.md) — every user-visible failure message, with cause and fix

@@ -63,7 +63,11 @@ def _build_parser() -> argparse.ArgumentParser:
     """Build the top-level argparse parser with subcommands."""
     parser = argparse.ArgumentParser(
         prog="nautilus",
-        description="Nautilus reasoning-engine CLI (serve / health / version).",
+        description=(
+            "Nautilus reasoning-engine CLI. Stand a broker up (init, serve, health, "
+            "version, demo), govern its rules (rules, rkm, rule, events), and manage "
+            "what it trusts (adapters, key, session, attestation)."
+        ),
     )
     sub = parser.add_subparsers(dest="command", required=True, metavar="command")
 
@@ -292,11 +296,8 @@ def _cmd_serve(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point. Returns the process exit code.
 
-    TODO(forge): OQ4 — wire new subcommand groups (rkm, rule, rules,
-    adapters, key, events) into :func:`_build_parser` and the dispatch
-    ladder. Stubs live in :mod:`nautilus.cli.rkm`, :mod:`nautilus.cli.rule`,
-    :mod:`nautilus.cli.rules`, :mod:`nautilus.cli.adapters`,
-    :mod:`nautilus.cli.key`, :mod:`nautilus.cli.events`.
+    Exit codes follow the ``.forge/shared.md`` contract: 0 success, 1 user
+    error, 2 validation/policy failure. Code 3 is not used (OQ5 LOCKED).
     """
     parser = _build_parser()
     args = parser.parse_args(argv)
