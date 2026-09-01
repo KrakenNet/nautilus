@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 """WAVE ops12 — a dead dependency had no name, and the SSRF guard had no teeth.
 
 A sealed operator trial, configured from ``docs/`` alone and measured against a
