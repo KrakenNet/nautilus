@@ -410,7 +410,11 @@ def _serve(config: str, port: int) -> subprocess.Popen[bytes]:
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         cwd=str(_REPO_ROOT),
-        env={**os.environ, "NAUTILUS_DISABLE_OTEL": "1"},
+        # ``OTEL_SDK_DISABLED`` is the switch the SDK reads. This said
+        # ``NAUTILUS_DISABLE_OTEL``, which nothing anywhere reads, so the
+        # subprocess exported exporters it could not reach and the quieting
+        # this line exists for never happened.
+        env={**os.environ, "OTEL_SDK_DISABLED": "true"},
     )
 
 

@@ -5,7 +5,10 @@ Per ``.forge/shared.md`` CLI contract:
   Code 3 explicitly NOT used (OQ5 LOCKED).
 - Output prefixes: ``OK:`` / ``ERROR:`` / ``WARN:`` / ``FAIL:`` (no
   Unicode sigils). Matches existing ``nautilus/cli/__init__.py:124,170,184``.
-- ANSI color only when ``sys.stdout.isatty()`` AND ``NO_COLOR`` unset.
+
+The CLI emits no ANSI colour at all, so it needs no ``NO_COLOR`` handling. This
+docstring used to promise both, which is the sort of claim an operator checks by
+exporting ``NO_COLOR`` and concluding the tool is broken.
 """
 
 from __future__ import annotations

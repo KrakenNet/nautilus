@@ -70,8 +70,8 @@ def dispatch(args: argparse.Namespace) -> int:
         return _cmd_rotate(args)
     if sub == "revoke":
         return _cmd_revoke(args)
-    err("key: subcommand required (list, rotate, revoke).")
-    return 1
+    err("key: no subcommand given (try: list, rotate, revoke)")
+    return 2
 
 
 def _require_url(args: argparse.Namespace, command: str) -> str | None:

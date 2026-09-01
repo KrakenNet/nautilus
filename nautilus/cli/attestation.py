@@ -57,8 +57,8 @@ def dispatch(args: argparse.Namespace) -> int:
     sub = getattr(args, "attestation_subcommand", None)
     if sub == "verify":
         return _cmd_verify(args)
-    err("attestation: subcommand required (verify).")
-    return 1
+    err("attestation: no subcommand given (try: verify)")
+    return 2
 
 
 def _cmd_verify(args: argparse.Namespace) -> int:

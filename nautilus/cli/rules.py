@@ -123,7 +123,7 @@ def dispatch(args: argparse.Namespace) -> int:
         return _cmd_test(args)
     if subcommand == "history":
         return _cmd_history(args)
-    err("unknown rules subcommand")
+    err("rules: no subcommand given (try: validate, test, history)")
     return 2
 
 
