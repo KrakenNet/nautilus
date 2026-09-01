@@ -114,12 +114,11 @@ Every line in the **failure modes** tables below is catalogued in the
 | Variable | Read by | Effect |
 |----------|---------|--------|
 | `NAUTILUS_REVIEWER` | `nautilus.cli._common.require_reviewer` | Operator identity recorded on every governance decision. Required by exactly seven subcommands — `rkm queue approve`, `rkm queue reject`, `rule retract`, `rule rollback`, `adapters schema-ack`, `key rotate`, `key revoke` (the seven `require_reviewer()` call sites in `nautilus/cli/`). `rkm queue submit` does **not** require it: queueing a proposal is not a decision. There is no `$USER` fallback — auto-detection would let a reviewer identity be spoofed by the shell (DQ4 LOCKED). Unset or blank ⇒ `ERROR: NAUTILUS_REVIEWER env var required for this command. Set it to your operator identity.` and exit `1`. |
+| `NAUTILUS_API_KEY` | `nautilus.cli._common.resolve_api_key` | The `X-API-Key` sent by every subcommand pointed at a running broker — `adapters list --url`, `key list`/`rotate`/`revoke`, `rkm queue approve`. Read only when `--api-key` is absent: an explicit flag always wins, and an explicitly empty `--api-key ''` sends no credential rather than falling back here. The value is stripped, so a trailing newline from a file or a command substitution does not become part of the header. Unset or blank ⇒ no `X-API-Key` header at all, and the broker's own 401 is the message. Prefer it to the flag: a credential in `argv` is world-readable in `/proc/<pid>/cmdline` and lands in shell history. |
 
-`NAUTILUS_REVIEWER` is the **only** environment variable the CLI reads —
-`os.environ` appears once in `nautilus/cli/`, in `require_reviewer`. In
-particular there is no `NO_COLOR` handling, because there is no colour to
-suppress (see below), and `NAUTILUS_API_KEY` in the examples below is purely a
-shell variable you set yourself; nothing in `nautilus/cli/` looks it up.
+These two are the whole list — `os.environ` appears twice in `nautilus/cli/`,
+both times in `_common.py`. In particular there is no `NO_COLOR` handling,
+because there is no colour to suppress (see below).
 
 ## State on disk
 
@@ -981,7 +980,7 @@ nowhere. Requires `NAUTILUS_REVIEWER`, which is sent as `X-Nautilus-Reviewer`.
 | `proposal_id` | `str` (positional) | — | **Required.** Proposal ID. |
 | `--note` | `str` | `None` | Optional reviewer note. Recorded on the decision. |
 | `--url` | `str` | `None` | Base URL of the running broker, e.g. `http://localhost:8000`. Refuses to run without it. |
-| `--api-key` | `str` | `None` | `X-API-Key` for the broker. |
+| `--api-key` | `str` | `None` | `X-API-Key` for the broker. Omitted, `NAUTILUS_API_KEY` is used instead. |
 | `--config` | `str` | `None` | `nautilus.yaml` whose `audit.path` receives the decision record (default `./audit.jsonl`). |
 | `--json` | flag (`store_true`) | `False` | Emit JSON to stdout. |
 
@@ -1572,7 +1571,7 @@ report `configured`.
 | `--status` | `str` | `None` | Filter by status (`active`, `quarantined`). **Requires `--url`.** |
 | `--config` | `str` | `None` | Path to `nautilus.yaml` (default `./nautilus.yaml` when present). |
 | `--url` | `str` | `None` | Base URL of a running server. |
-| `--api-key` | `str` | `None` | `X-API-Key` for `--url` mode. |
+| `--api-key` | `str` | `None` | `X-API-Key` for `--url` mode. Omitted, `NAUTILUS_API_KEY` is used instead. |
 | `--json` | flag (`store_true`) | `False` | Emit JSON to stdout. |
 
 Setup A — config mode:
@@ -1890,7 +1889,7 @@ All three subcommands share `--url`, `--api-key` and `--json`
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--url` | `str` | `None` | Base URL of the running broker whose signing ring to act on. Trailing slashes are stripped. |
-| `--api-key` | `str` | `None` | `X-API-Key` for the broker. |
+| `--api-key` | `str` | `None` | `X-API-Key` for the broker. Omitted, `NAUTILUS_API_KEY` is used instead. |
 | `--json` | flag (`store_true`) | `False` | Emit JSON to stdout. |
 
 ### `nautilus key list`

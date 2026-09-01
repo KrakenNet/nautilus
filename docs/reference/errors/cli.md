@@ -303,7 +303,7 @@ done
 
 ### `ERROR: rkm: no subcommand given (try: queue, lineage)`
 
-`nautilus/cli/rkm.py:151`. Exit **2**. No interpolation.
+`nautilus/cli/rkm.py:159`. Exit **2**. No interpolation.
 
 ```bash
 nautilus rkm; echo "exit=$?"
@@ -311,7 +311,7 @@ nautilus rkm; echo "exit=$?"
 
 ### `ERROR: rkm queue: no op given (try: submit, list, show, approve, reject, diff)`
 
-`nautilus/cli/rkm.py:177`. Exit **2**. No interpolation. `queue` is a group of its own, so
+`nautilus/cli/rkm.py:185`. Exit **2**. No interpolation. `queue` is a group of its own, so
 `nautilus rkm queue` is as incomplete as `nautilus rkm`.
 
 ```bash
@@ -339,7 +339,7 @@ nautilus rules; echo "exit=$?"
 
 ### `ERROR: adapters: no subcommand given (try: new, list, schema, schema-fingerprint, schema-diff, schema-ack)`
 
-`nautilus/cli/adapters.py:121-124`. Exit **2**. No interpolation.
+`nautilus/cli/adapters.py:129-132`. Exit **2**. No interpolation.
 
 ```bash
 nautilus adapters; echo "exit=$?"
@@ -414,7 +414,7 @@ nautilus key rotate --yes --url "$NAUTILUS" --api-key govern-key; echo "exit=$?"
 
 ### `ERROR: rotate requires --yes to confirm.`
 
-`nautilus/cli/key.py:154`. Exit **1**. No interpolation. Checked **before** `--url` and before
+`nautilus/cli/key.py:152`. Exit **1**. No interpolation. Checked **before** `--url` and before
 `NAUTILUS_REVIEWER`, so this is the first thing a bare `nautilus key rotate` says.
 
 **Means.** Rotation changes which key signs new session tokens. Old tokens keep verifying — only
@@ -426,7 +426,7 @@ nautilus key rotate; echo "exit=$?"
 
 ### `ERROR: revoke requires --yes to confirm.`
 
-`nautilus/cli/key.py:179`. Exit **1**. No interpolation.
+`nautilus/cli/key.py:177`. Exit **1**. No interpolation.
 
 **Means.** Revocation *is* retroactive: every session token already minted under that `kid` stops
 verifying with reason code `unknown_kid` (see
@@ -438,7 +438,7 @@ nautilus key revoke 00000000-0000-4000-8000-000000000000 --reason leaked; echo "
 
 ### `FAIL: key {command}: cannot reach {endpoint}: {exc}`
 
-`nautilus/cli/key.py:127`. Exit **2**. `{command}` is `list`, `rotate` or `revoke`; `{endpoint}`
+`nautilus/cli/key.py:125`. Exit **2**. `{command}` is `list`, `rotate` or `revoke`; `{endpoint}`
 is the full URL the CLI built (`{--url}/v1/keys`, `/v1/keys/rotate`, `/v1/keys/{kid}/revoke`);
 `{exc}` is the `httpx.HTTPError` — connection refused, DNS failure, TLS error, timeout.
 
@@ -448,7 +448,7 @@ nautilus key list --url http://127.0.0.1:1; echo "exit=$?"
 
 ### `ERROR: key {command}: server returned {status_code}: {text}`
 
-`nautilus/cli/key.py:130`. Exit **2**. The broker answered, and answered something other than
+`nautilus/cli/key.py:128`. Exit **2**. The broker answered, and answered something other than
 200. `{status_code}` is the HTTP status; `{text}` is the raw response body, normally
 `{"detail": "..."}` — look that sentence up in [auth.md](auth.md) (401/403) or
 [attestation.md](attestation.md) (400/404/409). The commonest cause is a key without the `keys`
@@ -542,7 +542,7 @@ against the local audit log; `approve` is the only one that requires a running b
 
 ### `ERROR: rule file not found: {rule_path}`
 
-`nautilus/cli/rkm.py:194`. Exit **1**. `{rule_path}` is the `--file` value with `str()`, not
+`nautilus/cli/rkm.py:202`. Exit **1**. `{rule_path}` is the `--file` value with `str()`, not
 resolved. This is `submit` reading the rule YAML it is about to propose.
 
 ```bash
@@ -551,7 +551,7 @@ nautilus rkm queue submit --file /nope.yaml; echo "exit=$?"
 
 ### `ERROR: rkm queue approve: --url is required. Approving promotes the rule into the engine of a running broker, so there is nothing for the CLI to approve locally — point --url at the broker (e.g. --url http://localhost:8000).`
 
-`nautilus/cli/rkm.py:316-320`. Exit **2**. No interpolation. `NAUTILUS_REVIEWER` is checked
+`nautilus/cli/rkm.py:324-328`. Exit **2**. No interpolation. `NAUTILUS_REVIEWER` is checked
 *first*, so an unset reviewer identity masks this message until you set it.
 
 **Fix.** Point `--url` at the broker whose engine should start enforcing the rule, and pass a
@@ -563,7 +563,7 @@ NAUTILUS_REVIEWER=you@example.com nautilus rkm queue approve prop_deadbeef; echo
 
 ### `ERROR: rkm queue approve: cannot reach {endpoint}: {exc}`
 
-`nautilus/cli/rkm.py:336`. Exit **2**. `{endpoint}` is
+`nautilus/cli/rkm.py:344`. Exit **2**. `{endpoint}` is
 `{--url}/v1/rkm/queue/{proposal_id}/approve`; `{exc}` is the `httpx.HTTPError`. Nothing was
 decided — the proposal is still pending, so retrying is safe.
 
@@ -573,7 +573,7 @@ NAUTILUS_REVIEWER=you@example.com nautilus rkm queue approve prop_deadbeef --url
 
 ### `ERROR: proposal {proposal_id} not found`
 
-`nautilus/cli/rkm.py:289`, `:347`, `:370`, `:387`, `:411`. Exit **1**. `{proposal_id}` is the
+`nautilus/cli/rkm.py:297`, `:347`, `:370`, `:387`, `:411`. Exit **1**. `{proposal_id}` is the
 positional argument with `str()` — **not** `repr()`-quoted, unlike the HTTP route's
 `proposal not found: {proposal_id!r}` in [rules.md](rules.md#proposal-not-found-proposal_idr).
 `:347` is the local rendering of the broker's own 404 during `approve`; the rest are local
@@ -605,7 +605,7 @@ cd /tmp/nautilus-errors && nautilus rkm queue reject prop_notreal --reason r; ec
 
 ### `ERROR: rkm queue approve: server returned {status_code}: {text}`
 
-`nautilus/cli/rkm.py:350`. Exit **2**. Any broker response that is not 200, 404 or 409.
+`nautilus/cli/rkm.py:358`. Exit **2**. Any broker response that is not 200, 404 or 409.
 `{status_code}` is the HTTP status; `{text}` is the raw body. The one you are most likely to see
 is **422** with a JSON object carrying `error`, `message`, `current_status` and `recovery` — a
 promotion that could not be made real. Its `recovery` field tells you what to change; the causes
@@ -618,13 +618,13 @@ NAUTILUS_REVIEWER=you@example.com nautilus rkm queue approve prop_deadbeef \
 
 ### `WARN: could not read rkm settings from {config_path!r} ({exc}); using defaults`
 
-`nautilus/cli/rkm.py:242`. **Exit 0** — the submission still happens, with default RKM settings.
+`nautilus/cli/rkm.py:250`. **Exit 0** — the submission still happens, with default RKM settings.
 `{config_path}` is `repr()`-quoted; `{exc}` is the loader error. If a proposal behaved as though
 your `rkm:` block were absent, this line is why.
 
 ### `WARN: no lineage records for {id!r}`
 
-`nautilus/cli/rkm.py:470`. **Exit 0**. `{id}` is the positional argument of
+`nautilus/cli/rkm.py:478`. **Exit 0**. `{id}` is the positional argument of
 `nautilus rkm lineage`, which accepts either a proposal ID or a rule name.
 
 ## `nautilus adapters`
@@ -635,7 +635,7 @@ interchangeable.
 
 ### `ERROR: invalid adapter name {name!r} (expected lowercase-dashed, e.g. my-csv-adapter)`
 
-`nautilus/cli/adapters.py:236`. Exit **1**. `{name}` is the positional argument, `repr()`-quoted.
+`nautilus/cli/adapters.py:244`. Exit **1**. `{name}` is the positional argument, `repr()`-quoted.
 The name becomes a Python distribution name and a package directory, so uppercase, underscores
 and leading digits are refused.
 
@@ -645,7 +645,7 @@ nautilus adapters new My_Adapter; echo "exit=$?"
 
 ### `ERROR: destination already exists and is not empty: {dest}`
 
-`nautilus/cli/adapters.py:241`. Exit **1**. `{dest}` is `Path(--dir) / name` with `str()`.
+`nautilus/cli/adapters.py:249`. Exit **1**. `{dest}` is `Path(--dir) / name` with `str()`.
 An *empty* directory of that name is fine — scaffolding proceeds into it.
 
 ```bash
@@ -655,7 +655,7 @@ nautilus adapters new my-csv-adapter --dir /tmp/n-ad; echo "exit=$?"
 
 ### `ERROR: copier is required for 'adapters new' — install it with: pip install copier`
 
-`nautilus/cli/adapters.py:247`. Exit **1**. No interpolation. `copier` renders the bundled
+`nautilus/cli/adapters.py:255`. Exit **1**. No interpolation. `copier` renders the bundled
 template and is not a runtime dependency of Nautilus, so it is absent from a normal install.
 
 ```bash
@@ -664,7 +664,7 @@ pip install copier && nautilus adapters new my-csv-adapter --dir /tmp/n-ad
 
 ### `ERROR: no config found: pass --config PATH, or run from a directory containing nautilus.yaml`
 
-`nautilus/cli/adapters.py:288-291` and `:497`. Exit **1**. No interpolation. The implicit lookup
+`nautilus/cli/adapters.py:296-299` and `:497`. Exit **1**. No interpolation. The implicit lookup
 is `./nautilus.yaml` in the process's working directory — not the config the broker is serving
 with, and not `$NAUTILUS_CONFIG`. It is the whole answer: `schema` and `schema-fingerprint` stop
 here rather than going on to report the missing config a second time as a missing schema.
@@ -676,7 +676,7 @@ cd /tmp/nautilus-errors && nautilus adapters list; echo "exit=$?"
 
 ### `ERROR: --status {status_filter!r} needs --url: quarantine state lives in the serving process, so a config file cannot answer it. Reporting an empty list here would look like 'nothing is quarantined'.`
 
-`nautilus/cli/adapters.py:280-284`. Exit **1**. `{status_filter}` is the `--status` value,
+`nautilus/cli/adapters.py:288-292`. Exit **1**. `{status_filter}` is the `--status` value,
 `repr()`-quoted.
 
 **Means.** Quarantine is decided at runtime by the broker as adapters fail. A config file
@@ -691,7 +691,7 @@ nautilus adapters list --status quarantined --config /tmp/nautilus-errors/nautil
 
 ### `ERROR: could not load {config_path}: {exc}`
 
-`nautilus/cli/adapters.py:327` (`adapters list`, via `_configured_adapters`) and `:175` (the four
+`nautilus/cli/adapters.py:335` (`adapters list`, via `_configured_adapters`) and `:175` (the four
 schema subcommands, via `_live_adapter_schema`). Exit **1** from all five, with the same sentence:
 one helper per path, one code. `{config_path}` is the resolved config path; `{exc}` is the
 `ConfigError` or `OSError` from the loader — look that sentence up in [config.md](config.md).
@@ -718,7 +718,7 @@ errors — which sent operators to DNS, the firewall and `systemctl status` for 
 
 ### `ERROR: could not reach {url}: {exc}`
 
-`nautilus/cli/adapters.py:346`. Exit **1**. `{url}` is the `--url` value; `{exc}` is the
+`nautilus/cli/adapters.py:354`. Exit **1**. `{url}` is the `--url` value; `{exc}` is the
 `httpx.HTTPError`.
 
 ```bash
@@ -727,7 +727,7 @@ nautilus adapters list --url http://127.0.0.1:1; echo "exit=$?"
 
 ### `ERROR: no schema available for adapter {name!r}`
 
-`nautilus/cli/adapters.py:368` (`adapters schema`) and `:386`
+`nautilus/cli/adapters.py:376` (`adapters schema`) and `:386`
 (`adapters schema-fingerprint`). Exit **1**. `{name}` is `repr()`-quoted. With `--json`, `null`
 is still printed on stdout before the non-zero exit, so a JSON consumer gets valid JSON either
 way.
@@ -747,7 +747,7 @@ cd /tmp/nautilus-errors && nautilus adapters schema no_such_source --config naut
 
 ### `ERROR: no schema available for adapter {name!r}; cannot ack`
 
-`nautilus/cli/adapters.py:450`. Exit **1**. The same condition reached from `schema-ack`: there
+`nautilus/cli/adapters.py:458`. Exit **1**. The same condition reached from `schema-ack`: there
 is no current fingerprint to record an acknowledgement against. Checked **after** `--yes` and
 after `NAUTILUS_REVIEWER`.
 
@@ -759,7 +759,7 @@ cd /tmp/nautilus-errors && NAUTILUS_REVIEWER=you@example.com \
 
 ### `ERROR: schema-ack requires --yes to confirm`
 
-`nautilus/cli/adapters.py:442`. Exit **1**. No interpolation. Acknowledging drift writes a new
+`nautilus/cli/adapters.py:450`. Exit **1**. No interpolation. Acknowledging drift writes a new
 fingerprint, which silences `schema-diff` for that adapter until the schema changes again.
 
 ```bash
@@ -768,7 +768,7 @@ nautilus adapters schema-ack notes --config /tmp/nautilus-errors/nautilus.yaml -
 
 ### `WARN: could not read schema for {name!r}: {exc}`
 
-`nautilus/cli/adapters.py:189`, inside `_live_adapter_schema` — so it comes from the four schema
+`nautilus/cli/adapters.py:197`, inside `_live_adapter_schema` — so it comes from the four schema
 subcommands (`schema`, `schema-fingerprint`, `schema-diff`, `schema-ack`), never from
 `adapters list`, which reads the config's `sources` through `_configured_adapters` and never asks
 an adapter anything. `{name}` is `repr()`-quoted; `{exc}` is whatever `connect()` or
@@ -821,7 +821,7 @@ warning at all, because it never asks it for a schema.
 
 ### `WARN: no stored fingerprint for {name!r}; treating as new`
 
-`nautilus/cli/adapters.py:405`. **Exit 0**, from `schema-diff`. There is nothing to compare
+`nautilus/cli/adapters.py:413`. **Exit 0**, from `schema-diff`. There is nothing to compare
 against yet — the first `schema-diff` for an adapter always says this. Run `schema-ack` to store
 the baseline.
 

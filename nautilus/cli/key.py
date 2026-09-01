@@ -27,7 +27,7 @@ import json
 
 import httpx
 
-from nautilus.cli._common import err, fail, ok, require_reviewer
+from nautilus.cli._common import API_KEY_HELP, err, fail, ok, require_reviewer, resolve_api_key
 
 _URL_HELP = (
     "Base URL of the running broker whose signing ring to act on. Required: "
@@ -38,7 +38,7 @@ _URL_HELP = (
 def _add_target_args(parser: argparse.ArgumentParser) -> None:
     """Add the ``--url`` / ``--api-key`` / ``--json`` trio shared by all three."""
     parser.add_argument("--url", help=_URL_HELP)
-    parser.add_argument("--api-key", dest="api_key", help="X-API-Key for the broker.")
+    parser.add_argument("--api-key", dest="api_key", help=API_KEY_HELP)
     parser.add_argument("--json", action="store_true", help="Emit JSON to stdout.")
 
 
@@ -120,9 +120,7 @@ def _call(
         return 2, None
     endpoint = base + path
     try:
-        response = _request(
-            method, endpoint, getattr(args, "api_key", None), body, transport=transport
-        )
+        response = _request(method, endpoint, resolve_api_key(args), body, transport=transport)
     except httpx.HTTPError as exc:
         fail(f"key {command}: cannot reach {endpoint}: {exc}")
         return 2, None

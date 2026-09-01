@@ -34,13 +34,16 @@ Conventions for the runnable blocks:
 - Blocks assume `nautilus` is on `PATH` (`pip install nautilus-broker`) and a
   config at `/etc/nautilus/nautilus.yaml`. Substitute your own path in `--config`.
 
-Two sections are deliberately **not** key entries, because the questions they
+Three sections are deliberately **not** key entries, because the questions they
 answer belong to no single key:
 [Sessions](#sessions-lifetime-parallelism-and-termination) — how many a
-credential may hold, what ends them, how to see them — and
+credential may hold, what ends them, how to see them;
 [What the deployment discloses without being asked](#what-the-deployment-discloses-without-being-asked)
-— what a scanner gets from a stock install. Both carry their own runnable config
-and their own transcripts.
+— what a scanner gets from a stock install; and
+[Four controls Nautilus does not implement](#four-controls-nautilus-does-not-implement)
+— four things a security questionnaire will ask for that have no key, because
+the software does not do them. All three carry their own runnable config and
+their own transcripts.
 
 ## The complete configuration surface
 
@@ -538,6 +541,12 @@ hardened. With more than one, the message names all of them:
 against `api.keys`. `proxy_trust`: your ingress already did it (mTLS, SPIFFE,
 OIDC) and forwards the result in `X-Forwarded-User`; Nautilus resolves that to
 an agent through `agents.<id>.subject`.
+
+Neither mode is more than one factor. If your control set requires two, the
+factors have to live in an ingress under `proxy_trust`, and Nautilus cannot tell
+whether they did — see
+[V6.3.3](#v633-multi-factor-authentication) and
+[V6.8.1](#v681-restricting-which-identity-provider-may-assert-an-identity).
 
 **Costs** — under `proxy_trust`, the header *is* the credential. Anything that
 can reach the port and set that header is that user, so the mode is only safe
@@ -4166,8 +4175,38 @@ sudo install -d -m 0750 -o nautilus -g nautilus /var/lib/nautilus/state
 ## Environment variables
 
 Nautilus reads exactly nine environment variables by fixed name, plus any name
-you reference from the config with `${VAR}`. There is no `NAUTILUS_*` override
-for config keys: the file is the config.
+you reference from the config with `${VAR}` or name in
+[`analysis.provider.api_key_env`](#analysisproviderapi_key_env). There is no
+`NAUTILUS_*` override for config keys: the file is the config.
+
+The list below is maintained by hand. Every read of the environment anywhere in
+the package is not, so check the list against it rather than trusting this page:
+
+```console
+$ grep -rn 'os\.environ\|os\.getenv' nautilus/ --include='*.py'
+nautilus/cli/_common.py:34:    reviewer = os.environ.get("NAUTILUS_REVIEWER", "").strip()
+nautilus/cli/_common.py:247:    return os.environ.get(API_KEY_ENV, "").strip() or None
+nautilus/analysis/llm/local_provider.py:70:        if not os.getenv(self.api_key_env):
+nautilus/analysis/llm/local_provider.py:81:            api_key = os.getenv(self.api_key_env) or self._api_key_literal
+nautilus/analysis/llm/anthropic_provider.py:93:        key = os.getenv(self.api_key_env)
+nautilus/analysis/llm/anthropic_provider.py:115:            api_key=os.getenv(self.api_key_env),
+nautilus/analysis/llm/openai_provider.py:92:        key = os.getenv(self.api_key_env)
+nautilus/analysis/llm/openai_provider.py:107:            api_key=os.getenv(self.api_key_env),
+nautilus/config/loader.py:68:        self._env = env if env is not None else dict(os.environ)
+nautilus/core/broker.py:1022:                dsn = os.environ.get("TEST_PG_DSN")
+nautilus/adapters/influxdb.py:224:            token = _auth_token(config) or os.environ.get("INFLUXDB_V2_TOKEN")
+nautilus/adapters/influxdb.py:225:            org = os.environ.get("INFLUXDB_V2_ORG")
+nautilus/observability/__init__.py:16:    if os.environ.get("OTEL_SDK_DISABLED", "").lower() == "true":
+nautilus/observability/instrumentation.py:32:    os.environ.setdefault(
+nautilus/observability/instrumentation.py:50:    if os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT") or os.environ.get(
+```
+
+Three classes, and only the first is a fixed name. **Nine fixed names** across
+eight call sites — the two OTLP endpoints share one `if`, and `API_KEY_ENV` is
+the module constant `"NAUTILUS_API_KEY"` (`nautilus/cli/_common.py:197`). **Six
+reads of whatever you named** in `analysis.provider.api_key_env`. **One copy of
+the whole environment**, in the loader: that is the `${VAR}` interpolator, and it
+is why a variable can be referenced from the config under any name at all.
 
 ### `${VAR}` (any name) — config value interpolation
 
@@ -4246,6 +4285,114 @@ nautilus rkm queue approve prop_7f3a --url http://127.0.0.1:8000 \
 
 The HTTP equivalent is the `X-Nautilus-Reviewer` header — see
 [Headers](#request-headers).
+
+### `NAUTILUS_API_KEY`
+
+Read by `nautilus/cli/_common.py:resolve_api_key` · the `X-API-Key` every CLI subcommand that is pointed at a running broker sends · overridden by an explicit `--api-key`
+
+**Defends** the credential from `argv`. Three subcommands reach a live broker —
+`adapters list --url`, `key list|rotate|revoke`, `rkm queue approve` — and until
+this variable existed each of them took its key only as `--api-key KEY`. A
+command line is not a private place. It is in `/proc/<pid>/cmdline`, which is
+mode `444`, for the whole life of the process, and an interactive shell writes
+it to history as well. Measure it rather than believe it — start a command
+against an address that will not answer, so the process is still alive while you
+look:
+
+```console
+$ nautilus adapters list --url http://10.255.255.1:1 --api-key "$NAUTILUS_KEY_REPORTING" &
+[1] 4081656
+$ ps -eo args | grep -- '--api-key' | grep -v grep
+.../nautilus adapters list --url http://10.255.255.1:1 --api-key lencVaozhCmnWcCcnRTAqns5l7p1Y6FZpVxt_g6qyiA
+$ ls -l /proc/4081656/cmdline /proc/4081656/environ
+-r--r--r-- 1 nautilus nautilus 0 Sep  1 15:13 /proc/4081656/cmdline
+-r-------- 1 nautilus nautilus 0 Sep  1 15:13 /proc/4081656/environ
+```
+
+`444` against `400` is the entire size of what this variable buys: **every**
+account on the host can read the flag, and only the process's own user and root
+can read the environment. Repeat the first two commands with the key in the
+variable instead and `grep` finds nothing:
+
+```console
+$ NAUTILUS_API_KEY="$NAUTILUS_KEY_REPORTING" nautilus adapters list --url http://10.255.255.1:1 &
+[1] 4081702
+$ ps -eo args | grep -- '--api-key' | grep -v grep | wc -l
+0
+$ tr '\0' ' ' < /proc/4081702/cmdline
+.../nautilus adapters list --url http://10.255.255.1:1
+```
+
+**Costs** you nothing on the flag: `--api-key` is unchanged, still supported, and
+still **wins** when it is passed, so no existing script changes behaviour. What
+it costs is the shell hygiene the variable now needs — an exported variable is
+inherited by every child of that shell, so export it in the operator's session
+(or a systemd `EnvironmentFile`, or a Kubernetes Secret) rather than in a shared
+profile, and remember that `/proc/<pid>/environ` is readable by *you* and by
+root. This is a smaller exposure than `argv`, not no exposure. If your threat
+model includes root or a same-uid process, neither mechanism helps and the
+answer is a short-lived credential, which Nautilus does not have — see
+[What this does not give you](#what-this-does-not-give-you).
+
+Precedence is decided in one place, `resolve_api_key`, so every subcommand — and
+every subcommand added later — answers the same way:
+
+| `--api-key` | `NAUTILUS_API_KEY` | What is sent |
+|---|---|---|
+| passed | anything | the flag |
+| `--api-key ''` | set | **nothing** — an empty flag is a choice, not a fallback |
+| absent | set | the variable, stripped of surrounding whitespace |
+| absent | unset or blank | no `X-API-Key` header at all |
+
+The strip matters: a value produced by `$(cat /etc/nautilus/key)` or read out of
+an `EnvironmentFile` arrives with a trailing newline, and an `X-API-Key` header
+carrying one matches no configured key, which reads as a wrong secret rather
+than a malformed one. `NAUTILUS_REVIEWER` is stripped for the same reason.
+
+**Fails with** the ordinary refusals of whichever subcommand you ran — the
+variable adds no message of its own. With neither the flag nor the variable set:
+
+```console
+$ unset NAUTILUS_API_KEY
+$ nautilus adapters list --url http://127.0.0.1:8000
+ERROR: http://127.0.0.1:8000 refused the credential (401). Pass a valid --api-key.
+$ echo $?
+1
+```
+
+```console
+$ nautilus rkm queue approve prop_7f3a --url http://127.0.0.1:8000
+ERROR: rkm queue approve: server returned 401: {"detail":"Not authenticated"}
+$ echo $?
+2
+```
+
+**Example**
+
+```console
+$ export NAUTILUS_API_KEY="$NAUTILUS_KEY_KEYS"
+$ export NAUTILUS_REVIEWER="alice@example.com"
+$ nautilus key rotate --url http://127.0.0.1:8000 --yes
+OK: rotated: new primary kid=6155cb85-9248-463c-8a93-361ead451422  reviewer=alice@example.com
+$ nautilus adapters list --url http://127.0.0.1:8000 --json
+[{"id": "orders", "type": "static", "status": "active"}]
+```
+
+For a unit file, put it beside the DSNs where it is reviewable and the file is
+`0600` — the same place [`${VAR}`](#var-any-name-config-value-interpolation)
+secrets live:
+
+```bash
+# /etc/nautilus/nautilus.env, 0600, root:nautilus
+NAUTILUS_API_KEY=<THE_KEY_THIS_OPERATOR_USES>
+NAUTILUS_REVIEWER=alice@example.com
+```
+
+One name, two directions. On the broker host the same variable is what
+`deploy/configmap.yaml` interpolates into `api.keys` — the key the *server*
+accepts — and what the CLI now sends. That is deliberate: a host that already
+holds the value for the server does not need a second name for the operator
+shell. On a workstation it is only ever the sending half.
 
 ### `TEST_PG_DSN`
 
@@ -4427,24 +4574,29 @@ every Kubernetes probe becomes a span.
 OTEL_PYTHON_FASTAPI_EXCLUDED_URLS=/healthz,/readyz,/metrics
 ```
 
-### `NO_COLOR`
+### `NO_COLOR` — not read, and this page used to say it was
 
-Read by `nautilus/cli/_common.py` · any value disables ANSI colour
+**Nautilus does not read `NO_COLOR`.** This entry previously described it as
+"read by `nautilus/cli/_common.py`", with a *Defends* clause about ANSI being
+emitted only on a TTY. None of that was true, and the module's own docstring
+(`nautilus/cli/_common.py:9-11`) says why the claim was removed from the code:
+the CLI emits no ANSI colour at all, so there is nothing for `NO_COLOR` to
+disable. The entry is kept rather than deleted because an operator who read the
+old one and set the variable deserves to find out what happened to it.
 
-**Defends** the legibility of captured CLI output. ANSI is emitted only when
-stdout is a TTY *and* `NO_COLOR` is unset, so redirected output is already clean;
-set this when a tool allocates a PTY and escape codes end up in your ticket, your
-log shipper or your evidence bundle.
+Verify in one line — the grep above is the whole environment surface, and this is
+the whole colour surface:
 
-**Costs** you colour.
-
-**Fails with** no error; the symptom is `\x1b[31m` sequences in captured text.
-
-**Example**
-
-```bash
-NO_COLOR=1 nautilus rkm queue list --status pending --json
+```console
+$ grep -rn 'NO_COLOR' nautilus/ --include='*.py'
+nautilus/cli/_common.py:9:The CLI emits no ANSI colour at all, so it needs no ``NO_COLOR`` handling. This
+nautilus/cli/_common.py:11:exporting ``NO_COLOR`` and concluding the tool is broken.
+$ grep -rc $'\x1b\[' nautilus/ --include='*.py' | grep -v ':0$' | wc -l
+0
 ```
+
+Two comments and zero escape sequences. Captured CLI output is already plain,
+whether or not the capture allocated a PTY, so nothing needs setting.
 
 ## Request headers
 
@@ -4616,6 +4768,11 @@ A wrong key at the form re-renders the page with HTTP 401 and the text
 `attestation`. The security-relevant ones are below. Exit codes are uniform:
 `0` success, `1` user error, `2` validation or policy failure; `3` is
 deliberately unused.
+
+Wherever `--api-key KEY` appears below it is optional, and passing it is the
+worse of the two ways: prefer
+[`NAUTILUS_API_KEY`](#nautilus_api_key), which keeps the credential out of `ps`
+and out of shell history. The flag still wins when both are set.
 
 ### `nautilus init [--dir DIR]`
 
@@ -4798,7 +4955,7 @@ An unreachable broker prints
 
 ### `nautilus key list|rotate|revoke`
 
-`--url URL` · `--api-key KEY` · `--json` · plus `--yes` on `rotate` and `revoke`, and `--reason REASON` (required) on `revoke`
+`--url URL` · `--api-key KEY` (or [`NAUTILUS_API_KEY`](#nautilus_api_key)) · `--json` · plus `--yes` on `rotate` and `revoke`, and `--reason REASON` (required) on `revoke`
 
 **Defends** the session-token signing ring. `rotate` mints a new primary key and
 keeps the old one verifying; `revoke` removes a key's private half immediately,
@@ -4867,8 +5024,9 @@ OK: chain valid — 12043 records, head 9f2c1d0b7a5e4c93, anchored
 
 ### `nautilus rkm queue approve|reject` and `nautilus rule retract|rollback`
 
-require `NAUTILUS_REVIEWER`; `--url URL` and `--api-key KEY` (approve/reject reach
-a running broker); `--config PATH` (where the decision record is written);
+require `NAUTILUS_REVIEWER`; `--url URL` and `--api-key KEY` — or
+[`NAUTILUS_API_KEY`](#nautilus_api_key) — (approve/reject reach a running
+broker); `--config PATH` (where the decision record is written);
 `--reason` on `reject`; `--yes` on destructive operations; `--json`
 
 **Defends** the rule set — the thing that decides every allow and deny. These
@@ -6817,10 +6975,470 @@ left column.
 | `Invalid HTTP request received.` (400, `text/plain`) | uvicorn's parser rejected the framing — duplicate `Content-Length`, `Content-Length` with `Transfer-Encoding`, or a malformed chunk terminator. Not a Nautilus string and never reaches the audit trail | see [Message framing](#message-framing-every-hop-must-count-the-body-the-same-way); if it is not an attack, a client is speaking HTTP badly |
 | `{"detail":"Plaintext HTTP is not accepted on /v1/. ...}` (403) | **the proxy's**, from [Option B](#option-b-terminate-in-front-and-tell-nautilus-who-did-it) — an agent sent a request to port 80 | the credential is already disclosed: rotate it, then fix the client's base URL |
 
+## Four controls Nautilus does not implement
+
+An operator hardening this deployment against a control catalogue will reach
+four requirements this software has no surface for at all. The honest answer to
+each is the same shape: **the control is not implemented**, here is the command
+that proves it, here is what the deployment boundary can be made to do instead,
+and here is the part that still is not covered. Nothing below is a feature.
+
+Each subsection names its OWASP ASVS 5.0 identifier, because that is the
+catalogue most readers arrive with; the wording is the requirement's, the
+verdicts are ours.
+
+### V6.3.3 — multi-factor authentication
+
+*The requirement:* a multi-factor mechanism, or a combination of single-factor
+mechanisms, must be used to access the application.
+
+**Not implemented.** There is one factor, and it is a bearer secret. Nautilus
+contains no second-factor code of any kind — no TOTP, no WebAuthn, no
+out-of-band challenge, and no notion of a factor at all:
+
+```console
+$ grep -rniE 'totp|webauthn|fido|\bmfa\b|multi.?factor|otpauth|u2f' nautilus/ | wc -l
+0
+```
+
+Nor can it consume somebody else's. An OIDC provider reports what it did in the
+`amr` / `acr` / `auth_time` claims; Nautilus reads none of them, because it
+never sees a token from a provider:
+
+```console
+$ grep -rnE '\bamr\b|\bacr\b|auth_time' nautilus/ --include='*.py' | wc -l
+0
+```
+
+**What Nautilus has instead** is one credential, checked one way, in whichever
+mode you run:
+
+- `api.auth.mode: api_key` — an opaque secret in `X-API-Key`, compared against
+  `api.keys` in constant time (`nautilus/transport/auth.py:73`). Whoever holds
+  the string is the caller. The admin console is the same secret in a form
+  field: `nautilus/ui/templates/pages/login.html:92` is an
+  `<input type="password">` whose value is an API key, exchanged for a cookie
+  that *is* the key.
+- `api.auth.mode: proxy_trust` — Nautilus authenticates nobody. It reads the
+  subject your ingress already resolved out of `X-Forwarded-User`
+  (`nautilus/transport/auth.py:243`).
+
+**What compensates**, and only in the second mode: put an authenticating proxy
+in front and make it the only reachable peer. The factors then live in the
+proxy, where they can be as many as your IdP enforces, and Nautilus never
+handles a credential at all. This is a real boundary, not a gesture — under
+`proxy_trust` an API key buys nothing on any route that returns data. Confirm it
+on your own deployment rather than taking the mode's name for it:
+
+```console
+$ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://nautilus.example.com/v1/request \
+    -H 'Content-Type: application/json' \
+    -d '{"agent_id":"reporting","intent":"list orders","context":{}}'
+401
+$ curl -s -X POST https://nautilus.example.com/v1/request \
+    -H "X-API-Key: $NAUTILUS_KEY_REPORTING" -H 'Content-Type: application/json' \
+    -d '{"agent_id":"reporting","intent":"list orders","context":{}}'
+{"detail":"Missing X-Forwarded-User"}
+$ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://nautilus.example.com/v1/request \
+    -H 'X-Forwarded-User: spiffe://idp-a.example/ns/agents/sa/alice' \
+    -H 'Content-Type: application/json' \
+    -d '{"agent_id":"reporting","intent":"list orders","context":{}}'
+200
+```
+
+A valid API key answering `401 Missing X-Forwarded-User` is the check that
+matters. It says the proxy is the only authenticator, which is the whole claim.
+
+Two things this does **not** cover, and both are load-bearing:
+
+1. **Nautilus cannot tell whether the proxy asked for a second factor.** It
+   receives a subject string and nothing else — no `amr`, no `acr`, no
+   authentication timestamp. If your ingress is configured to let some route or
+   some client past with one factor, Nautilus will serve it exactly like any
+   other. The control is enforced entirely in a component this page does not
+   configure; verify it there.
+2. **`POST /admin/login` still validates an API key in `proxy_trust` mode.** It
+   calls `verify_api_key` unconditionally (`nautilus/ui/router.py:194`), so
+   it answers `302` for a correct key and `401` for a wrong one even when no key
+   authorises anything — a live oracle for guessing `api.keys`, with no rate
+   limit in front of it. The cookie it hands back opens nothing, which is the
+   only reason this is a nuisance rather than a hole:
+
+   ```console
+   $ curl -s -o /dev/null -w '%{http_code}\n' -X POST https://nautilus.example.com/admin/login \
+       -d "api_key=$NAUTILUS_KEY_REPORTING"
+   302
+   $ curl -s -b "nautilus_key=$NAUTILUS_KEY_REPORTING" https://nautilus.example.com/admin/sources
+   {"detail":"Missing X-Forwarded-User"}
+   ```
+
+   Under `proxy_trust`, set `ui.enabled: false`, or block `/admin/login` at the
+   proxy the same way [the private surface](#keep-the-private-surface-off-the-public-listener)
+   is blocked.
+
+In `api_key` mode nothing compensates. One factor is the whole authentication
+story, and the mitigations available to you are the ones on this page already:
+one key per caller ([`api.keys`](#apikeys)), [scoped
+capabilities](#apikeyscapabilities), [agent binding](#apikeysagent_id), and
+[rotation](#rotate-and-revoke).
+
+### V6.8.1 — restricting which identity provider may assert an identity
+
+*The requirement:* where an application supports multiple identity providers, a
+user's identity must not be spoofable via another supported provider — the
+standard mitigation being to namespace the user's ID with the IdP's ID.
+
+**Not implemented.** Nautilus integrates with no identity provider, so it has no
+notion of *which* one asserted anything. Under `proxy_trust` the entire assertion
+is one opaque string:
+
+```console
+$ grep -rniE 'oidc|saml|oauth|openid|id_token' nautilus/ --include='*.py'
+nautilus/transport/auth.py:9:  (mTLS, SPIFFE, OIDC) and forwards its identity in ``X-Forwarded-User``.
+nautilus/transport/auth.py:247:    mesh/ingress has already authenticated the caller (mTLS, SPIFFE, OIDC) and
+nautilus/config/models.py:241:    # id, an OIDC subject, a certificate CN. Matched against ``X-Forwarded-User``
+```
+
+Three comments, no implementation. Every one of them describes something the
+*proxy* does.
+
+**What Nautilus has instead** is two flat lookups, neither of which knows about
+issuers:
+
+- `api.auth.trusted_proxies` — a list of CIDR blocks. A socket peer inside **any**
+  block may assert **any** subject (`nautilus/transport/auth.py:226`). There is
+  no per-proxy subject allowlist, so front the broker with two proxies and
+  either one can assert the other's identities.
+- `agents.<id>.subject` — a `dict[subject → agent_id]` built by
+  `nautilus/transport/fastapi_app.py:165-170`. The key is the raw header value.
+
+Both properties are visible from one host. Two agents bound to two subjects that
+differ only in their namespace, and a single peer asserting each in turn:
+
+```yaml
+agents:
+  reporting:
+    id: reporting
+    clearance: confidential
+    subject: "spiffe://idp-a.example/ns/agents/sa/alice"
+  finance:
+    id: finance
+    clearance: secret
+    subject: "spiffe://idp-b.example/ns/agents/sa/alice"
+api:
+  auth:
+    mode: proxy_trust
+    trusted_proxies: ["127.0.0.1/32"]
+```
+
+```console
+$ curl -s -X POST http://127.0.0.1:8000/v1/request \
+    -H 'X-Forwarded-User: spiffe://idp-a.example/ns/agents/sa/alice' \
+    -H 'Content-Type: application/json' \
+    -d '{"agent_id":"reporting","intent":"list orders","context":{}}' \
+  | python -c 'import json,sys; print(json.load(sys.stdin)["outcome"])'
+allowed
+$ curl -s -X POST http://127.0.0.1:8000/v1/request \
+    -H 'X-Forwarded-User: spiffe://idp-b.example/ns/agents/sa/alice' \
+    -H 'Content-Type: application/json' \
+    -d '{"agent_id":"finance","intent":"list orders","context":{}}' \
+  | python -c 'import json,sys; print(json.load(sys.stdin)["outcome"])'
+allowed
+```
+
+The same client was `alice` at two providers, in the same second, because
+nothing binds a subject to the peer that may assert it.
+
+**What compensates** is the mitigation the requirement itself names, done by
+you: **make the namespace part of the subject string.** A SPIFFE ID already
+carries one — the trust domain, `idp-a.example` above — and an OIDC deployment
+should prefix the subject with the issuer. Two providers then cannot collide,
+because the strings differ. Nautilus enforces none of this; it only compares
+strings, so the separation is exactly as good as the strings your proxy emits.
+
+Two checks make that auditable. First, that every declared subject is namespaced
+and that no two agents share one — a duplicate is silently resolved by config
+order, not refused:
+
+```console
+$ python - <<'EOF'
+import collections, sys, yaml
+agents = yaml.safe_load(open("/etc/nautilus/nautilus.yaml"))["agents"]
+subjects = {a: r.get("subject") for a, r in agents.items()}
+bare = [a for a, s in subjects.items() if s and "://" not in s and "/" not in s]
+dupes = [s for s, n in collections.Counter(filter(None, subjects.values())).items() if n > 1]
+print("un-namespaced subjects:", bare or "none")
+print("subjects claimed twice:", dupes or "none")
+sys.exit(1 if bare or dupes else 0)
+EOF
+un-namespaced subjects: none
+subjects claimed twice: none
+```
+
+A duplicate is not hypothetical arithmetic. `subjects[subject] = agent_id`
+overwrites, so the last agent in file order wins and the earlier one becomes
+unreachable — with no startup warning and no config error. Give both agents
+above the *same* subject and `reporting` disappears:
+
+```console
+$ curl -s -X POST http://127.0.0.1:8000/v1/request \
+    -H 'X-Forwarded-User: spiffe://idp-a.example/ns/agents/sa/alice' \
+    -H 'Content-Type: application/json' \
+    -d '{"agent_id":"reporting","intent":"list orders","context":{}}'
+{"detail":"This credential is bound to agent_id='finance', so it cannot ask as 'reporting'"}
+```
+
+Second, that the proxy cannot be bypassed — the `V6.3.3` check above, which is
+the same check, because an attacker who can reach the port directly can assert
+any subject in the file regardless of how well it is namespaced.
+
+**What is still not covered:** a compromised or misconfigured proxy inside
+`trusted_proxies` can assert every identity in the config, and nothing in the
+audit trail records which proxy did. The `peer` field
+(`nautilus/transport/auth.py:147`) holds the socket address, so a forensic
+answer exists after the fact if your proxies have distinct addresses — but it is
+not an authorization input, and the exposure ledger keys on the subject, not on
+the pair.
+
+### V8.1.2 — documented rules for field-level access
+
+*The requirement:* authorization documentation must define read and write rules
+at field level, based on the consumer's permissions and the resource's
+attributes.
+
+**Not implemented, because there are no field-level rules to document.** The
+authorization model has four granularities and none of them is a field. This is
+the whole of it:
+
+| Granularity | Mechanism | Where |
+|---|---|---|
+| Route | `api.keys[].capabilities` — one of `query`, `audit_read`, `govern`, `keys` | [`api.keys[].capabilities`](#apikeyscapabilities) |
+| Identity | `api.keys[].agent_id` binds a credential to exactly one agent | [`api.keys[].agent_id`](#apikeysagent_id) |
+| Source | clearance vs `sources[].classification`, compartments, `allowed_purposes`, and any rule that emits a denial | [`agents`](#agents-who-the-credential-may-speak-for) |
+| Row | `ScopeConstraint` — `(source_id, field, operator, value)`, compiled into the adapter's `WHERE` clause (`nautilus/core/models.py:95-108`) | [`sources`](#sources-what-the-broker-holds-credentials-for) |
+
+Note the fourth row carefully, because it is the one that looks like a
+field-level control and is not. A scope constraint names a `field`, but it uses
+it to choose **which rows** come back, never which columns. Nothing anywhere in
+the model selects columns:
+
+```console
+$ grep -rniE 'allowed_fields|denied_fields|field_policy|projection|select_columns' nautilus/ | wc -l
+0
+```
+
+**Writes do not exist at all.** No adapter emits an `INSERT`, `UPDATE`, `DELETE`
+or `MERGE` — Nautilus reads from sources and never writes to them:
+
+```console
+$ grep -rniE '\b(INSERT INTO|UPDATE |DELETE FROM|MERGE INTO)\b' nautilus/adapters/ | wc -l
+0
+```
+
+So the write half of this requirement has no surface. The read half has one, and
+it is not restricted.
+
+**What compensates:** put the projection where the columns are, in the source,
+and let the source id be the unit of authorization Nautilus already understands.
+A view that exposes only the permitted columns becomes a separate source with
+its own `classification`, its own `data_types` and therefore its own routing and
+denial rules — see [the next section](#v823-enforcing-field-level-access) for
+the demonstration and the shape.
+
+**What is still not covered:** the mapping from a consumer to a permitted set of
+fields exists only as your discipline in maintaining one view per audience.
+Nautilus will not detect that two sources overlap, will not warn that a caller
+can reach both, and has nowhere to record the intent.
+
+### V8.2.3 — enforcing field-level access
+
+*The requirement:* field-level access must be restricted to consumers with
+explicit permission to specific fields, to mitigate broken object property level
+authorization (BOPLA).
+
+**Not implemented on the read path.** Every adapter returns the whole record.
+The query builders are three lines, and none of them projects:
+
+| Adapter | What it asks for | Where |
+|---|---|---|
+| `postgres`, `pgvector` | `SELECT * FROM <table> [WHERE ...] LIMIT $n` | `nautilus/adapters/postgres.py:168` |
+| `neo4j` | `MATCH (n:<label>) [WHERE ...] RETURN n LIMIT $L` | `nautilus/adapters/neo4j.py:303` |
+| `elasticsearch` | the hit's entire `_source` document | `nautilus/adapters/elasticsearch.py:427-432` |
+
+And the caller has no say either: `BrokerRequest` has four fields — `agent_id`,
+`intent`, `context` and `fact_set_hash` (`nautilus/core/models.py:52-61`). None
+of them is a field list.
+
+Point a source at a table with a column nobody should see, and the column comes
+back:
+
+```yaml
+sources:
+  - id: employees
+    type: postgres
+    classification: confidential
+    data_types: [hr]
+    connection: "${HR_DSN}"
+    table: employees
+agents:
+  agent-alpha:
+    id: agent-alpha
+    clearance: confidential
+```
+
+```console
+$ curl -s -X POST http://127.0.0.1:8000/v1/request -H "X-API-Key: $NAUTILUS_KEY_REPORTING" \
+    -H 'Content-Type: application/json' \
+    -d '{"agent_id":"agent-alpha","intent":"list hr employees","context":{}}' \
+  | python -c 'import json,sys; print(json.dumps(json.load(sys.stdin)["data"], indent=2))'
+{
+  "employees": [
+    {
+      "id": 1,
+      "name": "Ada Lovelace",
+      "department": "engineering",
+      "salary": "185000",
+      "ssn": "123-45-6789"
+    }
+  ]
+}
+```
+
+The request asked for employees. It received salaries and social security
+numbers, because `SELECT *` is the only query the adapter knows how to write.
+
+**What compensates:** a view. Do the projection in the database, where the
+column names actually live, and give the result its own source id — which is a
+unit Nautilus *does* authorize, with its own classification and its own routing:
+
+```sql
+CREATE VIEW employees_directory AS SELECT id, name, department FROM employees;
+
+-- The role the directory source dials. Grant it the view and nothing else, so
+-- the projection survives a mistake in the YAML.
+CREATE ROLE hr_directory LOGIN PASSWORD '<HR_DIRECTORY_PASSWORD>';
+GRANT CONNECT ON DATABASE lab TO hr_directory;
+GRANT USAGE ON SCHEMA public TO hr_directory;
+GRANT SELECT ON employees_directory TO hr_directory;
+```
+
+```console
+$ psql "$HR_DIRECTORY_DSN" -c 'SELECT * FROM employees;'
+ERROR:  permission denied for table employees
+```
+
+```yaml
+sources:
+  - id: employees
+    type: postgres
+    classification: confidential      # only cleared agents route here
+    data_types: [hr]
+    connection: "${HR_DSN}"
+    table: employees
+  - id: employees-directory
+    type: postgres
+    classification: cui               # the projection, at its own level
+    data_types: [directory]
+    connection: "${HR_DIRECTORY_DSN}" # a role with SELECT on the view only
+    table: employees_directory
+agents:
+  agent-alpha:
+    id: agent-alpha
+    clearance: confidential
+```
+
+```console
+$ curl -s -X POST http://127.0.0.1:8000/v1/request -H "X-API-Key: $NAUTILUS_KEY_REPORTING" \
+    -H 'Content-Type: application/json' \
+    -d '{"agent_id":"agent-alpha","intent":"list the employee directory","context":{}}' \
+  | python -c 'import json,sys; d=json.load(sys.stdin); print(json.dumps(d["data"], indent=2)); print(d["skip_records"])'
+{
+  "employees-directory": [
+    {
+      "id": 1,
+      "name": "Ada Lovelace",
+      "department": "engineering"
+    }
+  ]
+}
+[{'source_id': 'employees', 'reason': "no data type in common with the intent: source 'employees' offers ['hr'], the request needed ['directory']"}]
+```
+
+Two details make this a control rather than a rename. The `data_types` differ,
+so the router picks one source or the other from the intent and reports the
+other as skipped rather than silently including it. And `connection` names a
+database role with `SELECT` on the view and nothing else — without that, a
+`classification` in a YAML file is the only thing between the caller and the
+base table, and a rule change or a routing surprise is enough to lose it.
+
+**On the write path there is one field-level check, and it is hand-written.**
+The transcript below needs
+[`session_tokens.enabled: true`](#session_tokensenabled); on a default config
+the route answers `409 session tokens are disabled`.
+`POST /v1/sessions` takes an untyped body (`nautilus/transport/fastapi_app.py:895`),
+and `clearance` in that body would be an authorization assertion signed by
+Nautilus and verifiable by anyone against the public JWKS. It is not a parameter
+of `Broker.issue_session_token` at all (`nautilus/core/broker.py:1324-1330`) —
+the value comes from the agent registry, so the body cannot reach it:
+
+```console
+$ curl -s -X POST http://127.0.0.1:8000/v1/sessions -H "X-API-Key: $NAUTILUS_KEY_REPORTING" \
+    -H 'Content-Type: application/json' \
+    -d '{"session_id":"s1","agent_id":"agent-alpha","purpose":"support","clearance":"top-secret","is_admin":true}' \
+  | python -c 'import json,sys; d=json.load(sys.stdin); d.pop("token"); print(json.dumps(d, indent=2))'
+{
+  "session_id": "s1",
+  "agent_id": "agent-alpha",
+  "purpose": "support",
+  "clearance": "confidential",
+  "issued_at": 1788276186,
+  "expires_at": 1788279786,
+  "broker_instance_id": "eff3658d-5ae2-4991-b9d7-b074c49b5623",
+  "kid": "39a3b0f6-ca81-4ce0-90e4-e01e039a9b70"
+}
+```
+
+`top-secret` in, `confidential` out. That is the control working — for the one
+property somebody thought about. Note the other half of the same transcript:
+`is_admin` was accepted without complaint, because the body is a bare
+`dict[str, Any]` and unknown properties are dropped rather than refused. Only
+`/v1/request` and `/v1/query` are strict, and they are strict because
+`BrokerRequest` sets `extra="forbid"` (`nautilus/core/models.py:50`):
+
+```console
+$ curl -s -X POST http://127.0.0.1:8000/v1/request -H "X-API-Key: $NAUTILUS_KEY_REPORTING" \
+    -H 'Content-Type: application/json' \
+    -d '{"agent_id":"agent-alpha","intent":"list hr employees","context":{},"clearance":"top-secret"}'
+{"detail":[{"type":"extra_forbidden","loc":["body","clearance"],"msg":"Extra inputs are not permitted","input":"top-secret"}]}
+```
+
+**What is still not covered:** every other `POST` body on the surface is a bare
+`dict[str, Any]`, so the guarantee is "the handler reads the keys it names",
+which is an audit of handlers rather than a schema. There is no per-consumer
+field permission anywhere, and no rule engine reaches inside a returned row.
+
 ## What this does not give you
 
-Named so you do not assume otherwise:
+Named so you do not assume otherwise. The first four are the section above, in
+one line each:
 
+- **No multi-factor authentication, and no way to require one.** One bearer
+  secret, or one forwarded subject. See
+  [V6.3.3](#v633-multi-factor-authentication).
+- **No identity-provider awareness.** `X-Forwarded-User` is a string; nothing
+  records or restricts which proxy asserted it. See
+  [V6.8.1](#v681-restricting-which-identity-provider-may-assert-an-identity).
+- **No field-level authorization rules.** Source and row are the finest
+  granularities the model has. See
+  [V8.1.2](#v812-documented-rules-for-field-level-access).
+- **No field-level enforcement.** `SELECT *`; put the projection in a view. See
+  [V8.2.3](#v823-enforcing-field-level-access).
+- **No credential that is hidden from the account running the process.**
+  [`NAUTILUS_API_KEY`](#nautilus_api_key) keeps the key out of `argv`, where
+  every local account could read it, and puts it in `/proc/<pid>/environ`, where
+  the process's own user and root still can. There is no keyring integration, no
+  credential file format, and no short-lived credential for the CLI to exchange
+  for one — `api.keys` entries never expire.
 - **No TLS.** There is no `api.tls` key and `nautilus serve` passes no TLS
   options. Terminate it yourself.
 - **No rate limiting.** `api.max_concurrent_requests` bounds *concurrency*, not

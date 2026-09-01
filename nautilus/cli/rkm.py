@@ -24,7 +24,15 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from nautilus.cli._common import err, ok, open_audit_logger, require_reviewer, warn
+from nautilus.cli._common import (
+    API_KEY_HELP,
+    err,
+    ok,
+    open_audit_logger,
+    require_reviewer,
+    resolve_api_key,
+    warn,
+)
 
 if TYPE_CHECKING:
     import httpx
@@ -93,7 +101,7 @@ def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> N
             "approving promotes the rule into the engine that broker is serving with."
         ),
     )
-    p_approve.add_argument("--api-key", dest="api_key", help="X-API-Key for the broker.")
+    p_approve.add_argument("--api-key", dest="api_key", help=API_KEY_HELP)
     p_approve.add_argument(
         "--config",
         default=None,
@@ -348,7 +356,7 @@ def _cmd_queue_approve(args: argparse.Namespace) -> int:
 
     endpoint = f"{str(url).rstrip('/')}/v1/rkm/queue/{args.proposal_id}/approve"
     headers = {"X-Nautilus-Reviewer": reviewer}
-    api_key = getattr(args, "api_key", None)
+    api_key = resolve_api_key(args)
     if api_key:
         headers["X-API-Key"] = api_key
     body: dict[str, Any] = {}

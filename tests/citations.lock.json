@@ -633,6 +633,22 @@
    }
   },
   {
+   "citation": "nautilus/adapters/elasticsearch.py:427-432",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/adapters/elasticsearch.py",
+   "sha": "bfd32419af733518",
+   "lines": {
+    "427": "",
+    "428": "rows: list[dict[str, Any]] = []",
+    "429": "for hit in response:  # pyright: ignore[reportUnknownVariableType]",
+    "430": "# ``hit.to_dict()`` returns the ``_source`` document; this matches",
+    "431": "# the row shape returned by the postgres adapter (plain dict).",
+    "432": "rows.append(hit.to_dict())  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]"
+   }
+  },
+  {
    "citation": "nautilus/adapters/elasticsearch.py:74",
    "cited_in": [
     "docs/reference/errors/adapters.md"
@@ -700,6 +716,28 @@
    "sha": "5f94623b04c495e4",
    "lines": {
     "176": "raise AdapterError("
+   }
+  },
+  {
+   "citation": "nautilus/adapters/influxdb.py:224",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/adapters/influxdb.py",
+   "sha": "a57701e3d94a7019",
+   "lines": {
+    "224": "token = _auth_token(config) or os.environ.get(\"INFLUXDB_V2_TOKEN\")"
+   }
+  },
+  {
+   "citation": "nautilus/adapters/influxdb.py:225",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/adapters/influxdb.py",
+   "sha": "a41819d535d1acea",
+   "lines": {
+    "225": "org = os.environ.get(\"INFLUXDB_V2_ORG\")"
    }
   },
   {
@@ -835,6 +873,17 @@
    }
   },
   {
+   "citation": "nautilus/adapters/neo4j.py:303",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/adapters/neo4j.py",
+   "sha": "a613d965f8119baa",
+   "lines": {
+    "303": "cypher = f\"MATCH (n:{label_bt}){where_sql} RETURN n LIMIT $L\""
+   }
+  },
+  {
    "citation": "nautilus/adapters/neo4j.py:419",
    "cited_in": [
     "docs/reference/errors/adapters.md"
@@ -956,6 +1005,17 @@
    "sha": "999f64089f1b8c7d",
    "lines": {
     "162": "raise ScopeEnforcementError(f\"Operator '{op}' unhandled in _build_sql\")"
+   }
+  },
+  {
+   "citation": "nautilus/adapters/postgres.py:168",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/adapters/postgres.py",
+   "sha": "f34f473e4f392f7f",
+   "lines": {
+    "168": "sql = f\"SELECT * FROM {quoted_table}{where_sql} LIMIT ${pidx}\""
    }
   },
   {
@@ -1307,6 +1367,28 @@
    }
   },
   {
+   "citation": "nautilus/analysis/llm/anthropic_provider.py:115",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/analysis/llm/anthropic_provider.py",
+   "sha": "4a437af49e0c6283",
+   "lines": {
+    "115": "api_key=os.getenv(self.api_key_env),"
+   }
+  },
+  {
+   "citation": "nautilus/analysis/llm/anthropic_provider.py:93",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/analysis/llm/anthropic_provider.py",
+   "sha": "53ac3299a5c7f9cd",
+   "lines": {
+    "93": "key = os.getenv(self.api_key_env)"
+   }
+  },
+  {
    "citation": "nautilus/analysis/llm/base.py:23",
    "cited_in": [
     "docs/reference/errors/adapters.md"
@@ -1315,6 +1397,50 @@
    "sha": "a376cf5003606425",
    "lines": {
     "23": "class LLMProviderError(Exception):"
+   }
+  },
+  {
+   "citation": "nautilus/analysis/llm/local_provider.py:70",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/analysis/llm/local_provider.py",
+   "sha": "7ec9fa7ca33a667d",
+   "lines": {
+    "70": "if not os.getenv(self.api_key_env):"
+   }
+  },
+  {
+   "citation": "nautilus/analysis/llm/local_provider.py:81",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/analysis/llm/local_provider.py",
+   "sha": "588ec5eb5c61e03b",
+   "lines": {
+    "81": "api_key = os.getenv(self.api_key_env) or self._api_key_literal"
+   }
+  },
+  {
+   "citation": "nautilus/analysis/llm/openai_provider.py:107",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/analysis/llm/openai_provider.py",
+   "sha": "4a437af49e0c6283",
+   "lines": {
+    "107": "api_key=os.getenv(self.api_key_env),"
+   }
+  },
+  {
+   "citation": "nautilus/analysis/llm/openai_provider.py:92",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/analysis/llm/openai_provider.py",
+   "sha": "53ac3299a5c7f9cd",
+   "lines": {
+    "92": "key = os.getenv(self.api_key_env)"
    }
   },
   {
@@ -1676,6 +1802,39 @@
    }
   },
   {
+   "citation": "nautilus/cli/_common.py:11",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/cli/_common.py",
+   "sha": "34d2361e50d650fe",
+   "lines": {
+    "11": "exporting ``NO_COLOR`` and concluding the tool is broken."
+   }
+  },
+  {
+   "citation": "nautilus/cli/_common.py:197",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/cli/_common.py",
+   "sha": "d6e69ac6972eff2e",
+   "lines": {
+    "197": "API_KEY_ENV = \"NAUTILUS_API_KEY\""
+   }
+  },
+  {
+   "citation": "nautilus/cli/_common.py:247",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/cli/_common.py",
+   "sha": "33921cd4f0c14e2b",
+   "lines": {
+    "247": "return os.environ.get(API_KEY_ENV, \"\").strip() or None"
+   }
+  },
+  {
    "citation": "nautilus/cli/_common.py:28-35",
    "cited_in": [
     "docs/reference/errors/cli.md"
@@ -1691,6 +1850,17 @@
     "33": "\"\"\"",
     "34": "reviewer = os.environ.get(\"NAUTILUS_REVIEWER\", \"\").strip()",
     "35": "if not reviewer:"
+   }
+  },
+  {
+   "citation": "nautilus/cli/_common.py:34",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/cli/_common.py",
+   "sha": "808b5b92622417f6",
+   "lines": {
+    "34": "reviewer = os.environ.get(\"NAUTILUS_REVIEWER\", \"\").strip()"
    }
   },
   {
@@ -1743,6 +1913,30 @@
    }
   },
   {
+   "citation": "nautilus/cli/_common.py:9",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/cli/_common.py",
+   "sha": "b5d28dcadc92b76c",
+   "lines": {
+    "9": "The CLI emits no ANSI colour at all, so it needs no ``NO_COLOR`` handling. This"
+   }
+  },
+  {
+   "citation": "nautilus/cli/_common.py:9-11",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/cli/_common.py",
+   "sha": "034e652d52d7bee9",
+   "lines": {
+    "9": "The CLI emits no ANSI colour at all, so it needs no ``NO_COLOR`` handling. This",
+    "10": "docstring used to promise both, which is the sort of claim an operator checks by",
+    "11": "exporting ``NO_COLOR`` and concluding the tool is broken."
+   }
+  },
+  {
    "citation": "nautilus/cli/_common.py:91-101",
    "cited_in": [
     "docs/reference/errors/index.md"
@@ -1764,145 +1958,134 @@
    }
   },
   {
-   "citation": "nautilus/cli/adapters.py:121-124",
+   "citation": "nautilus/cli/adapters.py:129-132",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/adapters.py",
    "sha": "1b4bd49097a5f6ef",
    "lines": {
-    "121": "err(",
-    "122": "\"adapters: no subcommand given\"",
-    "123": "\" (try: new, list, schema, schema-fingerprint, schema-diff, schema-ack)\"",
-    "124": ")"
+    "129": "err(",
+    "130": "\"adapters: no subcommand given\"",
+    "131": "\" (try: new, list, schema, schema-fingerprint, schema-diff, schema-ack)\"",
+    "132": ")"
    }
   },
   {
-   "citation": "nautilus/cli/adapters.py:189",
+   "citation": "nautilus/cli/adapters.py:197",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/adapters.py",
    "sha": "3d6560df7bdbc96c",
    "lines": {
-    "189": "warn(f\"could not read schema for {name!r}: {exc}\")"
+    "197": "warn(f\"could not read schema for {name!r}: {exc}\")"
    }
   },
   {
-   "citation": "nautilus/cli/adapters.py:236",
+   "citation": "nautilus/cli/adapters.py:244",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/adapters.py",
    "sha": "d39b8236d6655d1f",
    "lines": {
-    "236": "err(f\"invalid adapter name {name!r} (expected lowercase-dashed, e.g. my-csv-adapter)\")"
+    "244": "err(f\"invalid adapter name {name!r} (expected lowercase-dashed, e.g. my-csv-adapter)\")"
    }
   },
   {
-   "citation": "nautilus/cli/adapters.py:241",
+   "citation": "nautilus/cli/adapters.py:249",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/adapters.py",
    "sha": "e402ae205451bb9f",
    "lines": {
-    "241": "err(f\"destination already exists and is not empty: {dest}\")"
+    "249": "err(f\"destination already exists and is not empty: {dest}\")"
    }
   },
   {
-   "citation": "nautilus/cli/adapters.py:247",
+   "citation": "nautilus/cli/adapters.py:255",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/adapters.py",
    "sha": "e0d198eae3aa0c01",
    "lines": {
-    "247": "err(\"copier is required for 'adapters new' — install it with: pip install copier\")"
+    "255": "err(\"copier is required for 'adapters new' — install it with: pip install copier\")"
    }
   },
   {
-   "citation": "nautilus/cli/adapters.py:280-284",
+   "citation": "nautilus/cli/adapters.py:288-292",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/adapters.py",
    "sha": "2a5f037dc6c29da6",
    "lines": {
-    "280": "err(",
-    "281": "f\"--status {status_filter!r} needs --url: quarantine state lives in \"",
-    "282": "\"the serving process, so a config file cannot answer it. Reporting \"",
-    "283": "\"an empty list here would look like 'nothing is quarantined'.\"",
-    "284": ")"
+    "288": "err(",
+    "289": "f\"--status {status_filter!r} needs --url: quarantine state lives in \"",
+    "290": "\"the serving process, so a config file cannot answer it. Reporting \"",
+    "291": "\"an empty list here would look like 'nothing is quarantined'.\"",
+    "292": ")"
    }
   },
   {
-   "citation": "nautilus/cli/adapters.py:288-291",
+   "citation": "nautilus/cli/adapters.py:296-299",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/adapters.py",
    "sha": "680256444c83312a",
    "lines": {
-    "288": "err(",
-    "289": "\"no config found: pass --config PATH, or run from a directory \"",
-    "290": "\"containing nautilus.yaml\"",
-    "291": ")"
+    "296": "err(",
+    "297": "\"no config found: pass --config PATH, or run from a directory \"",
+    "298": "\"containing nautilus.yaml\"",
+    "299": ")"
    }
   },
   {
-   "citation": "nautilus/cli/adapters.py:327",
+   "citation": "nautilus/cli/adapters.py:335",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/adapters.py",
    "sha": "ff8004b2a5b0d85f",
    "lines": {
-    "327": "err(f\"could not load {config_path}: {exc}\")"
+    "335": "err(f\"could not load {config_path}: {exc}\")"
    }
   },
   {
-   "citation": "nautilus/cli/adapters.py:346",
+   "citation": "nautilus/cli/adapters.py:354",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/adapters.py",
    "sha": "85873d73e184e932",
    "lines": {
-    "346": "err(f\"could not reach {url}: {exc}\")"
+    "354": "err(f\"could not reach {url}: {exc}\")"
    }
   },
   {
-   "citation": "nautilus/cli/adapters.py:368",
+   "citation": "nautilus/cli/adapters.py:376",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/adapters.py",
    "sha": "d0d3c1b00167fe2a",
    "lines": {
-    "368": "err(f\"no schema available for adapter {args.name!r}\")"
+    "376": "err(f\"no schema available for adapter {args.name!r}\")"
    }
   },
   {
-   "citation": "nautilus/cli/adapters.py:405",
+   "citation": "nautilus/cli/adapters.py:413",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/adapters.py",
    "sha": "1a9a612e9fab63d1",
    "lines": {
-    "405": "warn(f\"no stored fingerprint for {args.name!r}; treating as new\")"
-   }
-  },
-  {
-   "citation": "nautilus/cli/adapters.py:442",
-   "cited_in": [
-    "docs/reference/errors/cli.md"
-   ],
-   "file": "nautilus/cli/adapters.py",
-   "sha": "b7cb0ed6f6b2a9e8",
-   "lines": {
-    "442": "err(\"schema-ack requires --yes to confirm\")"
+    "413": "warn(f\"no stored fingerprint for {args.name!r}; treating as new\")"
    }
   },
   {
@@ -1911,9 +2094,20 @@
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/adapters.py",
+   "sha": "b7cb0ed6f6b2a9e8",
+   "lines": {
+    "450": "err(\"schema-ack requires --yes to confirm\")"
+   }
+  },
+  {
+   "citation": "nautilus/cli/adapters.py:458",
+   "cited_in": [
+    "docs/reference/errors/cli.md"
+   ],
+   "file": "nautilus/cli/adapters.py",
    "sha": "94fb569897135444",
    "lines": {
-    "450": "err(f\"no schema available for adapter {args.name!r}; cannot ack\")"
+    "458": "err(f\"no schema available for adapter {args.name!r}; cannot ack\")"
    }
   },
   {
@@ -2033,47 +2227,47 @@
    }
   },
   {
-   "citation": "nautilus/cli/key.py:127",
+   "citation": "nautilus/cli/key.py:125",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/key.py",
    "sha": "faecb299e284fc95",
    "lines": {
-    "127": "fail(f\"key {command}: cannot reach {endpoint}: {exc}\")"
+    "125": "fail(f\"key {command}: cannot reach {endpoint}: {exc}\")"
    }
   },
   {
-   "citation": "nautilus/cli/key.py:130",
+   "citation": "nautilus/cli/key.py:128",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/key.py",
    "sha": "a435e95bab507ddb",
    "lines": {
-    "130": "err(f\"key {command}: server returned {response.status_code}: {response.text}\")"
+    "128": "err(f\"key {command}: server returned {response.status_code}: {response.text}\")"
    }
   },
   {
-   "citation": "nautilus/cli/key.py:154",
+   "citation": "nautilus/cli/key.py:152",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/key.py",
    "sha": "4b6f5e5d164ffa60",
    "lines": {
-    "154": "err(\"rotate requires --yes to confirm.\")"
+    "152": "err(\"rotate requires --yes to confirm.\")"
    }
   },
   {
-   "citation": "nautilus/cli/key.py:179",
+   "citation": "nautilus/cli/key.py:177",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/key.py",
    "sha": "70f1608845d4e8c8",
    "lines": {
-    "179": "err(\"revoke requires --yes to confirm.\")"
+    "177": "err(\"revoke requires --yes to confirm.\")"
    }
   },
   {
@@ -2104,106 +2298,106 @@
    }
   },
   {
-   "citation": "nautilus/cli/rkm.py:151",
+   "citation": "nautilus/cli/rkm.py:159",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/rkm.py",
    "sha": "20e1d736d5006a8b",
    "lines": {
-    "151": "if subcommand == \"lineage\":"
+    "159": "if subcommand == \"lineage\":"
    }
   },
   {
-   "citation": "nautilus/cli/rkm.py:177",
+   "citation": "nautilus/cli/rkm.py:185",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/rkm.py",
    "sha": "dec294e03773ecce",
    "lines": {
-    "177": "if op == \"diff\":"
+    "185": "if op == \"diff\":"
    }
   },
   {
-   "citation": "nautilus/cli/rkm.py:194",
+   "citation": "nautilus/cli/rkm.py:202",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/rkm.py",
    "sha": "dab70331f7ae53b0",
    "lines": {
-    "194": "rule_path = Path(args.file)"
+    "202": "rule_path = Path(args.file)"
    }
   },
   {
-   "citation": "nautilus/cli/rkm.py:242",
+   "citation": "nautilus/cli/rkm.py:250",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/rkm.py",
    "sha": "5891e966aec1bcc7",
    "lines": {
-    "242": "\"\"\"``rkm.sandbox`` and ``rules`` settings the sandbox stage needs."
+    "250": "\"\"\"``rkm.sandbox`` and ``rules`` settings the sandbox stage needs."
    }
   },
   {
-   "citation": "nautilus/cli/rkm.py:289",
+   "citation": "nautilus/cli/rkm.py:297",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/rkm.py",
    "sha": "450db6bc742be81e",
    "lines": {
-    "289": "ok(\"no proposals\")"
+    "297": "ok(\"no proposals\")"
    }
   },
   {
-   "citation": "nautilus/cli/rkm.py:316-320",
+   "citation": "nautilus/cli/rkm.py:324-328",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/rkm.py",
    "sha": "ac014096e4e5eb5b",
    "lines": {
-    "316": "except ValueError:",
-    "317": "return \"unknown\"",
-    "318": "if not isinstance(body, dict):",
-    "319": "return \"unknown\"",
-    "320": "detail: object = cast(\"dict[str, object]\", body).get(\"detail\")"
+    "324": "except ValueError:",
+    "325": "return \"unknown\"",
+    "326": "if not isinstance(body, dict):",
+    "327": "return \"unknown\"",
+    "328": "detail: object = cast(\"dict[str, object]\", body).get(\"detail\")"
    }
   },
   {
-   "citation": "nautilus/cli/rkm.py:336",
+   "citation": "nautilus/cli/rkm.py:344",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/rkm.py",
    "sha": "b6d267efe80a3dbc",
    "lines": {
-    "336": "\"\"\""
+    "344": "\"\"\""
    }
   },
   {
-   "citation": "nautilus/cli/rkm.py:350",
+   "citation": "nautilus/cli/rkm.py:358",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/rkm.py",
    "sha": "c4710e5f98ab1f08",
    "lines": {
-    "350": "headers = {\"X-Nautilus-Reviewer\": reviewer}"
+    "358": "headers = {\"X-Nautilus-Reviewer\": reviewer}"
    }
   },
   {
-   "citation": "nautilus/cli/rkm.py:470",
+   "citation": "nautilus/cli/rkm.py:478",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/rkm.py",
    "sha": "e0017fb5ef843b44",
    "lines": {
-    "470": "print(f\"  proposal : {args.proposal_id}\")"
+    "478": "print(f\"  proposal : {args.proposal_id}\")"
    }
   },
   {
@@ -2792,6 +2986,17 @@
    }
   },
   {
+   "citation": "nautilus/config/loader.py:68",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/config/loader.py",
+   "sha": "855a0944ba081bc8",
+   "lines": {
+    "68": "self._env = env if env is not None else dict(os.environ)"
+   }
+  },
+  {
    "citation": "nautilus/config/models.py:146",
    "cited_in": [
     "docs/reference/errors/config.md"
@@ -2848,6 +3053,17 @@
     "220": "raise ValueError(",
     "221": "f\"source '{self.id}' has type '{self.type}' but no 'connection'. \"",
     "222": "f\"The {self.type} adapter has nothing to dial, so every request \""
+   }
+  },
+  {
+   "citation": "nautilus/config/models.py:241",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/config/models.py",
+   "sha": "2c1f90888324ac5e",
+   "lines": {
+    "241": "# id, an OIDC subject, a certificate CN. Matched against ``X-Forwarded-User``"
    }
   },
   {
@@ -3029,6 +3245,17 @@
    }
   },
   {
+   "citation": "nautilus/core/broker.py:1022",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/core/broker.py",
+   "sha": "5c0fa3606b254ef7",
+   "lines": {
+    "1022": "dsn = os.environ.get(\"TEST_PG_DSN\")"
+   }
+  },
+  {
    "citation": "nautilus/core/broker.py:1074-1077",
    "cited_in": [
     "docs/reference/errors/attestation.md"
@@ -3070,6 +3297,23 @@
     "1192": "\"any agent_id, every capability\" and has no clearance to filter",
     "1193": "against — or a deployment with no ``classification`` hierarchy",
     "1194": "registered, which has no ladder at all. Both see the whole catalogue."
+   }
+  },
+  {
+   "citation": "nautilus/core/broker.py:1324-1330",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/core/broker.py",
+   "sha": "905b2a59d9cdb539",
+   "lines": {
+    "1324": "def issue_session_token(",
+    "1325": "self,",
+    "1326": "*,",
+    "1327": "session_id: str,",
+    "1328": "agent_id: str,",
+    "1329": "purpose: str,",
+    "1330": ") -> str:"
    }
   },
   {
@@ -3652,6 +3896,61 @@
    }
   },
   {
+   "citation": "nautilus/core/models.py:50",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/core/models.py",
+   "sha": "93d466167f51f820",
+   "lines": {
+    "50": "model_config = ConfigDict(extra=\"forbid\")"
+   }
+  },
+  {
+   "citation": "nautilus/core/models.py:52-61",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/core/models.py",
+   "sha": "72f9372c65736647",
+   "lines": {
+    "52": "agent_id: str",
+    "53": "# The audit entry stores the raw intent three times (``raw_intent``, the",
+    "54": "# intent analysis's copy, and the input fact's ``raw`` slot), so an",
+    "55": "# unbounded intent is a 3x write amplifier onto the fail-closed audit",
+    "56": "# sink: a 4 MB intent wrote 12.6 MB of JSONL in 0.22 s from the",
+    "57": "# lowest-privilege credential in the config. 8 KiB is far more natural",
+    "58": "# language than any caller sends and far less than that costs.",
+    "59": "intent: str = Field(max_length=MAX_INTENT_LENGTH)",
+    "60": "context: dict[str, Any] = Field(default_factory=dict)",
+    "61": "fact_set_hash: str | None = None"
+   }
+  },
+  {
+   "citation": "nautilus/core/models.py:95-108",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/core/models.py",
+   "sha": "a5c87a0bbcedba8d",
+   "lines": {
+    "95": "class ScopeConstraint(BaseModel):",
+    "96": "\"\"\"Per-source WHERE-clause fragment produced by the router (design §4.4).",
+    "97": "",
+    "98": "The ``operator`` allowlist is pinned via ``typing.Literal`` so pyright",
+    "99": "catches drift between the Pydantic model and the adapter-runtime",
+    "100": "validator in :mod:`nautilus.adapters.base` (design §6.1, UQ-6).",
+    "101": "\"\"\"",
+    "102": "",
+    "103": "source_id: str",
+    "104": "field: str",
+    "105": "operator: ScopeOperator",
+    "106": "value: Any  # validated by operator-specific rules",
+    "107": "expires_at: str | None = None",
+    "108": "valid_from: str | None = None"
+   }
+  },
+  {
    "citation": "nautilus/core/session_pg.py:234-238",
    "cited_in": [
     "docs/reference/errors/sessions.md"
@@ -3911,6 +4210,39 @@
    }
   },
   {
+   "citation": "nautilus/observability/__init__.py:16",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/observability/__init__.py",
+   "sha": "a0fac8d1229868df",
+   "lines": {
+    "16": "if os.environ.get(\"OTEL_SDK_DISABLED\", \"\").lower() == \"true\":"
+   }
+  },
+  {
+   "citation": "nautilus/observability/instrumentation.py:32",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/observability/instrumentation.py",
+   "sha": "ff38f0ed37eeaa37",
+   "lines": {
+    "32": "os.environ.setdefault("
+   }
+  },
+  {
+   "citation": "nautilus/observability/instrumentation.py:50",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/observability/instrumentation.py",
+   "sha": "8b3dbc9d8d15f592",
+   "lines": {
+    "50": "if os.environ.get(\"OTEL_EXPORTER_OTLP_ENDPOINT\") or os.environ.get("
+   }
+  },
+  {
    "citation": "nautilus/rkm/curator/isolation.py:32",
    "cited_in": [
     "docs/reference/errors/rules.md"
@@ -4075,6 +4407,17 @@
    }
   },
   {
+   "citation": "nautilus/transport/auth.py:147",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/transport/auth.py",
+   "sha": "17d14279573ebe96",
+   "lines": {
+    "147": "peer = request.client.host if request.client else \"\""
+   }
+  },
+  {
    "citation": "nautilus/transport/auth.py:166",
    "cited_in": [
     "docs/reference/errors/auth.md"
@@ -4111,6 +4454,39 @@
     "196": ")",
     "197": "if _match_key(header_value, list(keys)) is not None:",
     "198": "return"
+   }
+  },
+  {
+   "citation": "nautilus/transport/auth.py:226",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/transport/auth.py",
+   "sha": "5ecd06cd7ef5b7d6",
+   "lines": {
+    "226": "def _peer_is_trusted(peer: str, trusted: list[str]) -> bool:"
+   }
+  },
+  {
+   "citation": "nautilus/transport/auth.py:243",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/transport/auth.py",
+   "sha": "4f4ff001ec9be017",
+   "lines": {
+    "243": "async def proxy_trust_dependency(request: Request) -> str:"
+   }
+  },
+  {
+   "citation": "nautilus/transport/auth.py:247",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/transport/auth.py",
+   "sha": "8216e2485293ac38",
+   "lines": {
+    "247": "mesh/ingress has already authenticated the caller (mTLS, SPIFFE, OIDC) and"
    }
   },
   {
@@ -4166,6 +4542,28 @@
     "303": ") -> SessionTokenClaims | None:",
     "304": "\"\"\"Optional FastAPI dependency — validate ``X-Nautilus-Session-Token`` if present.",
     "305": ""
+   }
+  },
+  {
+   "citation": "nautilus/transport/auth.py:73",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/transport/auth.py",
+   "sha": "6152ff4d2bcd7a73",
+   "lines": {
+    "73": "def _match_key(header_value: str, keys: list[Any]) -> Any | None:"
+   }
+  },
+  {
+   "citation": "nautilus/transport/auth.py:9",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/transport/auth.py",
+   "sha": "948b4b1da0eeb100",
+   "lines": {
+    "9": "(mTLS, SPIFFE, OIDC) and forwards its identity in ``X-Forwarded-User``."
    }
   },
   {
@@ -4246,6 +4644,22 @@
     "1431": "status_code=status.HTTP_409_CONFLICT,",
     "1432": "detail={\"error\": \"already_decided\", \"current_status\": exc.current_status},",
     "1433": ") from exc"
+   }
+  },
+  {
+   "citation": "nautilus/transport/fastapi_app.py:165-170",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/transport/fastapi_app.py",
+   "sha": "f983f81ddbbd212b",
+   "lines": {
+    "165": "subjects: dict[str, str] = {}",
+    "166": "for agent_id, record in cast(\"dict[str, object]\", agents).items():",
+    "167": "subject = getattr(record, \"subject\", None)",
+    "168": "if isinstance(subject, str) and subject:",
+    "169": "subjects[subject] = str(agent_id)",
+    "170": "return subjects"
    }
   },
   {
@@ -4629,6 +5043,17 @@
    }
   },
   {
+   "citation": "nautilus/transport/fastapi_app.py:895",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/transport/fastapi_app.py",
+   "sha": "77e419c46ccc8ab6",
+   "lines": {
+    "895": "body: dict[str, Any],"
+   }
+  },
+  {
    "citation": "nautilus/transport/fastapi_app.py:925-932",
    "cited_in": [
     "docs/reference/errors/auth.md"
@@ -4787,6 +5212,17 @@
    "sha": "a4306586fb9d88e3",
    "lines": {
     "62": "raise HTTPException("
+   }
+  },
+  {
+   "citation": "nautilus/ui/router.py:194",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/ui/router.py",
+   "sha": "4721c9036772aba0",
+   "lines": {
+    "194": "verify_api_key(api_key, keys)"
    }
   },
   {

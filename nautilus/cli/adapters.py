@@ -17,7 +17,15 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from nautilus.cli._common import err, ok, refuse_unless_writable, require_reviewer, warn
+from nautilus.cli._common import (
+    API_KEY_HELP,
+    err,
+    ok,
+    refuse_unless_writable,
+    require_reviewer,
+    resolve_api_key,
+    warn,
+)
 
 if TYPE_CHECKING:
     from nautilus.adapters.schema import AdapterSchema
@@ -58,7 +66,7 @@ def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> N
         help="Path to nautilus.yaml (default: ./nautilus.yaml when present).",
     )
     p_list.add_argument("--url", default=None, help="Base URL of a running server.")
-    p_list.add_argument("--api-key", dest="api_key", help="X-API-Key for --url mode.")
+    p_list.add_argument("--api-key", dest="api_key", help=API_KEY_HELP)
     p_list.add_argument("--json", action="store_true", help="Emit JSON to stdout.")
 
     # schema
@@ -272,7 +280,7 @@ def _cmd_list(args: argparse.Namespace) -> int:
     status_filter: str | None = getattr(args, "status", None)
 
     if url:
-        rows = _remote_adapters(url, getattr(args, "api_key", None))
+        rows = _remote_adapters(url, resolve_api_key(args))
         if rows is None:
             return 1
     else:

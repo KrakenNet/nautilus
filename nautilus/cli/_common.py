@@ -1,4 +1,4 @@
-"""Shared CLI helpers — ``--json`` / ``--yes`` / ``NAUTILUS_REVIEWER`` / prefixes.
+"""Shared CLI helpers — ``--json`` / ``--yes`` / ``NAUTILUS_*`` env / prefixes.
 
 Per ``.forge/shared.md`` CLI contract:
 - Exit codes: 0 success, 1 user error, 2 validation/policy failure.
@@ -194,7 +194,62 @@ def fail(message: str) -> None:
     print(f"FAIL: {message}", file=sys.stderr)
 
 
+API_KEY_ENV = "NAUTILUS_API_KEY"
+"""Environment variable every broker-facing subcommand reads its credential from.
+
+Named to match ``NAUTILUS_REVIEWER`` — the CLI's other identity variable — and
+to match the name the deployment manifests, the operator guide and the CLI
+reference already use for this exact value (``deploy/secret.yaml``,
+``deploy/configmap.yaml``, which interpolate it into ``api.keys``). Reusing it
+means the broker host that already exports the key for the server exports it for
+the operator shell too.
+"""
+
+API_KEY_HELP = (
+    "X-API-Key for the broker. Omitted, the NAUTILUS_API_KEY environment "
+    "variable is used instead — prefer that, because a credential passed here is "
+    "readable by every local user in `ps` and is written to shell history."
+)
+"""``--api-key`` help text, written once so all three parsers say the same thing."""
+
+
+def resolve_api_key(args: Any) -> str | None:
+    """The broker credential for this invocation: ``--api-key``, then the env.
+
+    A credential passed as a command-line argument sits in
+    ``/proc/<pid>/cmdline`` for the life of the process, world-readable, so any
+    local user reads it out of ``ps``; an interactive shell also writes it to
+    history. ``--api-key`` stays, because every existing script passes it and it
+    is a reasonable thing to do on a host nobody else logs into — but it is no
+    longer the only way in.
+
+    Resolved here, not in each parser, so the precedence is decided once for
+    every subcommand that reaches a running broker, present and future:
+
+    - an explicitly passed ``--api-key`` always wins, *including* an empty one,
+      which means "send no credential" rather than "fall back to the
+      environment" — a flag the operator typed is never silently overridden;
+    - otherwise :data:`API_KEY_ENV`, stripped and treated as unset when blank.
+
+    The environment value is stripped for the same reason
+    :func:`require_reviewer` strips its own: a value produced by ``$(...)`` or
+    read out of a file arrives with a trailing newline, and an ``X-API-Key``
+    header with one on the end matches no configured key.
+
+    There is deliberately no third path. Reading the key from stdin would close
+    nothing the environment does not already close — the hazard is ``argv``, and
+    ``argv`` is what this removes — while adding a mode in which the CLI blocks
+    on a terminal that CI does not have.
+    """
+    flag: str | None = getattr(args, "api_key", None)
+    if flag is not None:
+        return flag
+    return os.environ.get(API_KEY_ENV, "").strip() or None
+
+
 __all__ = [
+    "API_KEY_ENV",
+    "API_KEY_HELP",
     "audit_path_for",
     "err",
     "fail",
@@ -202,5 +257,6 @@ __all__ = [
     "open_audit_logger",
     "refuse_unless_writable",
     "require_reviewer",
+    "resolve_api_key",
     "warn",
 ]
