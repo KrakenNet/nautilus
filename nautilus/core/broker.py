@@ -134,6 +134,16 @@ from nautilus.synthesis.basic import BasicSynthesizer
 
 _metrics = NautilusMetrics()
 
+
+def prime_metrics() -> None:
+    """Publish every counter at zero. Called once the meter provider exists.
+
+    See :meth:`NautilusMetrics.prime` for why: a counter is not exported until
+    its first ``add``, and an alert written against a series that does not
+    exist reads as healthy.
+    """
+    _metrics.prime()
+
 _T = TypeVar("_T")
 
 log = logging.getLogger(__name__)
@@ -692,6 +702,9 @@ class Broker:
         # ``arequest`` can lazy-connect on first use and skip on subsequent
         # calls (design §3.5 — adapter lifecycle is owned by the broker).
         self._connected_adapters: set[str] = set()
+        # Whether ``setup()`` has run. First use calls it if the caller did not;
+        # see ``_ensure_setup``.
+        self._setup_done: bool = False
         # When each source's last connect attempt failed, so a source that has
         # gone away is not re-dialled on every request. Without it one dead
         # source charged its whole ``timeout_s`` — 15 s by default — to every
@@ -1200,6 +1213,41 @@ class Broker:
         """Registered source configs (identifier + metadata) — design §3.1."""
         return self._registry.sources
 
+    def sources_visible_to(self, agent_id: str | None) -> list[SourceConfig]:
+        """The catalogue as ``agent_id`` is allowed to know it.
+
+        A source's name, prose description and data types are what a caller
+        needs in order to ask for it — which is the reconnaissance step the
+        classification rules refuse. Listing every source to every caller told
+        an unclassified key exactly what it was being kept from, so the
+        catalogue is filtered by the same clearance ladder the router routes
+        by.
+
+        ``None`` means no bound agent — a bare key, which is documented as
+        "any agent_id, every capability" and has no clearance to filter
+        against — or a deployment with no ``classification`` hierarchy
+        registered, which has no ladder at all. Both see the whole catalogue.
+        """
+        if agent_id is None:
+            return self.sources
+        levels = self._router.hierarchy_levels()
+        if not levels:
+            return self.sources
+        try:
+            clearance = self._agent_registry.get(agent_id).clearance
+        except UnknownAgentError:
+            return self.sources
+        if clearance not in levels:
+            return self.sources
+        rank = levels.index(clearance)
+        # An unrecognised source label ranks below everything for fathom, so it
+        # is visible on the same terms the router routes it on.
+        return [
+            s
+            for s in self.sources
+            if s.classification not in levels or levels.index(s.classification) <= rank
+        ]
+
     @property
     def config(self) -> NautilusConfig:
         """The validated config this broker was built from.
@@ -1543,6 +1591,7 @@ class Broker:
         failure, a single audit entry is still emitted before re-raising.
         """
         self._refuse_if_closed("arequest")
+        await self._ensure_setup()
         context = dict(context) if context else {}
         state = _new_request_state(context, intent)
         state.fact_set_hash = fact_set_hash
@@ -1637,6 +1686,7 @@ class Broker:
         compartments in the ``fathom-dominates`` calls).
         """
         self._refuse_if_closed("declare_handoff")
+        await self._ensure_setup()
         del rule_trace_refs, data_compartments  # Phase-3 / forensic forward-compat.
         started = time.perf_counter()
         handoff_id = str(uuid.uuid4())
@@ -3170,6 +3220,22 @@ class Broker:
         if isinstance(self._session_store, (PostgresSessionStore, SqliteSessionStore)):
             await self._session_store.setup()
         await self._check_schema_fingerprints()
+        self._setup_done = True
+
+    async def _ensure_setup(self) -> None:
+        """Stand the broker up on first use if the caller never did it.
+
+        ``from_config``/``afrom_config`` connect adapters lazily and say so, so
+        a durable session store that refused until an explicit ``setup()`` was
+        the one piece that did not follow the documented shape — and it refused
+        with ``SessionStoreUnavailableError``, which is exactly the class
+        ``session_store.on_failure: fallback_memory`` exists to degrade past.
+        One forgotten call therefore dropped a durable ledger to memory in one
+        config and failed loudly in another.
+        """
+        if self._setup_done:
+            return
+        await self.setup()
 
     async def _check_schema_fingerprints(self) -> None:
         """Check schema drift for every connected adapter; quarantine on major drift.

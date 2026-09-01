@@ -15,9 +15,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
@@ -88,10 +89,32 @@ def _run(workdir: Path) -> int:
 
     audit_lines = (workdir / "audit.jsonl").read_text(encoding="utf-8").splitlines()
     print(f"Both decisions were signed and appended to an audit log ({len(audit_lines)} entries).")
-    print("Every request the broker answers is recorded the same way.\n")
+    # The log lives in a temp directory this function deletes on the way out,
+    # so a line that only counts the entries points at a file the reader can
+    # never open. Print one. "Every decision is recorded" is a claim worth
+    # showing rather than asserting.
+    print("Here is the first one:\n")
+    print(_nautilus_entry(audit_lines[0]))
+    print("\nEvery request the broker answers is recorded the same way.\n")
     print("Next: 'nautilus init' writes a nautilus.yaml you can serve, and")
     print("      'nautilus serve' runs it as a REST or MCP endpoint.")
     return 0
+
+
+def _nautilus_entry(line: str) -> str:
+    """Pull the Nautilus audit entry out of the line fathom wrote.
+
+    The sink writes a fathom decision record and carries the Nautilus entry --
+    the one every doc describes, with ``event_type``, ``request_id`` and the
+    handoff decision -- as JSON under ``metadata.nautilus_audit_entry``.
+    Printing the outer record showed the reader a wrapper and called it the
+    audit trail.
+    """
+    outer: dict[str, Any] = json.loads(line)
+    metadata: dict[str, Any] = outer.get("metadata") or {}
+    inner: Any = metadata.get("nautilus_audit_entry")
+    entry: dict[str, Any] = json.loads(inner) if isinstance(inner, str) else outer
+    return json.dumps(entry, indent=2)
 
 
 def _print_decision(source: str, receiver: str, label: str, decision: HandoffDecision) -> None:

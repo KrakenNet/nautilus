@@ -63,6 +63,11 @@ def setup(app: Any, service_name: str = "nautilus") -> None:
     # against.
     meter_provider = MeterProvider(resource=resource, metric_readers=[PrometheusMetricReader()])
     metrics.set_meter_provider(meter_provider)
+    # Publish every counter at zero now that there is a reader to export them.
+    # See NautilusMetrics.prime.
+    from nautilus.core.broker import prime_metrics
+
+    prime_metrics()
 
     # --- FastAPI auto-instrumentation ---
     FastAPIInstrumentor.instrument_app(app)

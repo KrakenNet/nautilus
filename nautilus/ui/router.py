@@ -333,7 +333,9 @@ async def source_status(
     if broker is None:
         return _broker_not_ready()
 
-    sources = broker.sources
+    # Same clearance filter /v1/sources applies: the console reaches the same
+    # broker, so it must not publish a catalogue the API refuses to.
+    sources = broker.sources_visible_to(caller_identity(request)["agent_id"])
     source_rows = [
         {
             "id": s.id,

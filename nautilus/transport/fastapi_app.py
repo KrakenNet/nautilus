@@ -722,7 +722,13 @@ def create_app(
     async def get_sources(  # pyright: ignore[reportUnusedFunction]
         request: Request,
     ) -> dict[str, list[dict[str, Any]]]:
-        """Metadata-only source listing (AC-12.3 — no DSN / credentials)."""
+        """Metadata-only source listing (AC-12.3 — no DSN / credentials).
+
+        Filtered by the caller's clearance: a source's description and data
+        types are what you need to ask for it, so listing one an agent can
+        never reach hands it the map. A bare key has no bound agent and sees
+        everything, as it does everywhere else.
+        """
         broker: Broker | None = getattr(request.app.state, "broker", None)
         if broker is None:
             return {"sources": []}
@@ -741,7 +747,7 @@ def create_app(
                     # and a retry.
                     "allowed_purposes": list(s.allowed_purposes or []),
                 }
-                for s in broker.sources
+                for s in broker.sources_visible_to(_caller_identity(request)["agent_id"])
             ],
         }
 

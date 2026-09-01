@@ -286,6 +286,33 @@ source when the request falls outside it — so the broker mints no token, and
 `POST /v1/sessions` answers `403`, rather than signing an assertion the policy
 refuses to act on.
 
+### Memory under sustained load
+
+RSS climbs for the first several minutes of traffic and then stops. Measured
+over a 10-minute soak at 16 concurrent clients against a two-source broker:
+
+| elapsed | RSS | growth in the last 30s | Python objects |
+| --- | --- | --- | --- |
+| 0s | 165 MB | — | 158,868 |
+| 2m | 200 MB | 6.0 MB | 158,816 |
+| 5m | 224 MB | 3.1 MB | 158,817 |
+| 8m | 235 MB | 2.5 MB | 158,803 |
+| 9m | 243 MB | 1.7 MB | 158,831 |
+| load stops | 243 MB | 0.2 MB | 155,588 |
+
+The Python object count is flat the whole way and falls when the load stops, so
+nothing is being retained at the Python level. What grows is the CLIPS engine's
+own arena and the allocator's, sized to the working set of requests in flight
+and never returned to the OS. The per-30s growth decays geometrically and the
+curve goes flat the moment traffic does; extrapolating the last few samples
+puts the ceiling near 260 MB for that shape of config.
+
+Size the pod from the plateau, not the starting RSS: `deploy/deployment.yaml`
+requests 512Mi and limits 1Gi, which leaves room for a larger rule tree and
+more sources. A broker whose RSS is still climbing after 15 minutes of steady
+traffic, or that keeps climbing after the traffic stops, is not this — capture
+`gc` object counts before filing it.
+
 ### Session store schema versions
 
 The store carries a schema version — `PRAGMA user_version` for sqlite, the
@@ -294,7 +321,12 @@ does not understand refuses to start, and `/readyz` re-reads it on every probe,
 so a replica that is already serving when a rolling upgrade migrates the shared
 store drains instead of read-modify-writing rows under a schema it cannot read.
 `session_store.on_failure` does not cover this: a version mismatch is a
-deliberate refusal, not the store being unavailable. An agent that declares no `allowed_purposes` is
+deliberate refusal, not the store being unavailable.
+
+`nautilus session version --sqlite-path PATH` (or `--dsn DSN`) prints what a
+store carries and what the running build understands. Version 1 is the only
+version there has been, so a mismatch means the store was written by a build
+that is not this one: run that build, or point the config at a fresh store. An agent that declares no `allowed_purposes` is
 unrestricted, which is the shape every config written before the field existed
 has.
 

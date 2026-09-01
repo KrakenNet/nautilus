@@ -70,6 +70,11 @@ def _build_parser() -> argparse.ArgumentParser:
     # version ---------------------------------------------------------
     sub.add_parser("version", help="Print the installed nautilus package version.")
 
+    # session ---------------------------------------------------------
+    from nautilus.cli import session as _session
+
+    _session.register(sub)
+
     # health ----------------------------------------------------------
     p_health = sub.add_parser(
         "health",
@@ -298,6 +303,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "version":
         return _cmd_version()
+    if args.command == "session":
+        from nautilus.cli import session as session_cmd
+
+        return session_cmd.dispatch(args)
     if args.command == "health":
         return _cmd_health(args.url)
     if args.command == "serve":

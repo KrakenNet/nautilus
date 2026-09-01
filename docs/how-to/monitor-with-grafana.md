@@ -54,9 +54,15 @@ or copy the provisioning setup from
 
 - `readyz` failures (session-store outage; check
   `session_store_mode: degraded_*` in recent audit entries).
-- A rising denial rate — either a misbehaving agent or an
-  over-aggressive new rule (correlate with `rule_trace` in audit
-  entries; `nautilus rules test` before shipping rules prevents most of
-  these).
+- A rising denial rate — `rate(nautilus_scope_denials_total[5m])` — either a
+  misbehaving agent or an over-aggressive new rule (correlate with
+  `rule_trace` in audit entries; `nautilus rules test` before shipping rules
+  prevents most of these).
+- Adapter failures — `rate(nautilus_adapter_errors_total[5m])`, labelled by
+  `source_id` and `error_type`.
+
+Every counter is published at zero on startup, so an alert written against one
+of these matches a real series on a broker that has not yet fired it. A series
+that is missing is an exporter problem, not a quiet broker.
 - Quarantined adapters (`nautilus adapters list --status quarantined`) —
   schema drift detected; resolve with `schema-ack` after review.
