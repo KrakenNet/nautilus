@@ -472,13 +472,10 @@ async def decision_detail(
         return _broker_not_ready()
 
     reader = AuditReader(audit_path)
-    page = reader.read_page()
-
-    entry = None
-    for e in page.entries:
-        if e.request_id == request_id:
-            entry = e
-            break
+    # One page is not the log. Searching only the newest page reported every
+    # older decision as missing, which is the one answer an audit console must
+    # never give for something that is on disk.
+    entry = await run_in_threadpool(reader.find_entry, request_id)
 
     if entry is None:
         return HTMLResponse(content='<div class="empty-state"><p>Decision not found</p></div>')

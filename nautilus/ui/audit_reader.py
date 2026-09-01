@@ -77,6 +77,24 @@ class AuditReader:
 
     # -- core reader ---------------------------------------------------
 
+    def find_entry(self, request_id: str) -> AuditEntry | None:
+        """Page the whole log (newest-first) for ``request_id``.
+
+        ``read_page`` returns one page, so a caller that searches only its
+        result reports anything older than ``page_size`` as absent. Cursor
+        pagination keeps memory bounded on GB-sized logs; the loop ends when
+        the reader stops handing back a ``next_cursor``.
+        """
+        cursor: str | None = None
+        while True:
+            page = self.read_page(cursor=cursor, sort="desc")
+            for entry in page.entries:
+                if entry.request_id == request_id:
+                    return entry
+            if not page.next_cursor or page.next_cursor == cursor:
+                return None
+            cursor = page.next_cursor
+
     def read_page(
         self,
         cursor: str | None = None,

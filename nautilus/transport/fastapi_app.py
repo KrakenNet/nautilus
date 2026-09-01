@@ -35,8 +35,7 @@ Endpoints (all under ``/v1`` except health probes):
   absent; auth required (#32).
 
 Everything except the probes, ``GET /v1/keys/jwks.json`` (a public key by
-definition), ``GET /v1/sources``, ``GET /v1/adapters/{name}/schema`` and
-``GET /metrics`` is gated on :func:`nautilus.transport.auth.require_api_key`
+definition) and ``GET /metrics`` is gated on :func:`nautilus.transport.auth.require_api_key`
 when ``config.api.auth.mode == "api_key"`` (default, D-11) and on
 :func:`proxy_trust_dependency` when the mode is ``"proxy_trust"``. That
 includes the RKM queue and rule-governance routes: ``X-Nautilus-Reviewer``
@@ -207,15 +206,7 @@ def _find_audit_entry(reader: AuditReader, request_id: str) -> Any:
     keeps memory bounded on GB-sized logs; the loop terminates when the
     reader stops handing back a ``next_cursor``.
     """
-    cursor: str | None = None
-    while True:
-        page = reader.read_page(cursor=cursor, sort="desc")
-        for entry in page.entries:
-            if entry.request_id == request_id:
-                return entry
-        if not page.next_cursor or page.next_cursor == cursor:
-            return None
-        cursor = page.next_cursor
+    return reader.find_entry(request_id)
 
 
 def _ui_enabled(config_path: str | Path | None, existing_broker: Broker | None) -> bool:
@@ -1315,7 +1306,11 @@ def create_app(
 
         from fastapi import HTTPException
 
-        from nautilus.rkm.review import AlreadyDecidedError, approve_proposal
+        from nautilus.rkm.review import (
+            AlreadyDecidedError,
+            PromotionFailedError,
+            approve_proposal,
+        )
 
         reviewer = _require_reviewer(request)
         queue = _get_queue(request)
@@ -1338,6 +1333,23 @@ def create_app(
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail={"error": "already_decided", "current_status": exc.current_status},
+            ) from exc
+        except PromotionFailedError as exc:
+            # The rule did not compile. That is the reviewer's to fix, and they
+            # cannot fix what a 500 will not tell them. The proposal is left in
+            # ``approved`` on purpose -- re-approving retries the promotion --
+            # so the response says that too, or the state looks like a dead end.
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail={
+                    "error": "promotion_failed",
+                    "message": str(exc),
+                    "current_status": "approved",
+                    "recovery": (
+                        "fix the rule and re-approve to retry the promotion, "
+                        "or reject the proposal"
+                    ),
+                },
             ) from exc
         return dataclasses.asdict(result)
 
@@ -1730,9 +1742,35 @@ def create_app(
 
     @app.get("/", include_in_schema=False)
     async def root_redirect() -> Response:  # pyright: ignore[reportUnusedFunction]
-        from fastapi.responses import RedirectResponse
+        """Send a browser to the console, and everyone else somewhere real.
 
-        return RedirectResponse(url="/admin", status_code=302)
+        This route is registered unconditionally but ``/admin`` is mounted only
+        when ``ui.enabled`` is true -- and it is false by default. So the first
+        thing anyone does with a fresh deployment, curl its root, used to 302
+        into a 404. When the console is off, answer with the routes that do
+        exist instead.
+        """
+        from fastapi.responses import JSONResponse, RedirectResponse
+
+        from nautilus import __version__
+
+        if ui_enabled:
+            return RedirectResponse(url="/admin", status_code=302)
+        return JSONResponse(
+            {
+                "service": "nautilus",
+                "version": __version__,
+                "admin_console": "disabled (set ui.enabled: true to serve /admin)",
+                "routes": {
+                    "openapi": "/docs",
+                    "liveness": "/healthz",
+                    "readiness": "/readyz",
+                    "metrics": "/metrics",
+                    "request": "POST /v1/request",
+                    "sources": "/v1/sources",
+                },
+            }
+        )
 
     # ------------------------------------------------------------------
     # Admin UI — operator-facing dashboard (FR-1, AC-1.1)
