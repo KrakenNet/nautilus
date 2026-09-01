@@ -233,10 +233,13 @@ def test_b2c_a_rest_response_is_bounded_before_it_is_parsed() -> None:
     Served by a real HTTP server on loopback — an adapter asserted against a
     fake client proves nothing about what the adapter reads.
     """
+    import ipaddress
     import json
     import threading
     from http.server import BaseHTTPRequestHandler, HTTPServer
+    from unittest import mock
 
+    from nautilus.adapters import rest as rest_module
     from nautilus.adapters.base import AdapterError
     from nautilus.adapters.rest import MAX_RESPONSE_BYTES, RestAdapter
     from nautilus.config.models import SourceConfig
@@ -273,13 +276,22 @@ def test_b2c_a_rest_response_is_bounded_before_it_is_parsed() -> None:
                 "classification": "unclassified",
                 "data_types": ["patients"],
                 "allowed_purposes": ["care"],
-                # A hostname, not an IP literal: the adapter refuses
-                # loopback *literals* as an SSRF guard, which is not what this
-                # pin is about.
                 "connection": f"http://localhost:{port}",
             }
         )
-        await adapter.connect(config)
+        # The SSRF guard now *resolves* the base URL's host, so ``localhost``
+        # is refused exactly like ``127.0.0.1`` — which is the point of that
+        # fix, and not what this pin is about. Stub the resolver the guard
+        # calls so the config reaches ``connect()``; httpx does its own
+        # lookup afterwards, so the dial still lands on the real local server.
+        # (That gap between the two lookups is the guard's documented TOCTOU
+        # residual; here it is the only way to reach a loopback fixture.)
+        with mock.patch.object(
+            rest_module,
+            "resolve_base_url",
+            return_value=("localhost", [ipaddress.ip_address("93.184.216.34")]),
+        ):
+            await adapter.connect(config)
         try:
             with pytest.raises(AdapterError, match="bytes"):
                 await adapter.execute(_INTENT, [], {})

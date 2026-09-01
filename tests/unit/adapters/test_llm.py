@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+import ipaddress
 import json
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 import httpx
 import pytest
 
+from nautilus.adapters import llm as llm_module
 from nautilus.adapters.base import Adapter, AdapterError, ScopeEnforcementError
 from nautilus.adapters.llm import (
     LLMAdapter,
     _assemble_prompt,  # pyright: ignore[reportPrivateUsage]
-    _reject_unroutable_literal,  # pyright: ignore[reportPrivateUsage]
+    _reject_unroutable_base_url,  # pyright: ignore[reportPrivateUsage]
 )
 from nautilus.config.models import SourceConfig
 from nautilus.core.models import IntentAnalysis, ScopeConstraint
@@ -125,20 +128,53 @@ async def test_get_schema_is_static_capability_only() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_loopback_and_private_hosts_allowed() -> None:
-    _reject_unroutable_literal("http://127.0.0.1:8000/v1")
-    _reject_unroutable_literal("http://10.0.0.5:8000/v1")
-    _reject_unroutable_literal("https://llm.internal.example/v1")
+async def test_loopback_and_private_hosts_allowed() -> None:
+    await _reject_unroutable_base_url("http://127.0.0.1:8000/v1")
+    await _reject_unroutable_base_url("http://10.0.0.5:8000/v1")
+    await _reject_unroutable_base_url("https://llm.internal.example/v1")
 
 
-def test_link_local_metadata_host_rejected() -> None:
+async def test_link_local_metadata_host_rejected() -> None:
     with pytest.raises(ScopeEnforcementError, match="link-local"):
-        _reject_unroutable_literal("http://169.254.169.254/v1")
+        await _reject_unroutable_base_url("http://169.254.169.254/v1")
 
 
-def test_empty_host_rejected() -> None:
+async def test_link_local_metadata_host_rejected_by_name() -> None:
+    """A name resolving to the metadata address is refused, not only the literal.
+
+    The literal-only check this replaced blocked ``169.254.169.254`` and let
+    every cloud's *name* for the same service (``metadata.google.internal``,
+    ``instance-data``) straight through. Resolution is stubbed so the
+    assertion is about the guard rather than about whoever is answering DNS
+    for this machine.
+    """
+    with (
+        mock.patch.object(
+            llm_module,
+            "resolve_base_url",
+            return_value=("metadata.internal", [ipaddress.ip_address("169.254.169.254")]),
+        ),
+        pytest.raises(ScopeEnforcementError, match="link-local"),
+    ):
+        await _reject_unroutable_base_url("http://metadata.internal/v1")
+
+
+async def test_unresolvable_host_is_not_a_refusal() -> None:
+    """A name with no address reaches nothing; the dial reports the DNS error."""
+    with mock.patch.object(llm_module, "resolve_base_url", return_value=("nx.invalid", [])):
+        await _reject_unroutable_base_url("http://nx.invalid/v1")
+
+
+async def test_empty_host_rejected() -> None:
     with pytest.raises(ScopeEnforcementError, match="non-empty host"):
-        _reject_unroutable_literal("not-a-url")
+        await _reject_unroutable_base_url("not-a-url")
+
+
+async def test_empty_host_refusal_does_not_echo_the_connection_string() -> None:
+    """The refusal must not paste a credential-bearing value into the audit log."""
+    with pytest.raises(ScopeEnforcementError) as caught:
+        await _reject_unroutable_base_url("http://someone:hunter2@")
+    assert "hunter2" not in str(caught.value)
 
 
 # ---------------------------------------------------------------------------

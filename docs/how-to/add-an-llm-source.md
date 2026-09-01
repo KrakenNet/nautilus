@@ -58,8 +58,15 @@ capability and the broker signs `hash_skipped: true` instead of a
 Unlike the REST adapter (which blocks loopback/private addresses as SSRF
 defense), the LLM adapter **allows** loopback and RFC1918 endpoints —
 a local inference server is the primary deployment. Link-local/metadata
-(`169.254.x.x`), multicast, and unspecified literals stay blocked, and
+(`169.254.x.x`), multicast, and unspecified addresses stay blocked, and
 redirects are never followed.
+
+The block is on what `connection`'s host **resolves to**, not on the text of
+the URL, so `http://metadata.google.internal/v1` is refused the same way
+`http://169.254.169.254/v1` is. Resolution happens once, at `connect()`, and
+the driver resolves again when it dials — a record that changes between the
+two answers is not caught. The residual is stated in full in
+[the error reference](../reference/errors/adapters.md#ssrf-guards-rest-and-llm-adapters).
 
 Under `nautilus serve --air-gapped`, any `type: llm` source whose
 `connection` host is not loopback is dropped with a WARN — only local

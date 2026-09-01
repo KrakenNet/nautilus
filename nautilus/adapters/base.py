@@ -10,13 +10,20 @@ The ``_OPERATOR_ALLOWLIST`` set here is the runtime counterpart to the
 
 from __future__ import annotations
 
+import asyncio
 import functools
+import ipaddress
 import re
+import socket
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
+from urllib.parse import urlsplit
 
 from nautilus.config.models import SourceConfig
 from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
+
+# Either IP family; the SSRF guards test the same predicates on both.
+_IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
 
 if TYPE_CHECKING:
     import ssl
@@ -98,6 +105,58 @@ def bounded_rows(
         if used > max_bytes and index > 0:
             return rows[:index], True
     return rows, False
+
+
+async def resolve_base_url(base_url: str, adapter: str) -> tuple[str, list[_IPAddress]]:
+    """Return ``base_url``'s host and every address it currently resolves to.
+
+    The single seam both SSRF guards run on -- :func:`RestAdapter's
+    <nautilus.adapters.rest._reject_unroutable_base_url>` (shared with
+    ``ServiceNowAdapter``) and :func:`LLMAdapter's
+    <nautilus.adapters.llm._reject_unroutable_base_url>`. They refuse different
+    address classes on purpose, so the *policy* stays in each adapter; parsing
+    and name resolution live here so there is one place to audit and one place
+    a fix lands.
+
+    An IP literal resolves to itself with no lookup. A name goes through the
+    running loop's ``getaddrinfo``, which runs in a thread, so a slow resolver
+    does not block the event loop; the caller's own deadline
+    (``SourceConfig.timeout_s``, applied by the broker around ``connect()``)
+    bounds how long it may take.
+
+    **A name that does not resolve returns an empty list, not an error.** A
+    host with no address reaches nothing, so refusing here would buy no
+    security and would only replace the driver's own DNS message with ours.
+
+    **What this cannot do.** The answer is the resolver's answer *now*; httpx,
+    asyncpg and every other driver resolve again when they dial. A resolver
+    that returns a routable address here and a private one microseconds later
+    (DNS rebinding, a short-TTL record, a round-robin set that changes) is not
+    caught. This is a config-hygiene control with a genuine TOCTOU window, not
+    a dial-time pin -- see ``docs/reference/errors/adapters.md``.
+
+    Raises:
+        ScopeEnforcementError: ``base_url`` parses with no host.
+    """
+    host = urlsplit(base_url).hostname
+    if not host:
+        # The value is withheld deliberately: a malformed connection string is
+        # exactly the shape that still carries userinfo
+        # (``http://user:pw@``), and this message reaches the audit trail.
+        raise ScopeEnforcementError(
+            f"{adapter} requires a non-empty host in base_url "
+            f"(scheme={urlsplit(base_url).scheme!r}; the value is withheld "
+            f"because a connection string can carry credentials)"
+        )
+    try:
+        return host, [ipaddress.ip_address(host)]
+    except ValueError:
+        pass  # a name, not a literal — resolve it
+    try:
+        infos = await asyncio.get_running_loop().getaddrinfo(host, None, type=socket.SOCK_STREAM)
+    except (OSError, UnicodeError):
+        return host, []
+    return host, [ipaddress.ip_address(str(info[4][0])) for info in infos]
 
 
 def validate_operator(op: str) -> None:
@@ -353,9 +412,15 @@ def wrap_execute(fn: _ExecuteFn) -> _ExecuteFn:
         except Exception as exc:
             config = getattr(self, "_config", None)
             source_id = getattr(config, "id", "?")
+            # ``httpx.ReadTimeout()`` and friends carry no text, and appending
+            # an empty ``{exc}`` produced "... ReadTimeout: " -- a message
+            # ending in a colon and nothing, which was the whole thing an
+            # operator saw for a dead backend. Drop the tail when there is
+            # nothing to put after it.
+            detail = str(exc)
             raise AdapterError(
                 f"{type(self).__name__}: execute failed for source '{source_id}': "
-                f"{type(exc).__name__}: {exc}"
+                f"{type(exc).__name__}" + (f": {detail}" if detail else "")
             ) from exc
 
     return _wrapped
@@ -369,6 +434,7 @@ __all__ = [
     "EmbeddingUnavailableError",
     "ScopeEnforcementError",
     "quote_identifier",
+    "resolve_base_url",
     "quote_table",
     "render_field",
     "session_token_headers",

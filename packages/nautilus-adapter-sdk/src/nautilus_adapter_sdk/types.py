@@ -60,6 +60,12 @@ class ErrorRecord(BaseModel):
     error_type: str
     message: str
     trace_id: str = ""
+    # ``scheme://host[:port]`` of the backend that failed. Leave it unset: the
+    # broker fills it from the source's ``connection`` with userinfo, path and
+    # query stripped, so a DSN password cannot reach the audit trail. Set it
+    # only for an adapter that dials somewhere its ``connection`` does not
+    # name, and strip credentials yourself if you do.
+    endpoint: str | None = None
 
 
 class AdapterResult(BaseModel):

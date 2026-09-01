@@ -231,7 +231,61 @@ async def _run_both(
     )
 
 
+class ConfigRefusedError(Exception):
+    """A config ``serve`` will not start on, carrying the words it refuses in.
+
+    The message is everything ``serve`` prints after ``ERROR: ``, so a config
+    checked ahead of a deploy and the same config refused at startup read
+    identically.
+    """
+
+
+def broker_for_serve(config_path: Path, *, air_gapped: bool) -> Broker:
+    """Everything ``serve`` does between the path and the socket.
+
+    Path check, the ``--air-gapped`` pre-pass, and ``Broker.from_config`` —
+    the sequence ``nautilus serve`` runs before uvicorn binds, factored out
+    so ``nautilus config check`` runs it rather than a second copy of it. A
+    reimplementation would drift, and the failure mode of a drifted validator
+    is that it blesses a config ``serve`` then refuses, which is worse than
+    having no check at all.
+
+    What it deliberately does not reach: ``Broker.setup()``. ``serve`` does
+    not call it either until the transport is already up (the FastAPI
+    lifespan does), and it is where a durable session store is first dialled
+    and adapter schema fingerprints are checked — questions about the
+    environment the process lands in, not about the file. Those failures are
+    what ``/readyz`` and the rollout's readiness gate are for. Everything the
+    file alone decides, including whether ``audit.path`` can be opened for
+    writing, is settled here.
+
+    Raises:
+        ConfigRefusedError: On any config ``serve`` would exit 2 on.
+    """
+    if not config_path.is_file():
+        raise ConfigRefusedError(f"config path does not exist or is not a file: {config_path}")
+
+    try:
+        effective_path = _load_config_for_serve(config_path, air_gapped=air_gapped)
+    except RuntimeError as exc:
+        raise ConfigRefusedError(str(exc)) from exc
+
+    # Broker.from_config surfaces ConfigError / validation errors with
+    # readable messages; the caller turns these into a non-zero exit before
+    # any bind.
+    from nautilus.config.loader import ConfigError
+    from nautilus.core.broker import Broker
+
+    try:
+        return Broker.from_config(effective_path)
+    except ConfigError as exc:
+        raise ConfigRefusedError(f"invalid config: {exc}") from exc
+    except Exception as exc:  # noqa: BLE001 - surface wiring failures cleanly
+        raise ConfigRefusedError(f"broker construction failed: {exc}") from exc
+
+
 __all__ = [
+    "ConfigRefusedError",
     "_DEFAULT_BIND",
     "_enforce_air_gap",
     "_load_config_for_serve",
@@ -239,4 +293,5 @@ __all__ = [
     "_run_mcp",
     "_run_rest",
     "_split_bind",
+    "broker_for_serve",
 ]

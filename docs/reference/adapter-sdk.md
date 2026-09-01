@@ -319,10 +319,25 @@ There is no `response_hash` field, by design (see `execute` above).
 
 ### `ErrorRecord`
 
-`nautilus.core.models.ErrorRecord`: `source_id: str`, `error_type: str`,
-`message: str`, `trace_id: str`. Leave `trace_id` empty (`""`) —
-`_gather_adapter_results` fills in the request id, because `execute` cannot see
-it. Records that arrive with a `trace_id` already set are left alone.
+`nautilus.core.models.ErrorRecord`:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `source_id` | `str` | Required. Use `config.id`. |
+| `error_type` | `str` | Required. Conventionally the exception class name. |
+| `message` | `str` | Required. |
+| `trace_id` | `str` | Leave empty (`""`) — `_gather_adapter_results` fills in the request id, because `execute` cannot see it. Records that arrive with a `trace_id` already set are left alone. |
+| `endpoint` | `str \| None` | Default `None`. Leave it unset. |
+
+`endpoint` is the address the source dials, as `scheme://host[:port]`, and it
+is what makes a failed source answerable — a `source_id` is the operator's
+label for a dependency, not the dependency's address. Leave it `None` and the
+broker fills it from the source's `connection` (`redact_connection`, which
+copies scheme, host and port out and nothing else, so a DSN password or a URL
+token cannot reach the audit trail or the requesting agent). Set it yourself
+only if your adapter dials somewhere its `connection` does not name — the
+broker leaves a non-`None` value alone, so stripping credentials is then your
+job.
 
 ### `AdapterSchema`
 
@@ -387,7 +402,8 @@ All in `nautilus.adapters.base`.
 | `bounded_rows(rows, max_bytes) -> tuple[list[dict], bool]` | rows cut to the budget, and whether anything was dropped. Whole rows only; always keeps at least one | — |
 | `session_token_headers(context: dict[str, Any]) -> dict[str, str] \| None` | `{"X-Nautilus-Session-Token": <jws>}` or `None` | — |
 | `mtls_context(auth: MtlsAuth, source_id: str) -> ssl.SSLContext` | TLS context from the source's `auth: {type: mtls}` block | `AdapterError` naming `cert_path` / `key_path` if the material will not load |
-| `wrap_execute(fn) -> fn` | Decorator: re-raises a driver's own exception as `AdapterError: <Class>: execute failed for source '<id>': <ExcType>: <msg>` | — |
+| `await resolve_base_url(base_url: str, adapter: str) -> tuple[str, list[IPv4Address \| IPv6Address]]` | The host of `base_url` and every address it resolves to right now; an IP literal resolves to itself, an unresolvable name yields `[]`. The seam both SSRF guards run on — see [the SSRF entry](errors/adapters.md#ssrf-guards-rest-and-llm-adapters) for what it can and cannot promise | `ScopeEnforcementError` when `base_url` has no host |
+| `wrap_execute(fn) -> fn` | Decorator: re-raises a driver's own exception as `AdapterError: <Class>: execute failed for source '<id>': <ExcType>: <msg>`, dropping `: <msg>` when the exception has no text | — |
 | `SESSION_TOKEN_HEADER` | `"X-Nautilus-Session-Token"` | — |
 
 `wrap_execute` passes `AdapterError` (and therefore `ScopeEnforcementError`)
@@ -614,8 +630,8 @@ interpolated part.
 | 8 | Local-path `source_type` mismatch | `ERROR: could not load nautilus.yaml: adapters[1]: declared source_type='refusr' does not match RefuserAdapter.source_type='refuser' in adapters/refuser.py` | Make the YAML key and the ClassVar agree. |
 | 9 | Local-path class incomplete | `ERROR: could not load nautilus.yaml: adapters[1]: 'NoCloseAdapter' in adapters/noclose.py does not implement the Adapter protocol (missing: ['close'])` | Implement the listed members. Local paths fail closed — the broker will not start. |
 | 10 | Local-path class not found / not a class / import error | `adapters[<i>]: class '<Name>' not found in <path>` · `adapters[<i>]: '<Name>' in <path> is not a class` · `adapters[<i>]: error executing <path>: <exc>` | As printed. |
-| 11 | `execute` returns the wrong type | In `sources_errored`: `{"source_id": "bad_rows", "error_type": "AdapterContractError", "message": "adapter returned dict, expected AdapterResult", "trace_id": "<request_id>"}` | Return an `AdapterResult` (or any object whose `model_dump()` validates as one). Other sources in the request are unaffected. |
-| 12 | Adapter refuses a constraint | In `sources_errored`: `{"source_id": "refused_rows", "error_type": "ScopeEnforcementError", "message": "RefuserAdapter cannot enforce '=' on field 'name'", "trace_id": "<request_id>"}` | Expected behaviour when the backend cannot express the predicate. To serve the source, implement the operator. |
+| 11 | `execute` returns the wrong type | In `sources_errored`: `{"source_id": "bad_rows", "error_type": "AdapterContractError", "message": "adapter returned dict, expected AdapterResult", "trace_id": "<request_id>", "endpoint": null}` | Return an `AdapterResult` (or any object whose `model_dump()` validates as one). Other sources in the request are unaffected. |
+| 12 | Adapter refuses a constraint | In `sources_errored`: `{"source_id": "refused_rows", "error_type": "ScopeEnforcementError", "message": "RefuserAdapter cannot enforce '=' on field 'name'", "trace_id": "<request_id>", "endpoint": null}` | Expected behaviour when the backend cannot express the predicate. To serve the source, implement the operator. |
 | 13 | Operator outside the allowlist reaches a validator | `ScopeEnforcementError: Operator 'REGEX' not in allowlist: ['!=', '<', '<=', '=', '>', '>=', 'BETWEEN', 'IN', 'IS NULL', 'LIKE', 'NOT IN']` | Only the eleven are routable. A policy rule asserting anything else is the bug. |
 | 14 | Bad field identifier | `ScopeEnforcementError: Invalid field identifier 'user-id'` | Identifiers must match `^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$`; one dot is allowed, for JSON access. |
 | 15 | Driver exception escapes a `@wrap_execute` method | `AdapterError: MyAdapter: execute failed for source 'rows': PostgresSyntaxError: syntax error at or near "FROM"` | Fix the query; the wrapper only re-labels. |

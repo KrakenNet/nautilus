@@ -4193,7 +4193,7 @@ nautilus/analysis/llm/anthropic_provider.py:115:            api_key=os.getenv(se
 nautilus/analysis/llm/openai_provider.py:92:        key = os.getenv(self.api_key_env)
 nautilus/analysis/llm/openai_provider.py:107:            api_key=os.getenv(self.api_key_env),
 nautilus/config/loader.py:68:        self._env = env if env is not None else dict(os.environ)
-nautilus/core/broker.py:1022:                dsn = os.environ.get("TEST_PG_DSN")
+nautilus/core/broker.py:1023:                dsn = os.environ.get("TEST_PG_DSN")
 nautilus/adapters/influxdb.py:224:            token = _auth_token(config) or os.environ.get("INFLUXDB_V2_TOKEN")
 nautilus/adapters/influxdb.py:225:            org = os.environ.get("INFLUXDB_V2_ORG")
 nautilus/observability/__init__.py:16:    if os.environ.get("OTEL_SDK_DISABLED", "").lower() == "true":
@@ -6411,7 +6411,7 @@ by `log.exception` is still a readable multi-line traceback — it is generated
 from the interpreter's own frames, not from anybody's input.
 
 Here is the product doing it, from its own startup path, with nothing staged.
-`nautilus/core/broker.py:797` logs the config path when no `agents:` block is
+`nautilus/core/broker.py:798` logs the config path when no `agents:` block is
 declared, and a path is a filename, and a filename may contain a newline:
 
 ```console
@@ -6530,14 +6530,15 @@ sys.exit(1 if bad else 0)
 
 ```console
 $ python logscan.py
-ok     nautilus/core/broker.py:2718 %r on source_id
-ok     nautilus/core/broker.py:3252 %r on source_id
-ok     nautilus/core/broker.py:3318 %r on source_id
-ok     nautilus/core/broker.py:2928 %r on agent_id
-ok     nautilus/core/broker.py:2928 %r on purpose
-ok     nautilus/core/broker.py:1826 %r on receiving_agent_id
-ok     nautilus/core/broker.py:1826 %r on session_id
-ok     nautilus/core/broker.py:3232 %r on source_id
+ok     nautilus/core/broker.py:2700 %r on record.source_id
+ok     nautilus/core/broker.py:2797 %r on source_id
+ok     nautilus/core/broker.py:3331 %r on source_id
+ok     nautilus/core/broker.py:3397 %r on source_id
+ok     nautilus/core/broker.py:3007 %r on agent_id
+ok     nautilus/core/broker.py:3007 %r on purpose
+ok     nautilus/core/broker.py:1827 %r on receiving_agent_id
+ok     nautilus/core/broker.py:1827 %r on session_id
+ok     nautilus/core/broker.py:3311 %r on source_id
 ok     nautilus/transport/auth.py:287 %r on user
 
 0 unescaped interpolations
@@ -6545,12 +6546,12 @@ $ echo $?
 0
 ```
 
-Run it from the repository root; the paths are relative to it. Nine rows, no
+Run it from the repository root; the paths are relative to it. Ten rows, no
 `UNSAFE`. `auth.py:287` logs the `X-Forwarded-User` header a proxy sent;
-`broker.py:2928` logs the `agent_id` and `purpose` out of a request body;
-`broker.py:1826` logs a handoff's `agent_id` and `session_id`, also from the
-body; the four `broker.py` `source_id` rows are the schema-fetch, drift,
-quarantine-lift and truncation sites. Confirm the caller-facing half against a
+`broker.py:3007` logs the `agent_id` and `purpose` out of a request body;
+`broker.py:1827` logs a handoff's `agent_id` and `session_id`, also from the
+body; the five `broker.py` `source_id` rows are the per-source failure,
+schema-fetch, drift, quarantine-lift and truncation sites. Confirm the caller-facing half against a
 live broker rather than reading the source — send a purpose with a newline in it
 and count lines:
 
@@ -7096,7 +7097,7 @@ is one opaque string:
 $ grep -rniE 'oidc|saml|oauth|openid|id_token' nautilus/ --include='*.py'
 nautilus/transport/auth.py:9:  (mTLS, SPIFFE, OIDC) and forwards its identity in ``X-Forwarded-User``.
 nautilus/transport/auth.py:247:    mesh/ingress has already authenticated the caller (mTLS, SPIFFE, OIDC) and
-nautilus/config/models.py:241:    # id, an OIDC subject, a certificate CN. Matched against ``X-Forwarded-User``
+nautilus/config/models.py:242:    # id, an OIDC subject, a certificate CN. Matched against ``X-Forwarded-User``
 ```
 
 Three comments, no implementation. Every one of them describes something the
@@ -7378,7 +7379,7 @@ the route answers `409 session tokens are disabled`.
 `POST /v1/sessions` takes an untyped body (`nautilus/transport/fastapi_app.py:895`),
 and `clearance` in that body would be an authorization assertion signed by
 Nautilus and verifiable by anyone against the public JWKS. It is not a parameter
-of `Broker.issue_session_token` at all (`nautilus/core/broker.py:1324-1330`) —
+of `Broker.issue_session_token` at all (`nautilus/core/broker.py:1325-1331`) —
 the value comes from the agent registry, so the body cannot reach it:
 
 ```console

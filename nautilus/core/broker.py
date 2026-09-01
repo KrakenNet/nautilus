@@ -73,6 +73,7 @@ from nautilus.config.models import (
     NullSinkSpec,
     OpenAIProviderSpec,
     SourceConfig,
+    redact_connection,
 )
 from nautilus.config.registry import SourceRegistry
 from nautilus.core import (
@@ -2550,25 +2551,27 @@ class Broker:
         if source_id in self._quarantined_adapters and not (
             adapter is not None and await self._clear_quarantine_if_acked(source_id, adapter)
         ):
-            state.errored.append(
+            self._fail_source(
+                state,
                 _source_error(
                     source_id,
                     "ADAPTER_QUARANTINED",
                     f"Adapter '{source_id}' is quarantined due to major schema drift. "
                     "Operator must acknowledge drift via schema-ack before resuming.",
                     state.request_id,
-                )
+                ),
             )
             return None
 
         if adapter is None:
-            state.errored.append(
+            self._fail_source(
+                state,
                 _source_error(
                     source_id,
                     "AdapterError",
                     f"No adapter registered for source '{source_id}'",
                     state.request_id,
-                )
+                ),
             )
             return None
         if source_id in self._connected_adapters and source_id not in self._quarantined_adapters:
@@ -2577,14 +2580,15 @@ class Broker:
         if failed_at is not None:
             waited = time.monotonic() - failed_at
             if waited < self.connect_cooldown_s:
-                state.errored.append(
+                self._fail_source(
+                    state,
                     _source_error(
                         source_id,
                         "AdapterError",
                         f"connect() failed {waited:.1f}s ago; not retried for another "
                         f"{self.connect_cooldown_s - waited:.1f}s",
                         state.request_id,
-                    )
+                    ),
                 )
                 return None
             del self._connect_failures[source_id]
@@ -2601,13 +2605,14 @@ class Broker:
                     await adapter.connect(self._registry.get(source_id))
                 except Exception as exc:  # noqa: BLE001 — surface as per-source error
                     self._connect_failures[source_id] = time.monotonic()
-                    state.errored.append(
+                    self._fail_source(
+                        state,
                         _source_error(
                             source_id,
                             type(exc).__name__,
                             f"connect() failed: {exc}",
                             state.request_id,
-                        )
+                        ),
                     )
                     return None
                 self._connect_failures.pop(source_id, None)
@@ -2616,17 +2621,91 @@ class Broker:
                 drifted = await self._check_adapter_schema(source_id, adapter)
                 self._connected_adapters.add(source_id)
         if drifted:
-            state.errored.append(
+            self._fail_source(
+                state,
                 _source_error(
                     source_id,
                     "ADAPTER_QUARANTINED",
                     f"Adapter '{source_id}' is quarantined due to major schema drift. "
                     "Operator must acknowledge drift via schema-ack before resuming.",
                     state.request_id,
-                )
+                ),
             )
             return None
         return adapter
+
+    def _source_endpoint(self, source_id: str) -> str | None:
+        """What ``source_id`` dials, as ``scheme://host[:port]``, or ``None``.
+
+        Rebuilt from the source's ``connection`` by
+        :func:`~nautilus.config.models.redact_connection`, which copies out
+        scheme/host/port and nothing else, so a DSN password or a URL token
+        cannot ride out of the config file on an error record.
+        """
+        try:
+            source = self._registry.get(source_id)
+        except KeyError:
+            return None  # an id with no source: nothing to name
+        return redact_connection(source.connection)
+
+    def _timeout_message(self, source_id: str) -> str:
+        """Message for a source that spent its whole wall-clock budget.
+
+        ``TimeoutError`` carries no text, so interpolating it rendered
+        ``exceeded the source's timeout_s budget: `` -- a sentence ending in a
+        colon and nothing after it, and that was the entire text an operator
+        got. Name the budget that was spent instead. ``timeout_s: null`` means
+        the broker set no deadline, so a ``TimeoutError`` from that source came
+        from inside the driver and there is no budget to quote.
+        """
+        budget = self._registry.get(source_id).timeout_s
+        if budget is None:
+            return "exceeded the source's timeout_s budget"
+        return f"exceeded the source's timeout_s budget of {budget}s"
+
+    def _fail_source(self, state: _RequestState, record: ErrorRecord) -> None:
+        """Name the backend, log the failure, bucket it. One place, all paths.
+
+        Every per-source failure -- unknown id, connect cooldown, connect
+        error, schema quarantine, wall-clock timeout, adapter contract
+        violation, and the typed record an adapter returns -- converges here
+        before it reaches ``state.errored``, which is what both the response's
+        ``sources_errored`` and the audit entry's ``error_records`` are built
+        from.
+
+        Two things happen that did not before, and both answer the same
+        question -- *which dependency broke?*:
+
+        * ``record.endpoint`` is filled from the source's ``connection``, so
+          the address is in the durable audit trail. A ``source_id`` is the
+          operator's label for a dependency, not the dependency's address, and
+          the address appeared in nothing the broker wrote: an unreachable
+          backend produced a 200, an error bucket, and no way to learn what
+          was unreachable without already knowing.
+        * One ``WARNING`` is emitted on the process's own logger. The broker's
+          own loggers said nothing at all about a dead source at any level,
+          including ``--log-level debug``; the only lines naming the host came
+          from ``httpcore``/``httpx`` and were emitted identically on success,
+          so they distinguished nothing.
+
+        The endpoint is credential-free by construction -- see
+        :meth:`_source_endpoint`. It is also, deliberately, in the response the
+        requesting agent reads, not only in the operator's copy: the agent
+        already receives ``source_id`` and the driver's own error text, and an
+        endpoint an operator can act on is worth more than the hostname
+        secrecy it trades away.
+        """
+        if record.endpoint is None:
+            record = record.model_copy(update={"endpoint": self._source_endpoint(record.source_id)})
+        log.warning(
+            "source %r failed (endpoint=%s, error_type=%s, trace_id=%s): %s",
+            record.source_id,
+            record.endpoint or "<none configured>",
+            record.error_type,
+            record.trace_id,
+            record.message,
+        )
+        state.errored.append(record)
 
     async def _gather_adapter_results(
         self,
@@ -2640,12 +2719,10 @@ class Broker:
         for source_id, res in zip(task_source_ids, raw, strict=True):
             if isinstance(res, BaseException):
                 message = (
-                    f"exceeded the source's timeout_s budget: {res}"
-                    if isinstance(res, TimeoutError)
-                    else str(res)
+                    self._timeout_message(source_id) if isinstance(res, TimeoutError) else str(res)
                 )
-                state.errored.append(
-                    _source_error(source_id, type(res).__name__, message, state.request_id)
+                self._fail_source(
+                    state, _source_error(source_id, type(res).__name__, message, state.request_id)
                 )
                 continue
             if res is None:
@@ -2657,13 +2734,14 @@ class Broker:
                     # B5 -- ``res.error`` below is outside any try block, so
                     # an adapter that *returns* the wrong type (rather than
                     # raising) took down every co-queried source with it.
-                    state.errored.append(
+                    self._fail_source(
+                        state,
                         _source_error(
                             source_id,
                             "AdapterContractError",
                             f"adapter returned {type(res).__name__}, expected AdapterResult",
                             state.request_id,
-                        )
+                        ),
                     )
                     continue
                 res = coerced
@@ -2672,10 +2750,11 @@ class Broker:
                 # trace_id empty for the typed errors and this is the caller
                 # that fills it — otherwise one request's audit entry mixes
                 # correlated and uncorrelated rows.
-                state.errored.append(
+                self._fail_source(
+                    state,
                     res.error
                     if res.error.trace_id
-                    else res.error.model_copy(update={"trace_id": state.request_id})
+                    else res.error.model_copy(update={"trace_id": state.request_id}),
                 )
                 _metrics.adapter_errors_total.add(
                     1, {"source_id": source_id, "error_type": res.error.error_type}

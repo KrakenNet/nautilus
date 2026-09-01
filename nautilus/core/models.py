@@ -207,6 +207,17 @@ class ErrorRecord(BaseModel):
     error_type: str  # e.g. "ScopeEnforcementError", "AdapterError"
     message: str
     trace_id: str  # correlation to request_id
+    # Which backend this source dials, as ``scheme://host[:port]``. A source id
+    # names the operator's label for a dependency; it does not name the
+    # dependency, so "one of my sources is failing, which host is down?" had no
+    # answer anywhere the broker writes. The broker fills this from the
+    # source's ``connection`` through
+    # :func:`nautilus.config.models.redact_connection`, which rebuilds the
+    # value from scheme/host/port only -- userinfo, path and query never reach
+    # it, so a DSN password or a URL token cannot ride into the audit trail or
+    # the response. ``None`` for a source that dials nothing (``static``), for
+    # ``<broker>`` records, and for a connection with no host.
+    endpoint: str | None = None
 
 
 class AdapterResult(BaseModel):

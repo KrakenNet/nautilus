@@ -3,49 +3,27 @@
  "regenerate": "regenerate with: .venv/bin/python tests/citation_lock.py --write",
  "citations": [
   {
-   "citation": "__init__.py:218,227,275",
+   "citation": "__init__.py:240,250,284",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/__init__.py",
-   "sha": "fc7b18c0fe9d417f",
+   "sha": "b64dbcb3fc2d407d",
    "lines": {
-    "218": "# library modules keep plain ``logging.getLogger(__name__)``.",
-    "227": "config_path = _Path(args.config)",
-    "275": ")"
+    "240": "print(f\"ERROR: {exc}\", file=sys.stderr)",
+    "250": "print(f\"ERROR: {exc}\", file=sys.stderr)",
+    "284": "print(f\"ERROR: {exc}\", file=sys.stderr)"
    }
   },
   {
-   "citation": "__init__.py:230",
-   "cited_in": [
-    "docs/reference/errors/cli.md"
-   ],
-   "file": "nautilus/cli/__init__.py",
-   "sha": "69690bb684b9df67",
-   "lines": {
-    "230": "f\"ERROR: config path does not exist or is not a file: {config_path}\","
-   }
-  },
-  {
-   "citation": "__init__.py:238",
+   "citation": "__init__.py:250",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/__init__.py",
    "sha": "b2c3685c0ef538a6",
    "lines": {
-    "238": "print(f\"ERROR: {exc}\", file=sys.stderr)"
-   }
-  },
-  {
-   "citation": "__init__.py:241",
-   "cited_in": [
-    "docs/reference/errors/cli.md"
-   ],
-   "file": "nautilus/cli/__init__.py",
-   "sha": "8761c2f50a05555a",
-   "lines": {
-    "241": "try:"
+    "250": "print(f\"ERROR: {exc}\", file=sys.stderr)"
    }
   },
   {
@@ -115,25 +93,25 @@
    }
   },
   {
-   "citation": "broker.py:1826",
+   "citation": "broker.py:1827",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "1826": "log.warning("
+    "1827": "log.warning("
    }
   },
   {
-   "citation": "broker.py:2928",
+   "citation": "broker.py:3007",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "2928": "log.warning("
+    "3007": "log.warning("
    }
   },
   {
@@ -401,36 +379,14 @@
    }
   },
   {
-   "citation": "llm.py:184",
+   "citation": "llm.py:187",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/llm.py",
    "sha": "8f85edfad6e6fa62",
    "lines": {
-    "184": "raise AdapterError(\"LLMAdapter.execute() called before connect()\")"
-   }
-  },
-  {
-   "citation": "llm.py:73",
-   "cited_in": [
-    "docs/reference/errors/adapters.md"
-   ],
-   "file": "nautilus/adapters/llm.py",
-   "sha": "0647b09d7f7d0878",
-   "lines": {
-    "73": "raise ScopeEnforcementError("
-   }
-  },
-  {
-   "citation": "llm.py:81",
-   "cited_in": [
-    "docs/reference/errors/adapters.md"
-   ],
-   "file": "nautilus/adapters/llm.py",
-   "sha": "0647b09d7f7d0878",
-   "lines": {
-    "81": "raise ScopeEnforcementError("
+    "187": "raise AdapterError(\"LLMAdapter.execute() called before connect()\")"
    }
   },
   {
@@ -457,123 +413,136 @@
    }
   },
   {
-   "citation": "nautilus/adapters/base.py:107-110",
+   "citation": "nautilus/adapters/base.py:146-150",
+   "cited_in": [
+    "docs/reference/errors/adapters.md"
+   ],
+   "file": "nautilus/adapters/base.py",
+   "sha": "1d41bb740e23e533",
+   "lines": {
+    "146": "raise ScopeEnforcementError(",
+    "147": "f\"{adapter} requires a non-empty host in base_url \"",
+    "148": "f\"(scheme={urlsplit(base_url).scheme!r}; the value is withheld \"",
+    "149": "f\"because a connection string can carry credentials)\"",
+    "150": ")"
+   }
+  },
+  {
+   "citation": "nautilus/adapters/base.py:166-169",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/base.py",
    "sha": "f62d5a6d715ae23f",
    "lines": {
-    "107": "\"\"\"",
-    "108": "if op not in _OPERATOR_ALLOWLIST:",
-    "109": "raise ScopeEnforcementError(",
-    "110": "f\"Operator '{op}' not in allowlist: {sorted(_OPERATOR_ALLOWLIST)}\""
+    "166": "\"\"\"",
+    "167": "if op not in _OPERATOR_ALLOWLIST:",
+    "168": "raise ScopeEnforcementError(",
+    "169": "f\"Operator '{op}' not in allowlist: {sorted(_OPERATOR_ALLOWLIST)}\""
    }
   },
   {
-   "citation": "nautilus/adapters/base.py:120-123",
+   "citation": "nautilus/adapters/base.py:179-182",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/base.py",
    "sha": "fdf9a030d29dc76d",
    "lines": {
-    "120": "\"\"\"",
-    "121": "if not _FIELD_PATTERN.match(f):",
-    "122": "raise ScopeEnforcementError(f\"Invalid field identifier '{f}'\")",
-    "123": ""
+    "179": "\"\"\"",
+    "180": "if not _FIELD_PATTERN.match(f):",
+    "181": "raise ScopeEnforcementError(f\"Invalid field identifier '{f}'\")",
+    "182": ""
    }
   },
   {
-   "citation": "nautilus/adapters/base.py:158-161",
+   "citation": "nautilus/adapters/base.py:217-220",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/base.py",
    "sha": "9f87d8b89dc79bd4",
    "lines": {
-    "158": "parts = table.split(\".\")",
-    "159": "if len(parts) > 2:",
-    "160": "raise ScopeEnforcementError(f\"table name {table!r} has more than one schema qualifier\")",
-    "161": "return \".\".join(quote_identifier(part) for part in parts)"
+    "217": "parts = table.split(\".\")",
+    "218": "if len(parts) > 2:",
+    "219": "raise ScopeEnforcementError(f\"table name {table!r} has more than one schema qualifier\")",
+    "220": "return \".\".join(quote_identifier(part) for part in parts)"
    }
   },
   {
-   "citation": "nautilus/adapters/base.py:210-216",
+   "citation": "nautilus/adapters/base.py:269-275",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/base.py",
    "sha": "62334f1f4c66d474",
    "lines": {
-    "210": "context = ssl.create_default_context(cafile=auth.ca_path)",
-    "211": "try:",
-    "212": "context.load_cert_chain(certfile=auth.cert_path, keyfile=auth.key_path)",
-    "213": "except (OSError, ssl.SSLError) as exc:",
-    "214": "raise AdapterError(",
-    "215": "f\"source '{source_id}' declares mTLS but its client certificate could \"",
-    "216": "f\"not be loaded (cert_path={auth.cert_path!r}, key_path={auth.key_path!r}): {exc}\""
+    "269": "context = ssl.create_default_context(cafile=auth.ca_path)",
+    "270": "try:",
+    "271": "context.load_cert_chain(certfile=auth.cert_path, keyfile=auth.key_path)",
+    "272": "except (OSError, ssl.SSLError) as exc:",
+    "273": "raise AdapterError(",
+    "274": "f\"source '{source_id}' declares mTLS but its client certificate could \"",
+    "275": "f\"not be loaded (cert_path={auth.cert_path!r}, key_path={auth.key_path!r}): {exc}\""
    }
   },
   {
-   "citation": "nautilus/adapters/base.py:28",
+   "citation": "nautilus/adapters/base.py:35",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/base.py",
    "sha": "f2ca2678a33e0395",
    "lines": {
-    "28": "class AdapterError(Exception):"
+    "35": "class AdapterError(Exception):"
    }
   },
   {
-   "citation": "nautilus/adapters/base.py:319",
+   "citation": "nautilus/adapters/base.py:378",
    "cited_in": [
     "docs/reference/errors/library.md"
    ],
    "file": "nautilus/adapters/base.py",
    "sha": "5907930dea422682",
    "lines": {
-    "319": "raise NotImplementedError(\"AC-21.b: this adapter must implement get_schema() (task-006)\")"
+    "378": "raise NotImplementedError(\"AC-21.b: this adapter must implement get_schema() (task-006)\")"
    }
   },
   {
-   "citation": "nautilus/adapters/base.py:32",
+   "citation": "nautilus/adapters/base.py:39",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/base.py",
    "sha": "1b2dc9f07ffea523",
    "lines": {
-    "32": "class ScopeEnforcementError(AdapterError):"
+    "39": "class ScopeEnforcementError(AdapterError):"
    }
   },
   {
-   "citation": "nautilus/adapters/base.py:352-358",
+   "citation": "nautilus/adapters/base.py:420-424",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/base.py",
-   "sha": "893e02110e0b1ffc",
+   "sha": "dd4408552ad7ae2e",
    "lines": {
-    "352": "raise",
-    "353": "except Exception as exc:",
-    "354": "config = getattr(self, \"_config\", None)",
-    "355": "source_id = getattr(config, \"id\", \"?\")",
-    "356": "raise AdapterError(",
-    "357": "f\"{type(self).__name__}: execute failed for source '{source_id}': \"",
-    "358": "f\"{type(exc).__name__}: {exc}\""
+    "420": "detail = str(exc)",
+    "421": "raise AdapterError(",
+    "422": "f\"{type(self).__name__}: execute failed for source '{source_id}': \"",
+    "423": "f\"{type(exc).__name__}\" + (f\": {detail}\" if detail else \"\")",
+    "424": ") from exc"
    }
   },
   {
-   "citation": "nautilus/adapters/base.py:40",
+   "citation": "nautilus/adapters/base.py:47",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/base.py",
    "sha": "30fddf6bf6290a17",
    "lines": {
-    "40": "class EmbeddingUnavailableError(AdapterError):"
+    "47": "class EmbeddingUnavailableError(AdapterError):"
    }
   },
   {
@@ -818,47 +787,63 @@
    }
   },
   {
-   "citation": "nautilus/adapters/llm.py:145",
+   "citation": "nautilus/adapters/llm.py:148",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/llm.py",
    "sha": "5f94623b04c495e4",
    "lines": {
-    "145": "raise AdapterError("
+    "148": "raise AdapterError("
    }
   },
   {
-   "citation": "nautilus/adapters/llm.py:152",
+   "citation": "nautilus/adapters/llm.py:155",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/llm.py",
    "sha": "5f94623b04c495e4",
    "lines": {
-    "152": "raise AdapterError("
+    "155": "raise AdapterError("
    }
   },
   {
-   "citation": "nautilus/adapters/llm.py:204",
+   "citation": "nautilus/adapters/llm.py:207",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/llm.py",
    "sha": "fe96f23147fa18c7",
    "lines": {
-    "204": "raise AdapterError(f\"LLMAdapter call failed: {exc}\") from exc"
+    "207": "raise AdapterError(f\"LLMAdapter call failed: {exc}\") from exc"
    }
   },
   {
-   "citation": "nautilus/adapters/llm.py:206",
+   "citation": "nautilus/adapters/llm.py:209",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/llm.py",
    "sha": "5f94623b04c495e4",
    "lines": {
-    "206": "raise AdapterError("
+    "209": "raise AdapterError("
+   }
+  },
+  {
+   "citation": "nautilus/adapters/llm.py:81-86",
+   "cited_in": [
+    "docs/reference/errors/adapters.md"
+   ],
+   "file": "nautilus/adapters/llm.py",
+   "sha": "8d0482e527a40c62",
+   "lines": {
+    "81": "for ip in addresses:",
+    "82": "if ip.is_link_local or ip.is_multicast or ip.is_unspecified:",
+    "83": "raise ScopeEnforcementError(",
+    "84": "f\"LLMAdapter refuses base_url host '{host}': it resolves to \"",
+    "85": "f\"link-local/multicast/unspecified address {ip}\"",
+    "86": ")"
    }
   },
   {
@@ -1041,102 +1026,103 @@
    }
   },
   {
-   "citation": "nautilus/adapters/rest.py:125",
+   "citation": "nautilus/adapters/rest.py:127",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/rest.py",
    "sha": "0647b09d7f7d0878",
    "lines": {
-    "125": "raise ScopeEnforcementError("
+    "127": "raise ScopeEnforcementError("
    }
   },
   {
-   "citation": "nautilus/adapters/rest.py:222-226",
+   "citation": "nautilus/adapters/rest.py:231-236",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/rest.py",
-   "sha": "6bce26500eac027f",
+   "sha": "2aad1f63867c189b",
    "lines": {
-    "222": "return",
-    "223": "if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast:",
-    "224": "raise SSRFBlockedError(",
-    "225": "f\"RestAdapter refuses private/loopback/link-local IP base URL: {host}\"",
-    "226": ")"
+    "231": "for ip in addresses:",
+    "232": "if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast:",
+    "233": "raise SSRFBlockedError(",
+    "234": "f\"RestAdapter refuses base_url host '{host}': it resolves to \"",
+    "235": "f\"private/loopback/link-local address {ip}\"",
+    "236": ")"
    }
   },
   {
-   "citation": "nautilus/adapters/rest.py:307",
-   "cited_in": [
-    "docs/reference/errors/adapters.md"
-   ],
-   "file": "nautilus/adapters/rest.py",
-   "sha": "0647b09d7f7d0878",
-   "lines": {
-    "307": "raise ScopeEnforcementError("
-   }
-  },
-  {
-   "citation": "nautilus/adapters/rest.py:316",
+   "citation": "nautilus/adapters/rest.py:317",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/rest.py",
    "sha": "0647b09d7f7d0878",
    "lines": {
-    "316": "raise ScopeEnforcementError("
+    "317": "raise ScopeEnforcementError("
    }
   },
   {
-   "citation": "nautilus/adapters/rest.py:373",
+   "citation": "nautilus/adapters/rest.py:326",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/rest.py",
    "sha": "0647b09d7f7d0878",
    "lines": {
-    "373": "raise ScopeEnforcementError("
+    "326": "raise ScopeEnforcementError("
    }
   },
   {
-   "citation": "nautilus/adapters/rest.py:513-517",
+   "citation": "nautilus/adapters/rest.py:383",
+   "cited_in": [
+    "docs/reference/errors/adapters.md"
+   ],
+   "file": "nautilus/adapters/rest.py",
+   "sha": "0647b09d7f7d0878",
+   "lines": {
+    "383": "raise ScopeEnforcementError("
+   }
+  },
+  {
+   "citation": "nautilus/adapters/rest.py:523-527",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/rest.py",
    "sha": "94bd2c62cb1d81a0",
    "lines": {
-    "513": "target_host = next_req.url.host",
-    "514": "if target_host != base_host:",
-    "515": "raise SSRFBlockedError(",
-    "516": "f\"Refused redirect from host '{base_host}' to different host \"",
-    "517": "f\"'{target_host}' (status={response.status_code})\""
+    "523": "target_host = next_req.url.host",
+    "524": "if target_host != base_host:",
+    "525": "raise SSRFBlockedError(",
+    "526": "f\"Refused redirect from host '{base_host}' to different host \"",
+    "527": "f\"'{target_host}' (status={response.status_code})\""
    }
   },
   {
-   "citation": "nautilus/adapters/rest.py:519-522",
+   "citation": "nautilus/adapters/rest.py:529-532",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/rest.py",
    "sha": "fa12736843d2a67e",
    "lines": {
-    "519": "# Same-host redirect — still refuse, but with a distinct message so",
-    "520": "# operators can diagnose 3xx loops without confusing them with SSRF.",
-    "521": "raise SSRFBlockedError(",
-    "522": "f\"Refused same-host redirect (status={response.status_code}); \""
+    "529": "# Same-host redirect — still refuse, but with a distinct message so",
+    "530": "# operators can diagnose 3xx loops without confusing them with SSRF.",
+    "531": "raise SSRFBlockedError(",
+    "532": "f\"Refused same-host redirect (status={response.status_code}); \""
    }
   },
   {
-   "citation": "nautilus/adapters/rest.py:83",
+   "citation": "nautilus/adapters/rest.py:85",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/rest.py",
    "sha": "dcf33d712229544f",
    "lines": {
-    "83": "class SSRFBlockedError(AdapterError):"
+    "85": "class SSRFBlockedError(AdapterError):"
    }
   },
   {
@@ -1286,69 +1272,80 @@
    }
   },
   {
-   "citation": "nautilus/adapters/servicenow.py:220",
+   "citation": "nautilus/adapters/servicenow.py:171",
+   "cited_in": [
+    "docs/reference/errors/adapters.md"
+   ],
+   "file": "nautilus/adapters/servicenow.py",
+   "sha": "582ee8f1da8bf37e",
+   "lines": {
+    "171": "await _reject_unroutable_base_url(config.connection)"
+   }
+  },
+  {
+   "citation": "nautilus/adapters/servicenow.py:222",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/servicenow.py",
    "sha": "0647b09d7f7d0878",
    "lines": {
-    "220": "raise ScopeEnforcementError("
+    "222": "raise ScopeEnforcementError("
    }
   },
   {
-   "citation": "nautilus/adapters/servicenow.py:232",
+   "citation": "nautilus/adapters/servicenow.py:234",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/servicenow.py",
    "sha": "0647b09d7f7d0878",
    "lines": {
-    "232": "raise ScopeEnforcementError("
+    "234": "raise ScopeEnforcementError("
    }
   },
   {
-   "citation": "nautilus/adapters/servicenow.py:239",
+   "citation": "nautilus/adapters/servicenow.py:241",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/servicenow.py",
    "sha": "0647b09d7f7d0878",
    "lines": {
-    "239": "raise ScopeEnforcementError("
+    "241": "raise ScopeEnforcementError("
    }
   },
   {
-   "citation": "nautilus/adapters/servicenow.py:250",
+   "citation": "nautilus/adapters/servicenow.py:252",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/servicenow.py",
    "sha": "86f8580ff7524d8e",
    "lines": {
-    "250": "raise ScopeEnforcementError(f\"sn-unsupported-operator: {op!r}\")"
+    "252": "raise ScopeEnforcementError(f\"sn-unsupported-operator: {op!r}\")"
    }
   },
   {
-   "citation": "nautilus/adapters/servicenow.py:329",
+   "citation": "nautilus/adapters/servicenow.py:331",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/servicenow.py",
    "sha": "5f94623b04c495e4",
    "lines": {
-    "329": "raise AdapterError("
+    "331": "raise AdapterError("
    }
   },
   {
-   "citation": "nautilus/adapters/servicenow.py:405",
+   "citation": "nautilus/adapters/servicenow.py:407",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/servicenow.py",
    "sha": "5f94623b04c495e4",
    "lines": {
-    "405": "raise AdapterError("
+    "407": "raise AdapterError("
    }
   },
   {
@@ -1675,130 +1672,89 @@
    }
   },
   {
-   "citation": "nautilus/cli/__init__.py:209-280",
+   "citation": "nautilus/cli/__init__.py:218-293",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/__init__.py",
-   "sha": "bd35e2b3a90301a7",
+   "sha": "72131fc7cd4e09e4",
    "lines": {
-    "209": "\"\"\"Dispatch the ``serve`` subcommand.",
-    "210": "",
-    "211": "Calls ``_run_rest`` / ``_run_mcp`` / ``_run_both`` via *this* module's",
-    "212": "namespace so that test monkeypatches on ``cli._run_rest`` etc. are",
-    "213": "honoured.",
-    "214": "\"\"\"",
-    "215": "import nautilus.cli as _cli_module",
-    "216": "",
-    "217": "# #28 — structured logging is applied at the process entry point only;",
-    "218": "# library modules keep plain ``logging.getLogger(__name__)``.",
-    "219": "from nautilus.observability.logging import configure_logging",
+    "218": "def _cmd_serve(args: argparse.Namespace) -> int:",
+    "219": "\"\"\"Dispatch the ``serve`` subcommand.",
     "220": "",
-    "221": "log_level = getattr(args, \"log_level\", \"info\")",
-    "222": "configure_logging(",
-    "223": "getattr(args, \"log_format\", \"text\"),",
-    "224": "logging.getLevelNamesMapping()[log_level.upper()],",
-    "225": ")",
+    "221": "Calls ``_run_rest`` / ``_run_mcp`` / ``_run_both`` via *this* module's",
+    "222": "namespace so that test monkeypatches on ``cli._run_rest`` etc. are",
+    "223": "honoured.",
+    "224": "\"\"\"",
+    "225": "import nautilus.cli as _cli_module",
     "226": "",
-    "227": "config_path = _Path(args.config)",
-    "228": "if not config_path.is_file():",
-    "229": "print(",
-    "230": "f\"ERROR: config path does not exist or is not a file: {config_path}\",",
-    "231": "file=sys.stderr,",
-    "232": ")",
-    "233": "return 2",
-    "234": "",
-    "235": "try:",
-    "236": "explicit_bind = _split_bind(args.bind) if args.bind is not None else None",
-    "237": "except ValueError as exc:",
-    "238": "print(f\"ERROR: {exc}\", file=sys.stderr)",
-    "239": "return 2",
-    "240": "",
-    "241": "try:",
-    "242": "effective_path = _load_config_for_serve(",
-    "243": "config_path,",
-    "244": "air_gapped=bool(args.air_gapped),",
-    "245": ")",
-    "246": "except RuntimeError as exc:",
-    "247": "print(f\"ERROR: {exc}\", file=sys.stderr)",
-    "248": "return 2",
-    "249": "",
-    "250": "# Broker.from_config surfaces ConfigError / validation errors with",
-    "251": "# readable messages; propagate as a non-zero exit before any bind.",
-    "252": "from nautilus.config.loader import ConfigError",
-    "253": "from nautilus.core.broker import Broker",
-    "254": "",
-    "255": "try:",
-    "256": "broker = Broker.from_config(effective_path)",
-    "257": "except ConfigError as exc:",
-    "258": "print(f\"ERROR: invalid config: {exc}\", file=sys.stderr)",
-    "259": "return 2",
-    "260": "except Exception as exc:  # noqa: BLE001 - surface wiring failures cleanly",
-    "261": "print(f\"ERROR: broker construction failed: {exc}\", file=sys.stderr)",
-    "262": "return 2",
-    "263": "",
-    "264": "# ``api.host`` / ``api.port`` were modelled, documented and shipped in the",
-    "265": "# examples but had no reader, so a config asking for 0.0.0.0:9999 served",
-    "266": "# on 127.0.0.1:8000 anyway -- which is why the root Dockerfile's",
-    "267": "# bind-less CMD listened on loopback inside the container. An explicit",
-    "268": "# --bind still wins.",
-    "269": "host, port = (",
-    "270": "explicit_bind",
-    "271": "if explicit_bind is not None",
-    "272": "else (",
-    "273": "broker.api_config.host,",
-    "274": "broker.api_config.port,",
-    "275": ")",
-    "276": ")",
-    "277": "",
-    "278": "transport = args.transport",
-    "279": "mcp_mode = args.mcp_mode",
-    "280": ""
-   }
-  },
-  {
-   "citation": "nautilus/cli/__init__.py:211-245",
-   "cited_in": [
-    "docs/reference/errors/config.md"
-   ],
-   "file": "nautilus/cli/__init__.py",
-   "sha": "a4f9ec41cbe30589",
-   "lines": {
-    "211": "Calls ``_run_rest`` / ``_run_mcp`` / ``_run_both`` via *this* module's",
-    "212": "namespace so that test monkeypatches on ``cli._run_rest`` etc. are",
-    "213": "honoured.",
-    "214": "\"\"\"",
-    "215": "import nautilus.cli as _cli_module",
-    "216": "",
-    "217": "# #28 — structured logging is applied at the process entry point only;",
-    "218": "# library modules keep plain ``logging.getLogger(__name__)``.",
-    "219": "from nautilus.observability.logging import configure_logging",
-    "220": "",
-    "221": "log_level = getattr(args, \"log_level\", \"info\")",
-    "222": "configure_logging(",
-    "223": "getattr(args, \"log_format\", \"text\"),",
-    "224": "logging.getLevelNamesMapping()[log_level.upper()],",
-    "225": ")",
-    "226": "",
-    "227": "config_path = _Path(args.config)",
-    "228": "if not config_path.is_file():",
-    "229": "print(",
-    "230": "f\"ERROR: config path does not exist or is not a file: {config_path}\",",
-    "231": "file=sys.stderr,",
-    "232": ")",
-    "233": "return 2",
-    "234": "",
-    "235": "try:",
-    "236": "explicit_bind = _split_bind(args.bind) if args.bind is not None else None",
-    "237": "except ValueError as exc:",
-    "238": "print(f\"ERROR: {exc}\", file=sys.stderr)",
-    "239": "return 2",
-    "240": "",
-    "241": "try:",
-    "242": "effective_path = _load_config_for_serve(",
-    "243": "config_path,",
-    "244": "air_gapped=bool(args.air_gapped),",
-    "245": ")"
+    "227": "# #28 — structured logging is applied at the process entry point only;",
+    "228": "# library modules keep plain ``logging.getLogger(__name__)``.",
+    "229": "from nautilus.observability.logging import configure_logging",
+    "230": "",
+    "231": "log_level = getattr(args, \"log_level\", \"info\")",
+    "232": "configure_logging(",
+    "233": "getattr(args, \"log_format\", \"text\"),",
+    "234": "logging.getLevelNamesMapping()[log_level.upper()],",
+    "235": ")",
+    "236": "",
+    "237": "try:",
+    "238": "explicit_bind = _split_bind(args.bind) if args.bind is not None else None",
+    "239": "except ValueError as exc:",
+    "240": "print(f\"ERROR: {exc}\", file=sys.stderr)",
+    "241": "return 2",
+    "242": "",
+    "243": "# The path check, the --air-gapped pre-pass and Broker.from_config live in",
+    "244": "# ``broker_for_serve`` because ``nautilus config check`` runs the same",
+    "245": "# three, and an operator checking a config before a deploy has to be",
+    "246": "# running what ``serve`` runs rather than a copy of it that can drift.",
+    "247": "try:",
+    "248": "broker = broker_for_serve(_Path(args.config), air_gapped=bool(args.air_gapped))",
+    "249": "except ConfigRefusedError as exc:",
+    "250": "print(f\"ERROR: {exc}\", file=sys.stderr)",
+    "251": "return 2",
+    "252": "",
+    "253": "# ``api.host`` / ``api.port`` were modelled, documented and shipped in the",
+    "254": "# examples but had no reader, so a config asking for 0.0.0.0:9999 served",
+    "255": "# on 127.0.0.1:8000 anyway -- which is why the root Dockerfile's",
+    "256": "# bind-less CMD listened on loopback inside the container. An explicit",
+    "257": "# --bind still wins.",
+    "258": "host, port = (",
+    "259": "explicit_bind",
+    "260": "if explicit_bind is not None",
+    "261": "else (",
+    "262": "broker.api_config.host,",
+    "263": "broker.api_config.port,",
+    "264": ")",
+    "265": ")",
+    "266": "",
+    "267": "transport = args.transport",
+    "268": "mcp_mode = args.mcp_mode",
+    "269": "",
+    "270": "try:",
+    "271": "if transport == \"rest\":",
+    "272": "asyncio.run(_cli_module._run_rest(broker, host, port, log_level))  # pyright: ignore[reportPrivateUsage]",
+    "273": "elif transport == \"mcp\":",
+    "274": "asyncio.run(_cli_module._run_mcp(broker, mcp_mode, host, port, log_level))  # pyright: ignore[reportPrivateUsage]",
+    "275": "else:",
+    "276": "asyncio.run(_cli_module._run_both(broker, host, port, mcp_mode, log_level))  # pyright: ignore[reportPrivateUsage]",
+    "277": "except KeyboardInterrupt:",
+    "278": "pass",
+    "279": "except RuntimeError as exc:",
+    "280": "# ``_serve_or_raise`` turns a lifespan that failed into this. uvicorn",
+    "281": "# returns from ``serve()`` in that case rather than raising, and the",
+    "282": "# unconditional ``return 0`` below reported a pod that never served as",
+    "283": "# a clean run.",
+    "284": "print(f\"ERROR: {exc}\", file=sys.stderr)",
+    "285": "return 2",
+    "286": "finally:",
+    "287": "# For --transport rest the FastAPI lifespan already closed the",
+    "288": "# broker; aclose() is idempotent so the extra call is safe. A",
+    "289": "# stale/already-closed event loop surfaces as RuntimeError — we",
+    "290": "# silence it since the broker state is what matters here.",
+    "291": "with contextlib.suppress(RuntimeError):",
+    "292": "asyncio.run(broker.aclose())",
+    "293": "return 0"
    }
   },
   {
@@ -2688,6 +2644,70 @@
    }
   },
   {
+   "citation": "nautilus/cli/serve.py:243-284",
+   "cited_in": [
+    "docs/reference/errors/cli.md",
+    "docs/reference/errors/config.md"
+   ],
+   "file": "nautilus/cli/serve.py",
+   "sha": "e0c84b13cc404d27",
+   "lines": {
+    "243": "def broker_for_serve(config_path: Path, *, air_gapped: bool) -> Broker:",
+    "244": "\"\"\"Everything ``serve`` does between the path and the socket.",
+    "245": "",
+    "246": "Path check, the ``--air-gapped`` pre-pass, and ``Broker.from_config`` —",
+    "247": "the sequence ``nautilus serve`` runs before uvicorn binds, factored out",
+    "248": "so ``nautilus config check`` runs it rather than a second copy of it. A",
+    "249": "reimplementation would drift, and the failure mode of a drifted validator",
+    "250": "is that it blesses a config ``serve`` then refuses, which is worse than",
+    "251": "having no check at all.",
+    "252": "",
+    "253": "What it deliberately does not reach: ``Broker.setup()``. ``serve`` does",
+    "254": "not call it either until the transport is already up (the FastAPI",
+    "255": "lifespan does), and it is where a durable session store is first dialled",
+    "256": "and adapter schema fingerprints are checked — questions about the",
+    "257": "environment the process lands in, not about the file. Those failures are",
+    "258": "what ``/readyz`` and the rollout's readiness gate are for. Everything the",
+    "259": "file alone decides, including whether ``audit.path`` can be opened for",
+    "260": "writing, is settled here.",
+    "261": "",
+    "262": "Raises:",
+    "263": "ConfigRefusedError: On any config ``serve`` would exit 2 on.",
+    "264": "\"\"\"",
+    "265": "if not config_path.is_file():",
+    "266": "raise ConfigRefusedError(f\"config path does not exist or is not a file: {config_path}\")",
+    "267": "",
+    "268": "try:",
+    "269": "effective_path = _load_config_for_serve(config_path, air_gapped=air_gapped)",
+    "270": "except RuntimeError as exc:",
+    "271": "raise ConfigRefusedError(str(exc)) from exc",
+    "272": "",
+    "273": "# Broker.from_config surfaces ConfigError / validation errors with",
+    "274": "# readable messages; the caller turns these into a non-zero exit before",
+    "275": "# any bind.",
+    "276": "from nautilus.config.loader import ConfigError",
+    "277": "from nautilus.core.broker import Broker",
+    "278": "",
+    "279": "try:",
+    "280": "return Broker.from_config(effective_path)",
+    "281": "except ConfigError as exc:",
+    "282": "raise ConfigRefusedError(f\"invalid config: {exc}\") from exc",
+    "283": "except Exception as exc:  # noqa: BLE001 - surface wiring failures cleanly",
+    "284": "raise ConfigRefusedError(f\"broker construction failed: {exc}\") from exc"
+   }
+  },
+  {
+   "citation": "nautilus/cli/serve.py:266",
+   "cited_in": [
+    "docs/reference/errors/cli.md"
+   ],
+   "file": "nautilus/cli/serve.py",
+   "sha": "e7c361bc687dc575",
+   "lines": {
+    "266": "raise ConfigRefusedError(f\"config path does not exist or is not a file: {config_path}\")"
+   }
+  },
+  {
    "citation": "nautilus/cli/serve.py:27-29",
    "cited_in": [
     "docs/reference/errors/cli.md"
@@ -2698,6 +2718,28 @@
     "27": "port = int(port_s)",
     "28": "except ValueError as exc:",
     "29": "raise ValueError(f\"--bind port must be an integer, got {port_s!r}\") from exc"
+   }
+  },
+  {
+   "citation": "nautilus/cli/serve.py:282",
+   "cited_in": [
+    "docs/reference/errors/cli.md"
+   ],
+   "file": "nautilus/cli/serve.py",
+   "sha": "e9ece20d76f6b79f",
+   "lines": {
+    "282": "raise ConfigRefusedError(f\"invalid config: {exc}\") from exc"
+   }
+  },
+  {
+   "citation": "nautilus/cli/serve.py:284",
+   "cited_in": [
+    "docs/reference/errors/cli.md"
+   ],
+   "file": "nautilus/cli/serve.py",
+   "sha": "f4d881b5612e32ea",
+   "lines": {
+    "284": "raise ConfigRefusedError(f\"broker construction failed: {exc}\") from exc"
    }
   },
   {
@@ -2997,148 +3039,173 @@
    }
   },
   {
-   "citation": "nautilus/config/models.py:146",
+   "citation": "nautilus/config/models.py:147",
    "cited_in": [
     "docs/reference/errors/config.md"
    ],
    "file": "nautilus/config/models.py",
    "sha": "df25f102925190e9",
    "lines": {
-    "146": "id: str = Field(pattern=r\"^[A-Za-z0-9][A-Za-z0-9._-]*$\")"
+    "147": "id: str = Field(pattern=r\"^[A-Za-z0-9][A-Za-z0-9._-]*$\")"
    }
   },
   {
-   "citation": "nautilus/config/models.py:211-216",
+   "citation": "nautilus/config/models.py:212-217",
    "cited_in": [
     "docs/reference/errors/config.md"
    ],
    "file": "nautilus/config/models.py",
    "sha": "119e00c647ddbdc8",
    "lines": {
-    "211": "\"\"\"Reject a source whose adapter can never serve a request.\"\"\"",
-    "212": "required = _REQUIRED_BY_TYPE.get(self.type)",
-    "213": "if required is not None and not getattr(self, required, None):",
-    "214": "raise ValueError(",
-    "215": "f\"source '{self.id}' has type '{self.type}' but no '{required}'. \"",
-    "216": "f\"The {self.type} adapter requires it, so every request to this \""
+    "212": "\"\"\"Reject a source whose adapter can never serve a request.\"\"\"",
+    "213": "required = _REQUIRED_BY_TYPE.get(self.type)",
+    "214": "if required is not None and not getattr(self, required, None):",
+    "215": "raise ValueError(",
+    "216": "f\"source '{self.id}' has type '{self.type}' but no '{required}'. \"",
+    "217": "f\"The {self.type} adapter requires it, so every request to this \""
    }
   },
   {
-   "citation": "nautilus/config/models.py:212-218",
+   "citation": "nautilus/config/models.py:213-219",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/config/models.py",
    "sha": "b4a8c5ad41402e5c",
    "lines": {
-    "212": "required = _REQUIRED_BY_TYPE.get(self.type)",
-    "213": "if required is not None and not getattr(self, required, None):",
-    "214": "raise ValueError(",
-    "215": "f\"source '{self.id}' has type '{self.type}' but no '{required}'. \"",
-    "216": "f\"The {self.type} adapter requires it, so every request to this \"",
-    "217": "f\"source would fail at runtime.\"",
-    "218": ")"
+    "213": "required = _REQUIRED_BY_TYPE.get(self.type)",
+    "214": "if required is not None and not getattr(self, required, None):",
+    "215": "raise ValueError(",
+    "216": "f\"source '{self.id}' has type '{self.type}' but no '{required}'. \"",
+    "217": "f\"The {self.type} adapter requires it, so every request to this \"",
+    "218": "f\"source would fail at runtime.\"",
+    "219": ")"
    }
   },
   {
-   "citation": "nautilus/config/models.py:218-222",
+   "citation": "nautilus/config/models.py:219-223",
    "cited_in": [
     "docs/reference/errors/config.md"
    ],
    "file": "nautilus/config/models.py",
    "sha": "5cf68072cfbee407",
    "lines": {
-    "218": ")",
-    "219": "if self.type in _CONNECTS_OUT and not self.connection:",
-    "220": "raise ValueError(",
-    "221": "f\"source '{self.id}' has type '{self.type}' but no 'connection'. \"",
-    "222": "f\"The {self.type} adapter has nothing to dial, so every request \""
+    "219": ")",
+    "220": "if self.type in _CONNECTS_OUT and not self.connection:",
+    "221": "raise ValueError(",
+    "222": "f\"source '{self.id}' has type '{self.type}' but no 'connection'. \"",
+    "223": "f\"The {self.type} adapter has nothing to dial, so every request \""
    }
   },
   {
-   "citation": "nautilus/config/models.py:241",
+   "citation": "nautilus/config/models.py:242",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/config/models.py",
    "sha": "2c1f90888324ac5e",
    "lines": {
-    "241": "# id, an OIDC subject, a certificate CN. Matched against ``X-Forwarded-User``"
+    "242": "# id, an OIDC subject, a certificate CN. Matched against ``X-Forwarded-User``"
    }
   },
   {
-   "citation": "nautilus/config/models.py:466-470",
+   "citation": "nautilus/config/models.py:467-471",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/config/models.py",
    "sha": "5f84d68b6c17a5e5",
    "lines": {
-    "466": "unknown = [c for c in self.capabilities if c not in CAPABILITIES]",
-    "467": "if unknown:",
-    "468": "raise ValueError(",
-    "469": "f\"api.keys entry declares unknown capabilities {unknown}. \"",
-    "470": "f\"Known capabilities: {list(CAPABILITIES)}\""
+    "467": "unknown = [c for c in self.capabilities if c not in CAPABILITIES]",
+    "468": "if unknown:",
+    "469": "raise ValueError(",
+    "470": "f\"api.keys entry declares unknown capabilities {unknown}. \"",
+    "471": "f\"Known capabilities: {list(CAPABILITIES)}\""
    }
   },
   {
-   "citation": "nautilus/config/models.py:492-496",
+   "citation": "nautilus/config/models.py:493-497",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/config/models.py",
    "sha": "399cb4ca40bfde7a",
    "lines": {
-    "492": "\"\"\"Refuse ``proxy_trust`` with no peer restriction.\"\"\"",
-    "493": "if self.mode == \"proxy_trust\" and not self.trusted_proxies:",
-    "494": "raise ValueError(",
-    "495": "\"api.auth.mode 'proxy_trust' requires api.auth.trusted_proxies. \"",
-    "496": "\"Without it, X-Forwarded-User is settable by anyone who can reach \""
+    "493": "\"\"\"Refuse ``proxy_trust`` with no peer restriction.\"\"\"",
+    "494": "if self.mode == \"proxy_trust\" and not self.trusted_proxies:",
+    "495": "raise ValueError(",
+    "496": "\"api.auth.mode 'proxy_trust' requires api.auth.trusted_proxies. \"",
+    "497": "\"Without it, X-Forwarded-User is settable by anyone who can reach \""
    }
   },
   {
-   "citation": "nautilus/config/models.py:501-505",
+   "citation": "nautilus/config/models.py:502-506",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/config/models.py",
    "sha": "3eecbca458fa3c46",
    "lines": {
-    "501": "ip_network(entry, strict=False)",
-    "502": "except ValueError as exc:",
-    "503": "raise ValueError(",
-    "504": "f\"api.auth.trusted_proxies entry {entry!r} is not an address \"",
-    "505": "f\"or CIDR block: {exc}\""
+    "502": "ip_network(entry, strict=False)",
+    "503": "except ValueError as exc:",
+    "504": "raise ValueError(",
+    "505": "f\"api.auth.trusted_proxies entry {entry!r} is not an address \"",
+    "506": "f\"or CIDR block: {exc}\""
    }
   },
   {
-   "citation": "nautilus/config/models.py:593-597",
+   "citation": "nautilus/config/models.py:594-598",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/config/models.py",
    "sha": "38116d3d76baa2f5",
    "lines": {
-    "593": "\"\"\"Name what happened to ``redis`` rather than listing it as a typo.\"\"\"",
-    "594": "if value == \"redis\":",
-    "595": "raise ValueError(",
-    "596": "\"session_store.backend: redis has no implementation. It used to \"",
-    "597": "\"load and serve sessions from memory instead, which gives \""
+    "594": "\"\"\"Name what happened to ``redis`` rather than listing it as a typo.\"\"\"",
+    "595": "if value == \"redis\":",
+    "596": "raise ValueError(",
+    "597": "\"session_store.backend: redis has no implementation. It used to \"",
+    "598": "\"load and serve sessions from memory instead, which gives \""
    }
   },
   {
-   "citation": "nautilus/config/models.py:685-689",
+   "citation": "nautilus/config/models.py:686-690",
    "cited_in": [
     "docs/reference/errors/config.md"
    ],
    "file": "nautilus/config/models.py",
    "sha": "3cac630950f66587",
    "lines": {
-    "685": "def _reject_unimplemented_auto_promotion(self) -> AutoPromoteConfig:",
-    "686": "if self.enabled:",
-    "687": "raise ValueError(",
-    "688": "\"rkm.auto_promote.enabled: auto-promotion is not implemented. \"",
-    "689": "\"Every proposal routes to the human-review queue \""
+    "686": "def _reject_unimplemented_auto_promotion(self) -> AutoPromoteConfig:",
+    "687": "if self.enabled:",
+    "688": "raise ValueError(",
+    "689": "\"rkm.auto_promote.enabled: auto-promotion is not implemented. \"",
+    "690": "\"Every proposal routes to the human-review queue \""
+   }
+  },
+  {
+   "citation": "nautilus/config/models.py:798-812",
+   "cited_in": [
+    "docs/reference/errors/adapters.md"
+   ],
+   "file": "nautilus/config/models.py",
+   "sha": "97c30338ec51da9d",
+   "lines": {
+    "798": "try:",
+    "799": "parts = urlsplit(connection)",
+    "800": "host = parts.hostname",
+    "801": "port = parts.port",
+    "802": "except ValueError:",
+    "803": "# urlsplit defers parsing to attribute access: a non-numeric or",
+    "804": "# out-of-range port raises here, and a connection we cannot parse is",
+    "805": "# one we must not paraphrase.",
+    "806": "return None",
+    "807": "if not host or not parts.scheme:",
+    "808": "return None",
+    "809": "# An IPv6 literal comes back unbracketed; re-bracket so the result is a",
+    "810": "# URL an operator can paste back.",
+    "811": "host = f\"[{host}]\" if \":\" in host else host",
+    "812": "return f\"{parts.scheme}://{host}\" + (f\":{port}\" if port is not None else \"\")"
    }
   },
   {
@@ -3230,572 +3297,607 @@
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1021-1025",
+   "citation": "nautilus/core/broker.py:1022-1026",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "cf1c51c54172f854",
    "lines": {
-    "1021": "if not dsn:",
-    "1022": "dsn = os.environ.get(\"TEST_PG_DSN\")",
-    "1023": "if dsn:",
-    "1024": "# A test-shaped name reaching a production code path. It stays",
-    "1025": "# (the integration fixtures dial a container DSN through it),"
+    "1022": "if not dsn:",
+    "1023": "dsn = os.environ.get(\"TEST_PG_DSN\")",
+    "1024": "if dsn:",
+    "1025": "# A test-shaped name reaching a production code path. It stays",
+    "1026": "# (the integration fixtures dial a container DSN through it),"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1022",
+   "citation": "nautilus/core/broker.py:1023",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "5c0fa3606b254ef7",
    "lines": {
-    "1022": "dsn = os.environ.get(\"TEST_PG_DSN\")"
+    "1023": "dsn = os.environ.get(\"TEST_PG_DSN\")"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1074-1077",
+   "citation": "nautilus/core/broker.py:1075-1078",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "f839b58851bf09db",
    "lines": {
-    "1074": "",
-    "1075": "- ``\"null\"`` (default) → :class:`NullAttestationSink` — no-op; preserves",
-    "1076": "NFR-5 for Phase-1 YAML fixtures with no ``attestation.sink`` entry.",
-    "1077": "- ``\"file\"`` → :class:`FileAttestationSink` — append-only JSONL with"
+    "1075": "",
+    "1076": "- ``\"null\"`` (default) → :class:`NullAttestationSink` — no-op; preserves",
+    "1077": "NFR-5 for Phase-1 YAML fixtures with no ``attestation.sink`` entry.",
+    "1078": "- ``\"file\"`` → :class:`FileAttestationSink` — append-only JSONL with"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1184",
+   "citation": "nautilus/core/broker.py:1185",
    "cited_in": [
     "docs/reference/errors/config.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "eb033019f187851d",
    "lines": {
-    "1184": "A source's name, prose description and data types are what a caller"
+    "1185": "A source's name, prose description and data types are what a caller"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1186-1194",
+   "citation": "nautilus/core/broker.py:1187-1195",
    "cited_in": [
     "docs/reference/errors/config.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dc46cb72fe93c6f5",
    "lines": {
-    "1186": "classification rules refuse. Listing every source to every caller told",
-    "1187": "an unclassified key exactly what it was being kept from, so the",
-    "1188": "catalogue is filtered by the same clearance ladder the router routes",
-    "1189": "by.",
-    "1190": "",
-    "1191": "``None`` means no bound agent — a bare key, which is documented as",
-    "1192": "\"any agent_id, every capability\" and has no clearance to filter",
-    "1193": "against — or a deployment with no ``classification`` hierarchy",
-    "1194": "registered, which has no ladder at all. Both see the whole catalogue."
+    "1187": "classification rules refuse. Listing every source to every caller told",
+    "1188": "an unclassified key exactly what it was being kept from, so the",
+    "1189": "catalogue is filtered by the same clearance ladder the router routes",
+    "1190": "by.",
+    "1191": "",
+    "1192": "``None`` means no bound agent — a bare key, which is documented as",
+    "1193": "\"any agent_id, every capability\" and has no clearance to filter",
+    "1194": "against — or a deployment with no ``classification`` hierarchy",
+    "1195": "registered, which has no ladder at all. Both see the whole catalogue."
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1324-1330",
+   "citation": "nautilus/core/broker.py:1325-1331",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "905b2a59d9cdb539",
    "lines": {
-    "1324": "def issue_session_token(",
-    "1325": "self,",
-    "1326": "*,",
-    "1327": "session_id: str,",
-    "1328": "agent_id: str,",
-    "1329": "purpose: str,",
-    "1330": ") -> str:"
+    "1325": "def issue_session_token(",
+    "1326": "self,",
+    "1327": "*,",
+    "1328": "session_id: str,",
+    "1329": "agent_id: str,",
+    "1330": "purpose: str,",
+    "1331": ") -> str:"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1392",
+   "citation": "nautilus/core/broker.py:1393",
    "cited_in": [
     "docs/reference/errors/session-tokens.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "2a9b5e72b68a1d0b",
    "lines": {
-    "1392": "wrong-instance token."
+    "1393": "wrong-instance token."
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1396-1400",
+   "citation": "nautilus/core/broker.py:1397-1401",
    "cited_in": [
     "docs/reference/errors/session-tokens.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "fb2c2b2fe73ac099",
    "lines": {
-    "1396": "try:",
-    "1397": "return self._session_tokens.verify(token)",
-    "1398": "except SessionTokenError as exc:",
-    "1399": "request_id = str(uuid.uuid4())",
-    "1400": "self._emit_session_token_event("
+    "1397": "try:",
+    "1398": "return self._session_tokens.verify(token)",
+    "1399": "except SessionTokenError as exc:",
+    "1400": "request_id = str(uuid.uuid4())",
+    "1401": "self._emit_session_token_event("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1509",
+   "citation": "nautilus/core/broker.py:1510",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "d7557aae12da7324",
    "lines": {
-    "1509": "raise RuntimeError("
+    "1510": "raise RuntimeError("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1542-1546",
+   "citation": "nautilus/core/broker.py:1543-1547",
    "cited_in": [
     "docs/reference/errors/library.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "ea5bb8ff93b057e5",
    "lines": {
-    "1542": ") -> BrokerResponse:",
-    "1543": "\"\"\"Async request pipeline (design §3.1, §8, §9).",
-    "1544": "",
-    "1545": "``caller`` is the transport's view of who is calling -- ``{\"auth\":",
-    "1546": "<authenticated principal>, \"peer\": <network address>}`` -- and is what"
+    "1543": ") -> BrokerResponse:",
+    "1544": "\"\"\"Async request pipeline (design §3.1, §8, §9).",
+    "1545": "",
+    "1546": "``caller`` is the transport's view of who is calling -- ``{\"auth\":",
+    "1547": "<authenticated principal>, \"peer\": <network address>}`` -- and is what"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1644",
+   "citation": "nautilus/core/broker.py:1645",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "9c34f9bb4365f61d",
    "lines": {
-    "1644": "``event_type=\"handoff_declared\"`` and the populated"
+    "1645": "``event_type=\"handoff_declared\"`` and the populated"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1800-1816",
+   "citation": "nautilus/core/broker.py:1801-1817",
    "cited_in": [
     "docs/reference/errors/library.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "8cec7252b3e0971e",
    "lines": {
-    "1800": ")",
-    "1801": "return decision",
-    "1802": "",
-    "1803": "async def _record_handoff_partner(self, session_id: str, receiving_agent_id: str) -> None:",
-    "1804": "\"\"\"Let the receiving agent of an allowed handoff into the session.",
-    "1805": "",
-    "1806": "Read-merge-write on the session row's ``handoff_agents``. Best effort:",
-    "1807": "a store that cannot take the note must not turn an allowed handoff into",
-    "1808": "a denial — the receiving agent is refused later by the ownership gate,",
-    "1809": "which is the safe direction to fail.",
-    "1810": "\"\"\"",
-    "1811": "try:",
-    "1812": "row = await self._session_get(session_id)",
-    "1813": "prior: Any = row.get(\"handoff_agents\")",
-    "1814": "partners: list[str] = (",
-    "1815": "[str(a) for a in cast(\"list[Any]\", prior)] if isinstance(prior, list) else []",
-    "1816": ")"
+    "1801": ")",
+    "1802": "return decision",
+    "1803": "",
+    "1804": "async def _record_handoff_partner(self, session_id: str, receiving_agent_id: str) -> None:",
+    "1805": "\"\"\"Let the receiving agent of an allowed handoff into the session.",
+    "1806": "",
+    "1807": "Read-merge-write on the session row's ``handoff_agents``. Best effort:",
+    "1808": "a store that cannot take the note must not turn an allowed handoff into",
+    "1809": "a denial — the receiving agent is refused later by the ownership gate,",
+    "1810": "which is the safe direction to fail.",
+    "1811": "\"\"\"",
+    "1812": "try:",
+    "1813": "row = await self._session_get(session_id)",
+    "1814": "prior: Any = row.get(\"handoff_agents\")",
+    "1815": "partners: list[str] = (",
+    "1816": "[str(a) for a in cast(\"list[Any]\", prior)] if isinstance(prior, list) else []",
+    "1817": ")"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1802-1806",
+   "citation": "nautilus/core/broker.py:1803-1807",
    "cited_in": [
     "docs/reference/errors/library.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "0d75463cf77bbd7b",
    "lines": {
-    "1802": "",
-    "1803": "async def _record_handoff_partner(self, session_id: str, receiving_agent_id: str) -> None:",
-    "1804": "\"\"\"Let the receiving agent of an allowed handoff into the session.",
-    "1805": "",
-    "1806": "Read-merge-write on the session row's ``handoff_agents``. Best effort:"
+    "1803": "",
+    "1804": "async def _record_handoff_partner(self, session_id: str, receiving_agent_id: str) -> None:",
+    "1805": "\"\"\"Let the receiving agent of an allowed handoff into the session.",
+    "1806": "",
+    "1807": "Read-merge-write on the session row's ``handoff_agents``. Best effort:"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1826",
+   "citation": "nautilus/core/broker.py:1827",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "1826": "log.warning("
+    "1827": "log.warning("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1936",
+   "citation": "nautilus/core/broker.py:1937",
    "cited_in": [
     "docs/reference/errors/session-tokens.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "ad2f90cfd9b5409d",
    "lines": {
-    "1936": "token_trace.append("
+    "1937": "token_trace.append("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1959",
+   "citation": "nautilus/core/broker.py:1960",
    "cited_in": [
     "docs/reference/errors/session-tokens.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "83f5de42b2f77754",
    "lines": {
-    "1959": "whose async ``analyze`` returns a ``(IntentAnalysis, LLMProvenance)``"
+    "1960": "whose async ``analyze`` returns a ``(IntentAnalysis, LLMProvenance)``"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2021-2026",
+   "citation": "nautilus/core/broker.py:2022-2027",
    "cited_in": [
     "docs/reference/errors/library.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "d7f5acce06de767c",
    "lines": {
-    "2021": "# ``alock_all`` holds every key on one pooled connection. Entering the",
-    "2022": "# store's per-key lock separately took a connection per key, which made",
-    "2023": "# the store's ceiling ``pool_max_size / keys-per-request``.",
-    "2024": "store_lock_all = getattr(self._session_store, \"alock_all\", None)",
-    "2025": "store_lock = getattr(self._session_store, \"alock\", None)",
-    "2026": "# The wait is bounded because the hold is long: the lock spans the whole"
+    "2022": "# ``alock_all`` holds every key on one pooled connection. Entering the",
+    "2023": "# store's per-key lock separately took a connection per key, which made",
+    "2024": "# the store's ceiling ``pool_max_size / keys-per-request``.",
+    "2025": "store_lock_all = getattr(self._session_store, \"alock_all\", None)",
+    "2026": "store_lock = getattr(self._session_store, \"alock\", None)",
+    "2027": "# The wait is bounded because the hold is long: the lock spans the whole"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2224-2228",
+   "citation": "nautilus/core/broker.py:2225-2229",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "842a90b5e8793512",
    "lines": {
-    "2224": "The source is therefore denied for this request rather than queried",
-    "2225": "under whatever restrictions happen to survive — the fail-closed",
-    "2226": "reading of the window that :mod:`nautilus.core.temporal` documents.",
-    "2227": "Re-granting means issuing a fresh, unexpired constraint.",
-    "2228": "\"\"\""
+    "2225": "The source is therefore denied for this request rather than queried",
+    "2226": "under whatever restrictions happen to survive — the fail-closed",
+    "2227": "reading of the window that :mod:`nautilus.core.temporal` documents.",
+    "2228": "Re-granting means issuing a fresh, unexpired constraint.",
+    "2229": "\"\"\""
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2357-2362",
+   "citation": "nautilus/core/broker.py:2358-2363",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "5f5ab125913deb5f",
    "lines": {
-    "2357": "if allowed and \"purpose\" in reason.lower():",
-    "2358": "names = \", \".join(sorted(allowed))",
-    "2359": "reason = f\"{reason} (source '{source.id}' allows purposes: {names})\"",
-    "2360": "return denial.model_copy(update={\"relevant\": relevant, \"reason\": reason})",
-    "2361": "",
-    "2362": "def _skip_records(self, state: _RequestState) -> list[SkipRecord]:"
+    "2358": "if allowed and \"purpose\" in reason.lower():",
+    "2359": "names = \", \".join(sorted(allowed))",
+    "2360": "reason = f\"{reason} (source '{source.id}' allows purposes: {names})\"",
+    "2361": "return denial.model_copy(update={\"relevant\": relevant, \"reason\": reason})",
+    "2362": "",
+    "2363": "def _skip_records(self, state: _RequestState) -> list[SkipRecord]:"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2608",
+   "citation": "nautilus/core/broker.py:2613",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "33b7ae9382dd5af3",
    "lines": {
-    "2608": "f\"connect() failed: {exc}\","
+    "2613": "f\"connect() failed: {exc}\","
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2687-2690",
+   "citation": "nautilus/core/broker.py:2661-2664",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/core/broker.py",
-   "sha": "14ad205c005c7027",
+   "sha": "45d17966985fdc02",
    "lines": {
-    "2687": "if res.truncated:",
-    "2688": "state.truncated_sources.append(source_id)",
-    "2689": "# Per-source chain-of-custody hash (issue #19, AC-19), computed",
-    "2690": "# centrally by the broker over each source's raw rows at this"
+    "2661": "budget = self._registry.get(source_id).timeout_s",
+    "2662": "if budget is None:",
+    "2663": "return \"exceeded the source's timeout_s budget\"",
+    "2664": "return f\"exceeded the source's timeout_s budget of {budget}s\""
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2718",
+   "citation": "nautilus/core/broker.py:2698-2708",
+   "cited_in": [
+    "docs/reference/errors/adapters.md"
+   ],
+   "file": "nautilus/core/broker.py",
+   "sha": "725b604008949701",
+   "lines": {
+    "2698": "if record.endpoint is None:",
+    "2699": "record = record.model_copy(update={\"endpoint\": self._source_endpoint(record.source_id)})",
+    "2700": "log.warning(",
+    "2701": "\"source %r failed (endpoint=%s, error_type=%s, trace_id=%s): %s\",",
+    "2702": "record.source_id,",
+    "2703": "record.endpoint or \"<none configured>\",",
+    "2704": "record.error_type,",
+    "2705": "record.trace_id,",
+    "2706": "record.message,",
+    "2707": ")",
+    "2708": "state.errored.append(record)"
+   }
+  },
+  {
+   "citation": "nautilus/core/broker.py:2700",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "2718": "log.warning("
+    "2700": "log.warning("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:275-320",
+   "citation": "nautilus/core/broker.py:276-321",
    "cited_in": [
     "docs/reference/errors/config.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "df32fd3e5aed01f1",
    "lines": {
-    "275": "registered: list[str] = []  # sys.modules names to roll back on failure",
-    "276": "try:",
-    "277": "for i, cfg in enumerate(adapter_configs):",
-    "278": "module_path = Path(cfg.module_path)",
-    "279": "if not module_path.is_absolute():",
-    "280": "module_path = base_dir / module_path",
-    "281": "if not module_path.is_file():",
-    "282": "raise ConfigError(",
-    "283": "f\"adapters[{i}]: module_path does not exist or is not a file: {module_path}\"",
-    "284": ")",
-    "285": "",
-    "286": "module_name = f\"nautilus_local_adapter_{i}_{module_path.stem}\"",
-    "287": "spec = importlib.util.spec_from_file_location(module_name, module_path)",
-    "288": "if spec is None or spec.loader is None:",
-    "289": "raise ConfigError(f\"adapters[{i}]: cannot import module from {module_path}\")",
-    "290": "module = importlib.util.module_from_spec(spec)",
-    "291": "sys.modules[module_name] = module",
-    "292": "registered.append(module_name)",
-    "293": "try:",
-    "294": "spec.loader.exec_module(module)",
-    "295": "except Exception as exc:",
-    "296": "raise ConfigError(f\"adapters[{i}]: error executing {module_path}: {exc}\") from exc",
-    "297": "",
-    "298": "obj: object = getattr(module, cfg.class_name, None)",
-    "299": "if obj is None:",
-    "300": "raise ConfigError(",
-    "301": "f\"adapters[{i}]: class '{cfg.class_name}' not found in {module_path}\"",
-    "302": ")",
-    "303": "if not isinstance(obj, type):",
-    "304": "raise ConfigError(",
-    "305": "f\"adapters[{i}]: '{cfg.class_name}' in {module_path} is not a class\"",
-    "306": ")",
-    "307": "gaps = _adapter_protocol_gaps(obj)",
-    "308": "if gaps:",
-    "309": "raise ConfigError(",
-    "310": "f\"adapters[{i}]: '{cfg.class_name}' in {module_path} does not implement \"",
-    "311": "f\"the Adapter protocol (missing: {gaps})\"",
-    "312": ")",
-    "313": "actual_type = getattr(obj, \"source_type\", None)",
-    "314": "if actual_type != cfg.source_type:",
-    "315": "raise ConfigError(",
-    "316": "f\"adapters[{i}]: declared source_type='{cfg.source_type}' does not match \"",
-    "317": "f\"{cfg.class_name}.source_type={actual_type!r} in {module_path}\"",
-    "318": ")",
-    "319": "",
-    "320": "loaded[cfg.source_type] = cast(\"type[Adapter]\", obj)"
+    "276": "registered: list[str] = []  # sys.modules names to roll back on failure",
+    "277": "try:",
+    "278": "for i, cfg in enumerate(adapter_configs):",
+    "279": "module_path = Path(cfg.module_path)",
+    "280": "if not module_path.is_absolute():",
+    "281": "module_path = base_dir / module_path",
+    "282": "if not module_path.is_file():",
+    "283": "raise ConfigError(",
+    "284": "f\"adapters[{i}]: module_path does not exist or is not a file: {module_path}\"",
+    "285": ")",
+    "286": "",
+    "287": "module_name = f\"nautilus_local_adapter_{i}_{module_path.stem}\"",
+    "288": "spec = importlib.util.spec_from_file_location(module_name, module_path)",
+    "289": "if spec is None or spec.loader is None:",
+    "290": "raise ConfigError(f\"adapters[{i}]: cannot import module from {module_path}\")",
+    "291": "module = importlib.util.module_from_spec(spec)",
+    "292": "sys.modules[module_name] = module",
+    "293": "registered.append(module_name)",
+    "294": "try:",
+    "295": "spec.loader.exec_module(module)",
+    "296": "except Exception as exc:",
+    "297": "raise ConfigError(f\"adapters[{i}]: error executing {module_path}: {exc}\") from exc",
+    "298": "",
+    "299": "obj: object = getattr(module, cfg.class_name, None)",
+    "300": "if obj is None:",
+    "301": "raise ConfigError(",
+    "302": "f\"adapters[{i}]: class '{cfg.class_name}' not found in {module_path}\"",
+    "303": ")",
+    "304": "if not isinstance(obj, type):",
+    "305": "raise ConfigError(",
+    "306": "f\"adapters[{i}]: '{cfg.class_name}' in {module_path} is not a class\"",
+    "307": ")",
+    "308": "gaps = _adapter_protocol_gaps(obj)",
+    "309": "if gaps:",
+    "310": "raise ConfigError(",
+    "311": "f\"adapters[{i}]: '{cfg.class_name}' in {module_path} does not implement \"",
+    "312": "f\"the Adapter protocol (missing: {gaps})\"",
+    "313": ")",
+    "314": "actual_type = getattr(obj, \"source_type\", None)",
+    "315": "if actual_type != cfg.source_type:",
+    "316": "raise ConfigError(",
+    "317": "f\"adapters[{i}]: declared source_type='{cfg.source_type}' does not match \"",
+    "318": "f\"{cfg.class_name}.source_type={actual_type!r} in {module_path}\"",
+    "319": ")",
+    "320": "",
+    "321": "loaded[cfg.source_type] = cast(\"type[Adapter]\", obj)"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2871-2874",
+   "citation": "nautilus/core/broker.py:2797",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/core/broker.py",
+   "sha": "dfbf1883e63b66b0",
+   "lines": {
+    "2797": "log.warning("
+   }
+  },
+  {
+   "citation": "nautilus/core/broker.py:2950-2953",
    "cited_in": [
     "docs/reference/errors/session-tokens.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "9d0c5a9fe8f4ae13",
    "lines": {
-    "2871": "# verifies (grace window), but we hand back a fresh primary-signed",
-    "2872": "# token on the response so agents converge on the new key without",
-    "2873": "# a push channel — tokens are bearer credentials. The re-signed",
-    "2874": "# token keeps the ORIGINAL expiry (security review C2): re-keying"
+    "2950": "# verifies (grace window), but we hand back a fresh primary-signed",
+    "2951": "# token on the response so agents converge on the new key without",
+    "2952": "# a push channel — tokens are bearer credentials. The re-signed",
+    "2953": "# token keeps the ORIGINAL expiry (security review C2): re-keying"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2878-2884",
+   "citation": "nautilus/core/broker.py:2957-2963",
    "cited_in": [
     "docs/reference/errors/session-tokens.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "cbeb6c56cdafef4a",
    "lines": {
-    "2878": "# a downstream reader has nothing but the signature and the claims.",
-    "2879": "# ``purpose`` and ``clearance`` are written at mint time, so a",
-    "2880": "# session carried into a second purpose kept attesting to the",
-    "2881": "# first. Re-mint when either drifts, so what is signed is what was",
-    "2882": "# enforced. The ORIGINAL expiry is kept in both cases (security",
-    "2883": "# review C2): neither re-keying nor re-binding extends a session.",
-    "2884": "purpose, clearance = self._request_grant(agent_id, context)"
+    "2957": "# a downstream reader has nothing but the signature and the claims.",
+    "2958": "# ``purpose`` and ``clearance`` are written at mint time, so a",
+    "2959": "# session carried into a second purpose kept attesting to the",
+    "2960": "# first. Re-mint when either drifts, so what is signed is what was",
+    "2961": "# enforced. The ORIGINAL expiry is kept in both cases (security",
+    "2962": "# review C2): neither re-keying nor re-binding extends a session.",
+    "2963": "purpose, clearance = self._request_grant(agent_id, context)"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2928",
+   "citation": "nautilus/core/broker.py:3007",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "2928": "log.warning("
+    "3007": "log.warning("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3084-3106",
+   "citation": "nautilus/core/broker.py:3112-3137",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/core/broker.py",
-   "sha": "ea5efb2df121e084",
+   "sha": "1f75a9a859d879b8",
    "lines": {
-    "3084": "(NFR-14) and unit-testable in isolation.",
-    "3085": "",
-    "3086": "Signs via ``AttestationService.sign_claims``, which takes a claim set",
-    "3087": "verbatim. The six claims ``AttestationService.sign`` would have",
-    "3088": "emitted are reproduced exactly, plus the four ``verify-a-token.md``",
-    "3089": "documents (``request_id``, ``response_hash``, ``hash_skipped``,",
-    "3090": "``source_response_hashes``). The Nautilus payload is still what the",
-    "3091": "``input_hash`` covers, so that binding — and every verifier reading",
-    "3092": "it — is unchanged.",
-    "3093": "",
-    "3094": "Returns ``(token, scope_hash_version, nautilus_payload)`` so callers",
-    "3095": "can (1) stamp the version into :attr:`AuditEntry.scope_hash_version`",
-    "3096": "(D-7, FR-19) and (2) hand the signed claim set to the attestation",
-    "3097": "sink (design §3.14). The internal ``scope_by_source`` dict is passed",
-    "3098": "straight to :func:`build_payload` so temporal-slot detection sees the",
-    "3099": "raw :class:`ScopeConstraint` attributes; the v1 path flattens it",
-    "3100": "back to the Phase-1 4-key shape in the legacy iteration order so",
-    "3101": "Phase-1 tokens remain bit-for-bit reproducible (NFR-6).",
-    "3102": "\"\"\"",
-    "3103": "if self._attestation is None:",
-    "3104": "# pragma: no cover — caller guards on self._attestation",
-    "3105": "raise RuntimeError(\"attestation is disabled\")",
-    "3106": ""
+    "3112": "try:",
+    "3113": "return await adapter.execute(intent, scope, context)",
+    "3114": "except ScopeEnforcementError as exc:",
+    "3115": "return AdapterResult(",
+    "3116": "source_id=source_id,",
+    "3117": "rows=[],",
+    "3118": "duration_ms=0,",
+    "3119": "error=ErrorRecord(",
+    "3120": "source_id=source_id,",
+    "3121": "error_type=\"ScopeEnforcementError\",",
+    "3122": "message=str(exc),",
+    "3123": "trace_id=\"\",  # filled in by _gather_adapter_results",
+    "3124": "),",
+    "3125": ")",
+    "3126": "except AdapterError as exc:",
+    "3127": "return AdapterResult(",
+    "3128": "source_id=source_id,",
+    "3129": "rows=[],",
+    "3130": "duration_ms=0,",
+    "3131": "error=ErrorRecord(",
+    "3132": "source_id=source_id,",
+    "3133": "error_type=type(exc).__name__,",
+    "3134": "message=str(exc),",
+    "3135": "trace_id=\"\",",
+    "3136": "),",
+    "3137": ")"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3140",
+   "citation": "nautilus/core/broker.py:3219",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "a315211e467c4c21",
    "lines": {
-    "3140": "decision = f\"nautilus:{request_id}:agent={agent_id}:principal={principal_id}\""
+    "3219": "decision = f\"nautilus:{request_id}:agent={agent_id}:principal={principal_id}\""
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3232",
+   "citation": "nautilus/core/broker.py:3311",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "3232": "log.warning("
+    "3311": "log.warning("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3252",
+   "citation": "nautilus/core/broker.py:3331",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "3252": "log.warning("
+    "3331": "log.warning("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3318",
+   "citation": "nautilus/core/broker.py:3397",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "be7a933a835bb215",
    "lines": {
-    "3318": "log.info(\"quarantine lifted for adapter %r; baseline now matches\", source_id)"
+    "3397": "log.info(\"quarantine lifted for adapter %r; baseline now matches\", source_id)"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3392-3396",
-   "cited_in": [
-    "docs/reference/errors/library.md"
-   ],
-   "file": "nautilus/core/broker.py",
-   "sha": "2c937a3e9a8eea6a",
-   "lines": {
-    "3392": "# 1. Session store: flush any in-flight writes before downstream close.",
-    "3393": "if hasattr(self._session_store, \"aclose\"):",
-    "3394": "with contextlib.suppress(Exception):",
-    "3395": "await self._session_store.aclose()  # type: ignore[attr-defined]",
-    "3396": "# 2. Attestation sink: release the store-and-forward handle AFTER"
-   }
-  },
-  {
-   "citation": "nautilus/core/broker.py:342-360",
+   "citation": "nautilus/core/broker.py:343-361",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "67e8e09eb0686d74",
    "lines": {
-    "342": "def _busy_message(what: str, budget: float | None) -> str:",
-    "343": "\"\"\"What to tell a caller that could not take the exposure ledger in time.",
-    "344": "",
-    "345": "Only what the timeout actually proves. The wait covers two things — the",
-    "346": "in-process lock another request from this caller may be holding, and the",
-    "347": "round trip to the session store that takes the shared advisory lock — and",
-    "348": "nothing here distinguishes them. Naming only contention sent operators",
-    "349": "looking for load that was not there: a single uncontended request against a",
-    "350": "store that had stopped answering timed out with the same message.",
-    "351": "\"\"\"",
-    "352": "return (",
-    "353": "f\"Broker busy: waited {budget}s to take the exposure ledger on {what!r} \"",
-    "354": "f\"and did not get it. Either another request from this caller still \"",
-    "355": "f\"holds it — requests from one caller are served one at a time so \"",
-    "356": "f\"cumulative exposure is counted once — or the session store is slow or \"",
-    "357": "f\"unreachable. Check /readyz to tell the two apart. Retry, or raise \"",
-    "358": "f\"session_store.lock_timeout_s.\"",
-    "359": ")",
-    "360": ""
+    "343": "def _busy_message(what: str, budget: float | None) -> str:",
+    "344": "\"\"\"What to tell a caller that could not take the exposure ledger in time.",
+    "345": "",
+    "346": "Only what the timeout actually proves. The wait covers two things — the",
+    "347": "in-process lock another request from this caller may be holding, and the",
+    "348": "round trip to the session store that takes the shared advisory lock — and",
+    "349": "nothing here distinguishes them. Naming only contention sent operators",
+    "350": "looking for load that was not there: a single uncontended request against a",
+    "351": "store that had stopped answering timed out with the same message.",
+    "352": "\"\"\"",
+    "353": "return (",
+    "354": "f\"Broker busy: waited {budget}s to take the exposure ledger on {what!r} \"",
+    "355": "f\"and did not get it. Either another request from this caller still \"",
+    "356": "f\"holds it — requests from one caller are served one at a time so \"",
+    "357": "f\"cumulative exposure is counted once — or the session store is slow or \"",
+    "358": "f\"unreachable. Check /readyz to tell the two apart. Retry, or raise \"",
+    "359": "f\"session_store.lock_timeout_s.\"",
+    "360": ")",
+    "361": ""
    }
   },
   {
-   "citation": "nautilus/core/broker.py:547-552",
+   "citation": "nautilus/core/broker.py:3471-3475",
+   "cited_in": [
+    "docs/reference/errors/library.md"
+   ],
+   "file": "nautilus/core/broker.py",
+   "sha": "2c937a3e9a8eea6a",
+   "lines": {
+    "3471": "# 1. Session store: flush any in-flight writes before downstream close.",
+    "3472": "if hasattr(self._session_store, \"aclose\"):",
+    "3473": "with contextlib.suppress(Exception):",
+    "3474": "await self._session_store.aclose()  # type: ignore[attr-defined]",
+    "3475": "# 2. Attestation sink: release the store-and-forward handle AFTER"
+   }
+  },
+  {
+   "citation": "nautilus/core/broker.py:548-553",
    "cited_in": [
     "docs/reference/errors/config.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "ff89ceffd775db6e",
    "lines": {
-    "547": "if errors:",
-    "548": "raise ConfigError(",
-    "549": "\"classification labels are not levels of the 'classification' \"",
-    "550": "f\"hierarchy ({known}): \" + \"; \".join(errors)",
-    "551": ")",
-    "552": ""
+    "548": "if errors:",
+    "549": "raise ConfigError(",
+    "550": "\"classification labels are not levels of the 'classification' \"",
+    "551": "f\"hierarchy ({known}): \" + \"; \".join(errors)",
+    "552": ")",
+    "553": ""
    }
   },
   {
-   "citation": "nautilus/core/broker.py:797",
+   "citation": "nautilus/core/broker.py:798",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "797": "log.warning("
+    "798": "log.warning("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:935-939",
+   "citation": "nautilus/core/broker.py:936-940",
    "cited_in": [
     "docs/reference/errors/config.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "811addfcc4aac984",
    "lines": {
-    "935": "if analysis.provider is None:",
-    "936": "raise ConfigError(",
-    "937": "f\"analysis.mode={analysis.mode!r} requires analysis.provider to be set\"",
-    "938": ")",
-    "939": "provider = cls._build_llm_provider(analysis.provider, known_data_types)"
+    "936": "if analysis.provider is None:",
+    "937": "raise ConfigError(",
+    "938": "f\"analysis.mode={analysis.mode!r} requires analysis.provider to be set\"",
+    "939": ")",
+    "940": "provider = cls._build_llm_provider(analysis.provider, known_data_types)"
    }
   },
   {
@@ -5382,92 +5484,81 @@
    }
   },
   {
-   "citation": "rest.py:192",
+   "citation": "rest.py:194",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/rest.py",
    "sha": "0647b09d7f7d0878",
    "lines": {
-    "192": "raise ScopeEnforcementError("
+    "194": "raise ScopeEnforcementError("
    }
   },
   {
-   "citation": "rest.py:197,202",
+   "citation": "rest.py:199,204",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/rest.py",
    "sha": "ea57f3e9be9a8787",
    "lines": {
-    "197": "raise ScopeEnforcementError(\"Operator 'BETWEEN' requires a 2-tuple/list value\")",
-    "202": "raise ScopeEnforcementError(\"Operator 'BETWEEN' requires a 2-tuple/list value\")"
+    "199": "raise ScopeEnforcementError(\"Operator 'BETWEEN' requires a 2-tuple/list value\")",
+    "204": "raise ScopeEnforcementError(\"Operator 'BETWEEN' requires a 2-tuple/list value\")"
    }
   },
   {
-   "citation": "rest.py:215",
-   "cited_in": [
-    "docs/reference/errors/adapters.md"
-   ],
-   "file": "nautilus/adapters/rest.py",
-   "sha": "0647b09d7f7d0878",
-   "lines": {
-    "215": "raise ScopeEnforcementError("
-   }
-  },
-  {
-   "citation": "rest.py:340",
+   "citation": "rest.py:350",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/rest.py",
    "sha": "5f94623b04c495e4",
    "lines": {
-    "340": "raise AdapterError("
+    "350": "raise AdapterError("
    }
   },
   {
-   "citation": "rest.py:367",
+   "citation": "rest.py:377",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/rest.py",
    "sha": "ba3dba5736e8b826",
    "lines": {
-    "367": "raise ScopeEnforcementError(f\"operator not allowed: {op}\")"
+    "377": "raise ScopeEnforcementError(f\"operator not allowed: {op}\")"
    }
   },
   {
-   "citation": "rest.py:419",
+   "citation": "rest.py:429",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/rest.py",
    "sha": "eccbba3d28bc83b2",
    "lines": {
-    "419": "raise AdapterError(\"RestAdapter.execute called before connect()\")"
+    "429": "raise AdapterError(\"RestAdapter.execute called before connect()\")"
    }
   },
   {
-   "citation": "rest.py:466",
+   "citation": "rest.py:476",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/rest.py",
    "sha": "5f94623b04c495e4",
    "lines": {
-    "466": "raise AdapterError("
+    "476": "raise AdapterError("
    }
   },
   {
-   "citation": "rest.py:475",
+   "citation": "rest.py:485",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/rest.py",
    "sha": "5f94623b04c495e4",
    "lines": {
-    "475": "raise AdapterError("
+    "485": "raise AdapterError("
    }
   },
   {
@@ -5550,36 +5641,36 @@
    }
   },
   {
-   "citation": "servicenow.py:187",
+   "citation": "servicenow.py:189",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/servicenow.py",
    "sha": "5f94623b04c495e4",
    "lines": {
-    "187": "raise AdapterError("
+    "189": "raise AdapterError("
    }
   },
   {
-   "citation": "servicenow.py:280",
+   "citation": "servicenow.py:282",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/servicenow.py",
    "sha": "404ee46c995fe2f6",
    "lines": {
-    "280": "raise AdapterError(\"ServiceNowAdapter.execute called before connect()\")"
+    "282": "raise AdapterError(\"ServiceNowAdapter.execute called before connect()\")"
    }
   },
   {
-   "citation": "servicenow.py:329",
+   "citation": "servicenow.py:331",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/servicenow.py",
    "sha": "5f94623b04c495e4",
    "lines": {
-    "329": "raise AdapterError("
+    "331": "raise AdapterError("
    }
   },
   {

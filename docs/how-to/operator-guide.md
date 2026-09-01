@@ -401,6 +401,9 @@ Probe it:
 nautilus health --url http://127.0.0.1:8000/readyz
 ```
 
+The config is read once, here, and never again — check it before you start on
+it: [Check what you are about to deploy](#the-config).
+
 `serve` exits **2** when the application fails to start — an unreachable
 `on_failure: fail_closed` session store, an unwritable audit path — so a pod
 that never served reads as a crash and gets restarted, rather than exiting
@@ -1154,11 +1157,31 @@ state_dir: /var/lib/nautilus
 
 ### When a source is down or answers with too much
 
+- **Which host is down is on the error record and in the log.** A failed
+  source's `sources_errored[]` entry carries `endpoint` — the address that
+  source dials, as `scheme://host[:port]` — and the same value is in the audit
+  entry's `error_records[]` and in one `WARNING` on the `nautilus.core.broker`
+  logger:
+
+    ```text
+    WARNING:nautilus.core.broker:source 'ledger' failed (endpoint=postgresql://127.0.0.1:15499, error_type=AdapterError, trace_id=b8f39914-…): PostgresAdapter: execute failed for source 'ledger': ConnectionRefusedError: [Errno 111] Connect call failed ('127.0.0.1', 15499)
+    ```
+
+    It is a `WARNING`, so it is on stdout at the default `--log-level info`;
+    `--log-level debug` is not needed and does not help (it adds every
+    library's records, not the broker's reasoning). `endpoint` is rebuilt from
+    scheme, host and port only, so a DSN password or a URL token in
+    `connection` is not in the log, the audit trail or the agent's response —
+    which also means a `connection` with no host (a filesystem path, a libpq
+    keyword DSN) has `endpoint: null` and nothing to show. Full field
+    semantics: [the error reference](../reference/errors/adapters.md#endpoint-which-backend-this-was).
 - **Unreachable sources are not re-dialled on every request.** A source whose
   `connect()` fails or times out is put in a 30-second cooldown; requests
-  routed to it during that window are denied immediately with the connect
-  error rather than spending the source's `timeout_s` again. The first request
-  after the window retries, so a recovered source comes back on its own.
+  routed to it during that window are denied immediately with `connect()
+  failed {n}s ago; not retried for another {m}s` rather than spending the
+  source's `timeout_s` again — the *cooldown* message, not the original
+  connect error, which is on the first failure's entry. The first request after
+  the window retries, so a recovered source comes back on its own.
 - **A response is bounded before it is parsed.** The REST adapter refuses a
   body over 8 MiB, and the S3 adapter refuses an object over 8 MiB, in both
   cases before materializing it. Either raises an adapter error naming the
@@ -1262,7 +1285,9 @@ remove the pack from `rules.packs` instead. **Rollback does not:** a lineage
 record carries no rule text, so `POST /v1/rules/{name}/rollback` re-promotes a
 version in the ledger and returns `engine_updated: false`.
 
-## 8. Validate rules before deploying
+## 8. Check what you are about to deploy
+
+### Rules
 
 ```bash
 nautilus rules validate my-rules.yaml
@@ -1276,6 +1301,131 @@ have is caught here rather than at the next broker start.
 See the [rule-authoring guide](authoring-rules.md) for the full workflow,
 including shadow detection and sandbox replay against production audit
 history.
+
+### The config
+
+**A running broker never re-reads `nautilus.yaml`.** There is no hot reload
+([hardening](hardening.md#what-this-does-not-give-you)) and no reload signal:
+`SIGHUP` is not handled, and a broker that is serving keeps serving the config
+it started with no matter what you write to the file. A config change is
+adopted by starting a process, and only by starting a process — which is also
+why a bad one cannot corrupt a broker that is already up.
+
+That makes the config change a two-step operation. Check the file, then roll
+the deployment:
+
+```bash
+nautilus config check /etc/nautilus/nautilus.yaml && systemctl restart nautilus
+```
+
+`config check` runs the exact sequence `serve` runs before it binds — the path
+check, the `--air-gapped` pre-pass, and `Broker.from_config` — so it answers
+one question, in `serve`'s own words: would a process come up on this file.
+
+```text
+OK: /etc/nautilus/nautilus.yaml — serve would start on this config
+  bind:          127.0.0.1:8000   (api.host/api.port; serve --bind overrides)
+  sources:       2 (tickets, orders)
+  agents:        1 (agent-alpha)
+  rules:         6 in force
+  session store: memory
+  audit log:     /etc/nautilus/audit.jsonl
+```
+
+Read the summary, not just the exit code. It is built from the broker the
+check really constructed, so it is the deployment you are about to have: a
+source you thought you added and do not see here is a source the next start
+will not serve, and `agents: 0` means the next start takes every caller's word
+for its own clearance ([2. Configure `nautilus.yaml`](#2-configure-nautilusyaml)).
+
+A refused config exits **2** and prints what the startup log would have
+printed:
+
+```bash
+nautilus config check /etc/nautilus/nautilus.yaml; echo "exit=$?"
+```
+
+```text
+ERROR: invalid config: classification labels are not levels of the 'classification' hierarchy (unclassified, cui, confidential, secret, top-secret): sources['tickets'].classification='internal'
+exit=2
+```
+
+Same message, same exit code, no restart — that is the whole point of the
+command, and it is why the check calls `serve`'s loader instead of
+reimplementing it. The `&&` above is the safety property: the restart does not
+run.
+
+### What a check cannot tell you
+
+`config check` stops where `serve` stops before it binds. It does **not** call
+`Broker.setup()` — the async half of a start, where a Postgres or SQLite
+session store stands up its schema — so a config naming an unreachable
+`fail_closed` session store passes the check and still kills the process at
+startup:
+
+```text
+OK: nautilus.yaml — serve would start on this config
+  ...
+  session store: postgres
+```
+
+```text
+nautilus.core.session_pg.SessionStoreUnavailableError: PostgresSessionStore unavailable (dsn=postgresql://127.0.0.1:5599/nautilus): [Errno 111] Connect call failed ('127.0.0.1', 5599)
+ERROR:    Application startup failed. Exiting.
+ERROR: application startup failed; the server never accepted a connection. The cause is logged above.
+```
+
+That failure is not about the file — the same file is correct against a
+reachable database — so it belongs to the readiness gate, not to the check.
+`serve` exits 2 on it, `/readyz` never turns green, and the rollout below is
+what catches it.
+
+What the file *does* decide on its own is settled by the check, and that
+includes more than validation: because the broker opens `audit.path` while it
+is being constructed, an audit directory this process cannot write to is
+refused here, with `ERROR: broker construction failed: [Errno 13] Permission
+denied: …` and exit 2 — the same failure the pod would have had, on the
+machine where you can still fix it.
+
+The other side of that: opening the file is a side effect. Constructing a
+broker creates the audit log's parent directory and opens `audit.path`, so
+checking a config in a directory that has never served leaves an empty
+`audit.jsonl` beside it. It writes no entries.
+
+### Roll the restart
+
+The refusal is only free if the process that refuses is not the only one
+serving. `serve` exits **2** without ever binding a socket when it refuses a
+config, so the new process never takes the port and never answers a request —
+which means a deployment that starts the new process *before* retiring the old
+one loses nothing when the config is bad:
+
+```bash
+# old broker serving on :8801, new one brought up on :8802
+nautilus serve --config /etc/nautilus/nautilus.yaml --bind 127.0.0.1:8802 &
+until nautilus health --url http://127.0.0.1:8802/readyz; do sleep 1; done
+kill -TERM "$OLD_PID"        # only after the new one is ready
+```
+
+With a bad config the `until` loop never exits — `:8802` refuses connections
+because nothing is listening there — so the `kill` never runs and the old
+broker on `:8801` is still answering `/readyz` with 200, untouched. (Bound
+that loop with a timeout in anything unattended; as written it waits forever,
+which is the safe direction but not a finished script.) With a good config the new process is ready before the old one
+is asked to stop, and the port the load balancer is pointed at never goes
+quiet. Behind one address, that is blue/green or a `RollingUpdate` with
+`maxUnavailable: 0`; the mechanism that matters is the ordering, not the tool.
+
+**The manifests in `deploy/` do not have that ordering.** They ship
+`replicas: 1` and `strategy: Recreate` — deliberately, because two brokers
+sharing one key ring and one `ReadWriteOnce` audit volume is worse than a gap
+(see [Running more than one replica](#running-more-than-one-replica)) — and
+`Recreate` terminates the old pod *before* the new one starts. There, a config
+the new pod refuses is not a safe abort: it is `CrashLoopBackOff` with nothing
+serving until you fix the file. On that deployment shape `config check` is not
+a convenience, it is the only thing standing between a typo and an outage —
+run it on the `nautilus.yaml` you are about to paste into
+`deploy/configmap.yaml`, not after.
 
 ## 9. Back up and restore
 

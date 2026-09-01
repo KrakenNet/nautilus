@@ -276,6 +276,7 @@ shapes do not. Kill the background brokers with `kill %1` when you are done.
 | [`session`](#nautilus-session) | `version` | Print the schema version a session store carries. |
 | [`health`](#nautilus-health) | — | Probe a `/readyz` endpoint over HTTP. |
 | [`serve`](#nautilus-serve) | — | Run the REST and/or MCP transport. |
+| [`config`](#nautilus-config) | `check` | Load a config the way `serve` does, without serving it. |
 | [`demo`](#nautilus-demo) | — | Run a governed handoff decision with no config or database. |
 | [`init`](#nautilus-init) | — | Write a runnable `nautilus.yaml`. |
 | [`rkm`](#nautilus-rkm) | `queue list` | List proposals in the review queue. |
@@ -582,6 +583,136 @@ nautilus serve: error: argument --transport: invalid choice: 'bogus' (choose fro
 | `WARN: --air-gapped overrides analysis.mode from '<mode>' to 'pattern' (NFR-1)` | — | Informational. Remove `analysis.mode` from the config, or drop `--air-gapped`. |
 | `WARN: --air-gapped refuses analysis.provider (type='<type>'); dropping it (NFR-1)` | — | Informational. An air-gapped run has no LLM provider. |
 | `WARN: --air-gapped drops LLM source id='<id>' — connection host is not loopback (NFR-1, #43)` | — | Informational. An LLM source is only air-gap compatible when the inference server is local. |
+
+---
+
+## `nautilus config`
+
+```bash
+nautilus config
+```
+
+```text
+ERROR: config: no subcommand given (try: check)
+```
+
+Exit `2`.
+
+### `nautilus config check`
+
+Load a `nautilus.yaml` through the same sequence `nautilus serve` runs before
+it binds — the path check, the `--air-gapped` pre-pass, and
+`Broker.from_config` — and report what came out, without serving it. The
+broker is built and immediately closed; nothing binds a socket.
+
+There is no config hot reload ([Hardening: what this does not give
+you](../how-to/hardening.md#what-this-does-not-give-you)), so a config is only
+ever adopted by a process start. This is how you find out
+whether one will succeed without restarting the broker to see.
+
+| Argument | Type | Default | Description |
+|----------|------|---------|-------------|
+| `file` | `str` (positional) | — | **Required.** Path to the config to check. |
+
+Setup A:
+
+```bash
+nautilus config check nautilus.yaml
+```
+
+```text
+OK: nautilus.yaml — serve would start on this config
+  bind:          127.0.0.1:8000   (api.host/api.port; serve --bind overrides)
+  sources:       1 (orders)
+  agents:        1 (agent-alpha)
+  rules:         6 in force
+  session store: memory
+  audit log:     audit.jsonl
+```
+
+Every line is read off the broker that was really constructed, not off the
+YAML: `sources` and `agents` are what the registries accepted, `rules` is what
+the engine compiled (built-ins plus `rules.packs` plus `rules.user_rules_dirs`),
+and `audit log` is `audit.path` resolved the way the broker resolves it —
+relative to the config file's directory, not to your shell.
+
+Warnings the broker emits at construction are printed as it emits them, so the
+undeclared-`agents:` warning an operator would otherwise first read in a
+startup log arrives here instead — `noagents.yaml` is Setup A's config with
+the `agents:` block deleted:
+
+```bash
+nautilus config check noagents.yaml
+```
+
+```text
+WARNING:nautilus.core.broker:No 'agents:' are declared in 'noagents.yaml', so every request declares its own clearance, compartments and purpose and the broker enforces them against the sources it knows. Declare agents to turn enforcement on.
+OK: noagents.yaml — serve would start on this config
+  bind:          127.0.0.1:8000   (api.host/api.port; serve --bind overrides)
+  sources:       1 (orders)
+  agents:        0
+  rules:         6 in force
+  session store: memory
+  audit log:     audit.jsonl
+```
+
+Only warnings: the INFO lines `serve` prints at startup (adapter discovery)
+are below the threshold the check sets, so the one line that is about your
+config is not buried in them.
+
+**Exit codes** — `0` or `2`; argparse can also return `2`. Never returns `1`
+or `3`.
+
+| Exit | When |
+|------|------|
+| `0` | `serve` would construct a broker from this file. |
+| `2` | It would not, for any reason — missing file, unparseable YAML, failed validation, or failed wiring. |
+
+**Failure modes.** The messages are `serve`'s, verbatim, because they are
+raised by the same function; see [`nautilus serve`](#nautilus-serve) for the
+full table.
+
+```bash
+nautilus config check nope.yaml; echo "exit=$?"
+```
+
+```text
+ERROR: config path does not exist or is not a file: nope.yaml
+exit=2
+```
+
+```bash
+nautilus config check broken.yaml; echo "exit=$?"
+```
+
+```text
+ERROR: invalid config: classification labels are not levels of the 'classification' hierarchy (unclassified, cui, confidential, secret, top-secret): sources['orders'].classification='internal'
+exit=2
+```
+
+**What it does not check.** `Broker.setup()` — the async half of a start, where
+a Postgres or SQLite session store stands up its schema and adapter schema
+fingerprints are checked — is not run, exactly as `serve` does not run it until
+the transport is already up. A config naming an unreachable `fail_closed`
+session store therefore passes this check and still exits `2` at startup with
+`application startup failed`. That is a readiness question; see
+[What a check cannot tell you](../how-to/operator-guide.md#what-a-check-cannot-tell-you).
+
+Anything the file decides on its own is settled here, including whether
+`audit.path` can be opened for writing — an audit directory the broker cannot
+write to comes back as `ERROR: broker construction failed: [Errno 13]
+Permission denied: …`, exit `2`, from the check rather than from the pod.
+
+**Side effect.** Constructing a broker creates the parent directory of
+`audit.path` and opens the file, so a check in a directory that has never
+served leaves an empty `audit.jsonl` behind. No entry is written.
+
+**No `--air-gapped`.** The flag only ever removes: it forces
+`analysis.mode: pattern`, drops `analysis.provider`, and drops `type: llm`
+sources whose `connection` is not loopback. So it can only make a config more
+acceptable, and anything `config check` passes also starts under
+`serve --air-gapped`. What the check will not show you is *which* sources that
+flag would drop — those `WARN:` lines are printed by `serve` itself.
 
 ---
 

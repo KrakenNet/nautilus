@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from ipaddress import ip_network
 from typing import Annotated, Any, Literal, cast
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -776,3 +777,36 @@ class NautilusConfig(_Strict):
     # resolve against the config file's directory.
     state_dir: str | None = None
     rkm: RkmConfig = Field(default_factory=RkmConfig)
+
+
+def redact_connection(connection: str) -> str | None:
+    """Return ``scheme://host[:port]`` for a DSN / base URL, or ``None``.
+
+    Built by **allowlist**, not by stripping: only the scheme, the host and the
+    port are copied out, so userinfo (``postgres://user:pw@…``), path
+    (``https://hooks.example/services/T0/B0/SECRET``), query
+    (``?password=…``, ``?token=…``) and fragment cannot survive into anything
+    built from the result. That matters because the result goes into
+    :attr:`~nautilus.core.models.ErrorRecord.endpoint`, which reaches the
+    process log, the audit trail and the requesting agent -- three audiences
+    strictly wider than the one that reads ``nautilus.yaml``.
+
+    A ``connection`` with no host -- a filesystem path, an empty string, a
+    libpq keyword DSN (``host=db password=pw``) -- returns ``None`` rather than
+    a guess, because a guess is how the withheld half gets echoed by accident.
+    """
+    try:
+        parts = urlsplit(connection)
+        host = parts.hostname
+        port = parts.port
+    except ValueError:
+        # urlsplit defers parsing to attribute access: a non-numeric or
+        # out-of-range port raises here, and a connection we cannot parse is
+        # one we must not paraphrase.
+        return None
+    if not host or not parts.scheme:
+        return None
+    # An IPv6 literal comes back unbracketed; re-bracket so the result is a
+    # URL an operator can paste back.
+    host = f"[{host}]" if ":" in host else host
+    return f"{parts.scheme}://{host}" + (f":{port}" if port is not None else "")

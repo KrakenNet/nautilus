@@ -9,7 +9,7 @@ serialised per caller, and it lives in the session store — so most failures he
 ### `session_not_yours: session {state.session_id!r} belongs to another principal. A session id is not a credential — either use your own, or have its owner declare a handoff to agent_id={agent_id!r} in it first.`
 
 **`SessionNotOwnedError`** (`nautilus/core/__init__.py:32`), raised at
-`nautilus/core/broker.py:2357-2362`. **HTTP 403** via
+`nautilus/core/broker.py:2358-2363`. **HTTP 403** via
 `nautilus/transport/fastapi_app.py:699-705`.
 
 **Interpolates.** `{state.session_id!r}` — the session named in the request.
@@ -24,14 +24,14 @@ handoff was performed downstream without being declared to the broker.
 **Fix.** Use a session id of your own — omitting `session_id` lets the broker pick one — or have
 the current owner declare the transfer before the receiving agent asks —
 `await broker.declare_handoff(source_agent_id=…, receiving_agent_id=…, session_id=…,
-data_classifications=[…])` (`nautilus/core/broker.py:1644`, keyword-only and async).
+data_classifications=[…])` (`nautilus/core/broker.py:1645`, keyword-only and async).
 
 ## Contention
 
 ### `Broker busy: waited {budget}s to take the exposure ledger on {what!r} and did not get it. Either another request from this caller still holds it — requests from one caller are served one at a time so cumulative exposure is counted once — or the session store is slow or unreachable. Check /readyz to tell the two apart. Retry, or raise session_store.lock_timeout_s.`
 
 **`BrokerBusyError`** (`nautilus/core/__init__.py:46`), built by `_busy_message`
-(`nautilus/core/broker.py:342-360`) and raised at `:2075` and `:2079`. **HTTP 503** with
+(`nautilus/core/broker.py:343-361`) and raised at `:2075` and `:2079`. **HTTP 503** with
 `Retry-After: 1` (`nautilus/transport/fastapi_app.py:690-697`).
 
 **Interpolates.** `{budget}` — `session_store.lock_timeout_s`. `{what!r}` — which ledger was
@@ -122,11 +122,11 @@ nautilus session version --sqlite-path /tmp/nautilus-errors/sessions.db; echo "e
 
 ### `session_store.backend: redis has no implementation. It used to load and serve sessions from memory instead, which gives replicas a per-process view of cumulative exposure and no signal that this is happening. Use postgres for a store shared across replicas, or sqlite for a durable single-node one.`
 
-`nautilus/config/models.py:593-597`, refused at startup.
+`nautilus/config/models.py:594-598`, refused at startup.
 
 ### `session_store.backend=postgres requires 'dsn' or TEST_PG_DSN env var`
 
-**`ConfigError`**, `nautilus/core/broker.py:1021-1025`. Set `session_store.dsn`, or export
+**`ConfigError`**, `nautilus/core/broker.py:1022-1026`. Set `session_store.dsn`, or export
 `TEST_PG_DSN`.
 
 ```bash

@@ -77,7 +77,7 @@ The list is the live `ADAPTER_REGISTRY`, so it grows when you register a custom 
 `nautilus/config/loader.py:167-171`. A typo, or a custom adapter that is configured under
 `sources:` but not registered under `adapters:`. Also raised later as
 `Unsupported source type '{source.type}' for id='{source.id}'`
-(`nautilus/core/broker.py:1184`) when the broker builds the adapter.
+(`nautilus/core/broker.py:1185`) when the broker builds the adapter.
 
 ```bash
 python - <<'PY'
@@ -125,7 +125,7 @@ needs at least `id`, `type`, `classification` and `data_types`.
 
 ### `sources.{i}.id: String should match pattern '^[A-Za-z0-9][A-Za-z0-9._-]*$' [type=string_pattern_mismatch]`
 
-`nautilus/config/models.py:146`. A source id is letters, digits, `.`, `_` and `-`, starting with
+`nautilus/config/models.py:147`. A source id is letters, digits, `.`, `_` and `-`, starting with
 a letter or a digit. The bound is there because the id is *reproduced*: it is interpolated into
 application log lines, it becomes the OpenTelemetry span name `adapter.<id>`, and it is the
 `{name}` segment of `GET /v1/adapters/{name}/schema`. A newline in it used to split one log
@@ -143,21 +143,21 @@ Nautilus's own validators appear here as `Value error, <message>`:
 
 ### `source '{self.id}' has type '{self.type}' but no '{required}'. The {self.type} adapter requires it, so every request to this source would fail at runtime.`
 
-`nautilus/config/models.py:211-216`. `{required}` is the per-type key — `table` for `postgres`
+`nautilus/config/models.py:212-217`. `{required}` is the per-type key — `table` for `postgres`
 and `pgvector`, `index` for `elasticsearch`, `label` for `neo4j`, `model` for `llm`.
 
 ### `source '{self.id}' has type '{self.type}' but no 'connection'. The {self.type} adapter has nothing to dial, so every request to this source would fail at runtime.`
 
-`nautilus/config/models.py:218-222`.
+`nautilus/config/models.py:219-223`.
 
 ### `analysis.mode={analysis.mode!r} requires analysis.provider to be set`
 
-**`ConfigError`**, `nautilus/core/broker.py:935-939`. `analysis.mode: llm` needs a provider
+**`ConfigError`**, `nautilus/core/broker.py:936-940`. `analysis.mode: llm` needs a provider
 block. Either add one, or return to `analysis.mode: pattern`.
 
 ### `rkm.auto_promote.enabled: auto-promotion is not implemented.` …
 
-`nautilus/config/models.py:685-689`. Startup refuses rather than silently ignoring the key. In
+`nautilus/config/models.py:686-690`. Startup refuses rather than silently ignoring the key. In
 full:
 
 ```text
@@ -168,7 +168,7 @@ or set it to false.
 
 ### `classification labels are not levels of the 'classification' hierarchy ({known}): {errors}`
 
-**`ConfigError`**, `nautilus/core/broker.py:547-552`. `{known}` is the configured hierarchy;
+**`ConfigError`**, `nautilus/core/broker.py:548-553`. `{known}` is the configured hierarchy;
 `{errors}` is a `; `-joined list naming each offender, in one of three shapes:
 `sources['s1'].classification='secret'`, `agents['analyst'].clearance='secret'`, or
 `escalation rule 'r1'.resulting_level='secret'`.
@@ -182,7 +182,7 @@ unknown capabilities — are in [auth.md](auth.md). Session-store validation is 
 
 ## Custom adapters under `adapters:`
 
-Raised by `Broker._load_custom_adapters` (`nautilus/core/broker.py:275-320`). `{i}` is the index
+Raised by `Broker._load_custom_adapters` (`nautilus/core/broker.py:276-321`). `{i}` is the index
 in the `adapters:` list, so `adapters[0]:` is the first entry.
 
 | Message | Cause |
@@ -197,7 +197,7 @@ in the `adapters:` list, so `adapters[0]:` is the first entry.
 
 ### `source id='{source.id}' has type '{source.type}', whose driver is not installed: pip install 'nautilus-rkm[{extra}]' (import failed: {…})`
 
-**`ConfigError`**, `nautilus/core/broker.py:1186-1194`. The source type is built in, but its
+**`ConfigError`**, `nautilus/core/broker.py:1187-1195`. The source type is built in, but its
 optional driver is not installed, so `nautilus.adapters` registered a stand-in. `{extra}` is the
 extra to install; the parenthesised text is the original `ImportError`. Install the extra, or
 remove the source.
@@ -214,13 +214,18 @@ remove the source.
 
 ## What the CLI shows
 
-`nautilus serve` wraps the above (`nautilus/cli/__init__.py:211-245`):
+`nautilus serve` wraps the above (`nautilus/cli/serve.py:243-284`):
 
 ```text
 ERROR: config path does not exist or is not a file: {config_path}
 ERROR: invalid config: {exc}
 ERROR: broker construction failed: {exc}
 ```
+
+`nautilus config check <path>` prints the same three, with the same exit **2**, without starting
+anything: it calls the same function. That is how you read these messages before a deployment
+rather than after one — see
+[Check what you are about to deploy](../../how-to/operator-guide.md#the-config).
 
 The first is checked before the file is opened; the second wraps `ConfigError`; the third catches
 everything else raised while wiring the broker. All three exit **2**.

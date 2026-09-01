@@ -4,6 +4,7 @@ Subcommands are implemented in sibling modules:
     * :mod:`nautilus.cli.version` — ``version``
     * :mod:`nautilus.cli.health`  — ``health``
     * :mod:`nautilus.cli.serve`   — ``serve`` runners + config helpers
+    * :mod:`nautilus.cli.config`  — ``config check``, over the same helpers
 
 Shared helpers (``--json``, ``--yes``, ``NAUTILUS_REVIEWER``, output
 prefixes) live in :mod:`nautilus.cli._common`.
@@ -34,16 +35,19 @@ from nautilus.cli.health import (
 )
 from nautilus.cli.serve import (
     _DEFAULT_BIND,  # pyright: ignore[reportPrivateUsage]
+    ConfigRefusedError,
     _enforce_air_gap,  # pyright: ignore[reportPrivateUsage]
     _load_config_for_serve,  # pyright: ignore[reportPrivateUsage]
     _run_both,  # pyright: ignore[reportPrivateUsage]
     _run_mcp,  # pyright: ignore[reportPrivateUsage]
     _run_rest,  # pyright: ignore[reportPrivateUsage]
     _split_bind,  # pyright: ignore[reportPrivateUsage]
+    broker_for_serve,
 )
 from nautilus.cli.version import _cmd_version  # pyright: ignore[reportPrivateUsage]
 
 __all__ = [
+    "ConfigRefusedError",
     "_DEFAULT_BIND",
     "_DEFAULT_HEALTH_URL",
     "_cmd_health",
@@ -55,6 +59,7 @@ __all__ = [
     "_run_mcp",
     "_run_rest",
     "_split_bind",
+    "broker_for_serve",
     "main",
     "metadata",
 ]
@@ -150,6 +155,11 @@ def _build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    # config ---------------------------------------------------------------
+    from nautilus.cli import config as _config_mod
+
+    _config_mod.add_subparser(sub)
+
     # demo ----------------------------------------------------------------
     from nautilus.cli import demo as _demo_mod
 
@@ -224,41 +234,20 @@ def _cmd_serve(args: argparse.Namespace) -> int:
         logging.getLevelNamesMapping()[log_level.upper()],
     )
 
-    config_path = _Path(args.config)
-    if not config_path.is_file():
-        print(
-            f"ERROR: config path does not exist or is not a file: {config_path}",
-            file=sys.stderr,
-        )
-        return 2
-
     try:
         explicit_bind = _split_bind(args.bind) if args.bind is not None else None
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
+    # The path check, the --air-gapped pre-pass and Broker.from_config live in
+    # ``broker_for_serve`` because ``nautilus config check`` runs the same
+    # three, and an operator checking a config before a deploy has to be
+    # running what ``serve`` runs rather than a copy of it that can drift.
     try:
-        effective_path = _load_config_for_serve(
-            config_path,
-            air_gapped=bool(args.air_gapped),
-        )
-    except RuntimeError as exc:
+        broker = broker_for_serve(_Path(args.config), air_gapped=bool(args.air_gapped))
+    except ConfigRefusedError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
-        return 2
-
-    # Broker.from_config surfaces ConfigError / validation errors with
-    # readable messages; propagate as a non-zero exit before any bind.
-    from nautilus.config.loader import ConfigError
-    from nautilus.core.broker import Broker
-
-    try:
-        broker = Broker.from_config(effective_path)
-    except ConfigError as exc:
-        print(f"ERROR: invalid config: {exc}", file=sys.stderr)
-        return 2
-    except Exception as exc:  # noqa: BLE001 - surface wiring failures cleanly
-        print(f"ERROR: broker construction failed: {exc}", file=sys.stderr)
         return 2
 
     # ``api.host`` / ``api.port`` were modelled, documented and shipped in the
@@ -328,6 +317,10 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_health(args.url)
     if args.command == "serve":
         return _cmd_serve(args)
+    if args.command == "config":
+        from nautilus.cli import config as _config_mod
+
+        return _config_mod.dispatch(args)
     if args.command == "demo":
         from nautilus.cli import demo as _demo_mod
 

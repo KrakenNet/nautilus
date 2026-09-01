@@ -218,17 +218,17 @@ These are `ConfigError`s wrapping pydantic validation; see [config.md](config.md
 
 ### `api.auth.mode 'proxy_trust' requires api.auth.trusted_proxies. Without it, X-Forwarded-User is settable by anyone who can reach the port, so every caller can assert every identity.`
 
-`nautilus/config/models.py:492-496`. Set `api.auth.trusted_proxies` to the ingress addresses, or
+`nautilus/config/models.py:493-497`. Set `api.auth.trusted_proxies` to the ingress addresses, or
 return to `api.auth.mode: api_key`.
 
 ### `api.auth.trusted_proxies entry {entry!r} is not an address or CIDR block: {exc}`
 
-`nautilus/config/models.py:501-505`. `{exc}` is the `ipaddress` parse failure. Use
+`nautilus/config/models.py:502-506`. `{exc}` is the `ipaddress` parse failure. Use
 `10.0.0.0/8`, `192.168.1.7`, or an IPv6 equivalent — hostnames are not resolved.
 
 ### `api.keys entry declares unknown capabilities {unknown}. Known capabilities: {list(CAPABILITIES)}`
 
-`nautilus/config/models.py:466-470`. Rendered example:
+`nautilus/config/models.py:467-471`. Rendered example:
 
 ```text
 api.keys entry declares unknown capabilities ['bogus'].

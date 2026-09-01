@@ -342,7 +342,7 @@ curl -sS -X POST "$NAUTILUS/v1/request" -H "X-API-Key: $KEY" \
 | `outcome` | `allowed` \| `denied` \| `errored` \| `skipped` — what happened, in one word. `denied` only when a source the request actually concerned was refused; an unrelated refusal does not outrank a source that failed to answer |
 | `denial_records` | One `{source_id, reason, rule_name, relevant}` per denied source: why it was refused, which rule said so, and whether the refusal concerned this request at all. A purpose refusal names the purposes the source does accept — read it and retry |
 | `skip_records` | One `{source_id, reason}` per source that took no part — usually because its `data_types` have nothing to do with the intent |
-| `sources_errored` | One `ErrorRecord` per source that failed to answer |
+| `sources_errored` | One `ErrorRecord` per source that failed to answer: `source_id`, `error_type`, `message`, `trace_id`, and `endpoint` — the address that source dials, as `scheme://host[:port]`, or `null` for a source that dials nothing. `endpoint` carries no credential: it is rebuilt from scheme, host and port, so userinfo, path and query in `connection` never reach it. See [the error reference](errors/adapters.md#endpoint-which-backend-this-was) |
 | `source_info` | `{source_id: {description, classification, data_types}}` for each queried source — what the rows in `data` actually are |
 | `ruleset_hash` | Which ruleset answered. Mid-rollout two replicas hold different ones and the identical request alternates `allowed` / `denied` behind the load balancer; this is how a caller can tell |
 | `rule_trace` | The rules that fired, in order — the same trace the audit entry records |

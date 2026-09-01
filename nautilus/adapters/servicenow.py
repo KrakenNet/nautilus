@@ -33,7 +33,7 @@ from nautilus.adapters.base import (
     wrap_execute,
 )
 from nautilus.adapters.rest import (
-    _reject_private_ip_literal,  # pyright: ignore[reportPrivateUsage]
+    _reject_unroutable_base_url,  # pyright: ignore[reportPrivateUsage]
 )
 from nautilus.adapters.schema import AdapterField, AdapterSchema, AdapterTable
 from nautilus.config.models import (
@@ -163,10 +163,12 @@ class ServiceNowAdapter:
             return
 
         # #18 security review — the session-provenance token now rides on
-        # every request (AC-18.b), so refuse private/loopback/metadata IP
-        # literals just like the REST adapter, and pin redirect behaviour
-        # explicitly (httpx defaults to no-follow; make it load-bearing).
-        _reject_private_ip_literal(config.connection)
+        # every request (AC-18.b), so refuse a base URL that resolves to a
+        # private/loopback/metadata address just like the REST adapter (this is
+        # that adapter's guard, imported, not a second copy), and pin redirect
+        # behaviour explicitly (httpx defaults to no-follow; make it
+        # load-bearing).
+        await _reject_unroutable_base_url(config.connection)
 
         client_kwargs: dict[str, Any] = {
             "base_url": config.connection,

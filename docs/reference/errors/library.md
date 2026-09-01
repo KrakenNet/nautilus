@@ -7,7 +7,7 @@ HTTP these are unreachable — the transport owns the lifecycle.
 
 ### `Broker.request() called inside a running event loop. Use Broker.arequest() (async) from async contexts.`
 
-**`RuntimeError`**, `nautilus/core/broker.py:1542-1546`.
+**`RuntimeError`**, `nautilus/core/broker.py:1543-1547`.
 
 **Means.** The synchronous facade was called from inside a coroutine. It would need to drive an
 event loop that is already running.
@@ -59,7 +59,7 @@ RuntimeError: Broker.request() called inside a running event loop. Use Broker.ar
 
 ### `Broker.close() called inside a running event loop. Use Broker.aclose() (async) from async contexts.`
 
-**`RuntimeError`**, `nautilus/core/broker.py:3392-3396`. Same rule for shutdown: `await
+**`RuntimeError`**, `nautilus/core/broker.py:3471-3475`. Same rule for shutdown: `await
 broker.aclose()`. No interpolation.
 
 **Means.** `close()` drains the attestation sink and the session store synchronously; from inside a
@@ -113,7 +113,7 @@ RuntimeError: Broker.close() called inside a running event loop. Use Broker.aclo
 
 ### `Broker.{method}() called after close(); the attestation sink and session store are already shut down, so this request could not be receipted. Build a new Broker.`
 
-**`RuntimeError`**, `nautilus/core/broker.py:2021-2026`. `{method}` is the method you called.
+**`RuntimeError`**, `nautilus/core/broker.py:2022-2027`. `{method}` is the method you called.
 
 **Means.** The broker is closed. It is not reusable: the sink and the session store are gone, so
 the request could not be receipted, and an unreceipted decision is not served.
@@ -168,12 +168,12 @@ and the guard fires inside the async one, so `{method}` reads `arequest` even wh
 
 ### `Broker.declare_handoff() failed for source={source_agent_id!r} receiving={receiving_agent_id!r}: {exc}`
 
-**`PolicyEngineError`**, `nautilus/core/broker.py:1802-1806`. The handoff could not be recorded.
+**`PolicyEngineError`**, `nautilus/core/broker.py:1803-1807`. The handoff could not be recorded.
 `{source_agent_id!r}` and `{receiving_agent_id!r}` are the two agent ids with `repr()`, so they
 arrive quoted; `{exc}` is the exception the rules engine raised, with its own message.
 
 **Means.** `declare_handoff` clears the shared engine, asserts one `data_handoff` fact per declared
-classification, evaluates, and queries `denial_record` (`nautilus/core/broker.py:1800-1816`). Any
+classification, evaluates, and queries `denial_record` (`nautilus/core/broker.py:1801-1817`). Any
 exception from those four calls is re-wrapped here. It is the engine failing, not the handoff being
 denied — a *denied* handoff returns a `HandoffDecision` carrying `DenialRecord`s, and an unknown
 agent id likewise returns a decision, not this error.
@@ -285,7 +285,7 @@ create_app requires either config_path or existing_broker
 
 ### `AC-21.b: this adapter must implement get_schema() (task-006)`
 
-**`NotImplementedError`**, `nautilus/adapters/base.py:319`. No interpolation. The default
+**`NotImplementedError`**, `nautilus/adapters/base.py:378`. No interpolation. The default
 `get_schema()` inherited from the `Adapter` protocol.
 
 **Means.** Registration succeeds at import time and the gap only shows when something asks for the

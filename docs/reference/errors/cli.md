@@ -107,14 +107,20 @@ exit=2
 
 ## `nautilus serve`
 
-`nautilus/cli/__init__.py:209-280` and `nautilus/cli/serve.py`. All of these exit **2**.
+`nautilus/cli/__init__.py:218-293` and `nautilus/cli/serve.py`. All of these exit **2**.
+
+The three config messages are raised as `ConfigRefusedError` by
+`broker_for_serve` (`nautilus/cli/serve.py:243-284`) and printed by whichever
+command called it — `serve` at `__init__.py:250`, `config check` in
+`nautilus/cli/config.py`. That is why the two commands refuse a config in
+identical words.
 
 | Message | Line |
 | --- | --- |
-| `ERROR: config path does not exist or is not a file: {config_path}` | `__init__.py:230` |
-| `ERROR: invalid config: {exc}` | `__init__.py:238` |
-| `ERROR: broker construction failed: {exc}` | `__init__.py:241` |
-| `ERROR: {exc}` (bind parsing, air-gapped load, serve failure) | `__init__.py:218,227,275` |
+| `ERROR: config path does not exist or is not a file: {config_path}` | `nautilus/cli/serve.py:266` |
+| `ERROR: invalid config: {exc}` | `nautilus/cli/serve.py:282` |
+| `ERROR: broker construction failed: {exc}` | `nautilus/cli/serve.py:284` |
+| `ERROR: {exc}` (bind parsing, air-gapped load, serve failure) | `__init__.py:240,250,284` |
 
 The wrapped `{exc}` texts:
 
@@ -155,6 +161,19 @@ nautilus serve --config /nonexistent/nautilus.yaml; echo "exit=$?"
 | `WARN: --air-gapped refuses analysis.provider (type={provider_type!r}); dropping it (NFR-1)` |
 
 If a source you rely on is silently missing under `--air-gapped`, this is why.
+
+## `nautilus config check`
+
+`nautilus/cli/config.py`. Exits **0** or **2**, never **1**.
+
+Every refusal comes from `broker_for_serve` and is therefore one of the three messages in the
+[`nautilus serve`](#nautilus-serve) table above, printed with the same `ERROR: ` prefix and the
+same exit **2**. There is no failure text of its own — a check that could refuse a config for a
+reason `serve` does not have would be a second config validator, which is the thing this command
+exists not to be.
+
+The one output that is not `serve`'s is the success summary on stdout, which is not an error and
+is documented in the [CLI reference](../cli.md#nautilus-config-check).
 
 ## `nautilus health`
 
@@ -292,11 +311,11 @@ See [sessions.md](sessions.md).
 
 Every command group answers a bare invocation with its own sentence naming the subcommands it
 accepts, and every one of them exits **2** — `rkm`, `rkm queue`, `rule`, `rules`, `adapters`,
-`key`, `attestation` and `events` alike. One code covers the whole class, so a script can test
-for it without a per-group table:
+`key`, `attestation`, `events` and `config` alike. One code covers the whole class, so a script
+can test for it without a per-group table:
 
 ```bash
-for g in rkm "rkm queue" rule rules adapters key attestation events; do
+for g in rkm "rkm queue" rule rules adapters key attestation events config; do
   nautilus $g >/dev/null 2>&1; echo "$g -> $?"
 done
 ```
@@ -368,6 +387,16 @@ nautilus attestation; echo "exit=$?"
 
 ```bash
 nautilus events; echo "exit=$?"
+```
+
+### `ERROR: config: no subcommand given (try: check)`
+
+`nautilus/cli/config.py`. Exit **2**. No interpolation. `check` is the only subcommand: a
+config is read by a process start, and this is the one way to ask what a start would make of it
+without performing one.
+
+```bash
+nautilus config; echo "exit=$?"
 ```
 
 ## `nautilus init`

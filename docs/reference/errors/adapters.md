@@ -2,14 +2,14 @@
 
 Two exception types cover almost everything here, and the difference matters:
 
-- **`ScopeEnforcementError`** (`nautilus/adapters/base.py:32`) — the adapter **cannot honestly
+- **`ScopeEnforcementError`** (`nautilus/adapters/base.py:39`) — the adapter **cannot honestly
   enforce** what policy asked for. It refuses instead of returning data it cannot vouch for.
   Every one of these is a refusal to over-return.
-- **`AdapterError`** (`nautilus/adapters/base.py:28`) — the source itself failed: not connected,
+- **`AdapterError`** (`nautilus/adapters/base.py:35`) — the source itself failed: not connected,
   misconfigured, unreachable, or over a size ceiling.
 
-`SSRFBlockedError` (`nautilus/adapters/rest.py:83`) and `EmbeddingUnavailableError`
-(`nautilus/adapters/base.py:40`) are subclasses of `AdapterError`.
+`SSRFBlockedError` (`nautilus/adapters/rest.py:85`) and `EmbeddingUnavailableError`
+(`nautilus/adapters/base.py:47`) are subclasses of `AdapterError`.
 
 ## Shared scope validation
 
@@ -17,7 +17,7 @@ Applied by every SQL-shaped adapter through `nautilus/adapters/base.py`.
 
 ### `Operator '{op}' not in allowlist: {sorted(_OPERATOR_ALLOWLIST)}`
 
-`validate_operator`, `nautilus/adapters/base.py:107-110`. Rendered example:
+`validate_operator`, `nautilus/adapters/base.py:166-169`. Rendered example:
 
 ```text
 Operator 'DROP' not in allowlist: ['!=', '<', '<=', '=', '>', '>=', 'BETWEEN', 'IN',
@@ -29,13 +29,13 @@ The allowlist is closed: an operator that is not on it is refused, never passed 
 
 ### `Invalid field identifier '{f}'`
 
-`validate_field`, `nautilus/adapters/base.py:120-123`. The field name does not match
+`validate_field`, `nautilus/adapters/base.py:179-182`. The field name does not match
 `_FIELD_PATTERN`. Spaces, quotes, semicolons and parentheses are all rejected — the name is
 interpolated into a query, so only identifier-shaped strings are allowed.
 
 ### `table name {table!r} has more than one schema qualifier`
 
-`quote_table`, `nautilus/adapters/base.py:158-161`. At most one `.` is allowed:
+`quote_table`, `nautilus/adapters/base.py:217-220`. At most one `.` is allowed:
 `public.orders` is fine, `db.public.orders` is not.
 
 ### `Operator '{op}' requires a list value, got {type(bad).__name__}`
@@ -61,18 +61,18 @@ accepted it would have excluded nothing.
 
 ### `Operator 'LIKE' requires a string value, got {type(bad).__name__}`
 
-`nautilus/adapters/elasticsearch.py:165`, `neo4j.py:134`, `rest.py:192`,
+`nautilus/adapters/elasticsearch.py:165`, `neo4j.py:134`, `rest.py:194`,
 `postgres.py:146`, `influxdb.py:335`.
 
 ### `Operator 'BETWEEN' requires a 2-tuple/list value`
 
 Raised twice per adapter — once when the value is not a sequence, once when it does not have
 exactly two elements (`postgres.py:154`, `elasticsearch.py:170,175`, `neo4j.py:139,144`,
-`rest.py:197,202`, `influxdb.py:288,341`).
+`rest.py:199,204`, `influxdb.py:288,341`).
 
 ### `operator not allowed: {op}`
 
-`elasticsearch.py:371`, `neo4j.py:254,300`, `rest.py:367`. The final guard in an operator switch:
+`elasticsearch.py:371`, `neo4j.py:254,300`, `rest.py:377`. The final guard in an operator switch:
 the operator passed the shared allowlist but this adapter has no translation for it.
 
 ### `Operator '{op}' unhandled in _build_sql`
@@ -105,11 +105,11 @@ One per adapter, with the class name spelled out:
 `ElasticsearchAdapter.execute called before connect()` (`elasticsearch.py:410`),
 `Neo4jAdapter.execute called before connect()` (`neo4j.py:323`),
 `InfluxDBAdapter.execute called before connect()` (`influxdb.py:375`),
-`RestAdapter.execute called before connect()` (`rest.py:419`),
+`RestAdapter.execute called before connect()` (`rest.py:429`),
 `PgVectorAdapter.execute called before connect()` (`pgvector.py:212`),
 `S3Adapter.execute called before connect()` (`s3.py:188`),
-`ServiceNowAdapter.execute called before connect()` (`servicenow.py:280`),
-`LLMAdapter.execute() called before connect()` (`llm.py:184`),
+`ServiceNowAdapter.execute called before connect()` (`servicenow.py:282`),
+`LLMAdapter.execute() called before connect()` (`llm.py:187`),
 `StaticAdapter.execute() called before connect()` (`static.py:90`) and
 `StaticAdapter.get_schema() called before connect()` (`static.py:114`).
 `S3Adapter is not connected` (`s3.py:305,343,377`) is the same condition on other S3 methods.
@@ -124,16 +124,16 @@ directly, `await adapter.connect(config)` first.
 than a pool: `ElasticsearchAdapter failed to build client for source '{config.id}': {exc}`
 (`elasticsearch.py:270`), `Neo4jAdapter failed to build driver for source '{config.id}': {exc}`
 (`neo4j.py:218`), `RestAdapter failed to build client for source '{config.id}': {exc}`
-(`rest.py:340`), `S3Adapter failed to create client for source '{config.id}': {exc}`
+(`rest.py:350`), `S3Adapter failed to create client for source '{config.id}': {exc}`
 (`s3.py:152`), `ServiceNowAdapter failed to build client for source '{config.id}': {exc}`
-(`servicenow.py:187`).
+(`servicenow.py:189`).
 
 `{exc}` is the driver's own error — DNS failure, refused connection, bad credentials, TLS
 mismatch. Read it first; Nautilus adds only the source id.
 
-### `{type(self).__name__}: execute failed for source '{source_id}': {type(exc).__name__}: {exc}`
+### `{type(self).__name__}: execute failed for source '{source_id}': {type(exc).__name__}[: {exc}]`
 
-`wrap_execute`, `nautilus/adapters/base.py:352-358`. The uniform wrapper around a query that
+`wrap_execute`, `nautilus/adapters/base.py:420-424`. The uniform wrapper around a query that
 raised. Rendered example:
 
 ```text
@@ -141,11 +141,21 @@ PostgresAdapter: execute failed for source 'vuln_db': UndefinedTableError:
 relation "vulnerabilities" does not exist
 ```
 
-The inner class name and message belong to the driver.
+The inner class name and message belong to the driver. **`: {exc}` is omitted entirely when the
+driver's exception has no text** — `httpx.ReadTimeout()` and its siblings carry none, and
+appending an empty one rendered `RestAdapter: execute failed for source 'catalog': ReadTimeout: `,
+a sentence ending in a colon and nothing after it, which was the whole message an operator got for
+a dead backend. The class name is now the last thing on the line:
+
+```text
+RestAdapter: execute failed for source 'catalog': ReadTimeout
+```
+
+Read the failing entry's `endpoint` for the address that timed out.
 
 ### `source '{source_id}' declares mTLS but its client certificate could not be loaded (cert_path={auth.cert_path!r}, key_path={auth.key_path!r}): {exc}`
 
-`mtls_context`, `nautilus/adapters/base.py:210-216`. Both paths are echoed so you can see which
+`mtls_context`, `nautilus/adapters/base.py:269-275`. Both paths are echoed so you can see which
 one the process actually read. `{exc}` is the `ssl` failure: a missing file, an encrypted key
 with no passphrase, or a cert/key pair that does not match.
 
@@ -160,40 +170,98 @@ driver is unimportable. `connect()` adds the original cause:
 
 | Message | Source | Meaning |
 | --- | --- | --- |
-| `source '{source_id}' answered with {declared} bytes, over the {MAX_RESPONSE_BYTES}-byte ceiling` | `rest.py:466` | `Content-Length` exceeded the ceiling; refused before reading. |
-| `source '{source_id}' streamed more than the {MAX_RESPONSE_BYTES}-byte ceiling` | `rest.py:475` | No `Content-Length`; aborted mid-stream. |
+| `source '{source_id}' answered with {declared} bytes, over the {MAX_RESPONSE_BYTES}-byte ceiling` | `rest.py:476` | `Content-Length` exceeded the ceiling; refused before reading. |
+| `source '{source_id}' streamed more than the {MAX_RESPONSE_BYTES}-byte ceiling` | `rest.py:485` | No `Content-Length`; aborted mid-stream. |
 | `source '{source_id}' object {key!r} is {declared} bytes, over the {MAX_OBJECT_BYTES}-byte ceiling` | `s3.py:313` | S3 object too large by its declared size. |
 | `source '{source_id}' object {key!r} streamed more than the {MAX_OBJECT_BYTES}-byte ceiling` | `s3.py:321` | S3 object too large while streaming. |
-| `sn-attachment-fetch-cap: {len(rows)} rows pinned, cap is {_MAX_ATTACHMENT_FETCHES}` | `servicenow.py:329` | Too many attachment fetches in one request. Narrow the scope. |
+| `sn-attachment-fetch-cap: {len(rows)} rows pinned, cap is {_MAX_ATTACHMENT_FETCHES}` | `servicenow.py:331` | Too many attachment fetches in one request. Narrow the scope. |
 
 Fix by narrowing the query (add scope constraints, request fewer rows) rather than by chasing
 the ceiling — it exists so one source cannot exhaust broker memory.
 
 ## SSRF guards (REST and LLM adapters)
 
-### `RestAdapter refuses private/loopback/link-local IP base URL: {host}`
+### `RestAdapter refuses base_url host '{host}': it resolves to private/loopback/link-local address {ip}`
 
-`nautilus/adapters/rest.py:222-226`. A `base_url` resolving to a private, loopback or link-local
-address would let a rule reach cloud metadata endpoints or internal services. Point the source at
-a routable host, or model the internal service as its own source type.
+`nautilus/adapters/rest.py:231-236`, shared verbatim by `ServiceNowAdapter`
+(`nautilus/adapters/servicenow.py:171`) — one function, not a copy per adapter. A `base_url`
+that reaches a private, loopback or link-local address would let a rule reach cloud metadata
+endpoints or internal services. Point the source at a routable host, or model the internal
+service as its own source type.
+
+`{host}` is what `connection` names; `{ip}` is the first address it answered with that failed the
+check, so the two differ whenever a *name* was configured:
+
+```text
+RestAdapter refuses base_url host 'localhost': it resolves to private/loopback/link-local address 127.0.0.1
+RestAdapter refuses base_url host '169.254.169.254': it resolves to private/loopback/link-local address 169.254.169.254
+```
+
+**The host is resolved, not pattern-matched.** Until 0.2.6 this check ran on an IP *literal* only:
+`http://backend` inside a container resolved to an RFC1918 address and was dialled without
+complaint, so every internal service with a DNS name — including a cloud metadata service fronted
+by a name — passed a control this page said covered it. The name is now resolved at `connect()`
+and **every** address it answers with must be routable.
+
+**What it does not cover — read this before relying on it.**
+
+- **It is a lookup, not a pin.** Resolution happens once, at `connect()`; httpx resolves again
+  when it dials. A record that changes between the two answers — DNS rebinding, a short TTL, a
+  round-robin set that rotates — is not caught. Closing that would mean pinning the resolved
+  address into the transport for the life of the connection, which Nautilus does not do. Treat
+  this as config hygiene with a real TOCTOU window, not as a boundary you can put a hostile
+  resolver behind.
+- **A name that does not resolve is accepted.** It reaches nothing, so refusing it would buy no
+  security; the dial then fails with the driver's own DNS error, and the failing source's
+  `endpoint` names the host.
+- **It runs at connect, so it runs once per process per source.** A source that connected before
+  DNS changed keeps its pool.
+- **REST and ServiceNow only.** `postgres`, `elasticsearch`, `neo4j`, `influxdb`, `s3` and
+  `pgvector` dial whatever their `connection` says; internal addresses are the *normal* case for
+  those and there is no guard on them. The LLM adapter has its own, deliberately narrower rule —
+  see below.
+
+**A consequence worth planning for:** a REST source pointed at a sibling container or a
+cluster-internal service by name (`http://backend`, `http://catalog.svc.cluster.local`) is now
+refused where it previously worked. That was always this page's stated rule; the code has caught
+up with it. The documented alternatives are unchanged — front the service with a routable host,
+or model it as its own source type.
 
 ### `Refused redirect from host '{base_host}' to different host '{target_host}' (status={response.status_code})`
 
-`nautilus/adapters/rest.py:513-517`. A 3xx tried to move the request to another host. Redirects
+`nautilus/adapters/rest.py:523-527`. A 3xx tried to move the request to another host. Redirects
 are never followed across hosts.
 
 ### `Refused same-host redirect (status={response.status_code}); configure the endpoint path directly to avoid 3xx responses.`
 
-`nautilus/adapters/rest.py:519-522`. Even a same-host redirect is refused; point
+`nautilus/adapters/rest.py:529-532`. Even a same-host redirect is refused; point
 `EndpointSpec.path` at the final URL.
 
-### `LLMAdapter requires a non-empty host in base_url '{base_url}'` / `RestAdapter requires a non-empty host in base_url '{base_url}'`
+### `{adapter} requires a non-empty host in base_url (scheme={scheme!r}; the value is withheld because a connection string can carry credentials)`
 
-`llm.py:73`, `rest.py:215`. The URL parsed with no netloc — usually a missing `https://`.
+`resolve_base_url`, `nautilus/adapters/base.py:146-150`. `{adapter}` is `RestAdapter` or
+`LLMAdapter`. The URL parsed with no netloc — usually a missing `https://`. Rendered example:
 
-### `LLMAdapter refuses link-local/multicast/unspecified base URL host: {host}`
+```text
+RestAdapter requires a non-empty host in base_url (scheme='http'; the value is withheld because a connection string can carry credentials)
+```
 
-`llm.py:81`.
+The offending value is deliberately **not** echoed. A malformed connection string is exactly the
+shape that still carries userinfo (`http://user:pw@`), and this message travels into the audit
+trail and the requesting agent's response. The `source_id` on the same `sources_errored` entry
+tells you which `connection` to go and read.
+
+### `LLMAdapter refuses base_url host '{host}': it resolves to link-local/multicast/unspecified address {ip}`
+
+`nautilus/adapters/llm.py:81-86`. The LLM adapter's rule is deliberately narrower than the REST
+adapter's: loopback and RFC1918 are **allowed**, because a local inference server is the primary
+and only air-gap-compatible deployment. Cloud metadata (`169.254.0.0/16`), multicast and the
+unspecified address stay blocked.
+
+Names are resolved here too, and for the same reason: every cloud metadata service also answers
+to a name (`metadata.google.internal`, `instance-data`), and the literal-only version of this
+check let all of them through. The residual above applies here identically — it is one lookup,
+not a pin.
 
 ## Embeddings
 
@@ -231,20 +299,80 @@ and the message arrives as one entry in `sources_errored[]`:
 
 ```json
 {
-  "source_id": "vuln_db",
+  "source_id": "ledger",
   "error_type": "AdapterError",
-  "message": "connect() failed: PostgresAdapter failed to connect to source 'vuln_db': [Errno 111] Connect call failed ('127.0.0.1', 1)",
-  "trace_id": "02b484b1-2fdb-4c80-9013-cca9aaad706c"
+  "message": "PostgresAdapter: execute failed for source 'ledger': ConnectionRefusedError: [Errno 111] Connect call failed ('127.0.0.1', 15499)",
+  "trace_id": "b8f39914-1ba2-4d3e-800c-43fffe1041e8",
+  "endpoint": "postgresql://127.0.0.1:15499"
 }
 ```
 
 `error_type` is the exception class name (`ScopeEnforcementError`, `AdapterError`,
 `SSRFBlockedError`, `EmbeddingUnavailableError`), and the failed source contributes no rows —
 partial answers are labelled, never silently merged. Anything raised from `connect()` is prefixed
-`connect() failed: ` by `nautilus/core/broker.py:2608`, and that source is not retried for
+`connect() failed: ` by `nautilus/core/broker.py:2613`, and that source is not retried for
 `connect_cooldown_s`. Anything raised from `execute()` arrives unprefixed
-(`nautilus/core/broker.py:3084-3106`). The per-entry **Status** lines below say which of the two
+(`nautilus/core/broker.py:3112-3137`). The per-entry **Status** lines below say which of the two
 it is.
+
+### `endpoint` — which backend this was
+
+`endpoint` names the address the failing source dials, as `scheme://host[:port]`. It is the
+answer to *"one of my sources is down — which host?"*, which nothing the broker wrote used to
+carry: a `source_id` is your label for a dependency, not the dependency. The same value appears
+in the audit entry's `error_records[]` and in the log line below, so the question is answerable
+from the durable trail after the fact.
+
+It is **built from scheme, host and port only** (`redact_connection`,
+`nautilus/config/models.py:798-812`), by copying those three out rather than by stripping
+anything: userinfo (`postgres://user:pw@…`), path (`https://hooks.example/services/T0/B0/SECRET`),
+query (`?password=…`, `?token=…`) and fragment cannot survive into it. That matters because this
+field reaches the process log, the audit file and the requesting agent — three audiences wider
+than the one that reads `nautilus.yaml`. `null` for a source that dials nothing (`static`), for
+broker-level records, and for any `connection` with no host (a filesystem path, a libpq keyword
+DSN like `host=db password=pw`): there is no guess, because a guess is how the withheld half gets
+echoed by accident.
+
+If your source dials somewhere its `connection` does not name, an adapter may set `endpoint` on
+an `ErrorRecord` it returns and the broker leaves it alone — strip credentials yourself if you do.
+
+### The matching log line
+
+`nautilus/core/broker.py:2698-2708`. Every per-source failure — unknown source, connect cooldown,
+connect error, schema quarantine, wall-clock timeout, adapter contract violation, and the typed
+record an adapter returns — emits exactly one `WARNING` on the `nautilus.core.broker` logger
+before it reaches the response:
+
+```text
+WARNING:nautilus.core.broker:source 'ledger' failed (endpoint=postgresql://127.0.0.1:15499, error_type=AdapterError, trace_id=b8f39914-1ba2-4d3e-800c-43fffe1041e8): PostgresAdapter: execute failed for source 'ledger': ConnectionRefusedError: [Errno 111] Connect call failed ('127.0.0.1', 15499)
+```
+
+`WARNING`, so it is on stdout at the default `--log-level info` — you do not need
+`--log-level debug`, which adds every library's records and still said nothing about this. Under
+`--log-format json` the same record arrives as one JSON object with `logger:
+"nautilus.core.broker"`. `endpoint=<none configured>` renders when the field is `null`.
+
+### `exceeded the source's timeout_s budget of {timeout_s}s`
+
+`nautilus/core/broker.py:2661-2664`, with `error_type: "TimeoutError"`. The broker wraps each
+source's `connect()` + `execute()` in one wall-clock deadline
+(`SourceConfig.timeout_s`, default `15.0`); this is what the entry says when the deadline fired
+before the source answered. Rendered example:
+
+```text
+exceeded the source's timeout_s budget of 5.0s
+```
+
+`TimeoutError` carries no text of its own, so interpolating it produced `exceeded the source's
+timeout_s budget: ` — a colon with nothing after it, and, like the `wrap_execute` case above, the
+entire text an operator received. The budget that was actually spent is what the sentence now
+ends with.
+
+The variant `exceeded the source's timeout_s budget` (no number) means the source declares
+`timeout_s: null`, so the broker imposed no deadline and the `TimeoutError` came from inside the
+driver — there is no broker budget to quote.
+
+Which source, and which host, are on the same entry: `source_id` and `endpoint`.
 
 ## Postgres and pgvector
 
@@ -260,7 +388,7 @@ table; there is no query planner here that could pick one.
 `connect() failed: `.
 
 **Fix.** Add `table: schema.name` to the source block. A source declared `type: postgres` in YAML
-never reaches this: `nautilus/config/models.py:212-218` rejects it at load with
+never reaches this: `nautilus/config/models.py:213-219` rejects it at load with
 `source 'vuln_db' has type 'postgres' but no 'table'. …` (see [config.md](config.md)). This one is
 reachable when you build the config yourself, or register the adapter under a different type name.
 
@@ -424,7 +552,7 @@ adapter that guessed would query indices policy never scoped.
 `connect() failed: `.
 
 **Fix.** Set `index:` on the source. `type: elasticsearch` in YAML is caught at load instead, by
-`nautilus/config/models.py:212-218`.
+`nautilus/config/models.py:213-219`.
 
 ```bash
 python - <<'PY'
@@ -1284,7 +1412,7 @@ ScopeEnforcementError: sn-injection-rejected
 
 ### `sn-unsupported-operator: {op!r}`
 
-**`ScopeEnforcementError`**, `nautilus/adapters/servicenow.py:250`, the fall-through of
+**`ScopeEnforcementError`**, `nautilus/adapters/servicenow.py:252`, the fall-through of
 `_render_segment()`'s operator dispatch. `{op!r}` is the operator with `repr()`.
 
 **Means.** No encoded-query translation exists for that operator. Every operator in
@@ -1315,7 +1443,7 @@ ScopeEnforcementError: sn-unsupported-operator: 'REGEX'
 
 ### `sn-invalid-value: operator {op!r} requires a list, got {type(cast(object, value)).__name__}`
 
-**`ScopeEnforcementError`**, `nautilus/adapters/servicenow.py:220`. `{op!r}` is `'IN'` or
+**`ScopeEnforcementError`**, `nautilus/adapters/servicenow.py:222`. `{op!r}` is `'IN'` or
 `'NOT IN'` with `repr()`; `{type(cast(object, value)).__name__}` is the Python type name of the
 value — `str`, `int`, `dict`.
 
@@ -1344,7 +1472,7 @@ ScopeEnforcementError: sn-invalid-value: operator 'IN' requires a list, got str
 
 ### `sn-invalid-value: operator 'BETWEEN' requires a 2-tuple/list`
 
-**`ScopeEnforcementError`**, `nautilus/adapters/servicenow.py:232`. No interpolation.
+**`ScopeEnforcementError`**, `nautilus/adapters/servicenow.py:234`. No interpolation.
 
 **Means.** The `BETWEEN` value was not a list or a tuple at all. It renders as
 `fieldBETWEENlo@hi`, so it needs two endpoints to render.
@@ -1372,7 +1500,7 @@ ScopeEnforcementError: sn-invalid-value: operator 'BETWEEN' requires a 2-tuple/l
 
 ### `sn-invalid-value: operator 'BETWEEN' requires exactly two endpoints`
 
-**`ScopeEnforcementError`**, `nautilus/adapters/servicenow.py:239`. No interpolation. The sibling of
+**`ScopeEnforcementError`**, `nautilus/adapters/servicenow.py:241`. No interpolation. The sibling of
 the message above: the value *is* a sequence, but its length is not 2.
 
 **Means.** Three endpoints is not a range, and one is not either. Rather than take the first two
@@ -1435,7 +1563,7 @@ ScopeEnforcementError: ServiceNowAdapter source 'tickets' has invalid table 'Inc
 
 ### `sn-attachment-fetch-cap: {len(rows)} rows pinned, cap is {_MAX_ATTACHMENT_FETCHES}`
 
-**`AdapterError`**, `nautilus/adapters/servicenow.py:329`, from `_attach_content()`.
+**`AdapterError`**, `nautilus/adapters/servicenow.py:331`, from `_attach_content()`.
 `{len(rows)}` is how many attachment rows the query pinned; `{_MAX_ATTACHMENT_FETCHES}` is the
 constant at `servicenow.py:56`, currently **10**.
 
@@ -1472,7 +1600,7 @@ AdapterError: sn-attachment-fetch-cap: 11 rows pinned, cap is 10
 
 ### `servicenow: get_schema failed for source '{self._config.id}': {exc}`
 
-**`AdapterError`**, `nautilus/adapters/servicenow.py:405`, from `get_schema()`.
+**`AdapterError`**, `nautilus/adapters/servicenow.py:407`, from `get_schema()`.
 `{self._config.id}` is the source id; `{exc}` is the underlying failure — an HTTP error from
 `sys_dictionary`, or a transport error.
 
@@ -1514,8 +1642,8 @@ AdapterError: servicenow: get_schema failed for source 'tickets': Client error '
 
 ### `Operator 'NOT IN' is not supported by the REST adapter unless explicitly declared in EndpointSpec.operator_templates (AC-9.3).`
 
-**`ScopeEnforcementError`**, `nautilus/adapters/rest.py:125` (the default builder
-`_b_not_in_default`) and `nautilus/adapters/rest.py:373` (`_resolve_template`, reached first when
+**`ScopeEnforcementError`**, `nautilus/adapters/rest.py:127` (the default builder
+`_b_not_in_default`) and `nautilus/adapters/rest.py:383` (`_resolve_template`, reached first when
 the endpoint declares no template for the operator). No interpolation.
 
 **Means.** There is no universal query-string form for "not in". Rendering it as a repeated
@@ -1556,7 +1684,7 @@ ScopeEnforcementError: Operator 'NOT IN' is not supported by the REST adapter un
 
 ### `RestAdapter source '{config.id}' declares endpoints=[] (must list at least one EndpointSpec or omit the field)`
 
-**`ScopeEnforcementError`**, `nautilus/adapters/rest.py:307`, from `connect()`. `{config.id}` is the
+**`ScopeEnforcementError`**, `nautilus/adapters/rest.py:317`, from `connect()`. `{config.id}` is the
 source id.
 
 **Means.** `endpoints:` present but empty is ambiguous: an omitted `endpoints` means "call the base
@@ -1588,7 +1716,7 @@ ScopeEnforcementError: RestAdapter source 'api' declares endpoints=[] (must list
 
 ### `EndpointSpec.operator_templates declares unknown operator '{op}' for source '{config.id}'`
 
-**`ScopeEnforcementError`**, `nautilus/adapters/rest.py:316`, from `connect()`. `{op}` is the
+**`ScopeEnforcementError`**, `nautilus/adapters/rest.py:326`, from `connect()`. `{op}` is the
 offending key from `operator_templates`; `{config.id}` is the source id.
 
 **Means.** Every key in `operator_templates` must be an operator from the shared allowlist
@@ -1626,7 +1754,7 @@ ScopeEnforcementError: EndpointSpec.operator_templates declares unknown operator
 
 ### `LLMAdapter source '{config.id}' requires a 'model' field in its source block`
 
-**`AdapterError`**, `nautilus/adapters/llm.py:145`, from `connect()`. `{config.id}` is the source
+**`AdapterError`**, `nautilus/adapters/llm.py:148`, from `connect()`. `{config.id}` is the source
 id.
 
 **Means.** The OpenAI-compatible `/chat/completions` body requires a `model`. There is no default:
@@ -1636,7 +1764,7 @@ picking one would silently send the request to whatever the endpoint happens to 
 `connect() failed: `.
 
 **Fix.** Add `model: <name>` to the source. A source declared `type: llm` in YAML is caught earlier,
-at config load (`nautilus/config/models.py:212-218`).
+at config load (`nautilus/config/models.py:213-219`).
 
 ```bash
 python - <<'PY'
@@ -1658,7 +1786,7 @@ AdapterError: LLMAdapter source 'summariser' requires a 'model' field in its sou
 
 ### `LLMAdapter source '{config.id}' does not support mTLS auth; use bearer/basic or front the endpoint with a TLS-terminating proxy`
 
-**`AdapterError`**, `nautilus/adapters/llm.py:152`, from `connect()`, before any client is built.
+**`AdapterError`**, `nautilus/adapters/llm.py:155`, from `connect()`, before any client is built.
 `{config.id}` is the source id.
 
 **Means.** This adapter builds a plain `httpx.AsyncClient` with no `cert=` wiring, so an `mtls:`
@@ -1694,7 +1822,7 @@ AdapterError: LLMAdapter source 'summariser' does not support mTLS auth; use bea
 
 ### `LLMAdapter call failed: {exc}`
 
-**`AdapterError`**, `nautilus/adapters/llm.py:204`. `{exc}` is the `httpx` error: a DNS failure, a
+**`AdapterError`**, `nautilus/adapters/llm.py:207`. `{exc}` is the `httpx` error: a DNS failure, a
 refused connection, a TLS error, a timeout, or an HTTP error status raised by
 `raise_for_status()`.
 
@@ -1703,7 +1831,9 @@ is *not* in this message — correlate with `source_id` on the `sources_errored[
 
 **Status.** **200**, `sources_errored[]`, `error_type: "AdapterError"`, unprefixed. A slow endpoint
 hits the source's `timeout_s` budget first and reports
-`exceeded the source's timeout_s budget: …` instead (`nautilus/core/broker.py:2687-2690`).
+`exceeded the source's timeout_s budget of {timeout_s}s` instead — see
+[that entry](#exceeded-the-sources-timeout_s-budget-of-timeout_ss)
+(`nautilus/core/broker.py:2661-2664`).
 
 **Fix.** Read `{exc}`. A `401`/`403` is the token; `Name or service not known` is the `connection:`
 host; a timeout usually means `timeout_s` is too tight for the model.
@@ -1737,7 +1867,7 @@ AdapterError: LLMAdapter call failed: [Errno -2] Name or service not known
 
 ### `LLMAdapter received a non-OpenAI-compatible response shape: {exc}`
 
-**`AdapterError`**, `nautilus/adapters/llm.py:206`. `{exc}` is the `KeyError`, `IndexError` or
+**`AdapterError`**, `nautilus/adapters/llm.py:209`. `{exc}` is the `KeyError`, `IndexError` or
 `TypeError` raised while reading the body — for a body with no `choices` key it renders as the
 bare `'choices'`, because that is what `KeyError` stringifies to.
 

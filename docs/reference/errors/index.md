@@ -227,9 +227,12 @@ curl -s "$NAUTILUS/readyz"; echo
 | `Operator 'BETWEEN' requires a 2-tuple/list value` |
 | `operator not allowed: {op}` |
 | `{Adapter}.execute called before connect()` |
-| `{type(self).__name__}: execute failed for source '{source_id}': {type(exc).__name__}: {exc}` |
+| `{type(self).__name__}: execute failed for source '{source_id}': {type(exc).__name__}[: {exc}]` |
+| `exceeded the source's timeout_s budget of {timeout_s}s` |
 | `source '{source_id}' declares mTLS but its client certificate could not be loaded …` |
-| `RestAdapter refuses private/loopback/link-local IP base URL: {host}` |
+| `RestAdapter refuses base_url host '{host}': it resolves to private/loopback/link-local address {ip}` |
+| `LLMAdapter refuses base_url host '{host}': it resolves to link-local/multicast/unspecified address {ip}` |
+| `{adapter} requires a non-empty host in base_url (scheme={scheme!r}; the value is withheld …)` |
 | `Refused redirect from host '{base_host}' to different host '{target_host}' (status={…})` |
 | `Refused same-host redirect (status={…}); configure the endpoint path directly …` |
 | `source '{source_id}' answered with {declared} bytes, over the {MAX_RESPONSE_BYTES}-byte ceiling` |
@@ -352,6 +355,7 @@ curl -s "$NAUTILUS/readyz"; echo
 | `ERROR: config path does not exist or is not a file: {config_path}` | 2 |
 | `ERROR: invalid config: {exc}` | 2 |
 | `ERROR: broker construction failed: {exc}` | 2 |
+| `ERROR: config: no subcommand given (try: check)` | 2 |
 | `ERROR: file not found: {file_path}` | 1 |
 | `--bind must be HOST:PORT, got {bind!r}` | 2 |
 | `--bind port must be an integer, got {port_s!r}` | 2 |
