@@ -522,7 +522,13 @@ warning above as one object:
 
 ## 4. Monitor
 
-- `GET /healthz` — liveness; `GET /readyz` — readiness (verifies the audit
+- `GET /healthz` — liveness, and the build: it answers
+  `{"status": "ok", "version": "0.2.2"}`, taking the version from the installed
+  distribution's metadata. No credential, so a synthetic check or a runbook
+  `curl` can read it; two replicas answering different strings means the
+  rollout is half done. Releases up to 0.2.5 answer `{"status": "ok"}` with no
+  version — there, run `nautilus version` inside the container instead.
+- `GET /readyz` — readiness (verifies the audit
   sink is writable and the session store responds; the `reason` field on a
   503 names which one failed). Every request writes an audit entry before it
   answers, so a sink that has stopped accepting writes fails every request —
@@ -628,9 +634,23 @@ zero, and a dashboard that plots the absence as zero will be wrong.
 `process_open_fds`, `process_max_fds`, `process_virtual_memory_bytes`,
 `process_start_time_seconds`, `python_info`, `python_gc_objects_collected_total`,
 `python_gc_objects_uncollectable_total`, `python_gc_collections_total` — the
-`prometheus_client` defaults. Plus `target_info{service_name="nautilus", ...}`
-and the OTel SDK's own `otel_sdk_span_started_total`, `otel_sdk_span_live` and
-`otel_sdk_metric_reader_collection_duration_seconds`.
+`prometheus_client` defaults. Plus the OTel SDK's own
+`otel_sdk_span_started_total`, `otel_sdk_span_live`,
+`otel_sdk_metric_reader_collection_duration_seconds`, and `target_info` — which
+carries these four labels and no others:
+
+```text
+target_info{service_name="nautilus",telemetry_sdk_language="python",telemetry_sdk_name="opentelemetry",telemetry_sdk_version="1.41.0"} 1.0
+```
+
+**There is no `service_version` label.** `target_info` is the conventional
+OpenTelemetry home for a build stamp and it does not hold one here: the resource
+is built from `service.name` alone. Do not write a dashboard or an alert that
+groups by a version label on `/metrics` — ask
+[`GET /healthz`](../reference/rest-api.md#get-healthz) instead, which reports the
+build with no credential, no optional dependency and no off-switch.
+`telemetry_sdk_version` is the OpenTelemetry SDK's version, not Nautilus's.
+
 `process_resident_memory_bytes` is the series to check against the plateau in
 [Memory under sustained load](#memory-under-sustained-load).
 
@@ -646,8 +666,113 @@ supported off-switch (see
 
 ## 5. Query the audit trail
 
-Every request appends one fsync'd JSONL entry to `audit.path` — success
-or failure. Query it over REST (auth-gated):
+The audit log is the broker's decision record: append-only JSONL at
+`audit.path`, fsync'd after every write, and the one dependency whose failure
+is total. When it stops accepting writes the instance takes itself out of
+rotation rather than serving unrecorded requests. Reproduced on a scratch
+instance by revoking write permission on the log under a live broker — do not
+run the `chmod` against a log you care about:
+
+```console
+$ curl -s http://127.0.0.1:8000/readyz
+{"status":"ok"}
+$ chmod 0444 /var/lib/nautilus/audit.jsonl
+$ curl -s -w ' HTTP %{http_code}\n' http://127.0.0.1:8000/readyz
+{"status":"not_ready","reason":"audit log /var/lib/nautilus/audit.jsonl is not writable"} HTTP 503
+```
+
+`/healthz` keeps answering `200` throughout: liveness is not readiness, and a
+broker with an unwritable audit log is working correctly by refusing traffic.
+
+So size the volume before you rely on it — and size it from the line rate
+below, not from the request rate.
+
+### How many lines a request writes
+
+**Two, not one.** The broker writes the `request` entry, and — whenever
+attestation is on — a second `attestation_emitted` entry carrying the same
+`request_id`. Attestation is on by default: `attestation.enabled` defaults to
+`true` and the broker generates a per-process Ed25519 key when
+`attestation.private_key_path` is unset, so a `nautilus.yaml` with **no
+`attestation:` stanza at all** still writes two lines per request.
+
+Measured against a running broker with one `static` source, 23 identical
+`POST /v1/request` calls, no `attestation:` stanza in the config:
+
+```console
+$ AUDIT=/var/lib/nautilus/audit.jsonl          # audit.path from nautilus.yaml
+$ for i in $(seq 1 23); do
+    curl -s -o /dev/null -X POST http://127.0.0.1:8000/v1/request \
+      -H "X-API-Key: $NAUTILUS_API_KEY" -H 'Content-Type: application/json' \
+      -d "{\"agent_id\":\"analyst\",\"intent\":\"show me orders number $i\"}"
+  done
+$ curl -s http://127.0.0.1:8000/metrics | grep '^nautilus_requests_total '
+nautilus_requests_total 23.0
+$ wc -l < "$AUDIT"
+46
+$ jq -r '.metadata.nautilus_audit_entry | fromjson | .event_type' "$AUDIT" \
+    | sort | uniq -c
+     23 attestation_emitted
+     23 request
+$ stat -c %s "$AUDIT"
+121160
+```
+
+`nautilus_requests_total` is therefore **half** the audit line rate on a
+default config. The same 23-call workload, against three configurations of
+the same broker:
+
+| Configuration | lines per request | file bytes for 23 requests | bytes per request |
+|---|---|---|---|
+| default — `attestation.enabled` unset or `true`, plain log | **2** | 121 160 | 5 268 |
+| `attestation.enabled: false` | 1 | 64 971 | 2 825 |
+| default + `audit.chained: true`, `checkpoint_interval: 10` | 2, plus one genesis line at first write and one checkpoint per 10 entries | 157 592 | 6 852 |
+
+Where the bytes go on that workload: the `request` line is 3 758 B with
+attestation on and 2 825 B with it off — the 933 B difference is the JWS the
+entry stores in `attestation_token` — and the `attestation_emitted` line is a
+flat 1 510 B. Chaining adds a 704 B signed envelope to every line (+27 %); the
+genesis and checkpoint lines are 4 029 B of the 157 592 (2.6 %), so
+`checkpoint_interval` barely moves the total.
+
+Those byte figures are for *that* workload — one source, a 23-character
+intent. The entry stores `raw_intent` verbatim and one `routing_decisions`
+plus one `scope_constraints` element per source the router selected, so both
+intent length and source fan-out move the number. Re-run the block
+above against your own traffic before you size a volume or a `sizeLimit`; on
+Kubernetes see [On Kubernetes](#on-kubernetes), where the audit `emptyDir` is
+capped and disk pressure evicts the node's other pods.
+
+Requests that never reach the broker write nothing. An unauthenticated
+`POST /v1/request` answers `401`, appends 0 lines and does not increment
+`nautilus_requests_total`; `GET /v1/sources`, `GET /v1/audit`, `/healthz`,
+`/readyz` and `/metrics` append 0 lines. Every request the counter *does*
+count writes the full pair — including one the router denied at every source
+and one where it skipped every source.
+
+Those last two were then sent to the same broker, taking `$AUDIT` to 25 pairs
+and 50 lines. That 50-line file is what the rest of this section reads.
+
+### The order the pair lands in
+
+`attestation_emitted` is written **first**, then `request` — the attestation
+is emitted inside the pipeline, the request entry after it returns. A tail
+follower sees the attestation line for a request before it sees the request
+itself:
+
+```console
+$ jq -r '.metadata.nautilus_audit_entry | fromjson | [.request_id, .event_type] | @tsv' "$AUDIT" \
+    | awk '{a[$1]=a[$1] " " $2} END {for (k in a) print a[k]}' | sort | uniq -c
+     25  attestation_emitted request
+```
+
+Correlate on `request_id`, not on adjacency, and do not read the first line of
+a pair as the decision — the `attestation_emitted` entry carries
+`agent_id: ""`, `raw_intent: ""` and empty `rule_trace`, `sources_queried`,
+`sources_denied` and `sources_errored` by construction. Everything about what
+was asked and what was allowed is on the `request` line.
+
+### Query it over REST
 
 ```bash
 curl -H "X-API-Key: $NAUTILUS_API_KEY" \
@@ -660,10 +785,214 @@ Filters: `agent_id`, `source_id`, `event_type`, `start`/`end` (ISO-8601),
 `cursor`, `limit` (≤ 500), `order=asc|desc`. The response carries
 `next_cursor` for pagination.
 
-**Integrity (optional):** `audit.chained: true` upgrades the log to the same
-hash-chained, JWS-signed format the attestation sink can use — every line
-commits to its predecessor, so an edited or reordered entry is detectable
-offline instead of leaving no trace:
+`limit` counts audit *entries*, not requests, so on a default config it spans
+half as many requests as its value suggests. `event_type` is applied before
+`limit`, so filtering restores one row per request:
+
+```console
+$ curl -s -H "X-API-Key: $NAUTILUS_API_KEY" "http://127.0.0.1:8000/v1/audit?limit=50" \
+    | jq -c '{n:(.entries|length), types:([.entries[].event_type]|unique)}'
+{"n":46,"types":["attestation_emitted","request"]}
+$ curl -s -H "X-API-Key: $NAUTILUS_API_KEY" "http://127.0.0.1:8000/v1/audit?limit=50&event_type=request" \
+    | jq -c '{n:(.entries|length), types:([.entries[].event_type]|unique)}'
+{"n":23,"types":["request"]}
+```
+
+`GET /v1/audit/{request_id}` needs no such filter: both entries of a pair
+carry the same `request_id`, and the single-entry lookup answers with the
+`request` one.
+
+### The shape on disk
+
+An on-disk line is **not** the object `/v1/audit` returns. It is a Fathom
+`AuditRecord` envelope whose `metadata.nautilus_audit_entry` holds the
+Nautilus entry **JSON-encoded as a string** — the entry is encoded twice, and
+a parser that stops after the first decode sees none of its fields:
+
+```console
+$ head -1 "$AUDIT" | jq -c 'keys'
+["asserted_facts","attestation_token","decision","duration_us","input_facts","match_evidence","metadata","modules_traversed","reason","rules_fired","session_id","timestamp"]
+$ head -1 "$AUDIT" | jq '{decision, reason, rules_fired, metadata_type: (.metadata.nautilus_audit_entry|type)}'
+{
+  "decision": "skip",
+  "reason": "queried=0 denied=0 skipped=0 errored=0",
+  "rules_fired": [],
+  "metadata_type": "string"
+}
+```
+
+The twelve envelope fields, and what the broker puts in each:
+
+| Envelope field | Type | What the broker writes |
+|---|---|---|
+| `timestamp` | string | Entry timestamp, ISO-8601 UTC with a literal `Z` suffix. Equal to the entry's own `timestamp`. |
+| `session_id` | string | The entry's `session_id`, **or its `request_id`** when the request had no session. Never `null` — so this is not a usable "was there a session" test; read `session_id` inside the entry for that. |
+| `input_facts` | `null` | Never set. |
+| `modules_traversed` | array | Always `[]`. |
+| `rules_fired` | array of string | The entry's `rule_trace`, verbatim. |
+| `decision` | string | `allow`, `deny`, `error` or `skip` — a summary of the *source fan-out*, not the request's outcome. See below. |
+| `reason` | string | `queried=N denied=N skipped=N errored=N` — the four counts `decision` was derived from. |
+| `duration_us` | integer | The entry's `duration_ms` × 1000. Millisecond resolution widened to microseconds, not microsecond resolution. |
+| `metadata` | object | Exactly one key, `nautilus_audit_entry`, whose value is a **JSON string** — 918–3 102 bytes on the workload above. |
+| `asserted_facts` | `null` | Never set. |
+| `match_evidence` | `null` | Never set. |
+| `attestation_token` | `null` | Never set **here**. The signed token is inside the entry, at `metadata.nautilus_audit_entry.attestation_token`. |
+
+The four always-`null` fields and the empty `modules_traversed` are Fathom
+schema fields Nautilus does not use. Checked across every line of a 50-line
+log — one distinct combination, so no line ever sets them:
+
+```console
+$ jq -s 'map({input_facts, asserted_facts, match_evidence, attestation_token, modules_traversed}) | unique' "$AUDIT"
+[
+  {
+    "input_facts": null,
+    "asserted_facts": null,
+    "match_evidence": null,
+    "attestation_token": null,
+    "modules_traversed": []
+  }
+]
+```
+
+**The extraction, worked.** Reading the fields the REST projection documents
+straight off a disk line finds nothing — no error, no warning, just `null`:
+
+```console
+$ head -2 "$AUDIT" | jq -c '{request_id, agent_id, rule_trace}'
+{"request_id":null,"agent_id":null,"rule_trace":null}
+{"request_id":null,"agent_id":null,"rule_trace":null}
+```
+
+Decode `metadata.nautilus_audit_entry` a second time and the entry appears:
+
+```console
+$ head -2 "$AUDIT" | jq -c '.metadata.nautilus_audit_entry | fromjson | {request_id, event_type, agent_id, rule_trace}'
+{"request_id":"35a158d0-3a0b-4b3d-9546-4efdf696f687","event_type":"attestation_emitted","agent_id":"","rule_trace":[]}
+{"request_id":"35a158d0-3a0b-4b3d-9546-4efdf696f687","event_type":"request","agent_id":"analyst","rule_trace":["nautilus-routing::match-sources-by-data-type"]}
+```
+
+`metadata.nautilus_audit_entry | fromjson` is the same object `GET /v1/audit`
+returns in `entries[]` — the same 39 fields, no additions and no omissions.
+Everything [the REST reference](../reference/rest-api.md) documents about an
+audit entry applies to it unchanged.
+
+### `decision` and `reason`
+
+`decision` is a Fathom `AuditRecord` field, and the broker fills it with a
+four-value summary of which bucket the request's sources ended up in:
+
+| `decision` | Emitted when | Read it as |
+|---|---|---|
+| `allow` | `sources_queried` is non-empty | At least one source was queried. **Not** "everything succeeded": a request that queried one source and errored on another is `allow`. |
+| `deny` | nothing queried, `sources_denied` non-empty | Every selected source was refused by policy. |
+| `error` | nothing queried, nothing denied, `sources_errored` non-empty | Every source that was reached failed. |
+| `skip` | none of the above | No source landed in any of those three buckets. Covers both a request whose sources were all *skipped* and every non-request event, which has no sources at all. |
+
+`sources_skipped` never enters the test, so `skip` is the else-branch and not
+a synonym for "nothing happened". Two different things land there, and
+`reason` is what separates them — `skipped=1` on a request whose sources were
+all skipped, `skipped=0` on an event:
+
+```console
+$ jq -r '[(.metadata.nautilus_audit_entry|fromjson|.event_type), .decision, .reason] | @tsv' "$AUDIT" | sort | uniq -c
+     25 attestation_emitted	skip	queried=0 denied=0 skipped=0 errored=0
+     23 request	allow	queried=1 denied=0 skipped=0 errored=0
+      1 request	deny	queried=0 denied=1 skipped=0 errored=0
+      1 request	skip	queried=0 denied=0 skipped=1 errored=0
+```
+
+and, on a second broker whose config adds one source that cannot be reached,
+the two rows that show `decision` is a fan-out summary rather than an outcome
+— `error` on a request where one source was skipped and one failed, `allow`
+on a request that succeeded on one source and failed on another:
+
+```console
+$ jq -r 'select((.metadata.nautilus_audit_entry|fromjson|.event_type)=="request") | [.decision, .reason] | @tsv' /var/lib/nautilus/audit-2.jsonl
+error	queried=0 denied=0 skipped=1 errored=1
+allow	queried=1 denied=0 skipped=0 errored=1
+```
+
+`request` is the **only** one of the twenty-one `event_type` values that can
+carry a `decision` other than `skip`. It is the only entry the broker builds
+with the source buckets filled; every other event — `attestation_emitted`,
+`handoff_declared`, `signing_key_rotated`, `proposal_validated`,
+`rule_promoted`, all of them — is constructed with all four lists empty and so
+lands as `skip` with `reason: queried=0 denied=0 skipped=0 errored=0`.
+
+That is the field's meaning, not a bug, and it is why **`decision` is the
+wrong field to alert on**. Alert on `event_type` inside the entry, which names
+what actually happened; use `decision` as a cheap pre-filter and `reason` to
+disambiguate it. `decision` is also load-bearing on disk under
+`audit.chained` — it sits inside the signed payload of every chained line, as
+the tamper check below shows — so treat its four values as a stable wire
+vocabulary rather than something to re-map at the source.
+
+Non-request events keep their detail in one of two places, depending on which
+path wrote them:
+
+| Producer | Where the detail is | Measured example |
+|---|---|---|
+| Broker lifecycle path — `attestation_emitted`, `signing_key_rotated`, `signing_key_revoked`, the session-token events | The entry's own fields; free-form markers go in `rule_trace`, which the envelope copies into `rules_fired` | `signing_key_rotated` → `rule_trace: ["reviewer=ops@example.com", "previous_kid=267b00a8-…", "new_kid=facbeccc-…"]` |
+| Rule-knowledge-management emitter — `proposal_*`, `rule_promoted`, `rule_retracted`, `rule_rolled_back`, `meta_rule_fired`, `relationship_observed`, adapter and schema-drift events | `event_fields`, a free-form object, and `agent_id` is the literal string `"<broker>"` | `proposal_validated` → `event_fields: {"proposal_id": "prop_5e33…", "status": "rejected", "confidence": 0.9, "sandbox_error": "…"}` |
+
+`agent_id` is `""` on an event with no agent behind it — measured on
+`attestation_emitted` and on `signing_key_rotated` — so a non-empty `agent_id`
+is not a usable "is this a real request" filter either. `event_type` is.
+
+### Ship it to a collector
+
+A shipper that indexes the raw line indexes `nautilus_audit_entry` as one
+opaque 0.9–3.1 kB string, and every field an operator wants to search on is
+inside it. Decode it once more before indexing. The envelope carries
+nothing the entry does not — `timestamp`, `session_id`, `rules_fired` and
+`duration_us` are all derivable from it, checked on every line of the file:
+
+```console
+$ jq -r '. as $o | ($o.metadata.nautilus_audit_entry|fromjson) as $e
+  | [ ($o.timestamp    == $e.timestamp),
+      ($o.session_id   == ($e.session_id // $e.request_id)),
+      ($o.rules_fired  == $e.rule_trace),
+      ($o.duration_us  == ($e.duration_ms * 1000)) ] | @tsv' "$AUDIT" | sort | uniq -c
+     50 true	true	true	true
+```
+
+so the whole pre-parse is: keep the entry, drop the envelope.
+
+```console
+$ jq -c '.metadata.nautilus_audit_entry | fromjson' "$AUDIT" | head -1 | cut -c1-200
+{"timestamp":"2026-09-01T15:56:31.760792Z","request_id":"35a158d0-3a0b-4b3d-9546-4efdf696f687","agent_id":"","principal_id":null,"session_id":null,"raw_intent":"","intent_analysis":null,"facts_asserte
+```
+
+One filter reads both a plain and a chained log and drops the lines that carry
+no entry, so a `filebeat` / Vector / `fluent-bit` pipe does not change when you
+turn chaining on:
+
+```console
+$ CHAIN=/var/lib/nautilus/audit-chained.jsonl
+$ jq -c '(.record // .) | .metadata.nautilus_audit_entry? // empty | fromjson' "$AUDIT" | wc -l
+50
+$ jq -c '(.record // .) | .metadata.nautilus_audit_entry? // empty | fromjson' "$CHAIN" | wc -l
+46
+```
+
+51 lines in that chained file, 46 entries: the genesis line and four
+checkpoints carry no entry and `// empty` drops them.
+
+If you parse in the shipper rather than in a pipe, the operation to configure
+is a **second** JSON decode of the field `metadata.nautilus_audit_entry`
+(under `record.metadata.nautilus_audit_entry` on a chained log) — Filebeat's
+`decode_json_fields` processor, Splunk's `spath input=`, Vector's
+`parse_json`. Those product configurations are not reproduced here because
+they were not executed here; the field path is, and it is the part that is
+easy to get wrong.
+
+### Integrity: `audit.chained`
+
+`audit.chained: true` upgrades the log to the same hash-chained, JWS-signed
+format the attestation sink can use — every line commits to its predecessor,
+so an edited or reordered entry is detectable offline instead of leaving no
+trace:
 
 ```yaml
 audit:
@@ -683,10 +1012,12 @@ is what makes a *truncation* — as opposed to an edit — detectable, so set
 `checkpoint_interval` if that is part of your threat model.
 
 **Chaining does not cost you this API.** A chained line is an envelope —
-`{"v", "seq", "prev_sha256", "record", "jws", "iat"}` — and the reader unwraps
-it, so `GET /v1/audit`, `GET /v1/audit/{request_id}` and the admin audit view
-answer from a chained log exactly as they do from a plain one. One file gives
-you the browser and offline-verifiable integrity, from one `/v1/request`:
+`{"v", "seq", "prev_sha256", "record", "jws", "iat"}` — with the plain line
+above nested whole under `record`, one container deeper than an unchained log.
+The reader unwraps it, so `GET /v1/audit`, `GET /v1/audit/{request_id}` and
+the admin audit view answer from a chained log exactly as they do from a plain
+one. One file gives you the browser and offline-verifiable integrity, from one
+`/v1/request`:
 
 ```console
 $ curl -s -H "X-API-Key: $NAUTILUS_API_KEY" "http://127.0.0.1:8000/v1/audit?limit=50" \
@@ -696,18 +1027,50 @@ $ nautilus attestation verify /var/lib/nautilus/audit.jsonl
 OK: chain valid — 2 records, head b2f74121bb605dfaba94882e874dd6e48d8aaa6a295f52925c772d584fc97363
 ```
 
-Two shapes in the file carry no audit entry and are skipped without comment:
-the chain's genesis record and its periodic checkpoints. So
+Two entries, two records — and three lines in the file, the third being the
+genesis record. `verify` counts entries, not lines. Over the 23-request run
+above, with `checkpoint_interval: 10`:
+
+```console
+$ wc -l < "$CHAIN"
+51
+$ jq -r '.record.type // (.record.metadata.nautilus_audit_entry|fromjson|.event_type)' "$CHAIN" \
+    | sort | uniq -c
+     23 attestation_emitted
+      4 fathom.checkpoint
+      1 fathom.genesis
+     23 request
+$ nautilus attestation verify "$CHAIN"
+OK: chain valid — 46 records, head 2de841e4fdd6395a465ea5f362787a54f972562fab1dc44893dd5035dbf57c71
+```
+
+The signature commits to the whole `record` object, `decision` included, so an
+edit anywhere in a line is caught with its line number and `verify` exits
+**2**. Prove that on a copy before you rely on it in an audit — flipping one
+`decision` from `skip` to `deny`:
+
+```console
+$ cp "$CHAIN" /tmp/tamper.jsonl && cp "$CHAIN".pub.pem /tmp/tamper.jsonl.pub.pem
+$ python -c 'import json; L=open("/tmp/tamper.jsonl").read().splitlines(); o=json.loads(L[1]); o["record"]["decision"]="deny"; L[1]=json.dumps(o); open("/tmp/tamper.jsonl","w").write("\n".join(L)+"\n")'
+$ nautilus attestation verify /tmp/tamper.jsonl; echo "exit=$?"
+ERROR: attestation verify: signature claims mismatch at line 2: signed {'iss': 'fathom-chain', 'iat': 1788278328, 'seq': 1, 'prev_sha256': '66286a6324bba4851406cad9d6a1ba18725fa79e5531b0b6a3b1fda6a2313496', 'record_sha256': '91b528f315df8afc4745823999ec85ff89d5a83f0463c1fd97db8772ce828943', 'log_id': 'e93d019ff21a4da8b163ae99ce26164d', 'v': 1}, computed {'iss': 'fathom-chain', 'iat': 1788278328, 'seq': 1, 'prev_sha256': '66286a6324bba4851406cad9d6a1ba18725fa79e5531b0b6a3b1fda6a2313496', 'record_sha256': 'b521301bedd117419b6c82681ff0bf4fbbdfa4845413e34bd19f290f825ac5ba', 'log_id': 'e93d019ff21a4da8b163ae99ce26164d', 'v': 1}
+exit=2
+```
+
+Those two shapes — the chain's genesis record and its periodic checkpoints —
+carry no audit entry and are skipped without comment. So
 `Skipping corrupt audit line:` in the broker's log still means what it says — a
 line that could not be read — rather than being the normal noise of a chained
 log.
 
-**Backup:** the audit file is append-only JSONL, so it is the one piece of
-durable state that tolerates a copy from a running broker — rotate and archive
-it like any log (`logrotate` with `copytruncate` disabled; a HUP is *not*
-needed since the broker holds the path, so prefer copy-then-trim during a
-maintenance window, or ship lines continuously with a follower like
-`filebeat`). It is not the only durable state there is — see
+### Backup
+
+The audit file is append-only JSONL, so it is the one piece of durable state
+that tolerates a copy from a running broker — rotate and archive it like any
+log (`logrotate` with `copytruncate` disabled; a HUP is *not* needed since the
+broker holds the path, so prefer copy-then-trim during a maintenance window,
+or ship lines continuously with a follower like `filebeat`). It is not the
+only durable state there is — see
 [Back up and restore](#9-back-up-and-restore) for the full list and the
 stop-archive-restore procedure.
 

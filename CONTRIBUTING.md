@@ -80,6 +80,36 @@ For anything non-trivial, comment on the issue to say you're picking it up befor
 - All CI checks must pass before merge.
 - Maintainers may request changes — this is collaborative, not adversarial.
 
+## Releases and Version Numbers
+
+There is exactly one version string: `[project] version` in `pyproject.toml`.
+[release-please](https://github.com/googleapis/release-please) owns it — it opens
+the bump PR, writes the `CHANGELOG.md` entry, and tags `vX.Y.Z` on merge.
+Everything else derives from it:
+
+- The build backend copies it into the installed distribution's metadata.
+- `nautilus.__version__` reads that metadata back (`importlib.metadata`).
+- `nautilus version`, `GET /healthz` and `info.version` in `GET /openapi.json`
+  all report `nautilus.__version__`.
+
+So do not hand-edit a version anywhere, and do not add a second literal — not in
+a module, not in a README, not in a doc page. The one we used to keep in
+`nautilus/__init__.py` drifted from `pyproject.toml` in 0.1.4 and needed a
+follow-up commit to re-sync; there is now no second side to drift.
+
+**A branch reports its own lineage, not the newest tag, and that is a hazard.**
+The version in the tree is whatever the last release commit *on this branch* set.
+A long-lived branch cut before a release and never brought up to date builds
+artifacts stamped with its fork point: at the time of writing, this branch is 70
+commits past `v0.2.2` and does not contain `v0.2.3`, `v0.2.4` or `v0.2.5`, so
+everything it builds calls itself `0.2.2` — the same string as a released wheel
+from months earlier. Nothing in the code can fix that, because an installed
+wheel genuinely cannot know it was built from an unreleased tree; do not try to
+paper over it with a git-describe scheme, which only moves the lie into builds
+that have no tag. Merge `main` before you cut a release branch, and treat two
+artifacts answering `/healthz` with the same version but different behaviour as
+a release-process bug, not a runtime one.
+
 ## Reporting Issues
 
 - Use the provided issue templates when available.

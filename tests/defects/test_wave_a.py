@@ -654,11 +654,19 @@ def test_wa11_the_adapter_sdk_reference_matches_the_protocol() -> None:
 
 
 def test_wa12_the_docs_agree_with_the_package_on_what_version_this_is() -> None:
-    """A user reading the README must be told the version they will install."""
+    """A user reading the README must be told the version they will install.
+
+    Originally this asserted README and ``docs/index.md`` repeated the string in
+    ``pyproject.toml``. Keeping three literals equal is a job nothing did: a
+    sealed operator trial found all three saying ``0.2.2`` while ``v0.2.3``,
+    ``v0.2.4`` and ``v0.2.5`` were on PyPI. So the claim is now the stronger one
+    — there is only *one* literal, in ``pyproject.toml``, and the prose sends
+    the reader somewhere that cannot go stale — and this test is what stops a
+    second copy from being pasted back in.
+    """
     import tomllib
 
     pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    version: str = pyproject["project"]["version"]
     requires: str = pyproject["project"]["requires-python"]
     floor = requires.lstrip(">=")
 
@@ -666,8 +674,20 @@ def test_wa12_the_docs_agree_with_the_package_on_what_version_this_is() -> None:
     index = (REPO_ROOT / "docs" / "index.md").read_text(encoding="utf-8")
     guide = (REPO_ROOT / "docs" / "how-to" / "operator-guide.md").read_text(encoding="utf-8")
 
-    assert f"**Current version:** {version}" in readme, "README states a different version"
-    assert f"`nautilus-rkm` {version}" in index, "docs/index.md states a different version"
+    # An X.Y.Z that is not part of a longer dotted/ported token -- so the
+    # ``0.0.0.0:8000`` bind address in the README's serve example is not one.
+    literal = re.compile(r"(?<![\d.])\d+\.\d+\.\d+(?![\d.:])")
+    for name, text in (("README.md", readme), ("docs/index.md", index)):
+        found = literal.findall(text)
+        assert not found, (
+            f"{name} hardcodes the release version {found}; that copy has to be "
+            "updated by hand every release and was not. Point at the PyPI badge, "
+            "`nautilus version` or GET /healthz instead."
+        )
+        assert "nautilus version" in text or "/healthz" in text, (
+            f"{name} names no version at all and does not say how to ask for one"
+        )
+
     for name, text in (("docs/index.md", index), ("operator-guide.md", guide)):
         found = re.findall(r"Python (\d+\.\d+)\+", text)
         assert all(v == floor for v in found), (

@@ -16,8 +16,7 @@ Endpoints (all under ``/v1`` except health probes):
 - ``GET /v1/sources`` — metadata-only listing (id, type, description,
   classification, data_types); never exposes DSNs or credentials
   (AC-12.3).
-- ``GET /healthz`` — static 200 liveness probe; no broker dependency
-  (AC-12.4).
+- ``GET /healthz`` — 200 liveness probe naming the build (AC-12.4); no broker.
 - ``GET /readyz`` — 200 iff startup finished AND the session store's
   ``aget('_ready_probe_')`` succeeds; else 503 (AC-12.5).
 - ``POST /v1/rkm/queue`` — submit a rule; validates and queues a proposal.
@@ -64,6 +63,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 from starlette.types import ASGIApp
 
+from nautilus import __version__
 from nautilus.attestation.jwks import export_jwks
 from nautilus.attestation.key_ring import KeyRing
 from nautilus.attestation.session_token import SessionTokenError, SessionTokenService
@@ -549,7 +549,7 @@ def create_app(
     app = FastAPI(
         title="Nautilus",
         description="Intent-aware scoped query broker (design §3.12).",
-        version="0.1.0",
+        version=__version__,
         lifespan=lifespan,
     )
     if max_request_bytes is not None:
@@ -811,8 +811,8 @@ def create_app(
 
     @app.get("/healthz", tags=["probes"])
     async def healthz() -> dict[str, str]:  # pyright: ignore[reportUnusedFunction]
-        """Static liveness probe — AC-12.4 (no broker dependency)."""
-        return {"status": "ok"}
+        """Liveness — AC-12.4 (no broker dependency) — and which build answered."""
+        return {"status": "ok", "version": __version__}
 
     @app.get("/readyz", tags=["probes"])
     async def readyz(  # pyright: ignore[reportUnusedFunction]
@@ -1846,14 +1846,15 @@ def create_app(
         """Send a browser to the console, and everyone else somewhere real.
 
         This route is registered unconditionally but ``/admin`` is mounted only
-        when ``ui.enabled`` is true -- and it is false by default. So the first
-        thing anyone does with a fresh deployment, curl its root, used to 302
-        into a 404. When the console is off, answer with the routes that do
-        exist instead.
+        when ``ui.enabled`` is true -- and it is false by default. The redirect
+        used to be unconditional, so the first thing anyone does with a fresh
+        deployment, curl its root, landed on ``/admin``: a 404 here, and on
+        releases up to 0.2.5 (which mount the console unconditionally too) a
+        ``401 Not authenticated`` after ``curl -L`` follows it. Neither answers
+        "what is this". When the console is off, answer with the routes that do
+        exist -- and see ``/healthz`` for the build.
         """
         from fastapi.responses import JSONResponse, RedirectResponse
-
-        from nautilus import __version__
 
         if ui_enabled:
             return RedirectResponse(url="/admin", status_code=302)

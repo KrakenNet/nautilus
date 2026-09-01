@@ -1183,9 +1183,10 @@ unwrapped.
 
 ### `GET /healthz`
 
-Liveness. **No credential**, and exempt from `api.max_concurrent_requests` — a
-full request queue must not take the pod out of rotation. It touches no broker
-state, so it never fails while the process is alive.
+Liveness, **and the answer to "which build is this?"**. **No credential**, and
+exempt from `api.max_concurrent_requests` — a full request queue must not take
+the pod out of rotation. It touches no broker state, so it never fails while the
+process is alive.
 
 **Status codes:** `200` only.
 
@@ -1194,7 +1195,34 @@ curl -sS "$NAUTILUS/healthz"
 ```
 
 ```json
-{"status": "ok"}
+{"status": "ok", "version": "0.2.2"}
+```
+
+`version` is read from the installed distribution's metadata — the same string
+`nautilus version` prints and the same one `GET /openapi.json` reports in
+`info.version`. It is a property of the wheel, not of the process: restarting,
+reconfiguring or reloading rules never changes it, and two replicas answering
+different strings means the rollout is half done.
+
+**It is the only credential-free surface that carries it.** `/metrics` was the
+other candidate and is the wrong one: `target_info` comes from the OpenTelemetry
+SDK, which lives in the optional `otel` extra, and `/metrics` itself imports
+`prometheus_client` from that same extra — so on a `pip install nautilus-rkm`
+with no extras the route raises, and even with the extra installed
+`OTEL_SDK_DISABLED=true` (a supported setting, see the
+[operator guide](../how-to/operator-guide.md#4-monitor)) removes `target_info`
+from the exposition entirely. A build stamp that disappears when observability
+is off is not an answer at 3 a.m. `/healthz` has no optional dependency, no
+off-switch and no auth.
+
+**On releases up to and including 0.2.5 this field does not exist** — `/healthz`
+answers `{"status": "ok"}` and nothing on the network names the build. Against
+one of those, ask the image or the pod instead:
+
+<!-- not-executed: needs an image tag / pod name this page does not have -->
+```bash
+docker run --rm <image> version           # the `nautilus version` subcommand
+kubectl exec <pod> -- nautilus version
 ```
 
 ### `GET /readyz`
@@ -1233,7 +1261,12 @@ replica read-modify-writing rows it does not understand.
 Prometheus scrape endpoint (`text/plain; version=1.0.0`). **No credential**,
 exempt from the concurrency limit, and excluded from the OpenAPI schema.
 
-**Status codes:** `200` only.
+**Status codes:** `200` with the `otel` extra installed · **`500`** without it.
+The handler imports `prometheus_client`, which ships in `nautilus-rkm[otel]` and
+in no other extra, so a plain `pip install nautilus-rkm` serves this route as an
+`ImportError`. Install `nautilus-rkm[otel]` before pointing a scrape at it. This
+is also why `/metrics` is not where the build version lives — see
+[`GET /healthz`](#get-healthz).
 
 ```bash
 curl -sS "$NAUTILUS/metrics" | head -5
@@ -1262,11 +1295,26 @@ whether the console is mounted:
 
 - `ui.enabled: true` — **`302`** to `/admin`.
 - `ui.enabled: false` (the default) — **`200`** with a JSON index of the routes
-  that do exist. The redirect used to be unconditional, so the first thing
-  anyone does with a fresh deployment, curl its root, landed on a `404`.
+  that do exist.
 
 **Status codes:** `302` (console on) · `200` (console off). No error path: the
 handler raises nothing and takes no credential.
+
+**Both branches are newer than every published release.** Up to and including
+**0.2.5**, `GET /` is an unconditional `302` to `/admin`, and the console router
+is mounted whether or not `ui.enabled` is set. `/` itself still takes no
+credential on those builds — but `/admin` does, so a browser or a `curl -L`
+follows the redirect straight into `401 {"detail":"Not authenticated"}`, and a
+`curl` without `-L` gets a `302` with an empty body. Either way the JSON index
+below is not there. Measured on 0.2.0, 0.2.1 and 0.2.5, `ui.enabled` left at its
+default.
+
+None of that is an authentication difference: `/admin` requires a credential on
+every build, and making it stop would be a downgrade, not a fix. What changed is
+that the redirect became conditional and grew a fallback body, because on a
+default config the redirect had nowhere real to land. To read the build off a
+released instance, use `nautilus version` inside the container — see
+[`GET /healthz`](#get-healthz).
 
 The scratch broker on this page sets `ui.enabled: true`, so it takes the first
 branch — a `302` with an empty body. Ask for the head, not the body:
@@ -1320,15 +1368,30 @@ Six routes set `include_in_schema=False` and are absent from it: `GET /metrics`,
 `GET /admin/logout`. So are the four routes in this group and the
 `/admin/static` mount. This page is their reference.
 
-**Status codes:** `200` only.
+**Status codes:** `200` on this build. **On every release up to and including
+0.2.5, `500 Internal Server Error`** — `nautilus/ui/dependencies.py` and
+`nautilus/ui/sse.py` imported `Broker` under `if TYPE_CHECKING:` while the module
+used `from __future__ import annotations`, so the admin routes' annotations were
+strings FastAPI could not resolve, and schema generation raised
+`PydanticUserError: ... is not fully defined`. The console router was mounted
+unconditionally on those builds, so the failure was unconditional too. `/docs`
+and `/redoc` still answer `200` there — they are HTML shells — but the document
+they fetch is the `500`, so both render empty in a browser. Both modules now
+import `Broker` at runtime, with a comment saying why.
 
 ```bash
 curl -sS "$NAUTILUS/openapi.json" | jq '{title: .info.title, version: .info.version, paths: (.paths | keys | length)}'
 ```
 
 ```json
-{"title": "Nautilus", "version": "0.1.0", "paths": 30}
+{"title": "Nautilus", "version": "0.2.2", "paths": 30}
 ```
+
+`info.version` is the build, taken from the installed distribution's metadata —
+the same string [`GET /healthz`](#get-healthz) reports. It used to be the literal
+`"0.1.0"`, FastAPI's default for the `version=` argument, which named no build
+that has ever existed; every release up to 0.2.5 carries it (in the schema they
+`500` on producing).
 
 That count is with `ui.enabled: true`; with the console off it drops by the nine
 `/admin` paths that do appear in the schema.
