@@ -24,6 +24,7 @@ otherwise. Read-only probes (``/healthz``, ``/readyz``) stay un-gated.
 
 from __future__ import annotations
 
+import logging
 import secrets
 from collections.abc import Mapping
 from ipaddress import ip_address, ip_network
@@ -40,6 +41,8 @@ from fastapi.security import APIKeyHeader
 from starlette.requests import Request
 
 from nautilus.config.models import CAPABILITIES
+
+log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from nautilus.attestation.session_token import SessionTokenClaims
@@ -124,8 +127,9 @@ def caller_identity(
     if auth_mode == "proxy_trust":
         auth = request.headers.get("X-Forwarded-User") or ""
         # The ingress authenticated the subject; ``agents.<id>.subject`` is what
-        # says which agent it is. An unmapped subject stays unbound rather than
-        # being refused here — ``proxy_trust_dependency`` owns the 401.
+        # says which agent it is. ``proxy_trust_dependency`` has already refused
+        # a subject no agent claims, whenever the config names any subject at
+        # all, so ``None`` here means the deployment binds nobody.
         if auth and agent_subjects:
             agent_id = agent_subjects.get(auth)
     else:
@@ -246,11 +250,22 @@ async def proxy_trust_dependency(request: Request) -> str:
     it: the socket peer must fall inside ``api.auth.trusted_proxies``, which
     the config refuses to omit.
 
+    A subject the proxy authenticated but that ``agents.<id>.subject`` never
+    named is refused here, whenever the config names any subject at all.
+    ``caller_identity`` resolves an unmapped subject to ``agent_id=None``, and
+    ``None`` is the *unbound* case — the caller names its own agent and holds
+    ``ALL_CAPABILITIES``, ``govern`` and key rotation included. So one typo in a
+    SPIFFE ID, or one workload the mesh authenticates before anybody adds it to
+    the config, silently upgraded a bound credential to a root one. The refusal
+    is scoped to deployments that have bound somebody: with no ``subject``
+    anywhere the operator has stated no intent, and that deployment keeps the
+    unbound behaviour a bare API-key string already has.
+
     Raises:
-        HTTPException: 401 if the peer is not a configured proxy, or if
+        HTTPException: 401 if the peer is not a configured proxy, if
             ``X-Forwarded-User`` is missing or empty — the proxy SHOULD always
             set it when traffic reaches us; a missing header implies a bypass
-            attempt.
+            attempt — or if the subject is not one the config binds.
     """
     app = request.scope.get("app")
     state = getattr(app, "state", None)
@@ -266,6 +281,19 @@ async def proxy_trust_dependency(request: Request) -> str:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing X-Forwarded-User",
+        )
+    subjects: dict[str, str] = dict(getattr(state, "agent_subjects", {}) or {})
+    if subjects and user not in subjects:
+        log.warning(
+            "refusing forwarded subject %r: no agents.<id>.subject names it", user
+        )
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=(
+                "Forwarded identity rejected: no agent is bound to this subject. "
+                "Add it as agents.<id>.subject, or the caller would run unbound "
+                "with every capability."
+            ),
         )
     return user
 
