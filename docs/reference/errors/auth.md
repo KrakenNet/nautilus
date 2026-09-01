@@ -5,7 +5,8 @@ Refusals raised before a request reaches the policy engine. All of them come fro
 `nautilus/transport/fastapi_app.py`; the MCP transport reuses the same sentences via
 `nautilus/transport/mcp_server.py`.
 
-`curl` examples assume the [scratch broker](index.md#a-scratch-broker).
+`curl` examples assume the [scratch broker](index.md#a-scratch-broker) on
+`127.0.0.1:8001` and `export NAUTILUS=http://127.0.0.1:8001`.
 
 ## `Not authenticated`
 
@@ -21,7 +22,7 @@ Refusals raised before a request reaches the policy engine. All of them come fro
 **Fix.** Send the header. Every route except `/healthz`, `/readyz` and `/metrics` requires it.
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:8000/v1/request \
+curl -s -o /dev/null -w '%{http_code}\n' -X POST "$NAUTILUS/v1/request" \
   -H 'Content-Type: application/json' \
   -d '{"agent_id":"analyst","intent":"list notes"}'
 ```
@@ -73,7 +74,7 @@ PY
 matching, no fallback to "any configured key".
 
 ```bash
-curl -s -X POST http://127.0.0.1:8000/v1/request \
+curl -s -X POST "$NAUTILUS/v1/request" \
   -H 'X-API-Key: wrong-key' -H 'Content-Type: application/json' \
   -d '{"agent_id":"analyst","intent":"list notes"}'
 ```
@@ -105,7 +106,7 @@ A key entry written as a bare string (`keys: ["secret"]`) holds *all* capabiliti
 refusal only exists for the `{key, agent_id, capabilities}` form.
 
 ```bash
-curl -s http://127.0.0.1:8000/v1/audit -H 'X-API-Key: query-key'
+curl -s "$NAUTILUS/v1/audit" -H 'X-API-Key: query-key'
 ```
 
 ## `This credential is bound to agent_id={bound!r}, so it cannot ask as {body.agent_id!r}`
@@ -129,7 +130,7 @@ credential speak for many agents, drop `agent_id` from that `api.keys` entry —
 also removes the binding that makes cross-agent handoff meaningful.
 
 ```bash
-curl -s -X POST http://127.0.0.1:8000/v1/request \
+curl -s -X POST "$NAUTILUS/v1/request" \
   -H 'X-API-Key: query-key' -H 'Content-Type: application/json' \
   -d '{"agent_id":"other","intent":"list notes"}'
 ```
@@ -146,7 +147,7 @@ the deliberately-unauthenticated JWKS at `/v1/keys/jwks.json`.
 regardless — it is read from the agent registry inside `Broker.issue_session_token`.
 
 ```bash
-curl -s -X POST http://127.0.0.1:8000/v1/sessions \
+curl -s -X POST "$NAUTILUS/v1/sessions" \
   -H 'X-API-Key: query-key' -H 'Content-Type: application/json' \
   -d '{"session_id":"s1","agent_id":"someone-else","purpose":"research"}'
 ```

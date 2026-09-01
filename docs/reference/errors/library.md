@@ -95,8 +95,8 @@ PY
 
 **`NotImplementedError`**, `nautilus/adapters/base.py:319`. The default `get_schema()` on the
 adapter base. Implement it, or accept that
-`GET /v1/adapters/{name}/schema` answers **501** for your source — see
-[transport.md](transport.md).
+`GET /v1/adapters/{name}/schema` answers **501** for your source — a permanent refusal, not a
+retryable one — see [transport.md](transport.md).
 
 ### `adapter id {adapter_id!r} is not usable as a fingerprint filename`
 

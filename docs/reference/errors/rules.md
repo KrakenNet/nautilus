@@ -3,6 +3,9 @@
 Failures from authoring a rule, from moving a proposal through the review queue, and from the
 engine that evaluates the result.
 
+`curl` examples assume the [scratch broker](index.md#a-scratch-broker) on
+`127.0.0.1:8001` and `export NAUTILUS=http://127.0.0.1:8001`.
+
 ## Authoring a rule
 
 ### `ERROR {serr.file}:{serr.line}: {serr.message}{hint_suffix}`
@@ -107,9 +110,9 @@ find the process holding the lock on the queue file.
 `X-Nautilus-Reviewer header required` is in [auth.md](auth.md).
 
 ```bash
-curl -s -X POST http://127.0.0.1:8000/v1/rkm/queue \
+curl -s -X POST "$NAUTILUS/v1/rkm/queue" \
   -H 'X-API-Key: govern-key' -H 'Content-Type: application/json' -d '{}'
-curl -s -X POST http://127.0.0.1:8000/v1/rules/some_rule/retract \
+curl -s -X POST "$NAUTILUS/v1/rules/some_rule/retract" \
   -H 'X-API-Key: govern-key' -H 'Content-Type: application/json' -d '{}'
 ```
 

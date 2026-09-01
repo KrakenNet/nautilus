@@ -45,6 +45,20 @@ interpolated into a query, so only identifier-shaped strings are allowed.
 got {type(value).__name__}` (`nautilus/adapters/postgres.py:130`,
 `nautilus/adapters/influxdb.py:321`) and the `NOT IN` twin.
 
+### `Operator 'IN' requires a list value, got {type(value).__name__}`
+
+`nautilus/adapters/postgres.py:131` and `nautilus/adapters/influxdb.py:322`. The same refusal as
+the generic one above, but with the operator baked into the literal, because these two adapters
+build the `IN` clause themselves rather than going through the shared validator. `{type(value).__name__}`
+is the Python type name of the offending value — `str`, `int`, `dict`. Grep for either spelling;
+which one you get depends on the source type.
+
+### `Operator 'NOT IN' requires a list value, got {type(value).__name__}`
+
+`nautilus/adapters/postgres.py:139` and `nautilus/adapters/influxdb.py:329`. As above, for the
+negated form. A `NOT IN` given a bare string is the more dangerous of the two: had it been
+accepted it would have excluded nothing.
+
 ### `Operator 'LIKE' requires a string value, got {type(bad).__name__}`
 
 `nautilus/adapters/elasticsearch.py:165`, `neo4j.py:134`, `rest.py:192`,
@@ -228,25 +242,47 @@ means the config is wrong, the second means the adapter was handed a different c
 | `Invalid Elasticsearch index '{index}': must match {_INDEX_PATTERN.pattern}` | `elasticsearch.py:78` |
 | `ElasticsearchAdapter could not read the mapping for index '{self._index}': {exc}` | `elasticsearch.py:289` |
 
-Two refusals are specific to how Elasticsearch indexes text, and both prevent silently
-over-returning data:
+Two more refusals are specific to how Elasticsearch indexes text, and both exist to stop a scope
+constraint from silently over-returning data. Both are `ScopeEnforcementError`, surfaced as
+**HTTP 400** through `/v1/request`, and both are fixed in the index mapping, not in the rule.
 
-```text
-ElasticsearchAdapter: field '{field}' is mapped as analysed 'text' with no 'keyword'
-subfield, so it cannot be matched exactly. An exact-match constraint on it would silently
-return over-scoped data. Add a keyword subfield to the mapping, or target one explicitly
-as 'field.<subfield>'.
+#### `ElasticsearchAdapter: field '{field}' is mapped as analysed 'text' with no 'keyword' subfield, so it cannot be matched exactly. An exact-match constraint on it would silently return over-scoped data. Add a keyword subfield to the mapping, or target one explicitly as 'field.<subfield>'.`
+
+`nautilus/adapters/elasticsearch.py:328-333`. `{field}` is the constraint's field name with
+`str()`, unquoted inside the literal `'` characters: `field 'owner' is mapped as analysed
+'text'`.
+
+**Means.** An analysed `text` field is tokenised, so a term query for `"Ada Lovelace"` matches
+every document containing `ada` *or* `lovelace`. A policy constraint evaluated that way returns
+rows the policy meant to exclude.
+
+**Fix.** Add a `keyword` subfield to the mapping for that field, or write the constraint against
+an existing exact subfield by name (`owner.raw`).
+
+```bash
+curl -s -X PUT 'http://localhost:9200/notes/_mapping' -H 'Content-Type: application/json' \
+  -d '{"properties":{"owner":{"type":"text","fields":{"keyword":{"type":"keyword"}}}}}'
 ```
 
-```text
-ElasticsearchAdapter: the only exact subfield for '{field}' is '{field}.{chosen}', which
-has ignore_above={limit}, and the constraint compares a value of length {longest}. Values
-over the limit are not indexed, so the comparison would silently return over-scoped data.
-Raise ignore_above on the mapping, or target a subfield without one as 'field.<subfield>'.
-```
+#### `ElasticsearchAdapter: the only exact subfield for '{field}' is '{field}.{chosen}', which has ignore_above={limit}, and the constraint compares a value of length {longest}. Values over the limit are not indexed, so the comparison would silently return over-scoped data. Raise ignore_above on the mapping, or target a subfield without one as 'field.<subfield>'.`
 
-(`elasticsearch.py:325-331` and `:347-353`.) Both are fixed in the index mapping, not in the
-rule.
+`nautilus/adapters/elasticsearch.py:350-357`. `{field}` is the constraint's field;
+`{chosen}` is the subfield with the largest `ignore_above` (ties broken by name);
+`{limit}` is that `ignore_above` as an `int`; `{longest}` is the length of the longest string in
+the constraint's value.
+
+**Means.** A `keyword` subfield with `ignore_above` does not index values longer than the limit
+*at all*. A term query for such a value matches nothing, and `!=` / `NOT IN` match everything —
+the same fail-open the `.keyword` routing exists to close. The adapter prefers a subfield with no
+`ignore_above` and only refuses when every candidate would drop the value.
+
+**Fix.** Raise `ignore_above` above `{longest}` on the mapping, or add and target a subfield
+without `ignore_above`.
+
+```bash
+curl -s -X PUT 'http://localhost:9200/notes/_mapping' -H 'Content-Type: application/json' \
+  -d '{"properties":{"owner":{"type":"text","fields":{"raw":{"type":"keyword"}}}}}'
+```
 
 ### Neo4j
 

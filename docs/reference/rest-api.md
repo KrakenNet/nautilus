@@ -142,7 +142,7 @@ Two optional headers apply across groups:
 | Header | Where | Meaning |
 | --- | --- | --- |
 | `X-Nautilus-Session-Token` | `/v1/request`, `/v1/query`, `/admin/api/query` | An EdDSA JWS from `POST /v1/sessions`. Verified by `verify_session_token`; a body-borne `context.session_token` wins if both are sent. |
-| `X-Nautilus-Reviewer` (alias `X-Reviewer`) | the five RKM routes and `/v1/rules/{rule_name}/retract`, `/rollback` | Who is recorded as deciding. Required **only** for a bare key: a bound key's `agent_id` is the reviewer (`_require_reviewer`). |
+| `X-Nautilus-Reviewer` (alias `X-Reviewer`) | the four routes that record a decision: `POST /v1/rkm/queue/{id}/approve`, `.../reject`, `POST /v1/rules/{rule_name}/retract`, `.../rollback`. The other RKM routes do not read it | Who is recorded as deciding. Required **only** for a bare key: a bound key's `agent_id` is the reviewer, so a bound key never needs the header (`_require_reviewer`). Missing on a bare key ⇒ `400 X-Nautilus-Reviewer header required` |
 
 ## Errors common to all routes
 
@@ -159,7 +159,7 @@ variant of the scratch broker above to reproduce it.
 | `401` | `Not authenticated` | No `X-API-Key` header and no `nautilus_key` cookie, on a route guarded by `_read_guard` / `get_auth_user` | Send `X-API-Key`, or log in at `/admin/login` for the console |
 | `401` | `Forwarded identity rejected: peer is not a trusted proxy` | `api.auth.mode: proxy_trust` and the peer is not in `api.auth.trusted_proxies` | Add the proxy's address, or terminate through the configured one |
 | `401` | `Missing X-Forwarded-User` | `proxy_trust` mode, trusted peer, no identity header | Have the proxy set `X-Forwarded-User` |
-| `401` | `Invalid session token: <reason_code>` e.g. `bad_signature`, `expired`, `unknown_kid` | `X-Nautilus-Session-Token` failed verification | Re-mint at `POST /v1/sessions`. `unknown_kid` across replicas means they hold separate rings — point every replica at one `session_tokens.key_ring_path` |
+| `401` | `Invalid session token: <reason_code>` — one of `missing`, `bad_signature`, `unknown_kid`, `expired`, `broker_instance_mismatch`, `agent_mismatch` | `X-Nautilus-Session-Token` failed verification | Re-mint at `POST /v1/sessions`; per-code remedies are in [the table under `POST /v1/request`](#post-v1request). A token carried in `context.session_token` instead is refused as `Invalid session token (<reason_code>): <message>` |
 | `403` | `This credential does not hold the 'query' capability (it holds ['audit_read'])` | The key's `capabilities` list omits what the route needs | Use a key that holds it, or widen `capabilities` |
 | `403` | `This credential is bound to agent_id='analyst', so it cannot ask as 'other'` | Bound key, different `agent_id` in the body | Send the bound agent's id, or use a key bound to the other agent |
 | `404` | FastAPI default `Not Found` | Route not registered — e.g. any `/admin/*` while `ui.enabled` is false | Set `ui.enabled: true` to serve the console |
@@ -222,10 +222,45 @@ routes that reach adapters.
 | --- | --- |
 | `200` | The broker answered. **A refusal is also a `200`** — read `outcome` |
 | `400` | Malformed input inside `context` (notably `scope_constraints`); `detail` is the parser's message |
-| `401` | Bad `X-API-Key`, or `Invalid session token: <reason_code>` |
-| `403` | Missing `query` capability; credential bound to another agent; `session_not_yours` |
+| `401` | `API key required` · `Invalid API key` · a rejected session token, in one of **two** spellings depending on where it was carried — see below |
+| `403` | `This credential does not hold the 'query' capability (it holds ['audit_read'])` · `This credential is bound to agent_id='analyst', so it cannot ask as 'other'` · `session_not_yours: session 's-1' belongs to another principal. A session id is not a credential — either use your own, or have its owner declare a handoff to agent_id='analyst' in it first.` |
 | `413` / `422` / `503` | See [Errors common to all routes](#errors-common-to-all-routes) |
 | `503` + `Retry-After: 5` | `Nautilus could not record this request and will not serve what it cannot account for: <os error>` — the audit sink stopped accepting writes |
+
+**The two spellings of a rejected session token.** Where the token was carried
+decides which component refuses it, and the two do not word it the same way. In
+the `X-Nautilus-Session-Token` header it is refused by the transport dependency:
+
+<!-- not-executed: response body for a token sent in the X-Nautilus-Session-Token header -->
+```json
+{"detail": "Invalid session token: bad_signature"}
+```
+
+A token inside `context.session_token` is refused by the handler instead, which
+keeps the verifier's own sentence and adds `WWW-Authenticate: Bearer`. Run this:
+
+```bash
+curl -sS -X POST "$NAUTILUS/v1/request" -H "X-API-Key: $KEY" \
+  -H 'Content-Type: application/json' \
+  -d '{"agent_id":"analyst","intent":"orders",
+       "context":{"purpose":"fraud-review","session_token":"not-a-token"}}'
+```
+
+```json
+{"detail": "Invalid session token (bad_signature): Cannot decode token header"}
+```
+
+The `reason_code` in either spelling is one of six
+(`nautilus/attestation/session_token.py`, `nautilus/core/broker.py`):
+
+| `reason_code` | Meaning | What to do |
+| --- | --- | --- |
+| `missing` | `No token provided`, or `session_token must be a string` — a non-string landed in `context.session_token` | Send the string `POST /v1/sessions` returned, or omit the key entirely |
+| `bad_signature` | `Cannot decode token header` · `Invalid signature` · `Token decode failed` | The token was edited or truncated in transit. Re-mint |
+| `unknown_kid` | `Token header missing kid` · `Unknown kid: '…'` · `Key '…' has been revoked` | Re-mint. Across replicas this means separate rings — point them all at one `session_tokens.key_ring_path` |
+| `expired` | `Token has expired` | Re-mint; lifetime is `session_tokens.ttl_seconds` (default 3600) |
+| `broker_instance_mismatch` | `Token issued for '<other>', not '<this>'` | The token came from a different broker process. Tokens are not portable across instances that do not share a ring |
+| `agent_mismatch` | `session token was minted for agent 'analyst', presented by 'other'` | A token belongs to the agent it was minted for. Mint one for the presenting agent |
 
 ```bash
 curl -sS -X POST "$NAUTILUS/v1/request" -H "X-API-Key: $KEY" \
@@ -391,7 +426,7 @@ key bound to a low-clearance agent cannot mint a token claiming a high one.
 | --- | --- |
 | `200` | Token issued |
 | `401` | Bad `X-API-Key` |
-| `403` | Missing `query`; credential bound to another agent (`…cannot mint a session token for 'other'`); purpose the agent may not claim |
+| `403` | `This credential does not hold the 'query' capability (it holds ['audit_read'])` · `This credential is bound to agent_id='analyst', so it cannot mint a session token for 'other'` · `purpose 'marketing' is not one of the purposes agent 'analyst' may claim (['fraud-review'])` |
 | `422` | Body is not a JSON object |
 | `503` | `Key ring not ready` (before lifespan startup) |
 
@@ -503,9 +538,10 @@ End a key's grace window. Capability `keys`. `kid` must be a UUID; take it from
 | --- | --- |
 | `200` | — |
 | `400` | `kid must be a UUID` · `reviewer and reason are required (no control characters)` |
-| `401` / `403` | auth; `keys` capability |
+| `401` | `API key required` · `Invalid API key` |
+| `403` | `This credential does not hold the 'keys' capability (it holds ['query'])` |
 | `404` | `kid '00000000-0000-0000-0000-000000000000' not found` |
-| `409` | session tokens disabled, **or** the kid is the current primary — rotate first, then revoke the one that rotated out |
+| `409` | `session tokens are disabled (session_tokens.enabled: false)` — set it and restart · `kid '1be21aab-482c-476a-8661-c1d7e83284d2' is the current primary; rotate first, then revoke` — `POST /v1/keys/rotate`, then revoke the kid that rotated out |
 | `503` | `Broker not ready` |
 
 <!-- not-executed: KID comes from the jwks.json response above; substitute a kid you actually hold -->
@@ -558,10 +594,15 @@ flags. Capability `query`. `name` is a source `id` from `GET /v1/adapters`.
 | Code | `detail` |
 | --- | --- |
 | `200` | — |
-| `401` / `403` | auth; `query` capability |
+| `401` | `API key required` · `Invalid API key` |
+| `403` | `This credential does not hold the 'query' capability (it holds ['audit_read'])` |
 | `404` | `Adapter 'nope' not found` |
-| `501` | `Adapter 'orders' does not support schema introspection` — the adapter has no `get_schema` |
-| `503` | `Broker not ready` · `Schema fetch failed: <error>` — the backing store refused the introspection query |
+| `501` | `Adapter 'custom' does not support schema introspection` — the adapter has no `get_schema`, or inherits the base one and never overrode it, so calling it raised `NotImplementedError`. Both are permanent: do not retry, implement `get_schema` |
+| `503` | `Broker not ready` · `Schema fetch failed: <error>` — the introspection call raised something other than `NotImplementedError`, so the condition is transient and worth retrying. Adapters connect lazily, so a broker that has served no request yet answers `Schema fetch failed: StaticAdapter.get_schema() called before connect()`. A store that refused the query puts its own driver error in the same slot |
+
+Every adapter type shipped in `nautilus/adapters/` (`static`, `postgres`,
+`rest`, `s3`, `elasticsearch`, `neo4j`, `pgvector`, `influxdb`, `servicenow`,
+`llm`) overrides `get_schema`, so neither of those two applies to a stock config.
 
 ```bash
 curl -sS "$NAUTILUS/v1/adapters/orders/schema" -H "X-API-Key: $KEY"
@@ -681,8 +722,9 @@ Retire a rule version. Capability `govern`. Destructive, so it demands
 | --- | --- |
 | `200` | — |
 | `400` | `X-Nautilus-Reviewer header required` (bare key, no header) · `reason is required for retraction` |
-| `401` / `403` | auth; `govern` capability |
-| `404` | `rule not found: 'nope'` |
+| `401` | `API key required` · `Invalid API key` |
+| `403` | `This credential does not hold the 'govern' capability (it holds ['query'])` |
+| `404` | `rule not found: 'nope'` — no lineage record for that name at all · `"lineage record not found: ve-expiring-scope-probe v7"` — the name exists but the `version` you asked for does not (doubled quoting: this one is a `KeyError` passed through `str()`) |
 | `412` | `yes=true required for destructive operation` |
 
 <!-- not-executed: names a rule you promoted through the RKM queue -->
@@ -765,7 +807,10 @@ version to decide requests.
 
 Rule-knowledge-management: a proposed rule is validated (static → shadow →
 sandbox → score), queued, and promoted only on human approval. Every route in
-this group needs capability `govern` and a reviewer identity.
+this group needs capability `govern`. The two routes that record a decision —
+`approve` and `reject` — additionally need a reviewer identity: a bound key
+supplies it, a bare key must send `X-Nautilus-Reviewer` or get
+`400 X-Nautilus-Reviewer header required`.
 
 ### `POST /v1/rkm/queue`
 
@@ -943,10 +988,11 @@ Capability `govern`. Body is optional (`{}`).
 | --- | --- |
 | `200` | — |
 | `400` | `X-Nautilus-Reviewer header required` — bare key with no reviewer header |
-| `401` / `403` | auth; `govern` capability |
-| `404` | the queue has no such proposal |
+| `401` | `API key required` · `Invalid API key` |
+| `403` | `This credential does not hold the 'govern' capability (it holds ['query'])` |
+| `404` | `"proposal not found: 'prop_deadbeef'"` — note the doubled quoting: the handler passes a `KeyError` through `str()`, so the whole message arrives inside a second pair of quotes |
 | `409` | `{"error": "already_decided", "current_status": "promoted"}` |
-| `422` | `{"error": "promotion_failed", "message": "FathomRouter.reload_rule failed for proposal '<proposal_id>': cannot promote rule '<proposal_id>': no rules.user_rules_dirs is configured, so the rule would live only in this process and be gone at the next restart while the proposal reads 'promoted'. Configure a writable rules directory and retry the approval.", "current_status": "approved", "recovery": "fix the rule and re-approve to retry the promotion, or reject the proposal"}` |
+| `422` | `{"error": "promotion_failed", "message": "…", "current_status": "approved", "recovery": "fix the rule and re-approve to retry the promotion, or reject the proposal"}` — full body below |
 
 A failed promotion leaves the proposal in `approved`, not `pending`: re-approving
 retries the promotion, and rejecting is the other way out. The `422` says so,
@@ -969,11 +1015,30 @@ curl -sS -X POST "$NAUTILUS/v1/rkm/queue/$PROPOSAL_ID/approve" \
 }
 ```
 
-**Recovery — the `500`.** It is a `PolicyEngineError` escaping the handler, and
-it is a configuration problem, not a transient one: set
-`rules.user_rules_dirs` to a writable directory, restart, and approve again. The
-proposal stays `pending`, so nothing is lost. Until then the rule cannot be
-promoted anywhere durable.
+**Recovery — the `422`.** Approval succeeded; loading the rule into the running
+engine did not. The commonest cause is the one the scratch config above avoids:
+no `rules.user_rules_dirs`, so there is nowhere to write the promoted rule and a
+"promoted" proposal would evaporate at the next restart. Against a broker whose
+config omits `rules.user_rules_dirs`, the same approve call answers:
+
+<!-- not-executed: this is the response from a broker whose config omits rules.user_rules_dirs; the scratch config above sets it, so approvals there succeed -->
+```json
+{
+  "detail": {
+    "error": "promotion_failed",
+    "message": "FathomRouter.reload_rule failed for proposal 'prop_de70fef5bfa84892be7c9ed4e94a74b6': cannot promote rule 've-expiring-scope-probe': no rules.user_rules_dirs is configured, so the rule would live only in this process and be gone at the next restart while the proposal reads 'promoted'. Configure a writable rules directory and retry the approval.",
+    "current_status": "approved",
+    "recovery": "fix the rule and re-approve to retry the promotion, or reject the proposal"
+  }
+}
+```
+
+`message` is `FathomRouter.reload_rule failed for proposal <proposal_id>: ` then
+the engine's own complaint — which names the *rule*, not the proposal. Set
+`rules.user_rules_dirs` to a writable directory, restart, and POST the same
+approve again; the proposal is still `approved` and the retry promotes it. The
+other `message` tail from the same branch is `cannot promote rule '<name>':
+writing <path> failed: <os error>` — the directory exists but is not writable.
 
 **Recovery — the `409`.** `current_status` tells you what already happened.
 `promoted` means the rule is in force; there is nothing to re-approve.
@@ -985,7 +1050,8 @@ Reject a pending proposal. Capability `govern`.
 **Body:** `{"reason": "..."}` — required.
 
 **Status codes:** `200` · `400 X-Nautilus-Reviewer header required` ·
-`400 reason is required for rejection` · `401` · `403` (`govern`) · `404` ·
+`400 reason is required for rejection` · `401` · `403` (`govern`) ·
+`404 "proposal not found: 'prop_deadbeef'"` (doubled quoting, as on approve) ·
 `409 {"error": "already_decided", "current_status": "<status>"}`.
 
 <!-- not-executed: PROPOSAL_ID comes from POST /v1/rkm/queue above -->
@@ -1199,12 +1265,29 @@ whether the console is mounted:
   that do exist. The redirect used to be unconditional, so the first thing
   anyone does with a fresh deployment, curl its root, landed on a `404`.
 
-**Status codes:** `302` (console on) · `200` (console off).
+**Status codes:** `302` (console on) · `200` (console off). No error path: the
+handler raises nothing and takes no credential.
+
+The scratch broker on this page sets `ui.enabled: true`, so it takes the first
+branch — a `302` with an empty body. Ask for the head, not the body:
 
 ```bash
-curl -sS "$NAUTILUS/"
+curl -sS -i "$NAUTILUS/" | head -3
 ```
 
+<!-- not-executed: response head, not a command -->
+```http
+HTTP/1.1 302 Found
+location: /admin
+```
+
+`location: /admin` is the mount point; FastAPI then sends `/admin` → `/admin/` →
+`/admin/playground`. `curl -L` walks all three.
+
+With `ui.enabled: false` — the default, and what a fresh deployment has —
+`curl -sS "$NAUTILUS/"` returns `200` and this body instead:
+
+<!-- not-executed: this is the ui.enabled: false response; the scratch broker above has the console on -->
 ```json
 {
   "service": "nautilus",
@@ -1309,7 +1392,11 @@ otherwise. Pages return HTML, not JSON. Authentication accepts either
 Browsers get a redirect where an API client gets a status: a `401` on a request
 whose `Accept` contains `text/html` becomes `302 → /admin/login`; without it the
 plain `401` is returned, so `curl` and tests see the real code. A `403` is
-rendered as an HTML error page carrying status `403`.
+rendered as an HTML error page carrying status `403`; its body quotes the same
+refusal the JSON routes emit — `This credential does not hold the 'audit_read'
+capability (it holds ['query'])` — so the fix is the same: use a key whose
+`capabilities` list holds it. A request that arrives before lifespan startup
+gets a `503` HTML page that re-fetches itself every 5 s until the broker is up.
 
 Every read page returns the full page normally and only the table-body partial
 when the request carries `HX-Request: true` (HTMX swap).
@@ -1374,6 +1461,8 @@ curl -sS -i -X POST "$NAUTILUS/admin/login" \
 HTTP/1.1 302 Found
 location: /admin/sources
 set-cookie: nautilus_key=my-secret-key; HttpOnly; Max-Age=86400; Path=/; SameSite=lax
+
+# behind TLS (or an ingress sending X-Forwarded-Proto: https) the same line ends `; Secure`
 ```
 
 ### `GET /admin/logout`
@@ -1423,7 +1512,7 @@ FastAPI's `detail`:
 | `200` | A full `BrokerResponse`, identical in shape to `POST /v1/request` |
 | `400` | `{"error": "Invalid JSON"}` · `{"error": "intent is required"}` |
 | `401` | `{"error": "Not authenticated"}` |
-| `403` | `{"error": "This credential does not hold the 'query' capability (it holds ['audit_read'])"}` · `{"error": "This credential is bound to agent_id='analyst', so it cannot ask as 'other'"}` · session-not-owned |
+| `403` | `{"error": "This credential does not hold the 'query' capability (it holds ['audit_read'])"}` · `{"error": "This credential is bound to agent_id='analyst', so it cannot ask as 'other'"}` · `{"error": "session_not_yours: session 's-1' belongs to another principal. A session id is not a credential — either use your own, or have its owner declare a handoff to agent_id='analyst' in it first."}` |
 | `500` | `{"error": "<exception message>"}` — anything the broker raised that is not one of the above |
 | `503` | `{"error": "Broker not ready"}` · busy, with `Retry-After: 1` · `{"error": "Nautilus could not record this request: <os error>"}` with `Retry-After: 5` |
 

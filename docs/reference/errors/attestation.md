@@ -7,7 +7,8 @@ to something it cannot vouch for.
 ## Key management over HTTP
 
 Both routes need the `keys` capability. `curl` examples assume the
-[scratch broker](index.md#a-scratch-broker).
+[scratch broker](index.md#a-scratch-broker) on `127.0.0.1:8001` and
+`export NAUTILUS=http://127.0.0.1:8001`.
 
 | Message | Status | Line | Meaning |
 | --- | --- | --- | --- |
@@ -17,9 +18,9 @@ Both routes need the `keys` capability. `curl` examples assume the
 | `kid {kid!r} not found` | 404 | `fastapi_app.py:1012` | No key with that id in the ring. |
 
 ```bash
-curl -s -X POST http://127.0.0.1:8000/v1/keys/rotate \
+curl -s -X POST "$NAUTILUS/v1/keys/rotate" \
   -H 'X-API-Key: govern-key' -H 'Content-Type: application/json' -d '{}'
-curl -s -X POST http://127.0.0.1:8000/v1/keys/not-a-uuid/revoke \
+curl -s -X POST "$NAUTILUS/v1/keys/not-a-uuid/revoke" \
   -H 'X-API-Key: govern-key' -H 'Content-Type: application/json' \
   -d '{"reviewer":"ops","reason":"test"}'
 ```

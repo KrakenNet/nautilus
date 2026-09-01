@@ -3,7 +3,8 @@
 Failures produced by the REST surface itself — readiness, limits, request validation and route
 lookups — before or around the policy decision. Source: `nautilus/transport/fastapi_app.py`.
 
-`curl` examples assume the [scratch broker](index.md#a-scratch-broker).
+`curl` examples assume the [scratch broker](index.md#a-scratch-broker) on
+`127.0.0.1:8001` and `export NAUTILUS=http://127.0.0.1:8001`.
 
 ## Readiness
 
@@ -22,21 +23,86 @@ there. `/readyz` reports the same condition as `startup_incomplete`.
 ### `/readyz` refusal payloads
 
 `/readyz` returns **200** `{"status": "ok"}` or **503** with a `reason`
-(`nautilus/transport/fastapi_app.py:759-815`):
+(`nautilus/transport/fastapi_app.py:759-806`). The four reasons are checked in this order, and the
+first one to fire is the one you get.
 
-| Payload | Meaning |
+<!-- not-executed: needs the scratch broker from index.md -->
+```bash
+curl -s -o /dev/null -w '%{http_code} ' "$NAUTILUS/readyz"; curl -s "$NAUTILUS/readyz"; echo
+```
+
+#### `{"status": "not_ready", "reason": "startup_incomplete"}`
+
+**HTTP 503.** `nautilus/transport/fastapi_app.py:763-766`. `app.state.broker` is `None` or
+`app.state.ready` is false: the lifespan has not finished, or it failed. Nothing is interpolated.
+
+**Means.** The process is listening but the broker was never built. This is the normal answer for
+the second or two between the socket opening and the config loading, and the permanent answer when
+the config is bad.
+
+**Fix.** Read the startup log — the `ConfigError`, driver import failure or unreachable session
+store is printed there, and `serve` exits **2** with
+`ERROR: broker construction failed: {exc}` when the failure is at construction time.
+
+#### `{"status": "not_ready", "reason": "<audit probe text>"}`
+
+**HTTP 503.** `nautilus/transport/fastapi_app.py:772-774`. The `reason` is the string returned by
+`broker.audit_logger.probe()` — free text from the sink, not a fixed vocabulary. A `FileSink`
+whose directory went read-only reports the `OSError` text.
+
+**Means.** The audit sink is checked before the session store, because an audit entry is written
+before any request answers: a sink that stopped accepting writes fails every request. Nautilus
+refuses to serve what it cannot account for.
+
+**Fix.** Restore write access to `audit.path`, or point it somewhere writable and restart. The
+matching per-request failure is
+[`Nautilus could not record this request…`](#nautilus-could-not-record-this-request-and-will-not-serve-what-it-cannot-account-for-exc).
+
+<!-- not-executed: needs the scratch broker from index.md -->
+```bash
+chmod a-w /tmp/nautilus-errors/audit.jsonl && curl -s "$NAUTILUS/readyz"; echo
+chmod u+w /tmp/nautilus-errors/audit.jsonl
+```
+
+#### `{"status": "not_ready", "reason": "session_store_timeout"}`
+
+**HTTP 503.** `nautilus/transport/fastapi_app.py:800-802`. The sentinel read of
+`_READY_PROBE_KEY` (`_ready_probe_`) or the `averify_schema()` re-check exceeded
+`_READY_PROBE_TIMEOUT_S` — **2.0 seconds**. Nothing is interpolated; the reason is this literal
+string.
+
+**Means.** The store is reachable but not answering. Both probes are bounded on purpose: a store
+that is *down* answers fast, and a store that is frozen never answers at all, so an unbounded
+probe is one the kubelet gives up on — the pod never drains and every probe leaves a wedged
+handler.
+
+**Fix.** Check the store's own health and its connection pool. If the pool is merely saturated you
+will also see `session-store pool exhausted: …` in the log
+(see [sessions.md](sessions.md)).
+
+#### `{"status": "not_ready", "reason": "{type(exc).__name__}"}`
+
+**HTTP 503.** `nautilus/transport/fastapi_app.py:803-805`. Any other exception from the store,
+reported as its **class name only** — never its message, so a DSN in an exception string cannot
+leak through a probe endpoint that needs no credentials.
+
+`{type(exc).__name__}` interpolates to values such as:
+
+| `reason` | What happened |
 | --- | --- |
-| `{"status": "not_ready", "reason": "startup_incomplete"}` | Lifespan has not finished, or the broker is absent. |
-| `{"status": "not_ready", "reason": "session_store_timeout"}` | The sentinel read `_ready_probe_` or the schema re-check exceeded `_READY_PROBE_TIMEOUT_S` (2.0s). The store is reachable but not answering. |
-| `{"status": "not_ready", "reason": "<ExceptionName>"}` | Any other store failure, reported as `type(exc).__name__` — for example `SessionSchemaError` mid-rollout. |
-| `{"status": "not_ready", "reason": "<audit probe text>"}` | `audit_logger.probe()` complained. The audit sink is checked first: an entry is written before any request answers, so a sink that stopped accepting writes fails every request. |
+| `SessionSchemaError` | The shared store was migrated under a pod that has not been replaced yet — the schema stamp no longer matches this build. Expected mid-rollout; it drains this pod instead of letting it read-modify-write rows it does not understand. |
+| `SessionStoreError` | The backend refused the sentinel read. |
+| `ConnectionRefusedError`, `OSError` | The store is not accepting connections. |
+
+**Fix.** The class name alone will not tell you why. The full exception, message included, is in
+the broker log at the moment the probe ran.
 
 `/healthz` and `/metrics` never gate — a full request queue must not take the pod out of
 rotation and turn saturation into a restart loop.
 
 ```bash
-curl -s http://127.0.0.1:8000/readyz; echo
-curl -s http://127.0.0.1:8000/healthz; echo
+curl -s "$NAUTILUS/readyz"; echo
+curl -s "$NAUTILUS/healthz"; echo
 ```
 
 ## Limits
@@ -57,7 +123,7 @@ python - <<'PY' > /tmp/nautilus-big-body.json
 import json
 print(json.dumps({"agent_id": "analyst", "intent": "x" * 8000}))
 PY
-curl -s -X POST http://127.0.0.1:8000/v1/request \
+curl -s -X POST "$NAUTILUS/v1/request" \
   -H 'X-API-Key: query-key' -H 'Content-Type: application/json' \
   --data-binary @/tmp/nautilus-big-body.json
 ```
@@ -91,7 +157,7 @@ and `/metrics` are exempt, so a saturated broker is still probeable.
 <!-- not-executed: needs enough concurrent load to fill api.max_concurrent_requests; outcome is timing-dependent -->
 ```bash
 for i in $(seq 1 64); do
-  curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:8000/v1/request \
+  curl -s -o /dev/null -w '%{http_code}\n' -X POST "$NAUTILUS/v1/request" \
     -H 'X-API-Key: query-key' -H 'Content-Type: application/json' \
     -d '{"agent_id":"analyst","intent":"list notes"}' &
 done | sort | uniq -c
@@ -130,7 +196,7 @@ input left as a 500.
 allowlist (see [adapters.md](adapters.md)).
 
 ```bash
-curl -s -X POST http://127.0.0.1:8000/v1/request \
+curl -s -X POST "$NAUTILUS/v1/request" \
   -H 'X-API-Key: query-key' -H 'Content-Type: application/json' \
   -d '{"agent_id":"analyst","intent":"list notes","context":{"scope_constraints":[{"nope":1}]}}'
 ```
@@ -142,7 +208,7 @@ curl -s -X POST http://127.0.0.1:8000/v1/request \
 `datetime.fromisoformat`, so `2026-01-01T00:00:00Z` and `2026-01-01` both work.
 
 ```bash
-curl -s 'http://127.0.0.1:8000/v1/audit?start=yesterday' -H 'X-API-Key: govern-key'
+curl -s "$NAUTILUS/v1/audit?start=yesterday" -H 'X-API-Key: govern-key'
 ```
 
 ## Lookups
@@ -154,23 +220,25 @@ curl -s 'http://127.0.0.1:8000/v1/audit?start=yesterday' -H 'X-API-Key: govern-k
 `GET /v1/adapters` lists what exists.
 
 ```bash
-curl -s http://127.0.0.1:8000/v1/adapters/nosuch/schema -H 'X-API-Key: query-key'
-curl -s http://127.0.0.1:8000/v1/adapters -H 'X-API-Key: query-key'
+curl -s "$NAUTILUS/v1/adapters/nosuch/schema" -H 'X-API-Key: query-key'
+curl -s "$NAUTILUS/v1/adapters" -H 'X-API-Key: query-key'
 ```
 
 ### `Adapter '{name}' does not support schema introspection`
 
-**HTTP 501.** `nautilus/transport/fastapi_app.py:1079-1084`. The adapter exists but has no
-`get_schema()`. Third-party adapters that do not implement it raise
+**HTTP 501.** The adapter exists but cannot introspect: it carries no `get_schema()`
+attribute at all, or it inherits the protocol default, which raises
 `NotImplementedError("AC-21.b: this adapter must implement get_schema() (task-006)")` —
-see [library.md](library.md).
+see [library.md](library.md). Both are permanent. This used to answer `503` for the
+second, far more common case, telling clients to retry a method that will never exist.
 
 ### `Schema fetch failed: {exc}`
 
-**HTTP 503.** `nautilus/transport/fastapi_app.py:1086-1093`. `get_schema()` exists and raised.
-`{exc}` carries the adapter's own message — for example
-`StaticAdapter.get_schema() called before connect()`, or a driver error for a source whose
-server is down. Look up `{exc}` in [adapters.md](adapters.md).
+**HTTP 503.** `get_schema()` ran and raised something other than `NotImplementedError`, so
+the condition is transient. `{exc}` carries the adapter's own message — for example
+`StaticAdapter.get_schema() called before connect()` on a broker that has served no request
+yet (adapters connect lazily), or a driver error for a source whose server is down. Look up
+`{exc}` in [adapters.md](adapters.md).
 
 ### `audit entry not found: {request_id!r}`
 
@@ -179,7 +247,7 @@ server is down. Look up `{exc}` in [adapters.md](adapters.md).
 `audit.path` points at the same file this broker writes.
 
 ```bash
-curl -s http://127.0.0.1:8000/v1/audit/no-such-request -H 'X-API-Key: govern-key'
+curl -s "$NAUTILUS/v1/audit/no-such-request" -H 'X-API-Key: govern-key'
 ```
 
 ### `Not Found`
@@ -194,5 +262,5 @@ Nautilus message. The registered routes are `/healthz`, `/readyz`, `/metrics`,
 `/v1/audit/{request_id}`.
 
 ```bash
-curl -s http://127.0.0.1:8000/v1/nope -H 'X-API-Key: query-key'
+curl -s "$NAUTILUS/v1/nope" -H 'X-API-Key: query-key'
 ```

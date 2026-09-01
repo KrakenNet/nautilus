@@ -44,13 +44,24 @@ COPY pyproject.toml uv.lock README.md /app/
 # ``--extra otel`` is not optional for the published image: without it every
 # metric is a no-op stub and ``GET /metrics`` raises ImportError, i.e. a 500
 # on every Prometheus scrape the monitoring guide tells operators to set up.
-RUN uv sync --frozen --no-dev --extra otel --no-install-project
+#
+# Adapter drivers are NOT in the default image (deploy/deployment.yaml says so)
+# and cannot be added to one: the runtime stage is distroless, with no shell
+# and no pip. So the only place to add them is here, at build time:
+#     docker build --build-arg EXTRAS="--extra postgres" -t nautilus:1.0.0-postgres .
+# Empty by default, which keeps the published image driver-free.
+ARG EXTRAS=""
+
+RUN uv sync --frozen --no-dev --extra otel ${EXTRAS} --no-install-project
 
 # Copy the application source last so edits don't bust the dep layer.
 COPY nautilus /app/nautilus
 
 # Install the nautilus package itself so `importlib.metadata.version` works.
-RUN uv sync --frozen --no-dev --extra otel
+# ``${EXTRAS}`` is repeated because ``uv sync`` makes the environment match the
+# request exactly: syncing without it here would uninstall what the layer
+# above installed.
+RUN uv sync --frozen --no-dev --extra otel ${EXTRAS}
 
 ############################
 # Stage 2 — debug (opt-in) #

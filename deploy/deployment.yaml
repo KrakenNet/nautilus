@@ -9,6 +9,15 @@ spec:
   # a shared session_tokens.key_ring_path, and one writer for a chained
   # attestation sink. See docs/how-to/operator-guide.md#running-more-than-one-replica.
   replicas: 1
+  # A rolling update must not overlap the old pod with the new one. The default
+  # RollingUpdate strategy rounds maxSurge=25% up to 1, so at replicas: 1 it
+  # starts the new pod before stopping the old one -- two brokers minting
+  # session tokens from two different key rings, and, once `audit` is a
+  # ReadWriteOnce PersistentVolumeClaim, a new pod that cannot mount the volume
+  # at all until the old one releases it. That rollout does not finish.
+  # Recreate costs the seconds between terminate and ready.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app.kubernetes.io/name: nautilus
@@ -17,16 +26,33 @@ spec:
       labels:
         app.kubernetes.io/name: nautilus
     spec:
+      # The broker never calls the Kubernetes API. Leaving the token mounted
+      # hands anything that reads /var/run/secrets a cluster credential the
+      # process has no use for.
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532
         fsGroup: 65532
+        # With the container securityContext below, this is the last field the
+        # `restricted` Pod Security Standard requires: without it the pod is
+        # rejected outright in a namespace labelled
+        # pod-security.kubernetes.io/enforce=restricted.
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: nautilus
-          # Built from the repository Dockerfile: docker build -t nautilus:latest .
-          # The published image carries no database drivers; add the extras your
-          # sources need (pip install 'nautilus-rkm[postgres]').
-          image: nautilus:latest
+          # Built from the repository Dockerfile. The default image carries no
+          # database drivers, and the ConfigMap beside this file configures a
+          # `postgres` source and a `postgres` session store -- so build it
+          # with the extras those sources need or the pod CrashLoopBackOffs on
+          # "whose driver is not installed":
+          #   docker build --build-arg EXTRAS="--extra postgres" \
+          #     -t nautilus:0.2.2-postgres .
+          # The image is distroless: it has no shell and no pip, so an extra
+          # cannot be added to a built image. Pin a tag; `latest` with
+          # imagePullPolicy: IfNotPresent silently keeps the old layer.
+          image: nautilus:0.2.2-postgres
           imagePullPolicy: IfNotPresent
           args: ["serve", "--config", "/config/nautilus.yaml", "--bind", "0.0.0.0:8000", "--log-format", "json"]
           ports:
@@ -51,18 +77,30 @@ spec:
               port: http
             initialDelaySeconds: 5
             periodSeconds: 30
+            timeoutSeconds: 3
+            # 5s + 3 x 30s: the broker has ~95s to open its Postgres pool and
+            # create its tables before the kubelet calls the process dead.
+            failureThreshold: 3
           readinessProbe:
             httpGet:
               path: /readyz
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10
+            # /readyz spends up to _READY_PROBE_TIMEOUT_S (2.0s, transport/
+            # fastapi_app.py) on the sentinel read and up to another 2.0s on
+            # the schema re-check. The kubelet's default timeoutSeconds is 1,
+            # so a store that was merely slow read as a failed probe and the
+            # pod left rotation before the handler had answered.
+            timeoutSeconds: 5
+            failureThreshold: 3
           resources:
             # One uvicorn worker, and the per-request work is dominated by
             # synchronous CPU on that one event loop -- measured throughput does
             # not rise with concurrency, so a pod cannot use more than a core
-            # and is throttled by anything less. 250m sized this for roughly a
-            # quarter of the rate the same image serves on a full core.
+            # and is throttled by anything less -- hence a whole core requested
+            # and no cpu limit at all: a limit only adds throttling to a
+            # workload that already cannot exceed one core.
             requests:
               cpu: "1"
               memory: 512Mi

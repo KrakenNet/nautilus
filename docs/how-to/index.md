@@ -10,9 +10,11 @@ Task-oriented guides for common Nautilus operations.
   denial-record invariant, and the validate → test → ship workflow.
 - [Developing Adapters](developing-adapters.md) — scaffold a package,
   pass the compliance suite, load via entry point or local path.
-- [Hardening](hardening.md) — credentials, TLS termination, capability
-  scoping, keeping `/metrics` and `/admin` private, and one hardened
-  end-to-end configuration.
+- [Hardening](hardening.md) — the complete security surface, key by key: every
+  security-relevant config key, environment variable, header, CLI flag and
+  route, each with what it defends, what it costs, the exact string it emits
+  when set wrong, and a runnable example; plus TLS termination, key rotation,
+  a failure-string index and one hardened end-to-end configuration.
 
 ## Recipes
 

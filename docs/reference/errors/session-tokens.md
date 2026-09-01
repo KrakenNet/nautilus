@@ -5,6 +5,9 @@ Verification failures raise `SessionTokenError` (`nautilus/attestation/session_t
 which carries a machine-readable `reason_code` **and** a human message. The transport shows you
 the code; the message is what the library shows.
 
+`curl` examples assume the [scratch broker](index.md#a-scratch-broker) on
+`127.0.0.1:8001` and `export NAUTILUS=http://127.0.0.1:8001`.
+
 ## Reading `Invalid session token: …`
 
 Two wrappers exist, and which one you see tells you where the token was carried.
@@ -30,7 +33,7 @@ Invalid session token (expired): Token has expired
 ```
 
 ```bash
-curl -s -X POST http://127.0.0.1:8000/v1/request \
+curl -s -X POST "$NAUTILUS/v1/request" \
   -H 'X-API-Key: query-key' -H 'X-Nautilus-Session-Token: garbage' \
   -H 'Content-Type: application/json' \
   -d '{"agent_id":"analyst","intent":"list notes"}'
@@ -99,7 +102,7 @@ separate key material. Check the live set at `/v1/keys/jwks.json`.
 that key stop verifying. Mint a new token.
 
 ```bash
-curl -s http://127.0.0.1:8000/v1/keys/jwks.json | head -c 200; echo
+curl -s "$NAUTILUS/v1/keys/jwks.json" | head -c 200; echo
 ```
 
 ### `expired`

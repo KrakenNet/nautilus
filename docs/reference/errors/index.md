@@ -34,8 +34,8 @@ the heading shows the template and the entry says what interpolates:
 Every `curl` on these pages runs against this. It needs no database and no driver. It is the
 [REST API reference's scratch broker](../rest-api.md#running-the-examples) narrowed until it
 fails: keys bound to an agent and a narrow capability list, and `api.max_request_bytes` at 4096 so
-the body limit is reachable by hand. Both configs bind `127.0.0.1:8000`, so serve one or the
-other, not both.
+the body limit is reachable by hand. It binds `127.0.0.1:8001`, not the `127.0.0.1:8000` the API
+reference uses, so both can run side by side.
 
 ```bash
 mkdir -p /tmp/nautilus-errors && cd /tmp/nautilus-errors
@@ -72,14 +72,23 @@ YAML
 
 <!-- not-executed: blocks until interrupted; run it in a second terminal -->
 ```bash
-cd /tmp/nautilus-errors && nautilus serve --config nautilus.yaml --bind 127.0.0.1:8000
+cd /tmp/nautilus-errors && nautilus serve --config nautilus.yaml --bind 127.0.0.1:8001
 ```
 
-Confirm it is up before using the `curl` examples:
+Every `curl` on every page of this section writes its base URL as `$NAUTILUS`. Export it once per
+shell — nothing else on these pages needs a placeholder filled in:
+
+```bash
+export NAUTILUS=http://127.0.0.1:8001
+```
+
+Confirm the broker is up before using the `curl` examples. `{"status":"ok"}` means go; a
+`{"status":"not_ready", …}` body is explained in
+[transport.md](transport.md#readyz-refusal-payloads):
 
 <!-- not-executed: needs the scratch broker from the block above -->
 ```bash
-curl -s http://127.0.0.1:8000/readyz
+curl -s "$NAUTILUS/readyz"; echo
 ```
 
 ## Find your message
@@ -166,7 +175,9 @@ curl -s http://127.0.0.1:8000/readyz
 | `Schema fetch failed: {exc}` | 503 |
 | `audit entry not found: {request_id!r}` | 404 |
 | `{"status": "not_ready", "reason": "startup_incomplete"}` | 503 |
+| `{"status": "not_ready", "reason": "<audit probe text>"}` | 503 |
 | `{"status": "not_ready", "reason": "session_store_timeout"}` | 503 |
+| `{"status": "not_ready", "reason": "{type(exc).__name__}"}` | 503 |
 | `Not Found` | 404 |
 
 ### Configuration and startup — [config.md](config.md)
@@ -209,6 +220,8 @@ curl -s http://127.0.0.1:8000/readyz
 | `Invalid field identifier '{f}'` |
 | `table name {table!r} has more than one schema qualifier` |
 | `Operator '{op}' requires a list value, got {type(bad).__name__}` |
+| `Operator 'IN' requires a list value, got {type(value).__name__}` |
+| `Operator 'NOT IN' requires a list value, got {type(value).__name__}` |
 | `Operator 'LIKE' requires a string value, got {type(bad).__name__}` |
 | `Operator 'BETWEEN' requires a 2-tuple/list value` |
 | `operator not allowed: {op}` |
@@ -220,6 +233,8 @@ curl -s http://127.0.0.1:8000/readyz
 | `Refused same-host redirect (status={…}); configure the endpoint path directly …` |
 | `source '{source_id}' answered with {declared} bytes, over the {MAX_RESPONSE_BYTES}-byte ceiling` |
 | `source '{source_id}' object {key!r} is {declared} bytes, over the {MAX_OBJECT_BYTES}-byte ceiling` |
+| `ElasticsearchAdapter: field '{field}' is mapped as analysed 'text' with no 'keyword' subfield, …` |
+| `ElasticsearchAdapter: the only exact subfield for '{field}' is '{field}.{chosen}', which has ignore_above={limit}, …` |
 | `NoopEmbedder(strict=True) cannot produce embeddings. …` |
 | `context['embedding'] must be list[float], got {type(override).__name__}` |
 | `sn-invalid-field: {field!r}`, `sn-injection-rejected`, `sn-unsupported-operator: {op!r}` |
@@ -295,6 +310,59 @@ curl -s http://127.0.0.1:8000/readyz
 | `application startup failed; the server never accepted a connection. The cause is logged above.` | 2 |
 | `FAIL {status} {url}` / `FAIL unreachable {url}: {exc}` | 1 |
 | `WARN: --air-gapped drops LLM source id={…!r} — connection host is not loopback (NFR-1, #43)` | — |
+| `ERROR: rkm: no subcommand given (try: queue, lineage)` | 2 |
+| `ERROR: rkm queue: no op given (try: submit, list, show, approve, reject, diff)` | 2 |
+| `ERROR: rule: no subcommand given (try: list, retract, lineage, history, rollback)` | 2 |
+| `ERROR: rules: no subcommand given (try: validate, test, history)` | 2 |
+| `ERROR: adapters: no subcommand given (try: new, list, schema, schema-fingerprint, schema-diff, schema-ack)` | 2 |
+| `ERROR: key: no subcommand given (try: list, rotate, revoke)` | 2 |
+| `ERROR: attestation: no subcommand given (try: verify)` | 2 |
+| `ERROR: events: no subcommand given (try: list)` | 2 |
+| `ERROR: {target} already exists — refusing to overwrite it` | 1 |
+| `FAIL: key {command}: --url is required. …` | 2 |
+| `ERROR: rotate requires --yes to confirm.` | 1 |
+| `ERROR: revoke requires --yes to confirm.` | 1 |
+| `FAIL: key {command}: cannot reach {endpoint}: {exc}` | 2 |
+| `ERROR: key {command}: server returned {status_code}: {text}` | 2 |
+| `ERROR: --yes required for destructive op` | 1 |
+| `ERROR: --reason required for retract` | 1 |
+| `ERROR: --cascade and --orphan-children are mutually exclusive` | 1 |
+| `ERROR: rule {name!r} not found in lineage` | 1 |
+| `ERROR: rule {name!r} v{to_version} not found in lineage` | 1 |
+| `WARN: no lineage records for {name!r}` / `WARN: no history for {name!r}` | 0 |
+| `ERROR: rule file not found: {rule_path}` | 1 |
+| `ERROR: rkm queue approve: --url is required. …` | 2 |
+| `ERROR: rkm queue approve: cannot reach {endpoint}: {exc}` | 2 |
+| `ERROR: rkm queue approve: server returned {status_code}: {text}` | 2 |
+| `ERROR: proposal {proposal_id} not found` | 1 |
+| `ERROR: proposal {proposal_id} already decided: status={current_status}` | 1 |
+| `WARN: could not read rkm settings from {config_path!r} ({exc}); using defaults` | 0 |
+| `WARN: no lineage records for {id!r}` | 0 |
+| `ERROR: invalid adapter name {name!r} (expected lowercase-dashed, e.g. my-csv-adapter)` | 1 |
+| `ERROR: destination already exists and is not empty: {dest}` | 1 |
+| `ERROR: copier is required for 'adapters new' — install it with: pip install copier` | 1 |
+| `ERROR: no config found: pass --config PATH, or run from a directory containing nautilus.yaml` | 1 |
+| `ERROR: --status {status_filter!r} needs --url: quarantine state lives in the serving process, …` | 1 |
+| `ERROR: could not load {config_path}: {exc}` | 1 |
+| `ERROR: could not reach {url}: {exc}` | 1 |
+| `ERROR: no schema available for adapter {name!r}` | 1 |
+| `ERROR: no schema available for adapter {name!r}; cannot ack` | 1 |
+| `ERROR: schema-ack requires --yes to confirm` | 1 |
+| `WARN: could not read schema for {name!r}: {exc}` | 0 |
+| `WARN: no stored fingerprint for {name!r}; treating as new` | 0 |
+| `ERROR: attestation verify: log not found: {log_path}` | 1 |
+| `ERROR: attestation verify: pubkey not found: {pubkey_path}` | 1 |
+| `ERROR: attestation verify: {result.error}` | 2 |
+| `WARN: could not read audit path from {config_path!r} ({exc}); using {path}` | 0 |
+| `ERROR: audit log not found: {audit_path}` | 1 |
+| `ERROR: cannot read rules config from {path}: {exc}` | 1 |
+| `ERROR: score {min_total} below threshold {threshold}: {file_path}` | 2 |
+| `WARN: no rules found in {file_path}` | 0 |
+| `WARN: affected descendants: {names}` | 0 |
+| `WARN: rule '{name}': shadow finding {relation} (existing rule '{existing_rule}')` | 0 |
+| `WARN: rule '{name}': insufficient audit history (replayed {replayed_n_actual} entries)` | 0 |
+| `WARN: rule '{name}': {skipped_drifted} audit entries could not be replayed -- …` | 0 |
+| `WARN: rule '{name}': {skipped_no_input_facts} audit entries carry no engine input and were not replayed` | 0 |
 
 ### Embedding Nautilus as a library — [library.md](library.md)
 
