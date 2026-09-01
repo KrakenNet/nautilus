@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 
 class IntentAnalysis(BaseModel):
@@ -39,6 +39,15 @@ class BrokerRequest(BaseModel):
     and an open ``context`` dict that the router inspects for optional
     hints (e.g. ``session_id``, transport metadata, prior-turn facts).
     """
+
+    # ``session_id``, ``purpose`` and ``clearance`` live in ``context``. Sent at
+    # the top level -- the obvious shape -- pydantic's default ``extra="ignore"``
+    # dropped them without a word: the caller got a fresh session on every
+    # request, so the cumulative exposure ledger never accumulated and its caps
+    # never tripped, and the purpose they asked for was replaced by the agent's
+    # default. The config models refuse unknown keys for the same reason; an
+    # input that changes what runs deserves the same answer.
+    model_config = ConfigDict(extra="forbid")
 
     agent_id: str
     # The audit entry stores the raw intent three times (``raw_intent``, the

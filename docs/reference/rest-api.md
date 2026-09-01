@@ -15,6 +15,13 @@ Submit a broker request.
 | `agent_id` | `string` | The requesting agent's identifier |
 | `intent` | `string` | Natural-language intent describing what data is needed |
 | `context` | `object` | Agent context: `clearance`, `purpose`, `session_id`, optional `embedding` |
+| `fact_set_hash` | `string?` | Pins the fact set a prior turn saw; omit unless replaying |
+
+Unknown top-level fields are refused with `422`, naming the field. `session_id`,
+`purpose` and `clearance` go **inside** `context` — sent at the top level they
+used to be dropped in silence, which handed the caller a fresh session on every
+request (so cumulative exposure never accumulated) and swapped their purpose for
+the agent's default.
 
 **Response:** `BrokerResponse` JSON with `request_id`, `data`, `sources_queried`,
 `sources_denied`, `attestation_token`, and `duration_ms`, plus:
@@ -30,9 +37,12 @@ Submit a broker request.
 
 ### `GET /v1/sources`
 
-List all configured sources: `id`, `type`, `description`, `classification`,
-`data_types` and `allowed_purposes`. Metadata only — never connection strings
-or credentials. `allowed_purposes` is what a caller refused on `purpose` should
+List the configured sources the calling agent is cleared to see: `id`, `type`,
+`description`, `classification`, `data_types` and `allowed_purposes`. Metadata
+only — never connection strings or credentials. Sources above the caller's
+clearance are omitted entirely, because a description is how you learn what to
+ask for. A bare API key names no agent, so it has no clearance to filter against
+and still sees the whole catalogue. `allowed_purposes` is what a caller refused on `purpose` should
 read to pick one that works. Requires the `query` capability.
 
 ### `GET /v1/rules`
