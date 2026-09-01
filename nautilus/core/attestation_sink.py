@@ -44,6 +44,34 @@ from pydantic import BaseModel, ConfigDict
 log = logging.getLogger(__name__)
 
 
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]"})
+
+
+def _warn_if_plaintext(url: str) -> None:
+    """Say it out loud when signed attestations will cross the wire in the clear.
+
+    The payload is the decision receipt: request id, agent, purpose, the sources
+    that answered, and the signed token. Configuring ``attestation.sink.url``
+    with ``http://`` is accepted -- refusing would break a sidecar collector on a
+    private network, which is a real deployment -- but it was accepted in total
+    silence, so nobody found out from Nautilus. Loopback is exempt: nothing
+    leaves the host.
+    """
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if parsed.scheme != "http":
+        return
+    if (parsed.hostname or "") in _LOOPBACK_HOSTS:
+        return
+    log.warning(
+        "attestation.sink.url is plaintext http:// to %s -- signed attestations "
+        "and the decision metadata around them cross the network unencrypted. "
+        "Use https:// unless the collector is reachable only over a trusted link.",
+        parsed.hostname or url,
+    )
+
+
 class AttestationPayload(BaseModel):
     """Store-and-forward envelope for a single attestation emission.
 
@@ -307,6 +335,7 @@ class HttpAttestationSink:
         dead_letter_path: Path | str | None = None,
     ) -> None:
         self._url = url
+        _warn_if_plaintext(url)
         self._retry_policy = retry_policy if retry_policy is not None else RetryPolicy()
         # ``httpx.AsyncClient`` defers the actual connection until first
         # request, so construction is cheap and the smoke-test in the Verify

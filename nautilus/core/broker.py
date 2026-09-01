@@ -1018,7 +1018,21 @@ class Broker:
         if sess_cfg.backend == "postgres":
             import os
 
-            dsn = sess_cfg.dsn or os.environ.get("TEST_PG_DSN")
+            dsn = sess_cfg.dsn
+            if not dsn:
+                dsn = os.environ.get("TEST_PG_DSN")
+                if dsn:
+                    # A test-shaped name reaching a production code path. It stays
+                    # (the integration fixtures dial a container DSN through it),
+                    # but silently: an operator who deleted `session_store.dsn`
+                    # from the ConfigMap got a session store pointed at whatever
+                    # TEST_PG_DSN happened to hold, and nothing said so.
+                    log.warning(
+                        "session_store.dsn is unset; falling back to the TEST_PG_DSN "
+                        "environment variable. Set session_store.dsn explicitly -- "
+                        "TEST_PG_DSN exists for the integration fixtures and is not "
+                        "a supported way to configure a deployment."
+                    )
             if not dsn:
                 raise ConfigError(
                     "session_store.backend=postgres requires 'dsn' or TEST_PG_DSN env var"

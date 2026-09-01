@@ -200,11 +200,22 @@ async def login_submit(request: Request, api_key: str = Form(...)) -> Response:
             status_code=401,
         )
     response = RedirectResponse(url="/admin/sources", status_code=302)
+    # The cookie *is* the API key, so over TLS it must never be offered on a
+    # plaintext request: without ``Secure`` a single http:// link to the host --
+    # a bookmark, a redirect, a mistyped scheme -- puts a live credential on the
+    # wire. Conditioned on the scheme rather than hard-coded, because a
+    # ``Secure`` cookie is silently dropped over http and would lock an operator
+    # out of a local console. ``X-Forwarded-Proto`` is what the deployments in
+    # deploy/ actually present: TLS terminates at the ingress and the app sees
+    # http, so the header is the only thing that knows.
+    forwarded_proto = request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip().lower()
+    over_tls = request.url.scheme == "https" or forwarded_proto == "https"
     response.set_cookie(
         key="nautilus_key",
         value=api_key,
         httponly=True,
         samesite="lax",
+        secure=over_tls,
         max_age=86400,
     )
     return response
