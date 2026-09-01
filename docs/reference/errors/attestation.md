@@ -121,7 +121,7 @@ When embedding Nautilus, this means the broker was closed while work was still i
 worker did not read back as it was written.
 
 **What the caller sees, for all seven.** These have no HTTP route and no CLI command:
-`nautilus/forensics/handoff_worker.py:217` calls `ProcessedOffsets.load()` and does not catch it,
+`nautilus/forensics/handoff_worker.py:197` calls `ProcessedOffsets.load()` and does not catch it,
 and `run_worker` is a library entry point. The exception propagates to whatever process runs the
 worker; a plain script exits **1** with a traceback ending in `OffsetsCorruptError: <message>`.
 The audit log itself is untouched — nothing has been read yet when `load()` fails, and nothing has
@@ -358,7 +358,7 @@ persisted still: 4096
 
 ### `AuditRecord has no {NAUTILUS_METADATA_KEY!r} metadata`
 
-**`KeyError`**, `nautilus/audit/logger.py:328`. A record was read that carries no Nautilus
+**`KeyError`**, `nautilus/audit/logger.py:383`. A record was read that carries no Nautilus
 metadata block. It came from a different writer, or the log mixes sources. Check that
 `audit.path` is not shared with another tool.
 

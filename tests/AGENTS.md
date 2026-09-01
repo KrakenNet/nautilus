@@ -19,6 +19,9 @@ red until its fix lands.
   defect pins. A plain module, not a conftest: `pytest_plugins` is only
   honoured at the root, and root-level container fixtures would make the whole
   suite look as though it needs Docker.
+- `tests/citation_lock.py` + `tests/citations.lock.json` — the content lock for
+  the `path.py:NNN` source citations in `docs/`. A plain module and a checked-in
+  lockfile, driven by `tests/test_doc_citations.py`.
 
 ## Local Contracts
 
@@ -41,12 +44,21 @@ red until its fix lands.
 - The same goes for local-only material. `docs/comps/` is excluded in
   `.git/info/exclude` and is absent from a clean clone, so a test over it
   skips at module level rather than failing CI over files that never shipped.
+  The citation lock enumerates docs through `git ls-files` for the same reason.
+- **Never regenerate the citation lock to make the suite green.** Its whole job
+  is to stop a code change from silently invalidating a line number a doc cites.
+  A failure names the citation, the pages that carry it, the text it was locked
+  against and the text now at that line; fix the number in the doc first,
+  regenerate second.
 
 ## Verification
 
 ```bash
 uv run pytest -m "not docker"   # fast lane, no containers (~40s)
 uv run pytest -m docker         # live backends via testcontainers
+
+python tests/citation_lock.py           # report drifted docs/ citations
+python tests/citation_lock.py --write   # re-lock, once the citations are re-read
 ```
 
 `docker` is applied automatically by `pytest_collection_modifyitems` in

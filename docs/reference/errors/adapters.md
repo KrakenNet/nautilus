@@ -241,7 +241,7 @@ and the message arrives as one entry in `sources_errored[]`:
 `error_type` is the exception class name (`ScopeEnforcementError`, `AdapterError`,
 `SSRFBlockedError`, `EmbeddingUnavailableError`), and the failed source contributes no rows —
 partial answers are labelled, never silently merged. Anything raised from `connect()` is prefixed
-`connect() failed: ` by `nautilus/core/broker.py:2657`, and that source is not retried for
+`connect() failed: ` by `nautilus/core/broker.py:2608`, and that source is not retried for
 `connect_cooldown_s`. Anything raised from `execute()` arrives unprefixed
 (`nautilus/core/broker.py:3084-3106`). The per-entry **Status** lines below say which of the two
 it is.

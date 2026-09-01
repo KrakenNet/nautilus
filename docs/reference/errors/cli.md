@@ -111,7 +111,7 @@ exit=2
 
 | Message | Line |
 | --- | --- |
-| `ERROR: config path does not exist or is not a file: {config_path}` | `__init__.py:210` |
+| `ERROR: config path does not exist or is not a file: {config_path}` | `__init__.py:230` |
 | `ERROR: invalid config: {exc}` | `__init__.py:238` |
 | `ERROR: broker construction failed: {exc}` | `__init__.py:241` |
 | `ERROR: {exc}` (bind parsing, air-gapped load, serve failure) | `__init__.py:218,227,275` |
