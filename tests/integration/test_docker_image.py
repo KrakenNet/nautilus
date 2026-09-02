@@ -241,15 +241,20 @@ def test_the_default_build_target_is_the_distroless_runtime() -> None:
 # ---------------------------------------------------------------------------
 
 
-def _run_version(image: str) -> tuple[int, list[str]]:
-    """Return ``(exit code, stdout lines)`` of ``docker run --rm <image> version``."""
+def _run_version(image: str, *, env: str | None = None) -> tuple[int, list[str], str]:
+    """``docker run --rm [-e env] <image> version`` → ``(code, stdout lines, stderr)``."""
+    opts = ["-e", env] if env is not None else []
     result = subprocess.run(  # noqa: S603 — trusted binary
-        [_DOCKER or "docker", "run", "--rm", image, "version"],
+        [_DOCKER or "docker", "run", "--rm", *opts, image, "version"],
         check=False,
         capture_output=True,
         timeout=120,
     )
-    return result.returncode, result.stdout.decode("utf-8", errors="replace").splitlines()
+    return (
+        result.returncode,
+        result.stdout.decode("utf-8", errors="replace").splitlines(),
+        result.stderr.decode("utf-8", errors="replace"),
+    )
 
 
 def test_version_subcommand_reports_the_packaged_version_and_an_honest_build(
@@ -265,7 +270,7 @@ def test_version_subcommand_reports_the_packaged_version_and_an_honest_build(
     import tomllib
 
     packaged = tomllib.loads((_repo_root() / "pyproject.toml").read_text(encoding="utf-8"))
-    code, lines = _run_version(built_image)
+    code, lines, _ = _run_version(built_image)
     assert code == 0, f"`docker run --rm {built_image} version` exited {code}"
     assert lines[0] == packaged["project"]["version"], (
         f"line 1 must be the packaged version alone; got {lines[0]!r}"
@@ -315,7 +320,7 @@ def test_the_build_arg_is_what_two_images_of_one_release_line_differ_by() -> Non
             assert build.returncode == 0, (
                 f"build of {tag} failed:\n{build.stderr.decode('utf-8', errors='replace')}"
             )
-            code, lines = _run_version(tag)
+            code, lines, _ = _run_version(tag)
             assert code == 0, f"`docker run --rm {tag} version` exited {code}"
             answers[tag] = lines[1]
             assert answers[tag] == f"build: {rev}", (
@@ -327,6 +332,90 @@ def test_the_build_arg_is_what_two_images_of_one_release_line_differ_by() -> Non
     finally:
         subprocess.run(  # noqa: S603 — trusted binary
             [_DOCKER or "docker", "image", "rm", "-f", *tags],
+            check=False,
+            capture_output=True,
+            timeout=120,
+        )
+
+
+# ---------------------------------------------------------------------------
+# WAVE ops14 — the identifier was a property of argv, not of the image.
+# ---------------------------------------------------------------------------
+
+
+_SPOOF = "4d5a1c9e83b27f60a1d4c8e2b95f307a6c1e8b42"
+
+
+def test_the_command_line_cannot_tell_an_image_which_build_it_is(built_image: str) -> None:
+    """``docker run -e NAUTILUS_BUILD_REV=…`` must not change the answer.
+
+    The session fixture builds with no ``--build-arg BUILD_REV``, which is
+    exactly the case that was passing dishonestly: two such images and two
+    invented 40-hex strings handed to ``docker run -e`` were enough to satisfy a
+    build-identity check neither image could satisfy on its own. The image now
+    carries its own answer and says when it was asked to say something else.
+    """
+    code, lines, err = _run_version(built_image, env=f"NAUTILUS_BUILD_REV={_SPOOF}")
+    assert code == 0, f"`docker run --rm -e … {built_image} version` exited {code}: {err}"
+    assert lines[1] == "build: unknown", (
+        "an image that was built with no revision accepted one from its command "
+        f"line; got {lines[1]!r}"
+    )
+    assert _SPOOF in err and "ignored" in err, (
+        "the override was discarded in silence, which is indistinguishable from "
+        f"an image that never saw it; stderr was {err!r}"
+    )
+
+
+def test_a_stamped_image_reports_its_own_revision_over_an_override() -> None:
+    """The stamp beats the environment on a real image, not only in-process.
+
+    Also the check that the stamp is reachable at runtime at all: it is copied
+    onto ``/app/nautilus``, and if ``PYTHONPATH`` or the venv layout ever moved
+    the imported copy of the package elsewhere, the file would still be in the
+    image and read by nothing.
+    """
+    root = _repo_root()
+    rev = "3333333333333333333333333333333333333333"
+    tag = "nautilus:test-rev-stamped"
+    try:
+        build = subprocess.run(  # noqa: S603 — trusted binary
+            [
+                _DOCKER or "docker",
+                "build",
+                "--target",
+                "runtime",
+                "--build-arg",
+                f"BUILD_REV={rev}",
+                "-t",
+                tag,
+                ".",
+            ],
+            check=False,
+            capture_output=True,
+            cwd=str(root),
+            timeout=900,
+        )
+        assert build.returncode == 0, (
+            f"build of {tag} failed:\n{build.stderr.decode('utf-8', errors='replace')}"
+        )
+
+        code, lines, err = _run_version(tag, env=f"NAUTILUS_BUILD_REV={_SPOOF}")
+        assert code == 0, f"`docker run --rm -e … {tag} version` exited {code}: {err}"
+        assert lines[1] == f"build: {rev}", (
+            f"{tag} was stamped {rev} and reported {lines[1]!r} under an override"
+        )
+        assert _SPOOF in err, f"the ignored override was not reported; stderr was {err!r}"
+
+        # Same value where a release check can read it without entering the container.
+        label = _inspect(tag, '{{index .Config.Labels "org.opencontainers.image.revision"}}')
+        assert label == rev, (
+            "org.opencontainers.image.revision does not match what the container "
+            f"answers ({label!r} vs {rev!r}), so the label cannot corroborate it"
+        )
+    finally:
+        subprocess.run(  # noqa: S603 — trusted binary
+            [_DOCKER or "docker", "image", "rm", "-f", tag],
             check=False,
             capture_output=True,
             timeout=120,

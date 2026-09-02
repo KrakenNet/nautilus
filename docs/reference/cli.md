@@ -327,23 +327,47 @@ build: 6b2879595e642133a8a04ba184659a8a8389d336-dirty
 
 Line 1 is the release line and is shared by every commit between two releases,
 so `nautilus version | head -1` is still the bare version string. Line 2 is the
-build: it comes from `NAUTILUS_BUILD_REV`, which the image sets from
-`docker build --build-arg BUILD_REV=…`. Outside a container — running from a
-checkout or a plain `pip install` — nothing sets it and the line reads
-`build: unknown`, which is the honest answer: a wheel carries no record of the
-tree it was built from. It is never filled in with the version, because two
-images that differ only in revision would then look identical.
+build, and where it comes from depends on what you are running:
+
+- **An image.** `docker build --build-arg BUILD_REV=…` writes the revision into
+  the image, and the container reads it back out of itself. Nothing at
+  `docker run` time changes it — see below. Built without the arg, the image
+  carries no revision and the line reads `build: unknown`.
+- **A checkout, a wheel, a unit file.** There is no revision in the artifact to
+  read, so `NAUTILUS_BUILD_REV` is used if it is set and the line reads
+  `build: unknown` if it is not. That is the honest answer: a wheel carries no
+  record of the tree it was built from.
+
+It is never filled in with the version, because two images that differ only in
+revision would then look identical.
 
 On the distroless runtime image this is the only way to ask which build you are
 holding without starting it as a server; `GET /healthz` reports the same two
 strings once it is running.
+
+**A third line, on stderr, when the environment disagrees with the artifact.**
+Setting `NAUTILUS_BUILD_REV` against an image does not change what that image
+says it is, and the command says so rather than discarding the value in silence:
+
+```console
+$ docker run --rm -e NAUTILUS_BUILD_REV=4d5a1c9e83b27f60a1d4c8e2b95f307a6c1e8b42 \
+    nautilus:dev version
+warning: NAUTILUS_BUILD_REV=4d5a1c9e83b27f60a1d4c8e2b95f307a6c1e8b42 was ignored: the build answer comes from the artifact, which reports a5fe4ede57965b060015a7ab00d5c82bb838ac66-dirty
+0.2.6.dev0
+build: a5fe4ede57965b060015a7ab00d5c82bb838ac66-dirty
+```
+
+It is a warning and not an error: the command answered, and answered correctly.
+The exit code stays `0` and stdout stays two lines, so `nautilus version | head -1`
+and any parser reading line 2 are unaffected. `GET /healthz` reports the same
+disagreement as a `build_override_ignored` field.
 
 **Exit codes** — returns `0` or `1`. Never returns `2` (except from argparse,
 for an unrecognised flag) and never returns `3`.
 
 | Exit | When |
 |------|------|
-| `0` | Version printed to stdout. |
+| `0` | Version printed to stdout. Also the exit code when an ignored `NAUTILUS_BUILD_REV` was reported on stderr. |
 | `1` | `nautilus (version unknown — package metadata missing)` on stderr — `importlib.metadata` could not find the `nautilus-rkm` distribution. You are running from a source tree that was never installed; `pip install -e .` fixes it. |
 
 ---

@@ -82,6 +82,14 @@ itself and it has to be passed in. **Omit it and the image answers
 looking like a real answer. The build is not refused: an sdist has no revision
 to give.
 
+This is genuinely build time only. The arg is written into the image and the
+container reads it out of itself, so `docker run -e NAUTILUS_BUILD_REV=…` does
+not change the answer — it is reported as `build_override_ignored` on
+`GET /healthz` and warned about on `nautilus version`'s stderr, and then
+discarded. Rebuilding is the only way to give an `unknown` image a revision. The
+same string lands on the image as `org.opencontainers.image.revision`, so
+`docker image inspect` can corroborate what the container says.
+
 `EXTRAS` is passed verbatim to `uv sync`. Available extras (from
 `pyproject.toml`): `postgres`, `pgvector`, `elasticsearch`, `neo4j`,
 `influxdb`, `s3`, `all`. Combine them:

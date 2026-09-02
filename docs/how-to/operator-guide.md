@@ -631,11 +631,16 @@ warning above as one object:
 - `GET /healthz` — liveness, and the build: it answers
   `{"status": "ok", "version": "0.2.6.dev0", "build": "6b28795…-dirty"}`. The
   version comes from the installed distribution's metadata; the build is the
-  revision passed to `docker build --build-arg BUILD_REV=…`, and is `unknown`
-  on an image built without it. No credential, so a synthetic check or a
-  runbook `curl` can read both; two replicas disagreeing on either means the
-  rollout is half done, and two replicas agreeing on `version` while
-  disagreeing on `build` is the case the version alone could never show you.
+  revision passed to `docker build --build-arg BUILD_REV=…` and stamped into the
+  image, and is `unknown` on an image built without it. Nothing at `docker run`
+  time can change it — if the container's environment names a different
+  revision, `/healthz` grows a `build_override_ignored` field naming the value it
+  discarded, and a container emitting that field is one somebody started with a
+  provenance claim its image does not support. No credential, so a synthetic
+  check or a runbook `curl` can read all of them; two replicas disagreeing on
+  `version` or `build` means the rollout is half done, and two replicas agreeing
+  on `version` while disagreeing on `build` is the case the version alone could
+  never show you.
   Releases up to 0.2.5 answer `{"status": "ok"}` with no version, and
   `nautilus version` is no fallback there: those builds look the distribution
   up as `metadata.version("nautilus")` when it is installed as `nautilus-rkm`,

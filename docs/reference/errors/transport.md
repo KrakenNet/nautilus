@@ -12,9 +12,9 @@ lookups — before or around the policy decision. Source: `nautilus/transport/fa
 
 **HTTP 503.** Seven guards, one per place the broker is read:
 `nautilus/transport/fastapi_app.py:661` covers `/v1/request` and `/v1/query`, which share
-`_handle_request`; then `:1058` (`/v1/keys/rotate`), `:1096` (`/v1/keys/{kid}/revoke`),
-`:1184` (`/v1/adapters/{name}/schema`), `:1356` (`/v1/rkm/queue`), `:1581` (`/v1/rules`) and
-`:1809`, which is in the `_audit_reader` dependency and so covers both `/v1/audit` and
+`_handle_request`; then `:1070` (`/v1/keys/rotate`), `:1108` (`/v1/keys/{kid}/revoke`),
+`:1196` (`/v1/adapters/{name}/schema`), `:1368` (`/v1/rkm/queue`), `:1593` (`/v1/rules`) and
+`:1821`, which is in the `_audit_reader` dependency and so covers both `/v1/audit` and
 `/v1/audit/{request_id}`.
 
 **Means.** `app.state.broker` is unset: the ASGI lifespan has not finished, or it failed.
@@ -25,7 +25,7 @@ there. `/readyz` reports the same condition as `startup_incomplete`.
 ### `/readyz` refusal payloads
 
 `/readyz` returns **200** `{"status": "ok"}` or **503** with a `reason`
-(`nautilus/transport/fastapi_app.py:852-933`). The four reasons are checked in this order, and the
+(`nautilus/transport/fastapi_app.py:864-945`). The four reasons are checked in this order, and the
 first one to fire is the one you get.
 
 <!-- not-executed: needs the scratch broker from index.md -->
@@ -35,7 +35,7 @@ curl -s -o /dev/null -w '%{http_code} ' "$NAUTILUS/readyz"; curl -s "$NAUTILUS/r
 
 #### `{"status": "not_ready", "reason": "startup_incomplete"}`
 
-**HTTP 503.** `nautilus/transport/fastapi_app.py:873-877`. `app.state.broker` is `None` or
+**HTTP 503.** `nautilus/transport/fastapi_app.py:885-889`. `app.state.broker` is `None` or
 `app.state.ready` is false: the lifespan has not finished, or it failed. Nothing is interpolated.
 
 **Means.** The process is listening but the broker was never built. This is the normal answer for
@@ -48,7 +48,7 @@ store is printed there, and `serve` exits **2** with
 
 #### `{"status": "not_ready", "reason": "<audit probe text>"}`
 
-**HTTP 503.** `nautilus/transport/fastapi_app.py:884-886`. The `reason` is the string returned by
+**HTTP 503.** `nautilus/transport/fastapi_app.py:896-898`. The `reason` is the string returned by
 `broker.audit_logger.probe()` — free text from the sink, not a fixed vocabulary. A `FileSink`
 whose directory went read-only reports the `OSError` text.
 
@@ -68,7 +68,7 @@ chmod u+w /tmp/nautilus-errors/audit.jsonl
 
 #### `{"status": "not_ready", "reason": "session_store_timeout"}`
 
-**HTTP 503.** `nautilus/transport/fastapi_app.py:916-919`. The sentinel read of
+**HTTP 503.** `nautilus/transport/fastapi_app.py:928-931`. The sentinel read of
 `_READY_PROBE_KEY` (`_ready_probe_`) or the `averify_schema()` re-check exceeded
 `_READY_PROBE_TIMEOUT_S` — **2.0 seconds**. Nothing is interpolated; the reason is this literal
 string.
@@ -84,7 +84,7 @@ will also see `session-store pool exhausted: …` in the log
 
 #### `{"status": "not_ready", "reason": "{type(exc).__name__}"}`
 
-**HTTP 503.** `nautilus/transport/fastapi_app.py:920-923`. Any other exception from the store,
+**HTTP 503.** `nautilus/transport/fastapi_app.py:932-935`. Any other exception from the store,
 reported as its **class name only** — never its message, so a DSN in an exception string cannot
 leak through a probe endpoint that needs no credentials.
 
@@ -205,7 +205,7 @@ curl -s -X POST "$NAUTILUS/v1/request" \
 
 ### `invalid datetime: {value!r}`
 
-**HTTP 400.** `_parse_audit_dt`, `nautilus/transport/fastapi_app.py:1818-1830`. The `start` or
+**HTTP 400.** `_parse_audit_dt`, `nautilus/transport/fastapi_app.py:1830-1842`. The `start` or
 `end` query parameter on `GET /v1/audit` is not ISO-8601. Parsed with
 `datetime.fromisoformat`, so `2026-01-01T00:00:00Z` and `2026-01-01` both work.
 
@@ -217,7 +217,7 @@ curl -s "$NAUTILUS/v1/audit?start=yesterday" -H 'X-API-Key: govern-key'
 
 ### `Adapter '{name}' not found`
 
-**HTTP 404.** `nautilus/transport/fastapi_app.py:1187-1193`. `{name}` is the path segment of
+**HTTP 404.** `nautilus/transport/fastapi_app.py:1199-1205`. `{name}` is the path segment of
 `GET /v1/adapters/{name}/schema` and must be a configured **source id**, not a source type.
 `GET /v1/adapters` lists what exists.
 

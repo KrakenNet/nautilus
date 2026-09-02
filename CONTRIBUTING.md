@@ -117,11 +117,14 @@ from months earlier. Two things now stop that:
   with no tags**, because `actions/checkout` fetches none by default and a
   skip there is how this rots again; `ci.yml` sets `fetch-tags: true`.
 - A version cannot separate two builds of one release line, and is not asked
-  to. The revision does: `docker build --build-arg BUILD_REV=…` sets
-  `NAUTILUS_BUILD_REV` in the image, and `GET /healthz` and `nautilus version`
-  report it. `.dockerignore` excludes `.git/`, so nothing inside the build can
-  derive it; an image built without the argument reports `unknown` and never
-  falls back to the version string.
+  to. The revision does: `docker build --build-arg BUILD_REV=…` stamps the
+  revision into the image, and `GET /healthz` and `nautilus version` read it
+  back out of the image. `.dockerignore` excludes `.git/`, so nothing inside the
+  build can derive it; an image built without the argument reports `unknown` and
+  never falls back to the version string. `NAUTILUS_BUILD_REV` is the same value
+  for a checkout or a wheel, which carry no stamp — against a stamped image it is
+  ignored and reported, because an identifier the command line can set is a
+  property of the command line.
 
 Still merge `main` before you cut a release branch. Two artifacts answering
 `/healthz` with the same `version` *and* the same `build` but different

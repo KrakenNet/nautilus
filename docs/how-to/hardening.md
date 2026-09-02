@@ -4302,7 +4302,8 @@ the package is not, so check the list against it rather than trusting this page:
 
 ```console
 $ grep -rn 'os\.environ\|os\.getenv' nautilus/ --include='*.py'
-nautilus/build.py:41:    return os.environ.get(BUILD_REV_ENV, "").strip() or UNKNOWN
+nautilus/build.py:91:    return os.environ.get(BUILD_REV_ENV, "").strip() or UNKNOWN
+nautilus/build.py:104:    supplied = os.environ.get(BUILD_REV_ENV, "").strip()
 nautilus/cli/_common.py:34:    reviewer = os.environ.get("NAUTILUS_REVIEWER", "").strip()
 nautilus/cli/_common.py:247:    return os.environ.get(API_KEY_ENV, "").strip() or None
 nautilus/analysis/llm/local_provider.py:70:        if not os.getenv(self.api_key_env):
@@ -4516,6 +4517,7 @@ shell. On a workstation it is only ever the sending half.
 ### `NAUTILUS_BUILD_REV`
 
 Read by `nautilus/build.py:build_rev` · reported as `build` by `GET /healthz`
+· **ignored on an image**, which is the point
 
 **Defends** the provenance of a rollout. `nautilus.__version__` names the release
 line, so every image built between two releases answers with the same string;
@@ -4529,25 +4531,80 @@ so nothing inside a layer can derive it:
 docker build --build-arg BUILD_REV=$(git rev-parse HEAD) -t nautilus:dev .
 ```
 
-`Dockerfile:104` and `:163` turn that `ARG` into this variable for the runtime
-image.
+The build arg does two things, at `Dockerfile:99` and `Dockerfile:197`: it is
+written to a file and that file is copied onto `/app/nautilus`, the copy of the
+package the runtime image imports. **That file, not this variable, is what a
+container answers from.** `Dockerfile:200` puts the same string in the
+`org.opencontainers.image.revision` label, so the answer can be checked against
+the image without entering the container:
 
-**Fails with** no message. An image built without it answers `unknown`, which is
-deliberately not a version string, so a build that lost its provenance says so
-rather than repeating `version`:
+```console
+$ docker image inspect nautilus:dev \
+    --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
+a5fe4ede57965b060015a7ab00d5c82bb838ac66-dirty
+```
+
+`Dockerfile:132` (debug) and `Dockerfile:201` (runtime) still export this
+variable, mirroring the same value for `docker inspect`. Nothing reads it back.
+
+**Costs** you nothing at run time, because there is nothing to set. Setting it
+against an image is not a way to fix a build that reports `unknown` — the only
+fix for that is to rebuild with the arg. This is deliberate. Measured on a
+running fleet: two images built from real commits with no `--build-arg`, both
+baking an empty value, were handed two invented 40-hex strings with
+`docker run -e` and satisfied a build-identity check on the strength of them.
+Swap the two strings and the answers swap with them. An identifier the command
+line can set identifies the command line.
+
+**Fails with** a warning on stderr and an extra field on the liveness probe when
+you set it anyway. The container keeps answering what it was built as:
+
+```console
+$ docker run --rm -e NAUTILUS_BUILD_REV=4d5a1c9e83b27f60a1d4c8e2b95f307a6c1e8b42 \
+    nautilus:dev version
+warning: NAUTILUS_BUILD_REV=4d5a1c9e83b27f60a1d4c8e2b95f307a6c1e8b42 was ignored: the build answer comes from the artifact, which reports a5fe4ede57965b060015a7ab00d5c82bb838ac66-dirty
+0.2.6.dev0
+build: a5fe4ede57965b060015a7ab00d5c82bb838ac66-dirty
+
+$ curl -s http://127.0.0.1:8000/healthz
+{"status":"ok","version":"0.2.6.dev0","build":"a5fe4ede57965b060015a7ab00d5c82bb838ac66-dirty","build_override_ignored":"4d5a1c9e83b27f60a1d4c8e2b95f307a6c1e8b42"}
+```
+
+`build_override_ignored` is absent whenever nothing disagrees, so its presence is
+the whole signal: someone started this container with a revision its image does
+not carry. Alert on the field's existence, not on its value.
+
+**Fails with** no message when the arg was simply omitted. That image answers
+`unknown`, which is deliberately not a version string, so a build that lost its
+provenance says so rather than repeating `version` — and it cannot be talked out
+of it either:
 
 ```console
 $ curl -s http://127.0.0.1:8000/healthz
 {"status":"ok","version":"0.2.6.dev0","build":"unknown"}
+
+$ docker run --rm -e NAUTILUS_BUILD_REV=4d5a1c9e83b27f60a1d4c8e2b95f307a6c1e8b42 \
+    nautilus:no-build-arg version
+warning: NAUTILUS_BUILD_REV=4d5a1c9e83b27f60a1d4c8e2b95f307a6c1e8b42 was ignored: the build answer comes from the artifact, which reports unknown
+0.2.6.dev0
+build: unknown
 ```
 
-**Example**
+**Example** — the variable is honoured in exactly one place: an artifact that
+carries no stamp, which is a source checkout, a `pip install` or a unit file. A
+wheel has no record of the tree it was built from, so a parent that does know can
+supply one:
 
-```bash
-# Read it back off a running container (the distroless image has no shell
-# utilities; its $PATH is the virtualenv's console scripts):
-docker exec nautilus /app/.venv/bin/python -c \
-  'import os; print(os.environ.get("NAUTILUS_BUILD_REV") or "<unset>")'
+```ini
+# /etc/systemd/system/nautilus.service.d/build.conf
+[Service]
+Environment=NAUTILUS_BUILD_REV=a5fe4ede57965b060015a7ab00d5c82bb838ac66
+```
+
+```console
+$ NAUTILUS_BUILD_REV=a5fe4ede57965b060015a7ab00d5c82bb838ac66 nautilus version
+0.2.6.dev0
+build: a5fe4ede57965b060015a7ab00d5c82bb838ac66
 ```
 
 ### `TEST_PG_DSN`
@@ -7603,7 +7660,7 @@ base table, and a rule change or a routing surprise is enough to lose it.
 The transcript below needs
 [`session_tokens.enabled: true`](#session_tokensenabled); on a default config
 the route answers `409 session tokens are disabled`.
-`POST /v1/sessions` takes an untyped body (`nautilus/transport/fastapi_app.py:955`),
+`POST /v1/sessions` takes an untyped body (`nautilus/transport/fastapi_app.py:967`),
 and `clearance` in that body would be an authorization assertion signed by
 Nautilus and verifiable by anyone against the public JWKS. It is not a parameter
 of `Broker.issue_session_token` at all (`nautilus/core/broker.py:1697-1703`) —

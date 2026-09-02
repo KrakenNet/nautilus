@@ -232,76 +232,76 @@
    }
   },
   {
-   "citation": "fastapi_app.py:1056-1059",
+   "citation": "fastapi_app.py:1068-1071",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "994bd1184491ab21",
    "lines": {
-    "1056": "raise HTTPException(",
-    "1057": "status_code=status.HTTP_503_SERVICE_UNAVAILABLE,",
-    "1058": "detail=\"Broker not ready\",",
-    "1059": ")"
+    "1068": "raise HTTPException(",
+    "1069": "status_code=status.HTTP_503_SERVICE_UNAVAILABLE,",
+    "1070": "detail=\"Broker not ready\",",
+    "1071": ")"
    }
   },
   {
-   "citation": "fastapi_app.py:1064",
+   "citation": "fastapi_app.py:1076",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "95a449072d630017",
    "lines": {
-    "1064": "detail=\"reviewer is required (no control characters)\","
+    "1076": "detail=\"reviewer is required (no control characters)\","
    }
   },
   {
-   "citation": "fastapi_app.py:1068-1072",
+   "citation": "fastapi_app.py:1080-1084",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "b607759d35b85ef1",
    "lines": {
-    "1068": "except RuntimeError as exc:",
-    "1069": "raise HTTPException(",
-    "1070": "status_code=status.HTTP_409_CONFLICT,",
-    "1071": "detail=str(exc),",
-    "1072": ") from exc"
+    "1080": "except RuntimeError as exc:",
+    "1081": "raise HTTPException(",
+    "1082": "status_code=status.HTTP_409_CONFLICT,",
+    "1083": "detail=str(exc),",
+    "1084": ") from exc"
    }
   },
   {
-   "citation": "fastapi_app.py:1103",
+   "citation": "fastapi_app.py:1115",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "7d1e644298df5931",
    "lines": {
-    "1103": "detail=\"kid must be a UUID\","
+    "1115": "detail=\"kid must be a UUID\","
    }
   },
   {
-   "citation": "fastapi_app.py:1110",
+   "citation": "fastapi_app.py:1122",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "a355f9133862ca8d",
    "lines": {
-    "1110": "detail=\"reviewer and reason are required (no control characters)\","
+    "1122": "detail=\"reviewer and reason are required (no control characters)\","
    }
   },
   {
-   "citation": "fastapi_app.py:1128",
+   "citation": "fastapi_app.py:1140",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "afe0f6e0f601642e",
    "lines": {
-    "1128": "detail=f\"kid {kid!r} not found\","
+    "1140": "detail=f\"kid {kid!r} not found\","
    }
   },
   {
@@ -1693,14 +1693,25 @@
    }
   },
   {
-   "citation": "nautilus/build.py:41",
+   "citation": "nautilus/build.py:104",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/build.py",
+   "sha": "5701ea8abecaebe1",
+   "lines": {
+    "104": "supplied = os.environ.get(BUILD_REV_ENV, \"\").strip()"
+   }
+  },
+  {
+   "citation": "nautilus/build.py:91",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/build.py",
    "sha": "3274498b6d421e8f",
    "lines": {
-    "41": "return os.environ.get(BUILD_REV_ENV, \"\").strip() or UNKNOWN"
+    "91": "return os.environ.get(BUILD_REV_ENV, \"\").strip() or UNKNOWN"
    }
   },
   {
@@ -4844,86 +4855,86 @@
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1187-1193",
+   "citation": "nautilus/transport/fastapi_app.py:1199-1205",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "ef36c1898c567ba8",
    "lines": {
-    "1187": "if adapter is None:",
-    "1188": "from fastapi import HTTPException",
-    "1189": "",
-    "1190": "raise HTTPException(",
-    "1191": "status_code=status.HTTP_404_NOT_FOUND,",
-    "1192": "detail=f\"Adapter '{name}' not found\",",
-    "1193": ")"
+    "1199": "if adapter is None:",
+    "1200": "from fastapi import HTTPException",
+    "1201": "",
+    "1202": "raise HTTPException(",
+    "1203": "status_code=status.HTTP_404_NOT_FOUND,",
+    "1204": "detail=f\"Adapter '{name}' not found\",",
+    "1205": ")"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1210-1215",
+   "citation": "nautilus/transport/fastapi_app.py:1222-1227",
    "cited_in": [
     "docs/reference/errors/library.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "9caaba2bb9987081",
    "lines": {
-    "1210": "from fastapi import HTTPException",
-    "1211": "",
-    "1212": "raise HTTPException(",
-    "1213": "status_code=status.HTTP_501_NOT_IMPLEMENTED,",
-    "1214": "detail=f\"Adapter '{name}' does not support schema introspection\",",
-    "1215": ") from exc"
+    "1222": "from fastapi import HTTPException",
+    "1223": "",
+    "1224": "raise HTTPException(",
+    "1225": "status_code=status.HTTP_501_NOT_IMPLEMENTED,",
+    "1226": "detail=f\"Adapter '{name}' does not support schema introspection\",",
+    "1227": ") from exc"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1216-1221",
+   "citation": "nautilus/transport/fastapi_app.py:1228-1233",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "9b93e271e7d698c4",
    "lines": {
-    "1216": "except Exception as exc:  # noqa: BLE001",
-    "1217": "from fastapi import HTTPException",
-    "1218": "",
-    "1219": "raise HTTPException(",
-    "1220": "status_code=status.HTTP_503_SERVICE_UNAVAILABLE,",
-    "1221": "detail=f\"Schema fetch failed: {exc}\","
+    "1228": "except Exception as exc:  # noqa: BLE001",
+    "1229": "from fastapi import HTTPException",
+    "1230": "",
+    "1231": "raise HTTPException(",
+    "1232": "status_code=status.HTTP_503_SERVICE_UNAVAILABLE,",
+    "1233": "detail=f\"Schema fetch failed: {exc}\","
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1299-1307",
+   "citation": "nautilus/transport/fastapi_app.py:1311-1319",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "9ec15c2b8912043a",
    "lines": {
-    "1299": "bound: str | None = _caller_identity(request)[\"agent_id\"]",
-    "1300": "if bound:",
-    "1301": "return bound",
-    "1302": "reviewer = request.headers.get(\"X-Nautilus-Reviewer\") or request.headers.get(\"X-Reviewer\")",
-    "1303": "if not reviewer:",
-    "1304": "raise HTTPException(",
-    "1305": "status_code=status.HTTP_400_BAD_REQUEST,",
-    "1306": "detail=\"X-Nautilus-Reviewer header required\",",
-    "1307": ")"
+    "1311": "bound: str | None = _caller_identity(request)[\"agent_id\"]",
+    "1312": "if bound:",
+    "1313": "return bound",
+    "1314": "reviewer = request.headers.get(\"X-Nautilus-Reviewer\") or request.headers.get(\"X-Reviewer\")",
+    "1315": "if not reviewer:",
+    "1316": "raise HTTPException(",
+    "1317": "status_code=status.HTTP_400_BAD_REQUEST,",
+    "1318": "detail=\"X-Nautilus-Reviewer header required\",",
+    "1319": ")"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1487-1491",
+   "citation": "nautilus/transport/fastapi_app.py:1499-1503",
    "cited_in": [
     "docs/reference/errors/rules.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "8eafd6401bff9005",
    "lines": {
-    "1487": "except AlreadyDecidedError as exc:",
-    "1488": "raise HTTPException(",
-    "1489": "status_code=status.HTTP_409_CONFLICT,",
-    "1490": "detail={\"error\": \"already_decided\", \"current_status\": exc.current_status},",
-    "1491": ") from exc"
+    "1499": "except AlreadyDecidedError as exc:",
+    "1500": "raise HTTPException(",
+    "1501": "status_code=status.HTTP_409_CONFLICT,",
+    "1502": "detail={\"error\": \"already_decided\", \"current_status\": exc.current_status},",
+    "1503": ") from exc"
    }
   },
   {
@@ -4943,26 +4954,26 @@
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1818-1830",
+   "citation": "nautilus/transport/fastapi_app.py:1830-1842",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "296c6cc1243dfb25",
    "lines": {
-    "1818": "def _parse_audit_dt(value: str | None) -> datetime | None:",
-    "1819": "\"\"\"Parse an ISO-8601 datetime query param, or 400 on bad input.\"\"\"",
-    "1820": "if not value:",
-    "1821": "return None",
-    "1822": "try:",
-    "1823": "return datetime.fromisoformat(value)",
-    "1824": "except ValueError as exc:",
-    "1825": "from fastapi import HTTPException",
-    "1826": "",
-    "1827": "raise HTTPException(",
-    "1828": "status_code=status.HTTP_400_BAD_REQUEST,",
-    "1829": "detail=f\"invalid datetime: {value!r}\",",
-    "1830": ") from exc"
+    "1830": "def _parse_audit_dt(value: str | None) -> datetime | None:",
+    "1831": "\"\"\"Parse an ISO-8601 datetime query param, or 400 on bad input.\"\"\"",
+    "1832": "if not value:",
+    "1833": "return None",
+    "1834": "try:",
+    "1835": "return datetime.fromisoformat(value)",
+    "1836": "except ValueError as exc:",
+    "1837": "from fastapi import HTTPException",
+    "1838": "",
+    "1839": "raise HTTPException(",
+    "1840": "status_code=status.HTTP_400_BAD_REQUEST,",
+    "1841": "detail=f\"invalid datetime: {value!r}\",",
+    "1842": ") from exc"
    }
   },
   {
@@ -5218,179 +5229,179 @@
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:852-933",
+   "citation": "nautilus/transport/fastapi_app.py:864-945",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "b82befba781ebe04",
    "lines": {
-    "852": "serve an ``aget`` against the sentinel key ``_ready_probe_``.",
-    "853": "Any exception from the store downgrades to 503 so rolling",
-    "854": "restarts take the pod out of rotation cleanly.",
-    "855": "",
-    "856": "Each stage is timed and the whole run is emitted as one ``DEBUG``",
-    "857": "record. ``reason: session_store_timeout`` names a budget without",
-    "858": "saying which of the two session-store stages spent it, and the two",
-    "859": "are bounded separately -- so a probe that overran the shipped",
-    "860": "``timeoutSeconds`` could not be attributed to the sentinel read or to",
-    "861": "the schema check from outside the process.",
-    "862": "\"\"\"",
-    "863": "stages: list[str] = []",
-    "864": "marks = [time.perf_counter()]",
-    "865": "",
-    "866": "def mark(name: str) -> None:",
-    "867": "now = time.perf_counter()",
-    "868": "stages.append(f\"{name} {(now - marks[-1]) * 1000:.1f} ms\")",
-    "869": "marks.append(now)",
-    "870": "",
-    "871": "try:",
-    "872": "broker: Broker | None = getattr(request.app.state, \"broker\", None)",
-    "873": "ready = bool(getattr(request.app.state, \"ready\", False))",
-    "874": "if broker is None or not ready:",
-    "875": "mark(\"startup gate (incomplete)\")",
-    "876": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "877": "return {\"status\": \"not_ready\", \"reason\": \"startup_incomplete\"}",
-    "878": "# The audit sink is checked first: an entry is written before any",
-    "879": "# request answers, so a sink that has stopped accepting writes fails",
-    "880": "# every request, and the probe that exists to drain a pod said ok.",
-    "881": "audit_logger: Any = getattr(broker, \"audit_logger\", None)",
-    "882": "audit_problem = audit_logger.probe() if audit_logger is not None else None",
-    "883": "mark(\"audit sink probe\")",
-    "884": "if audit_problem is not None:",
-    "885": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "886": "return {\"status\": \"not_ready\", \"reason\": audit_problem}",
-    "887": "store: Any = getattr(broker, \"session_store\", None)",
-    "888": "if store is None:",
-    "889": "# Broker without an exposed session_store still counts as ready",
-    "890": "# (the probe is best-effort — AC-12.5).",
-    "891": "return {\"status\": \"ok\"}",
-    "892": "stage = \"session store sentinel read\"",
-    "893": "try:",
-    "894": "if hasattr(store, \"aget\"):",
-    "895": "# Bounded, because a store that is *down* answers fast and a",
-    "896": "# store that is reachable but frozen does not answer at all:",
-    "897": "# ``acquire_timeout_s`` covers taking a new pooled connection,",
-    "898": "# and the sentinel read runs on one that is already open. An",
-    "899": "# unbounded probe is a probe the kubelet gives up on, so the pod",
-    "900": "# is never drained and every probe leaves a wedged handler.",
-    "901": "await asyncio.wait_for(store.aget(_READY_PROBE_KEY), _READY_PROBE_TIMEOUT_S)",
-    "902": "elif hasattr(store, \"get\"):",
-    "903": "store.get(_READY_PROBE_KEY)",
-    "904": "mark(stage)",
-    "905": "# The schema stamp is checked at boot, which covers the replica",
-    "906": "# coming up and misses the one already serving: a rolling upgrade",
-    "907": "# migrates the shared store under every pod that has not been",
-    "908": "# replaced yet. Re-reading it here drains this pod instead of",
-    "909": "# letting it read-modify-write rows it does not understand.",
-    "910": "verify: Any = getattr(store, \"averify_schema\", None)",
-    "911": "if callable(verify):",
-    "912": "stage = \"session store schema check\"",
-    "913": "probe: Any = verify()",
-    "914": "await asyncio.wait_for(probe, _READY_PROBE_TIMEOUT_S)",
-    "915": "mark(stage)",
-    "916": "except TimeoutError:",
-    "917": "mark(f\"{stage} (timed out)\")",
-    "918": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "919": "return {\"status\": \"not_ready\", \"reason\": \"session_store_timeout\"}",
-    "920": "except Exception as exc:  # noqa: BLE001 — any backend failure → 503.",
-    "921": "mark(f\"{stage} (failed)\")",
-    "922": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "923": "return {\"status\": \"not_ready\", \"reason\": type(exc).__name__}",
-    "924": "return {\"status\": \"ok\"}",
-    "925": "finally:",
-    "926": "log.debug(",
-    "927": "\"readyz stages: %s (total %.1f ms; each session-store stage is \"",
-    "928": "\"bounded at %.1fs, so the kubelet timeoutSeconds must exceed \"",
-    "929": "\"their sum, not one of them)\",",
-    "930": "\"; \".join(stages) or \"none reached\",",
-    "931": "(time.perf_counter() - marks[0]) * 1000,",
-    "932": "_READY_PROBE_TIMEOUT_S,",
-    "933": ")"
+    "864": "serve an ``aget`` against the sentinel key ``_ready_probe_``.",
+    "865": "Any exception from the store downgrades to 503 so rolling",
+    "866": "restarts take the pod out of rotation cleanly.",
+    "867": "",
+    "868": "Each stage is timed and the whole run is emitted as one ``DEBUG``",
+    "869": "record. ``reason: session_store_timeout`` names a budget without",
+    "870": "saying which of the two session-store stages spent it, and the two",
+    "871": "are bounded separately -- so a probe that overran the shipped",
+    "872": "``timeoutSeconds`` could not be attributed to the sentinel read or to",
+    "873": "the schema check from outside the process.",
+    "874": "\"\"\"",
+    "875": "stages: list[str] = []",
+    "876": "marks = [time.perf_counter()]",
+    "877": "",
+    "878": "def mark(name: str) -> None:",
+    "879": "now = time.perf_counter()",
+    "880": "stages.append(f\"{name} {(now - marks[-1]) * 1000:.1f} ms\")",
+    "881": "marks.append(now)",
+    "882": "",
+    "883": "try:",
+    "884": "broker: Broker | None = getattr(request.app.state, \"broker\", None)",
+    "885": "ready = bool(getattr(request.app.state, \"ready\", False))",
+    "886": "if broker is None or not ready:",
+    "887": "mark(\"startup gate (incomplete)\")",
+    "888": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "889": "return {\"status\": \"not_ready\", \"reason\": \"startup_incomplete\"}",
+    "890": "# The audit sink is checked first: an entry is written before any",
+    "891": "# request answers, so a sink that has stopped accepting writes fails",
+    "892": "# every request, and the probe that exists to drain a pod said ok.",
+    "893": "audit_logger: Any = getattr(broker, \"audit_logger\", None)",
+    "894": "audit_problem = audit_logger.probe() if audit_logger is not None else None",
+    "895": "mark(\"audit sink probe\")",
+    "896": "if audit_problem is not None:",
+    "897": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "898": "return {\"status\": \"not_ready\", \"reason\": audit_problem}",
+    "899": "store: Any = getattr(broker, \"session_store\", None)",
+    "900": "if store is None:",
+    "901": "# Broker without an exposed session_store still counts as ready",
+    "902": "# (the probe is best-effort — AC-12.5).",
+    "903": "return {\"status\": \"ok\"}",
+    "904": "stage = \"session store sentinel read\"",
+    "905": "try:",
+    "906": "if hasattr(store, \"aget\"):",
+    "907": "# Bounded, because a store that is *down* answers fast and a",
+    "908": "# store that is reachable but frozen does not answer at all:",
+    "909": "# ``acquire_timeout_s`` covers taking a new pooled connection,",
+    "910": "# and the sentinel read runs on one that is already open. An",
+    "911": "# unbounded probe is a probe the kubelet gives up on, so the pod",
+    "912": "# is never drained and every probe leaves a wedged handler.",
+    "913": "await asyncio.wait_for(store.aget(_READY_PROBE_KEY), _READY_PROBE_TIMEOUT_S)",
+    "914": "elif hasattr(store, \"get\"):",
+    "915": "store.get(_READY_PROBE_KEY)",
+    "916": "mark(stage)",
+    "917": "# The schema stamp is checked at boot, which covers the replica",
+    "918": "# coming up and misses the one already serving: a rolling upgrade",
+    "919": "# migrates the shared store under every pod that has not been",
+    "920": "# replaced yet. Re-reading it here drains this pod instead of",
+    "921": "# letting it read-modify-write rows it does not understand.",
+    "922": "verify: Any = getattr(store, \"averify_schema\", None)",
+    "923": "if callable(verify):",
+    "924": "stage = \"session store schema check\"",
+    "925": "probe: Any = verify()",
+    "926": "await asyncio.wait_for(probe, _READY_PROBE_TIMEOUT_S)",
+    "927": "mark(stage)",
+    "928": "except TimeoutError:",
+    "929": "mark(f\"{stage} (timed out)\")",
+    "930": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "931": "return {\"status\": \"not_ready\", \"reason\": \"session_store_timeout\"}",
+    "932": "except Exception as exc:  # noqa: BLE001 — any backend failure → 503.",
+    "933": "mark(f\"{stage} (failed)\")",
+    "934": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "935": "return {\"status\": \"not_ready\", \"reason\": type(exc).__name__}",
+    "936": "return {\"status\": \"ok\"}",
+    "937": "finally:",
+    "938": "log.debug(",
+    "939": "\"readyz stages: %s (total %.1f ms; each session-store stage is \"",
+    "940": "\"bounded at %.1fs, so the kubelet timeoutSeconds must exceed \"",
+    "941": "\"their sum, not one of them)\",",
+    "942": "\"; \".join(stages) or \"none reached\",",
+    "943": "(time.perf_counter() - marks[0]) * 1000,",
+    "944": "_READY_PROBE_TIMEOUT_S,",
+    "945": ")"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:873-877",
+   "citation": "nautilus/transport/fastapi_app.py:885-889",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "8f0237dbc61b367f",
    "lines": {
-    "873": "ready = bool(getattr(request.app.state, \"ready\", False))",
-    "874": "if broker is None or not ready:",
-    "875": "mark(\"startup gate (incomplete)\")",
-    "876": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "877": "return {\"status\": \"not_ready\", \"reason\": \"startup_incomplete\"}"
+    "885": "ready = bool(getattr(request.app.state, \"ready\", False))",
+    "886": "if broker is None or not ready:",
+    "887": "mark(\"startup gate (incomplete)\")",
+    "888": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "889": "return {\"status\": \"not_ready\", \"reason\": \"startup_incomplete\"}"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:884-886",
+   "citation": "nautilus/transport/fastapi_app.py:896-898",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "cdbe48b063fabab7",
    "lines": {
-    "884": "if audit_problem is not None:",
-    "885": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "886": "return {\"status\": \"not_ready\", \"reason\": audit_problem}"
+    "896": "if audit_problem is not None:",
+    "897": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "898": "return {\"status\": \"not_ready\", \"reason\": audit_problem}"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:916-919",
+   "citation": "nautilus/transport/fastapi_app.py:928-931",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "211ac9bee8d25e04",
    "lines": {
-    "916": "except TimeoutError:",
-    "917": "mark(f\"{stage} (timed out)\")",
-    "918": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "919": "return {\"status\": \"not_ready\", \"reason\": \"session_store_timeout\"}"
+    "928": "except TimeoutError:",
+    "929": "mark(f\"{stage} (timed out)\")",
+    "930": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "931": "return {\"status\": \"not_ready\", \"reason\": \"session_store_timeout\"}"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:920-923",
+   "citation": "nautilus/transport/fastapi_app.py:932-935",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "0f068338a926382b",
    "lines": {
-    "920": "except Exception as exc:  # noqa: BLE001 — any backend failure → 503.",
-    "921": "mark(f\"{stage} (failed)\")",
-    "922": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "923": "return {\"status\": \"not_ready\", \"reason\": type(exc).__name__}"
+    "932": "except Exception as exc:  # noqa: BLE001 — any backend failure → 503.",
+    "933": "mark(f\"{stage} (failed)\")",
+    "934": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "935": "return {\"status\": \"not_ready\", \"reason\": type(exc).__name__}"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:955",
+   "citation": "nautilus/transport/fastapi_app.py:967",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "77e419c46ccc8ab6",
    "lines": {
-    "955": "body: dict[str, Any],"
+    "967": "body: dict[str, Any],"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:979-985",
+   "citation": "nautilus/transport/fastapi_app.py:991-997",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "5bdbc093b595c58c",
    "lines": {
-    "979": "raise HTTPException(",
-    "980": "status_code=status.HTTP_403_FORBIDDEN,",
-    "981": "detail=(",
-    "982": "f\"This credential is bound to agent_id={bound!r}, so it cannot \"",
-    "983": "f\"mint a session token for {requested_agent!r}\"",
-    "984": "),",
-    "985": ")"
+    "991": "raise HTTPException(",
+    "992": "status_code=status.HTTP_403_FORBIDDEN,",
+    "993": "detail=(",
+    "994": "f\"This credential is bound to agent_id={bound!r}, so it cannot \"",
+    "995": "f\"mint a session token for {requested_agent!r}\"",
+    "996": "),",
+    "997": ")"
    }
   },
   {

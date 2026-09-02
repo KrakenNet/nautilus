@@ -6,6 +6,10 @@
 # Stages:
 #   builder  — uv-based Debian slim image that resolves dependencies into
 #              /app/.venv using uv.lock (deterministic, no dev deps).
+#   stamp    — writes BUILD_REV to a file. Exists because the runtime stage is
+#              distroless and cannot RUN anything, and because doing it in
+#              `builder` would put the revision underneath the /app copy and
+#              rebuild the whole venv layer on every new commit.
 #   debug    — optional python:3.14-slim target with bash for operator
 #              inspection; NOT built by CI (UQ-5 / D-17).
 #   runtime  — distroless/cc image carrying the interpreter, the venv and the
@@ -27,6 +31,13 @@
 # network. The build is NOT refused without the arg, because an sdist or a
 # tarball has no revision to supply and inventing one is worse than admitting
 # there is none.
+#
+# This value is stamped INTO the artifact (`stamp` stage below), not merely
+# exported as an environment variable. An environment variable is a property of
+# whoever ran `docker run`: two invented 40-hex strings passed with `-e` were
+# enough to make two containers of one image claim to be different builds.
+# `nautilus/build.py` reads the stamp and ignores the variable whenever the two
+# disagree, saying so in `GET /healthz` and on `nautilus version`'s stderr.
 ARG BUILD_REV=""
 
 ############################
@@ -76,7 +87,19 @@ COPY nautilus /app/nautilus
 RUN uv sync --frozen --no-dev --extra otel ${EXTRAS}
 
 ############################
-# Stage 2 — debug (opt-in) #
+# Stage 2 — stamp          #
+############################
+# One tiny layer whose only input is BUILD_REV. Built on `builder` because that
+# image is already resolved and has a shell; the distroless runtime has neither.
+# Kept out of `builder` proper so that changing the revision does not invalidate
+# `COPY --from=builder /app /app` and re-push the venv.
+FROM builder AS stamp
+
+ARG BUILD_REV=""
+RUN printf '%s' "${BUILD_REV}" > /build-rev
+
+############################
+# Stage 3 — debug (opt-in) #
 ############################
 # Operator-local only. NOT produced by CI (D-17 / UQ-5). Use for shelling
 # into a layer that mirrors `runtime` but with bash + apt available.
@@ -98,8 +121,13 @@ RUN apt-get update \
 
 COPY --from=builder /app /app
 
+# The revision, stamped onto the package the interpreter imports. ``PYTHONPATH``
+# is ``/app``, so that is ``/app/nautilus`` and not the venv's site-packages.
+COPY --from=stamp /build-rev /app/nautilus/_build_rev
+
 # Redeclared to pull the global ARG into this stage's scope, and set last so a
-# new revision invalidates only this layer.
+# new revision invalidates only this layer. The variable mirrors the stamp for
+# ``docker inspect``; it is not what the process answers from.
 ARG BUILD_REV=""
 ENV NAUTILUS_BUILD_REV=${BUILD_REV}
 
@@ -107,7 +135,7 @@ ENTRYPOINT ["/app/.venv/bin/python", "-m", "nautilus"]
 CMD ["serve", "--config", "/config/nautilus.yaml", "--bind", "0.0.0.0:8000"]
 
 ############################
-# Stage 3 — runtime        #
+# Stage 4 — runtime        #
 ############################
 FROM gcr.io/distroless/cc-debian13 AS runtime
 
@@ -158,8 +186,18 @@ ENV PYTHONPATH=/app \
 
 # The build stamp, set as late as possible: every layer above is identical
 # between two builds of the same source, so changing the revision re-uses the
-# whole image and rewrites one metadata entry.
+# whole image and rewrites one small layer and one metadata entry.
+#
+# The file is what the running process answers from -- it is part of the
+# artifact, so `docker run -e NAUTILUS_BUILD_REV=...` cannot change the answer,
+# and `nautilus/build.py` reports the attempt instead of believing it. An empty
+# file is a build declaring it has no revision: it answers `unknown` and stays
+# there. The label is the same value where a release check can read it without
+# entering the container, so the served answer can be cross-checked against it.
+COPY --from=stamp /build-rev /app/nautilus/_build_rev
+
 ARG BUILD_REV=""
+LABEL org.opencontainers.image.revision="${BUILD_REV}"
 ENV NAUTILUS_BUILD_REV=${BUILD_REV}
 
 # Drop root (distroless ships a `nonroot` user at UID/GID 65532).

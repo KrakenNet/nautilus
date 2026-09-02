@@ -293,7 +293,7 @@ schema, which is deliberate: an adapter is usable for queries before it can desc
 
 **Status.** `GET /v1/adapters/{name}/schema` answers **501** with
 `{"detail": "Adapter '<name>' does not support schema introspection"}`
-(`nautilus/transport/fastapi_app.py:1210-1215`) — a permanent refusal, not a retryable one, which
+(`nautilus/transport/fastapi_app.py:1222-1227`) — a permanent refusal, not a retryable one, which
 is why it is not the 503 the other schema failures get. Inside a request the drift gate treats a
 raising `get_schema` as "cannot check" and the request still answers **200**.
 

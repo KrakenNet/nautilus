@@ -137,7 +137,7 @@ curl -s -X POST "$NAUTILUS/v1/request" \
 
 ## `This credential is bound to agent_id={bound!r}, so it cannot mint a session token for {requested_agent!r}`
 
-**HTTP 403.** `nautilus/transport/fastapi_app.py:979-985`, on `POST /v1/sessions`.
+**HTTP 403.** `nautilus/transport/fastapi_app.py:991-997`, on `POST /v1/sessions`.
 
 **Means.** Same binding rule, applied to token minting. Without it a key bound to a low-clearance
 agent could mint a broker-valid token naming a high-clearance one, and the token verifies against
@@ -179,7 +179,7 @@ request, including health-check and retry paths.
 
 ## `X-Nautilus-Reviewer header required`
 
-**HTTP 400.** `_require_reviewer`, `nautilus/transport/fastapi_app.py:1299-1307`.
+**HTTP 400.** `_require_reviewer`, `nautilus/transport/fastapi_app.py:1311-1319`.
 
 **Means.** A governance route needs a human identity to write into the audit record and the
 credential could not supply one. The header is only consulted when the `api.keys` entry has no

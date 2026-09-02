@@ -1209,8 +1209,8 @@ commit between two releases, which is what makes the second field necessary.
 
 `build` is the revision the image was built from. It cannot be derived inside
 the image — `.dockerignore` excludes `.git/`, so no layer can run
-`git describe` — so it is handed to the build and carried as an environment
-variable:
+`git describe` — so it is handed to the build, which writes it **into the image**
+alongside the package the container runs:
 
 ```bash
 docker build --target runtime \
@@ -1223,6 +1223,22 @@ from a working tree with uncommitted changes, and a bare commit sha would have
 named a commit whose contents are not what is in the image. A release image,
 built by CI from a clean checkout, carries the sha alone.
 
+The same string is on the image as `org.opencontainers.image.revision`, so this
+answer can be checked against the artifact without entering the container:
+
+```bash
+docker image inspect nautilus:0.2.6.dev0 \
+  --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
+```
+
+**Nothing at `docker run` time can change what this field says.** The container
+reads the revision out of itself, not out of its environment, and that is what
+makes it a build identifier rather than a start parameter: an answer the command
+line can set is a property of the command line, and two containers of one image
+started with different `-e NAUTILUS_BUILD_REV=…` values would then claim to be
+different builds. `NAUTILUS_BUILD_REV` is honoured only where there is no image
+to read from — a source checkout, a `pip install`, a unit file.
+
 **An image built without that argument answers `"build": "unknown"`.** It does
 not fall back to `version`, and that is deliberate: for 76 commits every image
 answered with a well-formed `0.2.2`, so two builds that differed by an entire
@@ -1230,7 +1246,22 @@ release's worth of behaviour looked identical over the network. `unknown` is
 not a build identifier, does not compare equal to one, and makes a rollout that
 lost its provenance say so. The build is not refused without the argument —
 an sdist or a source tarball has no revision to supply, and inventing one is
-worse than admitting there is none.
+worse than admitting there is none. Such an image cannot be talked out of
+`unknown` at run time either; the remedy is to rebuild with the argument.
+
+`build_override_ignored` is a **fourth field, present only when the container's
+environment names a revision the image does not carry**:
+
+```json
+{"status": "ok", "version": "0.2.6.dev0", "build": "a5fe4ede57965b060015a7ab00d5c82bb838ac66-dirty", "build_override_ignored": "4d5a1c9e83b27f60a1d4c8e2b95f307a6c1e8b42"}
+```
+
+`build` is still the image's own answer; this field is the value that was
+discarded, published so the disagreement is visible over the network instead of
+being resolved in silence. Alert on the field being present at all — a well-run
+container never emits it, because the image exports the same revision it was
+stamped with. Parse `/healthz` as an object with `status`, `version` and `build`
+always present and this key sometimes present; nothing else is ever added.
 
 The pair is what a rollout check needs: `version` separates release lines,
 `build` separates two images on one release line, and two replicas of the same

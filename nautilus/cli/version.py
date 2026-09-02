@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from importlib import metadata
 
-from nautilus.build import build_rev
+from nautilus.build import BUILD_REV_ENV, build_rev, build_rev_override
 
 
 def _cmd_version() -> int:
@@ -28,6 +28,17 @@ def _cmd_version() -> int:
     # shell in it to read a file with.
     print(ver)
     print(f"build: {build_rev()}")
+    # stderr, so the two documented stdout lines stay two lines and
+    # ``nautilus version | head -1`` keeps printing the bare version. Not an
+    # error: the command answered, and it answered correctly -- the warning is
+    # that someone asked it to answer something else.
+    override = build_rev_override()
+    if override is not None:
+        print(
+            f"warning: {BUILD_REV_ENV}={override} was ignored: the build answer "
+            f"comes from the artifact, which reports {build_rev()}",
+            file=sys.stderr,
+        )
     return 0
 
 
