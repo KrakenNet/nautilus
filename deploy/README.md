@@ -167,7 +167,7 @@ docker run -d \
   -e NAUTILUS_API_KEY \
   -e ORDERS_DSN="postgresql://nautilus:secret@10.0.0.5:5432/orders" \
   -e SESSION_DSN="postgresql://nautilus:secret@10.0.0.5:5432/sessions" \
-  -v /srv/nautilus/config/nautilus.yaml:/config/nautilus.yaml:ro \
+  -v /srv/nautilus/config:/config:ro \
   -v /srv/nautilus/keys/attestation.pem:/etc/nautilus/keys/attestation.pem:ro \
   -v /srv/nautilus/state:/var/lib/nautilus \
   -v /srv/nautilus/audit:/var/log/nautilus \
@@ -179,6 +179,26 @@ Notes on the flags that are not obvious:
 
 - `--read-only` mirrors the Kubernetes `readOnlyRootFilesystem: true`. The four
   bind mounts are the only paths the broker writes.
+- **`-v /srv/nautilus/config:/config:ro` mounts the config *directory*, not the
+  config file**, which is what the ConfigMap volume in `deployment.yaml` does
+  too. A file bind mount binds an *inode*: rewriting the host file in place
+  reaches the container, but *replacing* it does not, and every editor,
+  `sed -i`, and every atomic writer replaces. The container then reads the old
+  inode for the life of the container and the [`SIGHUP` reload](#9-upgrade-and-rollback)
+  re-reads bytes that never changed. Two containers on one host directory — one
+  mounting the file, one mounting the directory — after a single `mv` replaced
+  that file with a copy saying `generation 2`:
+
+  ```console
+  $ docker exec by-file python -c "print(open('/config/nautilus.yaml').read(), end='')"
+  sources: []   # generation 1
+  $ docker exec by-dir  python -c "print(open('/config/nautilus.yaml').read(), end='')"
+  sources: []   # generation 2
+  ```
+
+  `install`, `cp` and a shell redirect all rewrite in place, so §2.2's
+  `sudo install -m 0444 …` carries through a file mount as well. Mounting the
+  directory means you do not have to remember which is which.
 - `--tmpfs /tmp` is needed only if you pass `--air-gapped`, which rewrites the
   config through `tempfile.NamedTemporaryFile`. Harmless otherwise.
 - The trailing `serve …` replaces the image `CMD`; the `ENTRYPOINT` still
@@ -543,22 +563,110 @@ file under `/config`, and what happens next depends on the key.
 
 `sources`, `rules` and the two live `session_store` limits reload in place on
 `SIGHUP` — no rollout, no gap in service, which matters here because
-`strategy: Recreate` at `replicas: 1` means a rollout *is* a gap:
+`strategy: Recreate` at `replicas: 1` means a rollout *is* a gap.
 
-```bash
-kubectl -n nautilus apply -f deploy/configmap.yaml
-# the kubelet syncs a mounted ConfigMap within ~1 minute by default
-kubectl -n nautilus exec deployment/nautilus -- pkill -HUP -f 'nautilus serve'
-kubectl -n nautilus logs deployment/nautilus | tail -1
-# INFO:nautilus.cli.serve:SIGHUP: reloaded /config/nautilus.yaml (adopted sources, rules)
+It is two steps, and skipping either one leaves you with a broker still serving
+the old file. The kubelet updates the mounted copy; **nothing tells the process
+to re-read it.**
+
+#### The kubelet rewrites the mount; `/config` stays `readOnly: true`
+
+A ConfigMap volume is not a copy of a file, it is a directory the kubelet
+rewrites out from under the container: each generation lands in its own
+timestamped directory, `..data` is a symlink to the current one, and the update
+is a `rename(2)` of that symlink. Every path the broker opens goes through it:
+
+```console
+$ kubectl -n nautilus exec deploy/nautilus -- /app/.venv/bin/python \
+    -c "import os; [print(n, '->', os.readlink('/config/'+n) if os.path.islink('/config/'+n) else '(regular file)') for n in sorted(os.listdir('/config'))]"
+..2026_09_02_05_40_36.2403785900 -> (regular file)
+..data -> ..2026_09_02_05_40_36.2403785900
+nautilus.yaml -> ..data/nautilus.yaml
+```
+
+The writer is the kubelet, on the node, outside the container — so the content
+under `/config` changes while the mount the container sees stays read-only, and
+the two errors [§11.4](#114-what-you-cannot-do-from-inside) quotes still hold on
+the same pod at the same moment:
+
+```console
+$ kubectl -n nautilus exec deploy/nautilus -- /app/.venv/bin/python -c \
+    "open('/config/nautilus.yaml','a').write('x')" 2>&1 | grep Error
+PermissionError: [Errno 13] Permission denied: '/config/nautilus.yaml'
+$ kubectl -n nautilus exec deploy/nautilus -- /app/.venv/bin/python -c \
+    "open('/config/other.yaml','w').write('x')" 2>&1 | grep Error
+OSError: [Errno 30] Read-only file system: '/config/other.yaml'
+```
+
+(`grep Error` because the interpreter prints a traceback and `kubectl` adds
+`command terminated with exit code 1` after it, so `tail -1` shows you the
+wrong line.)
+
+**Do not make the `config` volume writable to get a reload.** It does not help —
+the container is not the thing that writes it — and it turns the one input the
+broker trusts into something anything in the pod can edit.
+
+#### Apply, wait for the pod's copy, then signal
+
+The kubelet notices a changed ConfigMap on its own watch and sync schedule, not
+on `apply`. Measured on kind v1.34.0 with default kubelet settings: 37s, 42s,
+50s and 70s over four edits. Do not guess — compare what the API server holds
+against what the pod is reading, and only signal once they match:
+
+```console
+$ kubectl -n nautilus apply -f deploy/configmap.yaml
+configmap/nautilus-config configured
+
+$ kubectl -n nautilus get cm nautilus-config -o jsonpath='{.data.nautilus\.yaml}' | sha256sum
+5d8c6bd7313971b876f8b017d2f1085a7e133972529e7b69c112efadbc848d33  -
+$ kubectl -n nautilus exec deploy/nautilus -- /app/.venv/bin/python \
+    -c "import hashlib; print(hashlib.sha256(open('/config/nautilus.yaml','rb').read()).hexdigest())"
+ef9884c5c8a898b5ce3394f86d1d48a03c683b6b66bae2ef6e31ad07c5560f34
+
+$ # ... 37s later, the same command:
+5d8c6bd7313971b876f8b017d2f1085a7e133972529e7b69c112efadbc848d33
+```
+
+Now send the signal. There is no `pkill`, no `kill` and no shell in the runtime
+image — its whole `$PATH` is the virtualenv's console scripts — so the
+interpreter is the only thing in there that can send one, and the broker is
+PID 1 (`Started server process [1]` in the startup log). `docker kill -s HUP`
+is the equivalent on the container-runtime path, and has no Kubernetes analogue
+because there is no host to run it from:
+
+```console
+$ kubectl -n nautilus exec deploy/nautilus -- /app/.venv/bin/python -c \
+    "import os, signal; os.kill(1, signal.SIGHUP)"
+$ kubectl -n nautilus logs deploy/nautilus | grep 'SIGHUP: ' | tail -1
+{"ts": "2026-09-02T05:43:12.042134+00:00", "level": "INFO", "logger": "nautilus.cli.serve", "module": "serve", "msg": "SIGHUP: reloaded /config/nautilus.yaml (adopted sources)"}
+```
+
+`grep`, not `--tail 1`: a readiness probe lands between the signal and the read
+often enough to show you an access log instead. The result line always carries
+the colon — `SIGHUP: reloaded …` or `SIGHUP: refused; …`. The startup notice
+(`SIGHUP reloads sources, rules and the live session_store limits from …`) does
+not, and is there before you signal anything.
+
+`deploy/nautilus` sends the signal to *one* pod. At `replicas: 1` that is the
+pod; above one, list them and signal each
+([§8](#8-replicas-what-actually-breaks-at-two)):
+
+```console
+$ kubectl -n nautilus get pods -l app.kubernetes.io/name=nautilus -o name
+pod/nautilus-787c844569-68v8k
 ```
 
 A refused reload leaves the running config serving and says so, so this is safe
 to run against a bad edit — but it is not a substitute for checking first, and
 the pod keeps serving the *old* file until you notice:
 
-```text
-ERROR:nautilus.cli.serve:SIGHUP: refused; the running config is unchanged. Reason: these keys are read once at startup and cannot be reloaded: audit. Restart the process to adopt them.
+```console
+$ kubectl -n nautilus logs deploy/nautilus | grep 'SIGHUP: ' | tail -1
+{"ts": "2026-09-02T05:44:45.487981+00:00", "level": "ERROR", "logger": "nautilus.cli.serve", "module": "serve", "msg": "SIGHUP: refused; the running config is unchanged. Reason: invalid config: Invalid YAML in '/config/nautilus.yaml': while parsing a flow node\nexpected the node content, but found '-'\n  in \"<unicode string>\", line 2, column 3:\n      - id: alpha\n      ^"}
+$ kubectl -n nautilus get pods -l app.kubernetes.io/name=nautilus \
+    -o custom-columns=NAME:.metadata.name,RESTARTS:.status.containerStatuses[0].restartCount
+NAME                        RESTARTS
+nautilus-787c844569-68v8k   0
 ```
 
 Everything else — `audit`, `attestation`, `session_tokens`, the rest of
@@ -976,7 +1084,7 @@ These four have no in-container answer. The workaround column is the answer.
 | Impossible inside the container | Why | Do this instead |
 |---|---|---|
 | `chown` | the process is UID 65532 with `capabilities.drop: ["ALL"]`, so it has no `CAP_CHOWN` | for a bind mount, `sudo chown -R 65532:65532 <hostdir>` on the **host** ([§2.1](#21-lay-out-the-host-directories)); on Kubernetes, `fsGroup: 65532`, which the shipped `deployment.yaml` already sets. Or rename the file aside as in [§11.3](#113-writing-renaming-and-fixing-permissions) |
-| edit `nautilus.yaml` in place | `/config` is a `ro` mount of a ConfigMap | edit the ConfigMap (or the host file), then `kubectl rollout restart` — or send `SIGHUP`, which reloads the subset that can be reloaded safely and names what it refused |
+| edit `nautilus.yaml` in place | `/config` is a `ro` mount of a ConfigMap, and the kubelet — not the container — is what rewrites it | edit the ConfigMap (or the host file), then `kubectl rollout restart` — or send `SIGHUP`, which reloads the subset that can be reloaded safely and names what it refused. Both steps, and how to send the signal from an image with no `pkill` in it: [§9](#apply-wait-for-the-pods-copy-then-signal) |
 | install a package | no `pip`, no package manager, no writable `/usr` | add it to `pyproject.toml` and rebuild; or bring your own tools in an ephemeral container, [below](#getting-a-real-shell-next-to-the-container) |
 | write anywhere but the two volumes and `/tmp` | `readOnlyRootFilesystem: true` | use `/var/lib/nautilus` (persisted with the `state` volume) or `/tmp` (a 16 MiB tmpfs, gone on restart) |
 
