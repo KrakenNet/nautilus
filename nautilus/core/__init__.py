@@ -57,7 +57,17 @@ class BrokerBusyError(Exception):
 
     The transports map it to 503 with ``Retry-After``: it is worth retrying,
     which is precisely what a 500 does not say.
+
+    ``endpoint`` is the session store's ``scheme://host[:port]`` for the ledger
+    case, and ``None`` for the in-process concurrency gate, which dials
+    nothing. ``nautilus.core.broker._broker_error`` copies it onto the
+    ``<broker>`` :class:`~nautilus.core.models.ErrorRecord`, so the request
+    that *failed* names the dependency that failed it.
     """
+
+    def __init__(self, message: str, *, endpoint: str | None = None) -> None:
+        super().__init__(message)
+        self.endpoint: str | None = endpoint
 
 
 class ConsistencyError(PolicyEngineError):

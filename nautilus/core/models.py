@@ -215,8 +215,14 @@ class ErrorRecord(BaseModel):
     # :func:`nautilus.config.models.redact_connection`, which rebuilds the
     # value from scheme/host/port only -- userinfo, path and query never reach
     # it, so a DSN password or a URL token cannot ride into the audit trail or
-    # the response. ``None`` for a source that dials nothing (``static``), for
-    # ``<broker>`` records, and for a connection with no host.
+    # the response. On a ``<broker>`` record it names the broker's own failed
+    # dependency -- the session store behind a ``BrokerBusyError`` or a
+    # ``SessionStoreUnavailableError`` -- because "the request failed" and
+    # "here is what broke" must not be mutually exclusive observations.
+    # ``None`` for a source that dials nothing (``static``), for a connection
+    # with no host, and for a broker-level failure with no remote dependency
+    # at all: a session-token signature is checked in-process against the key
+    # ring, so there is no address to name and none is invented.
     endpoint: str | None = None
 
 

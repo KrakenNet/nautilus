@@ -310,9 +310,9 @@ and the message arrives as one entry in `sources_errored[]`:
 `error_type` is the exception class name (`ScopeEnforcementError`, `AdapterError`,
 `SSRFBlockedError`, `EmbeddingUnavailableError`), and the failed source contributes no rows —
 partial answers are labelled, never silently merged. Anything raised from `connect()` is prefixed
-`connect() failed: ` by `nautilus/core/broker.py:2613`, and that source is not retried for
+`connect() failed: ` by `nautilus/core/broker.py:2663`, and that source is not retried for
 `connect_cooldown_s`. Anything raised from `execute()` arrives unprefixed
-(`nautilus/core/broker.py:3112-3137`). The per-entry **Status** lines below say which of the two
+(`nautilus/core/broker.py:3173-3198`). The per-entry **Status** lines below say which of the two
 it is.
 
 ### `endpoint` — which backend this was
@@ -328,17 +328,26 @@ It is **built from scheme, host and port only** (`redact_connection`,
 anything: userinfo (`postgres://user:pw@…`), path (`https://hooks.example/services/T0/B0/SECRET`),
 query (`?password=…`, `?token=…`) and fragment cannot survive into it. That matters because this
 field reaches the process log, the audit file and the requesting agent — three audiences wider
-than the one that reads `nautilus.yaml`. `null` for a source that dials nothing (`static`), for
-broker-level records, and for any `connection` with no host (a filesystem path, a libpq keyword
-DSN like `host=db password=pw`): there is no guess, because a guess is how the withheld half gets
-echoed by accident.
+than the one that reads `nautilus.yaml`. `null` for a source that dials nothing (`static`) and
+for any `connection` with no host (a filesystem path, a libpq keyword DSN like
+`host=db password=pw`): there is no guess, because a guess is how the withheld half gets echoed
+by accident.
+
+A `source_id` of `<broker>` is not a source; it is the broker's own failure, and it carries the
+same field on the same terms. The request that *fails* — HTTP 503 from a wedged or unreachable
+session store, `BrokerBusyError` or `SessionStoreUnavailableError` — records the session store's
+`scheme://host[:port]`, so "the request failed" and "here is what broke" are one observation
+rather than two mutually exclusive ones (see
+[sessions.md](sessions.md)). It stays `null` where the broker dialled nothing: a rejected session
+token is checked in-process against the key ring, and `api.max_concurrent_requests` is an
+in-process gate, so neither has an address to name.
 
 If your source dials somewhere its `connection` does not name, an adapter may set `endpoint` on
 an `ErrorRecord` it returns and the broker leaves it alone — strip credentials yourself if you do.
 
 ### The matching log line
 
-`nautilus/core/broker.py:2698-2708`. Every per-source failure — unknown source, connect cooldown,
+`nautilus/core/broker.py:2759-2769`. Every per-source failure — unknown source, connect cooldown,
 connect error, schema quarantine, wall-clock timeout, adapter contract violation, and the typed
 record an adapter returns — emits exactly one `WARNING` on the `nautilus.core.broker` logger
 before it reaches the response:
@@ -354,7 +363,7 @@ WARNING:nautilus.core.broker:source 'ledger' failed (endpoint=postgresql://127.0
 
 ### `exceeded the source's timeout_s budget of {timeout_s}s`
 
-`nautilus/core/broker.py:2661-2664`, with `error_type: "TimeoutError"`. The broker wraps each
+`nautilus/core/broker.py:2722-2725`, with `error_type: "TimeoutError"`. The broker wraps each
 source's `connect()` + `execute()` in one wall-clock deadline
 (`SourceConfig.timeout_s`, default `15.0`); this is what the entry says when the deadline fired
 before the source answered. Rendered example:
@@ -1833,7 +1842,7 @@ is *not* in this message — correlate with `source_id` on the `sources_errored[
 hits the source's `timeout_s` budget first and reports
 `exceeded the source's timeout_s budget of {timeout_s}s` instead — see
 [that entry](#exceeded-the-sources-timeout_s-budget-of-timeout_ss)
-(`nautilus/core/broker.py:2661-2664`).
+(`nautilus/core/broker.py:2722-2725`).
 
 **Fix.** Read `{exc}`. A `401`/`403` is the token; `Name or service not known` is the `connection:`
 host; a timeout usually means `timeout_s` is too tight for the model.

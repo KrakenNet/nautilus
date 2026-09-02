@@ -340,7 +340,7 @@ if TYPE_CHECKING:
     from nautilus.synthesis.base import Synthesizer
 
 
-def _busy_message(what: str, budget: float | None) -> str:
+def _busy_message(what: str, budget: float | None, endpoint: str | None) -> str:
     """What to tell a caller that could not take the exposure ledger in time.
 
     Only what the timeout actually proves. The wait covers two things — the
@@ -349,14 +349,28 @@ def _busy_message(what: str, budget: float | None) -> str:
     nothing here distinguishes them. Naming only contention sent operators
     looking for load that was not there: a single uncontended request against a
     store that had stopped answering timed out with the same message.
+
+    It used to end "Check /readyz to tell the two apart", which is advice that
+    fails on exactly the failure it is given for: when the store wedges,
+    ``/readyz`` is the probe that has just failed too, it answers ``reason:
+    session_store_timeout`` — a reason, not an address — and its first response
+    after the wedge takes 12.0s. So the tiebreaker now travels in the message:
+    the store's own ``scheme://host[:port]``, which an operator can dial from
+    anywhere without logging into a node. Both causes stay named; naming the
+    address is what makes it possible to rule one out.
     """
+    where = (
+        f"the session store is {endpoint}, so reach it from here to rule that one out"
+        if endpoint
+        else "this store publishes no address to dial — see session_store in nautilus.yaml"
+    )
     return (
         f"Broker busy: waited {budget}s to take the exposure ledger on {what!r} "
         f"and did not get it. Either another request from this caller still "
         f"holds it — requests from one caller are served one at a time so "
         f"cumulative exposure is counted once — or the session store is slow or "
-        f"unreachable. Check /readyz to tell the two apart. Retry, or raise "
-        f"session_store.lock_timeout_s."
+        f"unreachable. This timeout does not tell the two apart: {where}. "
+        f"Retry, or raise session_store.lock_timeout_s."
     )
 
 
@@ -553,13 +567,42 @@ def _validate_classification_labels(config: NautilusConfig, router: FathomRouter
 
 
 def _broker_error(exc: BaseException, request_id: str) -> ErrorRecord:
-    """Wrap an unexpected broker-level exception as an :class:`ErrorRecord`."""
-    return ErrorRecord(
+    """Wrap an unexpected broker-level exception as an :class:`ErrorRecord`.
+
+    The choke point for the path that *fails* a request, the way
+    :meth:`Broker._fail_source` is the choke point for the path that survives
+    one. Both answer the same operator question -- *which dependency broke?* --
+    and only this one used to answer ``null``: a caller that got a 503 for a
+    wedged session store had to open ``nautilus.yaml`` to learn which host that
+    was, while a caller that got a 200 with a dead source was told the address.
+
+    ``endpoint`` is read off the exception rather than guessed here, because
+    only the raiser knows whether the failure had a remote dependency at all.
+    ``BrokerBusyError`` from the exposure ledger and
+    ``SessionStoreUnavailableError`` carry the session store's
+    ``scheme://host[:port]``; a policy-engine failure, a cancelled request or
+    an in-process session-token rejection carry nothing, and stay ``None``
+    rather than borrowing an address they never dialled.
+    """
+    endpoint = getattr(exc, "endpoint", None)
+    record = ErrorRecord(
         source_id="<broker>",
         error_type=type(exc).__name__,
         message=str(exc),
         trace_id=request_id,
+        endpoint=endpoint if isinstance(endpoint, str) else None,
     )
+    # The 503 left nothing on any ``nautilus.*`` logger, so a request that
+    # failed was invisible in the process log while a request that merely lost
+    # a source got a WARNING. Same shape as ``_fail_source``'s.
+    log.warning(
+        "request %s failed at the broker (error_type=%s, endpoint=%s): %s",
+        request_id,
+        record.error_type,
+        record.endpoint or "-",
+        record.message,
+    )
+    return record
 
 
 def _source_error(source_id: str, error_type: str, message: str, request_id: str) -> ErrorRecord:
@@ -2031,6 +2074,11 @@ class Broker:
         # but ``SourceConfig.timeout_s`` only starts once the lock is won, so
         # the queueing used to sit outside every deadline the config had.
         budget = self._config.session_store.lock_timeout_s
+        # Resolved once, from the store rather than from the config: with
+        # ``session_store.dsn`` unset the broker falls back to ``TEST_PG_DSN``,
+        # and the config would then name nothing while the process dials
+        # something. ``None`` for a store with no remote dependency.
+        endpoint = self._session_store_endpoint()
         deadline = None if budget is None else time.monotonic() + budget
 
         async def _hold(cm: AbstractAsyncContextManager[Any], what: str) -> Any:
@@ -2038,11 +2086,13 @@ class Broker:
                 return await stack.enter_async_context(cm)
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                raise BrokerBusyError(_busy_message(what, budget))
+                raise BrokerBusyError(_busy_message(what, budget, endpoint), endpoint=endpoint)
             try:
                 return await asyncio.wait_for(stack.enter_async_context(cm), remaining)
             except TimeoutError as exc:
-                raise BrokerBusyError(_busy_message(what, budget)) from exc
+                raise BrokerBusyError(
+                    _busy_message(what, budget, endpoint), endpoint=endpoint
+                ) from exc
 
         async with contextlib.AsyncExitStack() as stack:
             for key in keys:
@@ -2647,6 +2697,17 @@ class Broker:
         except KeyError:
             return None  # an id with no source: nothing to name
         return redact_connection(source.connection)
+
+    def _session_store_endpoint(self) -> str | None:
+        """What the session store dials, as ``scheme://host[:port]``, or ``None``.
+
+        The source-side twin of :meth:`_source_endpoint`. ``None`` for a store
+        with no remote dependency -- ``backend: memory`` holds an in-process
+        dict and ``backend: sqlite`` a local file, and neither has an address
+        an operator could dial -- and for a Postgres DSN with no host in it.
+        """
+        endpoint: object = getattr(self._session_store, "endpoint", None)
+        return endpoint if isinstance(endpoint, str) else None
 
     def _timeout_message(self, source_id: str) -> str:
         """Message for a source that spent its whole wall-clock budget.

@@ -405,7 +405,7 @@ def test_e13_the_busy_message_does_not_invent_a_second_caller() -> None:
     """
     from nautilus.core.broker import _busy_message
 
-    message = _busy_message("session-1, principal:abc", 30.0)
+    message = _busy_message("session-1, principal:abc", 30.0, None)
     assert "another request from the same caller still holds it" not in message, (
         f"the busy message asserts a cause it never checked:\n{message}"
     )

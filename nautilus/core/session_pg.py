@@ -32,6 +32,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, cast
 
+from nautilus.config.models import redact_connection
 from nautilus.core.session import InMemorySessionStore
 from nautilus.core.session_sqlite import SqliteSessionStore
 
@@ -106,7 +107,18 @@ class SessionStoreUnavailableError(Exception):
 
     Wraps the underlying ``asyncpg`` exception in ``__cause__`` so operators
     can diagnose the root cause (NFR-7, D-1).
+
+    ``endpoint`` is the store's ``scheme://host[:port]`` when the raiser knows
+    it. ``nautilus.core.broker._broker_error`` copies it onto the ``<broker>``
+    :class:`~nautilus.core.models.ErrorRecord`, which is how a request that
+    *failed* names the dependency that failed it -- the same field a request
+    that survived a dead source already carried. ``None`` when there is no
+    remote dependency to name (the SQLite store raises this class too).
     """
+
+    def __init__(self, message: str, *, endpoint: str | None = None) -> None:
+        super().__init__(message)
+        self.endpoint: str | None = endpoint
 
 
 FailureMode = Literal["fail_closed", "fallback_memory", "fallback_sqlite"]
@@ -176,6 +188,29 @@ class PostgresSessionStore:
     def degraded_since(self) -> datetime | None:
         """UTC timestamp of first degradation, or ``None`` while healthy."""
         return self._degraded_since
+
+    @property
+    def endpoint(self) -> str | None:
+        """Which Postgres this store dials, as ``scheme://host[:port]``.
+
+        The broker copies this onto the ``<broker>``
+        :class:`~nautilus.core.models.ErrorRecord` for a failure that could not
+        reach the store, so the address is in the response, the audit trail and
+        the log line -- a ``reason`` code names what happened, not what to go
+        look at. Built by
+        :func:`~nautilus.config.models.redact_connection`, which copies out
+        scheme, host and port by allowlist, so the DSN's password (in userinfo
+        *or* in a query parameter) cannot ride out of ``nautilus.yaml`` into
+        those three audiences. ``None`` for a DSN with no host -- the libpq
+        keyword form ``host=db password=pw`` -- because a guess is how the
+        withheld half gets echoed by accident.
+
+        Read from the store rather than from ``config.session_store.dsn``:
+        with ``dsn`` unset the broker falls back to the ``TEST_PG_DSN``
+        environment variable, and the config would then name nothing while the
+        process dials something.
+        """
+        return redact_connection(self._dsn)
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -259,7 +294,7 @@ class PostgresSessionStore:
     async def _handle_failure(self, exc: BaseException) -> None:
         """Apply ``on_failure`` policy to a connect/DDL failure."""
         if self._on_failure == "fail_closed":
-            raise SessionStoreUnavailableError(
+            raise self._unavailable(
                 f"PostgresSessionStore unavailable (dsn={self._sanitized_dsn()}): {exc}"
             ) from exc
         if self._on_failure == "fallback_sqlite":
@@ -270,7 +305,7 @@ class PostgresSessionStore:
             try:
                 await sqlite_store.setup()
             except Exception as sqlite_exc:  # noqa: BLE001 — any sqlite3/OS error
-                raise SessionStoreUnavailableError(
+                raise self._unavailable(
                     f"PostgresSessionStore unavailable (dsn={self._sanitized_dsn()}: {exc}) "
                     f"and sqlite fallback at {self._sqlite_path} failed: {sqlite_exc}"
                 ) from sqlite_exc
@@ -290,14 +325,27 @@ class PostgresSessionStore:
                     await pool.close()
 
     def _sanitized_dsn(self) -> str:
-        """Strip credentials from the DSN for error messages."""
-        # Crude but dependency-free: ``postgres://user:pw@host/db`` →
-        # ``postgres://host/db``. Good enough for log/error lines.
-        if "@" in self._dsn:
-            scheme, _, rest = self._dsn.partition("://")
-            _, _, host_and_path = rest.partition("@")
-            return f"{scheme}://{host_and_path}"
-        return self._dsn
+        """The DSN as it may appear in an error message, or a marker.
+
+        Was a partition on ``@``, which keeps everything after the host:
+        ``postgres://u:pw@host/db?password=second`` came back still carrying
+        ``password=second``, and a DSN with no ``@`` at all -- the libpq
+        keyword form ``host=db password=pw`` -- was returned verbatim. Both
+        shapes reach ``ErrorRecord.message``, so both reached the audit trail
+        and the requesting agent. :attr:`endpoint` copies out scheme/host/port
+        instead, and a DSN with no host gets a marker rather than a paraphrase.
+        """
+        return self.endpoint or "<no host in session_store.dsn>"
+
+    def _unavailable(self, message: str) -> SessionStoreUnavailableError:
+        """Every "this store did not answer" raise, tagged with the address.
+
+        One place, not a keyword repeated at six raise sites: the broker reads
+        ``.endpoint`` off whatever exception ended the request, so a site that
+        forgot the keyword would be a silently unnamed dependency rather than a
+        visible error.
+        """
+        return SessionStoreUnavailableError(message, endpoint=self.endpoint)
 
     # ------------------------------------------------------------------
     # AsyncSessionStore surface
@@ -310,7 +358,7 @@ class PostgresSessionStore:
         if self._degraded_memory is not None:
             return self._degraded_memory.get(session_id)
         if self._pool is None:
-            raise SessionStoreUnavailableError(
+            raise self._unavailable(
                 "PostgresSessionStore.aget() called before setup() succeeded"
             )
         # Bounded: ``pool.fetchrow`` acquires with no deadline, and /readyz
@@ -370,7 +418,7 @@ class PostgresSessionStore:
             self._degraded_memory.update(session_id, entry)
             return
         if self._pool is None:
-            raise SessionStoreUnavailableError(
+            raise self._unavailable(
                 "PostgresSessionStore.aupdate() called before setup() succeeded"
             )
         # Read-merge-write under a transaction so concurrent writers for the
@@ -413,7 +461,7 @@ class PostgresSessionStore:
         try:
             conn = await self._pool.acquire(timeout=self._acquire_timeout_s)
         except TimeoutError as exc:
-            raise SessionStoreUnavailableError(
+            raise self._unavailable(
                 f"session-store pool exhausted: no connection became free within "
                 f"{self._acquire_timeout_s}s (pool max_size={self._pool_max_size}). "
                 f"Raise session_store.pool_max_size to at least your peak concurrency."
@@ -487,7 +535,7 @@ class PostgresSessionStore:
         try:
             conn = await self._lock_pool.acquire(timeout=self._acquire_timeout_s)
         except TimeoutError as exc:
-            raise SessionStoreUnavailableError(
+            raise self._unavailable(
                 f"session-store lock pool exhausted: no connection became free within "
                 f"{self._acquire_timeout_s}s (lock pool max_size={self._lock_pool_max_size}). "
                 f"One is held per in-flight request, so raise "

@@ -207,7 +207,7 @@ underlying failure; a rule referencing a slot that does not exist is the common 
 
 ### `ConsistencyError`
 
-`nautilus/core/__init__.py:63`, raised by `FathomRouter` at `:625-671` with a **code** and a
+`nautilus/core/__init__.py:73`, raised by `FathomRouter` at `:625-671` with a **code** and a
 message. Each means the evaluation produced a fact set that contradicts itself — a routing
 decision Nautilus will not act on.
 

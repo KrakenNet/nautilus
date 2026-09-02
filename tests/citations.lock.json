@@ -93,25 +93,25 @@
    }
   },
   {
-   "citation": "broker.py:1827",
+   "citation": "broker.py:1870",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "1827": "log.warning("
+    "1870": "log.warning("
    }
   },
   {
-   "citation": "broker.py:3007",
+   "citation": "broker.py:3068",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "3007": "log.warning("
+    "3068": "log.warning("
    }
   },
   {
@@ -3184,6 +3184,47 @@
    }
   },
   {
+   "citation": "nautilus/config/models.py:782-812",
+   "cited_in": [
+    "docs/reference/errors/sessions.md"
+   ],
+   "file": "nautilus/config/models.py",
+   "sha": "0b518d13fcd30d2b",
+   "lines": {
+    "782": "def redact_connection(connection: str) -> str | None:",
+    "783": "\"\"\"Return ``scheme://host[:port]`` for a DSN / base URL, or ``None``.",
+    "784": "",
+    "785": "Built by **allowlist**, not by stripping: only the scheme, the host and the",
+    "786": "port are copied out, so userinfo (``postgres://user:pw@…``), path",
+    "787": "(``https://hooks.example/services/T0/B0/SECRET``), query",
+    "788": "(``?password=…``, ``?token=…``) and fragment cannot survive into anything",
+    "789": "built from the result. That matters because the result goes into",
+    "790": ":attr:`~nautilus.core.models.ErrorRecord.endpoint`, which reaches the",
+    "791": "process log, the audit trail and the requesting agent -- three audiences",
+    "792": "strictly wider than the one that reads ``nautilus.yaml``.",
+    "793": "",
+    "794": "A ``connection`` with no host -- a filesystem path, an empty string, a",
+    "795": "libpq keyword DSN (``host=db password=pw``) -- returns ``None`` rather than",
+    "796": "a guess, because a guess is how the withheld half gets echoed by accident.",
+    "797": "\"\"\"",
+    "798": "try:",
+    "799": "parts = urlsplit(connection)",
+    "800": "host = parts.hostname",
+    "801": "port = parts.port",
+    "802": "except ValueError:",
+    "803": "# urlsplit defers parsing to attribute access: a non-numeric or",
+    "804": "# out-of-range port raises here, and a connection we cannot parse is",
+    "805": "# one we must not paraphrase.",
+    "806": "return None",
+    "807": "if not host or not parts.scheme:",
+    "808": "return None",
+    "809": "# An IPv6 literal comes back unbracketed; re-bracket so the result is a",
+    "810": "# URL an operator can paste back.",
+    "811": "host = f\"[{host}]\" if \":\" in host else host",
+    "812": "return f\"{parts.scheme}://{host}\" + (f\":{port}\" if port is not None else \"\")"
+   }
+  },
+  {
    "citation": "nautilus/config/models.py:798-812",
    "cited_in": [
     "docs/reference/errors/adapters.md"
@@ -3264,14 +3305,14 @@
    }
   },
   {
-   "citation": "nautilus/core/__init__.py:63",
+   "citation": "nautilus/core/__init__.py:73",
    "cited_in": [
     "docs/reference/errors/rules.md"
    ],
    "file": "nautilus/core/__init__.py",
    "sha": "4cb29137a565cfc1",
    "lines": {
-    "63": "class ConsistencyError(PolicyEngineError):"
+    "73": "class ConsistencyError(PolicyEngineError):"
    }
   },
   {
@@ -3297,332 +3338,321 @@
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1022-1026",
+   "citation": "nautilus/core/broker.py:1065-1069",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "cf1c51c54172f854",
    "lines": {
-    "1022": "if not dsn:",
-    "1023": "dsn = os.environ.get(\"TEST_PG_DSN\")",
-    "1024": "if dsn:",
-    "1025": "# A test-shaped name reaching a production code path. It stays",
-    "1026": "# (the integration fixtures dial a container DSN through it),"
+    "1065": "if not dsn:",
+    "1066": "dsn = os.environ.get(\"TEST_PG_DSN\")",
+    "1067": "if dsn:",
+    "1068": "# A test-shaped name reaching a production code path. It stays",
+    "1069": "# (the integration fixtures dial a container DSN through it),"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1023",
+   "citation": "nautilus/core/broker.py:1066",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "5c0fa3606b254ef7",
    "lines": {
-    "1023": "dsn = os.environ.get(\"TEST_PG_DSN\")"
+    "1066": "dsn = os.environ.get(\"TEST_PG_DSN\")"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1075-1078",
+   "citation": "nautilus/core/broker.py:1118-1121",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "f839b58851bf09db",
    "lines": {
-    "1075": "",
-    "1076": "- ``\"null\"`` (default) → :class:`NullAttestationSink` — no-op; preserves",
-    "1077": "NFR-5 for Phase-1 YAML fixtures with no ``attestation.sink`` entry.",
-    "1078": "- ``\"file\"`` → :class:`FileAttestationSink` — append-only JSONL with"
+    "1118": "",
+    "1119": "- ``\"null\"`` (default) → :class:`NullAttestationSink` — no-op; preserves",
+    "1120": "NFR-5 for Phase-1 YAML fixtures with no ``attestation.sink`` entry.",
+    "1121": "- ``\"file\"`` → :class:`FileAttestationSink` — append-only JSONL with"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1185",
+   "citation": "nautilus/core/broker.py:1228",
    "cited_in": [
     "docs/reference/errors/config.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "eb033019f187851d",
    "lines": {
-    "1185": "A source's name, prose description and data types are what a caller"
+    "1228": "A source's name, prose description and data types are what a caller"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1187-1195",
+   "citation": "nautilus/core/broker.py:1230-1238",
    "cited_in": [
     "docs/reference/errors/config.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dc46cb72fe93c6f5",
    "lines": {
-    "1187": "classification rules refuse. Listing every source to every caller told",
-    "1188": "an unclassified key exactly what it was being kept from, so the",
-    "1189": "catalogue is filtered by the same clearance ladder the router routes",
-    "1190": "by.",
-    "1191": "",
-    "1192": "``None`` means no bound agent — a bare key, which is documented as",
-    "1193": "\"any agent_id, every capability\" and has no clearance to filter",
-    "1194": "against — or a deployment with no ``classification`` hierarchy",
-    "1195": "registered, which has no ladder at all. Both see the whole catalogue."
+    "1230": "classification rules refuse. Listing every source to every caller told",
+    "1231": "an unclassified key exactly what it was being kept from, so the",
+    "1232": "catalogue is filtered by the same clearance ladder the router routes",
+    "1233": "by.",
+    "1234": "",
+    "1235": "``None`` means no bound agent — a bare key, which is documented as",
+    "1236": "\"any agent_id, every capability\" and has no clearance to filter",
+    "1237": "against — or a deployment with no ``classification`` hierarchy",
+    "1238": "registered, which has no ladder at all. Both see the whole catalogue."
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1325-1331",
+   "citation": "nautilus/core/broker.py:1368-1374",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "905b2a59d9cdb539",
    "lines": {
-    "1325": "def issue_session_token(",
-    "1326": "self,",
-    "1327": "*,",
-    "1328": "session_id: str,",
-    "1329": "agent_id: str,",
-    "1330": "purpose: str,",
-    "1331": ") -> str:"
+    "1368": "def issue_session_token(",
+    "1369": "self,",
+    "1370": "*,",
+    "1371": "session_id: str,",
+    "1372": "agent_id: str,",
+    "1373": "purpose: str,",
+    "1374": ") -> str:"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1393",
+   "citation": "nautilus/core/broker.py:1436",
    "cited_in": [
     "docs/reference/errors/session-tokens.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "2a9b5e72b68a1d0b",
    "lines": {
-    "1393": "wrong-instance token."
+    "1436": "wrong-instance token."
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1397-1401",
+   "citation": "nautilus/core/broker.py:1440-1444",
    "cited_in": [
     "docs/reference/errors/session-tokens.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "fb2c2b2fe73ac099",
    "lines": {
-    "1397": "try:",
-    "1398": "return self._session_tokens.verify(token)",
-    "1399": "except SessionTokenError as exc:",
-    "1400": "request_id = str(uuid.uuid4())",
-    "1401": "self._emit_session_token_event("
+    "1440": "try:",
+    "1441": "return self._session_tokens.verify(token)",
+    "1442": "except SessionTokenError as exc:",
+    "1443": "request_id = str(uuid.uuid4())",
+    "1444": "self._emit_session_token_event("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1510",
+   "citation": "nautilus/core/broker.py:1553",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "d7557aae12da7324",
    "lines": {
-    "1510": "raise RuntimeError("
+    "1553": "raise RuntimeError("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1543-1547",
+   "citation": "nautilus/core/broker.py:1586-1590",
    "cited_in": [
     "docs/reference/errors/library.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "ea5bb8ff93b057e5",
    "lines": {
-    "1543": ") -> BrokerResponse:",
-    "1544": "\"\"\"Async request pipeline (design §3.1, §8, §9).",
-    "1545": "",
-    "1546": "``caller`` is the transport's view of who is calling -- ``{\"auth\":",
-    "1547": "<authenticated principal>, \"peer\": <network address>}`` -- and is what"
+    "1586": ") -> BrokerResponse:",
+    "1587": "\"\"\"Async request pipeline (design §3.1, §8, §9).",
+    "1588": "",
+    "1589": "``caller`` is the transport's view of who is calling -- ``{\"auth\":",
+    "1590": "<authenticated principal>, \"peer\": <network address>}`` -- and is what"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1645",
+   "citation": "nautilus/core/broker.py:1688",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "9c34f9bb4365f61d",
    "lines": {
-    "1645": "``event_type=\"handoff_declared\"`` and the populated"
+    "1688": "``event_type=\"handoff_declared\"`` and the populated"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1801-1817",
+   "citation": "nautilus/core/broker.py:1844-1860",
    "cited_in": [
     "docs/reference/errors/library.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "8cec7252b3e0971e",
    "lines": {
-    "1801": ")",
-    "1802": "return decision",
-    "1803": "",
-    "1804": "async def _record_handoff_partner(self, session_id: str, receiving_agent_id: str) -> None:",
-    "1805": "\"\"\"Let the receiving agent of an allowed handoff into the session.",
-    "1806": "",
-    "1807": "Read-merge-write on the session row's ``handoff_agents``. Best effort:",
-    "1808": "a store that cannot take the note must not turn an allowed handoff into",
-    "1809": "a denial — the receiving agent is refused later by the ownership gate,",
-    "1810": "which is the safe direction to fail.",
-    "1811": "\"\"\"",
-    "1812": "try:",
-    "1813": "row = await self._session_get(session_id)",
-    "1814": "prior: Any = row.get(\"handoff_agents\")",
-    "1815": "partners: list[str] = (",
-    "1816": "[str(a) for a in cast(\"list[Any]\", prior)] if isinstance(prior, list) else []",
-    "1817": ")"
+    "1844": ")",
+    "1845": "return decision",
+    "1846": "",
+    "1847": "async def _record_handoff_partner(self, session_id: str, receiving_agent_id: str) -> None:",
+    "1848": "\"\"\"Let the receiving agent of an allowed handoff into the session.",
+    "1849": "",
+    "1850": "Read-merge-write on the session row's ``handoff_agents``. Best effort:",
+    "1851": "a store that cannot take the note must not turn an allowed handoff into",
+    "1852": "a denial — the receiving agent is refused later by the ownership gate,",
+    "1853": "which is the safe direction to fail.",
+    "1854": "\"\"\"",
+    "1855": "try:",
+    "1856": "row = await self._session_get(session_id)",
+    "1857": "prior: Any = row.get(\"handoff_agents\")",
+    "1858": "partners: list[str] = (",
+    "1859": "[str(a) for a in cast(\"list[Any]\", prior)] if isinstance(prior, list) else []",
+    "1860": ")"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1803-1807",
+   "citation": "nautilus/core/broker.py:1846-1850",
    "cited_in": [
     "docs/reference/errors/library.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "0d75463cf77bbd7b",
    "lines": {
-    "1803": "",
-    "1804": "async def _record_handoff_partner(self, session_id: str, receiving_agent_id: str) -> None:",
-    "1805": "\"\"\"Let the receiving agent of an allowed handoff into the session.",
-    "1806": "",
-    "1807": "Read-merge-write on the session row's ``handoff_agents``. Best effort:"
+    "1846": "",
+    "1847": "async def _record_handoff_partner(self, session_id: str, receiving_agent_id: str) -> None:",
+    "1848": "\"\"\"Let the receiving agent of an allowed handoff into the session.",
+    "1849": "",
+    "1850": "Read-merge-write on the session row's ``handoff_agents``. Best effort:"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1827",
+   "citation": "nautilus/core/broker.py:1870",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "1827": "log.warning("
+    "1870": "log.warning("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1937",
+   "citation": "nautilus/core/broker.py:1980",
    "cited_in": [
     "docs/reference/errors/session-tokens.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "ad2f90cfd9b5409d",
    "lines": {
-    "1937": "token_trace.append("
+    "1980": "token_trace.append("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1960",
+   "citation": "nautilus/core/broker.py:2003",
    "cited_in": [
     "docs/reference/errors/session-tokens.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "83f5de42b2f77754",
    "lines": {
-    "1960": "whose async ``analyze`` returns a ``(IntentAnalysis, LLMProvenance)``"
+    "2003": "whose async ``analyze`` returns a ``(IntentAnalysis, LLMProvenance)``"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2022-2027",
+   "citation": "nautilus/core/broker.py:2065-2070",
    "cited_in": [
     "docs/reference/errors/library.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "d7f5acce06de767c",
    "lines": {
-    "2022": "# ``alock_all`` holds every key on one pooled connection. Entering the",
-    "2023": "# store's per-key lock separately took a connection per key, which made",
-    "2024": "# the store's ceiling ``pool_max_size / keys-per-request``.",
-    "2025": "store_lock_all = getattr(self._session_store, \"alock_all\", None)",
-    "2026": "store_lock = getattr(self._session_store, \"alock\", None)",
-    "2027": "# The wait is bounded because the hold is long: the lock spans the whole"
+    "2065": "# ``alock_all`` holds every key on one pooled connection. Entering the",
+    "2066": "# store's per-key lock separately took a connection per key, which made",
+    "2067": "# the store's ceiling ``pool_max_size / keys-per-request``.",
+    "2068": "store_lock_all = getattr(self._session_store, \"alock_all\", None)",
+    "2069": "store_lock = getattr(self._session_store, \"alock\", None)",
+    "2070": "# The wait is bounded because the hold is long: the lock spans the whole"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2225-2229",
+   "citation": "nautilus/core/broker.py:2275-2279",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "842a90b5e8793512",
    "lines": {
-    "2225": "The source is therefore denied for this request rather than queried",
-    "2226": "under whatever restrictions happen to survive — the fail-closed",
-    "2227": "reading of the window that :mod:`nautilus.core.temporal` documents.",
-    "2228": "Re-granting means issuing a fresh, unexpired constraint.",
-    "2229": "\"\"\""
+    "2275": "The source is therefore denied for this request rather than queried",
+    "2276": "under whatever restrictions happen to survive — the fail-closed",
+    "2277": "reading of the window that :mod:`nautilus.core.temporal` documents.",
+    "2278": "Re-granting means issuing a fresh, unexpired constraint.",
+    "2279": "\"\"\""
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2358-2363",
+   "citation": "nautilus/core/broker.py:2408-2413",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "5f5ab125913deb5f",
    "lines": {
-    "2358": "if allowed and \"purpose\" in reason.lower():",
-    "2359": "names = \", \".join(sorted(allowed))",
-    "2360": "reason = f\"{reason} (source '{source.id}' allows purposes: {names})\"",
-    "2361": "return denial.model_copy(update={\"relevant\": relevant, \"reason\": reason})",
-    "2362": "",
-    "2363": "def _skip_records(self, state: _RequestState) -> list[SkipRecord]:"
+    "2408": "if allowed and \"purpose\" in reason.lower():",
+    "2409": "names = \", \".join(sorted(allowed))",
+    "2410": "reason = f\"{reason} (source '{source.id}' allows purposes: {names})\"",
+    "2411": "return denial.model_copy(update={\"relevant\": relevant, \"reason\": reason})",
+    "2412": "",
+    "2413": "def _skip_records(self, state: _RequestState) -> list[SkipRecord]:"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2613",
+   "citation": "nautilus/core/broker.py:2663",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "33b7ae9382dd5af3",
    "lines": {
-    "2613": "f\"connect() failed: {exc}\","
+    "2663": "f\"connect() failed: {exc}\","
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2661-2664",
+   "citation": "nautilus/core/broker.py:2722-2725",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "45d17966985fdc02",
    "lines": {
-    "2661": "budget = self._registry.get(source_id).timeout_s",
-    "2662": "if budget is None:",
-    "2663": "return \"exceeded the source's timeout_s budget\"",
-    "2664": "return f\"exceeded the source's timeout_s budget of {budget}s\""
+    "2722": "budget = self._registry.get(source_id).timeout_s",
+    "2723": "if budget is None:",
+    "2724": "return \"exceeded the source's timeout_s budget\"",
+    "2725": "return f\"exceeded the source's timeout_s budget of {budget}s\""
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2698-2708",
+   "citation": "nautilus/core/broker.py:2759-2769",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "725b604008949701",
    "lines": {
-    "2698": "if record.endpoint is None:",
-    "2699": "record = record.model_copy(update={\"endpoint\": self._source_endpoint(record.source_id)})",
-    "2700": "log.warning(",
-    "2701": "\"source %r failed (endpoint=%s, error_type=%s, trace_id=%s): %s\",",
-    "2702": "record.source_id,",
-    "2703": "record.endpoint or \"<none configured>\",",
-    "2704": "record.error_type,",
-    "2705": "record.trace_id,",
-    "2706": "record.message,",
-    "2707": ")",
-    "2708": "state.errored.append(record)"
-   }
-  },
-  {
-   "citation": "nautilus/core/broker.py:2700",
-   "cited_in": [
-    "docs/how-to/hardening.md"
-   ],
-   "file": "nautilus/core/broker.py",
-   "sha": "dfbf1883e63b66b0",
-   "lines": {
-    "2700": "log.warning("
+    "2759": "if record.endpoint is None:",
+    "2760": "record = record.model_copy(update={\"endpoint\": self._source_endpoint(record.source_id)})",
+    "2761": "log.warning(",
+    "2762": "\"source %r failed (endpoint=%s, error_type=%s, trace_id=%s): %s\",",
+    "2763": "record.source_id,",
+    "2764": "record.endpoint or \"<none configured>\",",
+    "2765": "record.error_type,",
+    "2766": "record.trace_id,",
+    "2767": "record.message,",
+    "2768": ")",
+    "2769": "state.errored.append(record)"
    }
   },
   {
@@ -3682,147 +3712,147 @@
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2797",
+   "citation": "nautilus/core/broker.py:2761",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "2797": "log.warning("
+    "2761": "log.warning("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2950-2953",
+   "citation": "nautilus/core/broker.py:2858",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/core/broker.py",
+   "sha": "dfbf1883e63b66b0",
+   "lines": {
+    "2858": "log.warning("
+   }
+  },
+  {
+   "citation": "nautilus/core/broker.py:3011-3014",
    "cited_in": [
     "docs/reference/errors/session-tokens.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "9d0c5a9fe8f4ae13",
    "lines": {
-    "2950": "# verifies (grace window), but we hand back a fresh primary-signed",
-    "2951": "# token on the response so agents converge on the new key without",
-    "2952": "# a push channel — tokens are bearer credentials. The re-signed",
-    "2953": "# token keeps the ORIGINAL expiry (security review C2): re-keying"
+    "3011": "# verifies (grace window), but we hand back a fresh primary-signed",
+    "3012": "# token on the response so agents converge on the new key without",
+    "3013": "# a push channel — tokens are bearer credentials. The re-signed",
+    "3014": "# token keeps the ORIGINAL expiry (security review C2): re-keying"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2957-2963",
+   "citation": "nautilus/core/broker.py:3018-3024",
    "cited_in": [
     "docs/reference/errors/session-tokens.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "cbeb6c56cdafef4a",
    "lines": {
-    "2957": "# a downstream reader has nothing but the signature and the claims.",
-    "2958": "# ``purpose`` and ``clearance`` are written at mint time, so a",
-    "2959": "# session carried into a second purpose kept attesting to the",
-    "2960": "# first. Re-mint when either drifts, so what is signed is what was",
-    "2961": "# enforced. The ORIGINAL expiry is kept in both cases (security",
-    "2962": "# review C2): neither re-keying nor re-binding extends a session.",
-    "2963": "purpose, clearance = self._request_grant(agent_id, context)"
+    "3018": "# a downstream reader has nothing but the signature and the claims.",
+    "3019": "# ``purpose`` and ``clearance`` are written at mint time, so a",
+    "3020": "# session carried into a second purpose kept attesting to the",
+    "3021": "# first. Re-mint when either drifts, so what is signed is what was",
+    "3022": "# enforced. The ORIGINAL expiry is kept in both cases (security",
+    "3023": "# review C2): neither re-keying nor re-binding extends a session.",
+    "3024": "purpose, clearance = self._request_grant(agent_id, context)"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3007",
+   "citation": "nautilus/core/broker.py:3068",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "3007": "log.warning("
+    "3068": "log.warning("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3112-3137",
+   "citation": "nautilus/core/broker.py:3173-3198",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "1f75a9a859d879b8",
    "lines": {
-    "3112": "try:",
-    "3113": "return await adapter.execute(intent, scope, context)",
-    "3114": "except ScopeEnforcementError as exc:",
-    "3115": "return AdapterResult(",
-    "3116": "source_id=source_id,",
-    "3117": "rows=[],",
-    "3118": "duration_ms=0,",
-    "3119": "error=ErrorRecord(",
-    "3120": "source_id=source_id,",
-    "3121": "error_type=\"ScopeEnforcementError\",",
-    "3122": "message=str(exc),",
-    "3123": "trace_id=\"\",  # filled in by _gather_adapter_results",
-    "3124": "),",
-    "3125": ")",
-    "3126": "except AdapterError as exc:",
-    "3127": "return AdapterResult(",
-    "3128": "source_id=source_id,",
-    "3129": "rows=[],",
-    "3130": "duration_ms=0,",
-    "3131": "error=ErrorRecord(",
-    "3132": "source_id=source_id,",
-    "3133": "error_type=type(exc).__name__,",
-    "3134": "message=str(exc),",
-    "3135": "trace_id=\"\",",
-    "3136": "),",
-    "3137": ")"
+    "3173": "try:",
+    "3174": "return await adapter.execute(intent, scope, context)",
+    "3175": "except ScopeEnforcementError as exc:",
+    "3176": "return AdapterResult(",
+    "3177": "source_id=source_id,",
+    "3178": "rows=[],",
+    "3179": "duration_ms=0,",
+    "3180": "error=ErrorRecord(",
+    "3181": "source_id=source_id,",
+    "3182": "error_type=\"ScopeEnforcementError\",",
+    "3183": "message=str(exc),",
+    "3184": "trace_id=\"\",  # filled in by _gather_adapter_results",
+    "3185": "),",
+    "3186": ")",
+    "3187": "except AdapterError as exc:",
+    "3188": "return AdapterResult(",
+    "3189": "source_id=source_id,",
+    "3190": "rows=[],",
+    "3191": "duration_ms=0,",
+    "3192": "error=ErrorRecord(",
+    "3193": "source_id=source_id,",
+    "3194": "error_type=type(exc).__name__,",
+    "3195": "message=str(exc),",
+    "3196": "trace_id=\"\",",
+    "3197": "),",
+    "3198": ")"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3219",
+   "citation": "nautilus/core/broker.py:3280",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "a315211e467c4c21",
    "lines": {
-    "3219": "decision = f\"nautilus:{request_id}:agent={agent_id}:principal={principal_id}\""
+    "3280": "decision = f\"nautilus:{request_id}:agent={agent_id}:principal={principal_id}\""
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3311",
+   "citation": "nautilus/core/broker.py:3372",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "3311": "log.warning("
+    "3372": "log.warning("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3331",
+   "citation": "nautilus/core/broker.py:3392",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "3331": "log.warning("
+    "3392": "log.warning("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3397",
-   "cited_in": [
-    "docs/how-to/hardening.md"
-   ],
-   "file": "nautilus/core/broker.py",
-   "sha": "be7a933a835bb215",
-   "lines": {
-    "3397": "log.info(\"quarantine lifted for adapter %r; baseline now matches\", source_id)"
-   }
-  },
-  {
-   "citation": "nautilus/core/broker.py:343-361",
+   "citation": "nautilus/core/broker.py:343-374",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/broker.py",
-   "sha": "67e8e09eb0686d74",
+   "sha": "9f1862529d28b12e",
    "lines": {
-    "343": "def _busy_message(what: str, budget: float | None) -> str:",
+    "343": "def _busy_message(what: str, budget: float | None, endpoint: str | None) -> str:",
     "344": "\"\"\"What to tell a caller that could not take the exposure ledger in time.",
     "345": "",
     "346": "Only what the timeout actually proves. The wait covers two things — the",
@@ -3831,73 +3861,97 @@
     "349": "nothing here distinguishes them. Naming only contention sent operators",
     "350": "looking for load that was not there: a single uncontended request against a",
     "351": "store that had stopped answering timed out with the same message.",
-    "352": "\"\"\"",
-    "353": "return (",
-    "354": "f\"Broker busy: waited {budget}s to take the exposure ledger on {what!r} \"",
-    "355": "f\"and did not get it. Either another request from this caller still \"",
-    "356": "f\"holds it — requests from one caller are served one at a time so \"",
-    "357": "f\"cumulative exposure is counted once — or the session store is slow or \"",
-    "358": "f\"unreachable. Check /readyz to tell the two apart. Retry, or raise \"",
-    "359": "f\"session_store.lock_timeout_s.\"",
-    "360": ")",
-    "361": ""
+    "352": "",
+    "353": "It used to end \"Check /readyz to tell the two apart\", which is advice that",
+    "354": "fails on exactly the failure it is given for: when the store wedges,",
+    "355": "``/readyz`` is the probe that has just failed too, it answers ``reason:",
+    "356": "session_store_timeout`` — a reason, not an address — and its first response",
+    "357": "after the wedge takes 12.0s. So the tiebreaker now travels in the message:",
+    "358": "the store's own ``scheme://host[:port]``, which an operator can dial from",
+    "359": "anywhere without logging into a node. Both causes stay named; naming the",
+    "360": "address is what makes it possible to rule one out.",
+    "361": "\"\"\"",
+    "362": "where = (",
+    "363": "f\"the session store is {endpoint}, so reach it from here to rule that one out\"",
+    "364": "if endpoint",
+    "365": "else \"this store publishes no address to dial — see session_store in nautilus.yaml\"",
+    "366": ")",
+    "367": "return (",
+    "368": "f\"Broker busy: waited {budget}s to take the exposure ledger on {what!r} \"",
+    "369": "f\"and did not get it. Either another request from this caller still \"",
+    "370": "f\"holds it — requests from one caller are served one at a time so \"",
+    "371": "f\"cumulative exposure is counted once — or the session store is slow or \"",
+    "372": "f\"unreachable. This timeout does not tell the two apart: {where}. \"",
+    "373": "f\"Retry, or raise session_store.lock_timeout_s.\"",
+    "374": ")"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3471-3475",
+   "citation": "nautilus/core/broker.py:3458",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/core/broker.py",
+   "sha": "be7a933a835bb215",
+   "lines": {
+    "3458": "log.info(\"quarantine lifted for adapter %r; baseline now matches\", source_id)"
+   }
+  },
+  {
+   "citation": "nautilus/core/broker.py:3532-3536",
    "cited_in": [
     "docs/reference/errors/library.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "2c937a3e9a8eea6a",
    "lines": {
-    "3471": "# 1. Session store: flush any in-flight writes before downstream close.",
-    "3472": "if hasattr(self._session_store, \"aclose\"):",
-    "3473": "with contextlib.suppress(Exception):",
-    "3474": "await self._session_store.aclose()  # type: ignore[attr-defined]",
-    "3475": "# 2. Attestation sink: release the store-and-forward handle AFTER"
+    "3532": "# 1. Session store: flush any in-flight writes before downstream close.",
+    "3533": "if hasattr(self._session_store, \"aclose\"):",
+    "3534": "with contextlib.suppress(Exception):",
+    "3535": "await self._session_store.aclose()  # type: ignore[attr-defined]",
+    "3536": "# 2. Attestation sink: release the store-and-forward handle AFTER"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:548-553",
+   "citation": "nautilus/core/broker.py:562-567",
    "cited_in": [
     "docs/reference/errors/config.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "ff89ceffd775db6e",
    "lines": {
-    "548": "if errors:",
-    "549": "raise ConfigError(",
-    "550": "\"classification labels are not levels of the 'classification' \"",
-    "551": "f\"hierarchy ({known}): \" + \"; \".join(errors)",
-    "552": ")",
-    "553": ""
+    "562": "if errors:",
+    "563": "raise ConfigError(",
+    "564": "\"classification labels are not levels of the 'classification' \"",
+    "565": "f\"hierarchy ({known}): \" + \"; \".join(errors)",
+    "566": ")",
+    "567": ""
    }
   },
   {
-   "citation": "nautilus/core/broker.py:798",
+   "citation": "nautilus/core/broker.py:841",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "798": "log.warning("
+    "841": "log.warning("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:936-940",
+   "citation": "nautilus/core/broker.py:979-983",
    "cited_in": [
     "docs/reference/errors/config.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "811addfcc4aac984",
    "lines": {
-    "936": "if analysis.provider is None:",
-    "937": "raise ConfigError(",
-    "938": "f\"analysis.mode={analysis.mode!r} requires analysis.provider to be set\"",
-    "939": ")",
-    "940": "provider = cls._build_llm_provider(analysis.provider, known_data_types)"
+    "979": "if analysis.provider is None:",
+    "980": "raise ConfigError(",
+    "981": "f\"analysis.mode={analysis.mode!r} requires analysis.provider to be set\"",
+    "982": ")",
+    "983": "provider = cls._build_llm_provider(analysis.provider, known_data_types)"
    }
   },
   {
@@ -4053,119 +4107,119 @@
    }
   },
   {
-   "citation": "nautilus/core/session_pg.py:234-238",
+   "citation": "nautilus/core/session_pg.py:269-273",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/session_pg.py",
    "sha": "cfc44f9ae1b0903c",
    "lines": {
-    "234": ")",
-    "235": "elif int(row[\"version\"]) != _SCHEMA_VERSION:",
-    "236": "raise SessionSchemaError(",
-    "237": "f\"session database carries schema version \"",
-    "238": "f\"{int(row['version'])}; this build understands version \""
+    "269": ")",
+    "270": "elif int(row[\"version\"]) != _SCHEMA_VERSION:",
+    "271": "raise SessionSchemaError(",
+    "272": "f\"session database carries schema version \"",
+    "273": "f\"{int(row['version'])}; this build understands version \""
    }
   },
   {
-   "citation": "nautilus/core/session_pg.py:260-263",
+   "citation": "nautilus/core/session_pg.py:295-298",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/session_pg.py",
-   "sha": "584c6501aba6b841",
+   "sha": "570809b397109430",
    "lines": {
-    "260": "\"\"\"Apply ``on_failure`` policy to a connect/DDL failure.\"\"\"",
-    "261": "if self._on_failure == \"fail_closed\":",
-    "262": "raise SessionStoreUnavailableError(",
-    "263": "f\"PostgresSessionStore unavailable (dsn={self._sanitized_dsn()}): {exc}\""
+    "295": "\"\"\"Apply ``on_failure`` policy to a connect/DDL failure.\"\"\"",
+    "296": "if self._on_failure == \"fail_closed\":",
+    "297": "raise self._unavailable(",
+    "298": "f\"PostgresSessionStore unavailable (dsn={self._sanitized_dsn()}): {exc}\""
    }
   },
   {
-   "citation": "nautilus/core/session_pg.py:271-275",
+   "citation": "nautilus/core/session_pg.py:306-310",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/session_pg.py",
-   "sha": "246081d6c300c233",
+   "sha": "fd42ec01abc97bb8",
    "lines": {
-    "271": "await sqlite_store.setup()",
-    "272": "except Exception as sqlite_exc:  # noqa: BLE001 — any sqlite3/OS error",
-    "273": "raise SessionStoreUnavailableError(",
-    "274": "f\"PostgresSessionStore unavailable (dsn={self._sanitized_dsn()}: {exc}) \"",
-    "275": "f\"and sqlite fallback at {self._sqlite_path} failed: {sqlite_exc}\""
+    "306": "await sqlite_store.setup()",
+    "307": "except Exception as sqlite_exc:  # noqa: BLE001 — any sqlite3/OS error",
+    "308": "raise self._unavailable(",
+    "309": "f\"PostgresSessionStore unavailable (dsn={self._sanitized_dsn()}: {exc}) \"",
+    "310": "f\"and sqlite fallback at {self._sqlite_path} failed: {sqlite_exc}\""
    }
   },
   {
-   "citation": "nautilus/core/session_pg.py:311-314",
+   "citation": "nautilus/core/session_pg.py:359-362",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/session_pg.py",
-   "sha": "a92a85cb71035527",
+   "sha": "9678dec1209c0500",
    "lines": {
-    "311": "return self._degraded_memory.get(session_id)",
-    "312": "if self._pool is None:",
-    "313": "raise SessionStoreUnavailableError(",
-    "314": "\"PostgresSessionStore.aget() called before setup() succeeded\""
+    "359": "return self._degraded_memory.get(session_id)",
+    "360": "if self._pool is None:",
+    "361": "raise self._unavailable(",
+    "362": "\"PostgresSessionStore.aget() called before setup() succeeded\""
    }
   },
   {
-   "citation": "nautilus/core/session_pg.py:349-353",
+   "citation": "nautilus/core/session_pg.py:397-401",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/session_pg.py",
    "sha": "31bdf515f5594c18",
    "lines": {
-    "349": "row = await conn.fetchrow(\"SELECT version FROM nautilus_schema_version\")",
-    "350": "if row is not None and int(row[\"version\"]) != _SCHEMA_VERSION:",
-    "351": "raise SessionSchemaError(",
-    "352": "f\"session store at {self._sanitized_dsn()} now carries schema \"",
-    "353": "f\"version {int(row['version'])}; this build understands version \""
+    "397": "row = await conn.fetchrow(\"SELECT version FROM nautilus_schema_version\")",
+    "398": "if row is not None and int(row[\"version\"]) != _SCHEMA_VERSION:",
+    "399": "raise SessionSchemaError(",
+    "400": "f\"session store at {self._sanitized_dsn()} now carries schema \"",
+    "401": "f\"version {int(row['version'])}; this build understands version \""
    }
   },
   {
-   "citation": "nautilus/core/session_pg.py:414-419",
+   "citation": "nautilus/core/session_pg.py:462-467",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/session_pg.py",
-   "sha": "0c67ad5ef24d60b0",
+   "sha": "9bbcfdae6fbfc273",
    "lines": {
-    "414": "conn = await self._pool.acquire(timeout=self._acquire_timeout_s)",
-    "415": "except TimeoutError as exc:",
-    "416": "raise SessionStoreUnavailableError(",
-    "417": "f\"session-store pool exhausted: no connection became free within \"",
-    "418": "f\"{self._acquire_timeout_s}s (pool max_size={self._pool_max_size}). \"",
-    "419": "f\"Raise session_store.pool_max_size to at least your peak concurrency.\""
+    "462": "conn = await self._pool.acquire(timeout=self._acquire_timeout_s)",
+    "463": "except TimeoutError as exc:",
+    "464": "raise self._unavailable(",
+    "465": "f\"session-store pool exhausted: no connection became free within \"",
+    "466": "f\"{self._acquire_timeout_s}s (pool max_size={self._pool_max_size}). \"",
+    "467": "f\"Raise session_store.pool_max_size to at least your peak concurrency.\""
    }
   },
   {
-   "citation": "nautilus/core/session_pg.py:488-493",
+   "citation": "nautilus/core/session_pg.py:536-541",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/session_pg.py",
-   "sha": "e67cbbd8c02fe728",
+   "sha": "7b5c144d5429244c",
    "lines": {
-    "488": "conn = await self._lock_pool.acquire(timeout=self._acquire_timeout_s)",
-    "489": "except TimeoutError as exc:",
-    "490": "raise SessionStoreUnavailableError(",
-    "491": "f\"session-store lock pool exhausted: no connection became free within \"",
-    "492": "f\"{self._acquire_timeout_s}s (lock pool max_size={self._lock_pool_max_size}). \"",
-    "493": "f\"One is held per in-flight request, so raise \""
+    "536": "conn = await self._lock_pool.acquire(timeout=self._acquire_timeout_s)",
+    "537": "except TimeoutError as exc:",
+    "538": "raise self._unavailable(",
+    "539": "f\"session-store lock pool exhausted: no connection became free within \"",
+    "540": "f\"{self._acquire_timeout_s}s (lock pool max_size={self._lock_pool_max_size}). \"",
+    "541": "f\"One is held per in-flight request, so raise \""
    }
   },
   {
-   "citation": "nautilus/core/session_pg.py:71",
+   "citation": "nautilus/core/session_pg.py:72",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/session_pg.py",
    "sha": "94869f4b6fc3f3aa",
    "lines": {
-    "71": "class SessionSchemaError(Exception):"
+    "72": "class SessionSchemaError(Exception):"
    }
   },
   {
