@@ -16,10 +16,13 @@ that credential may speak for, and what it may do. :func:`caller_identity` is
 that resolution, and it is shared by REST, MCP and the admin UI so a client
 cannot get a different answer by changing ports.
 
-Both FastAPI REST (``fastapi_app``) and the MCP HTTP transport wrap their
-write endpoints with the dependency returned by :func:`require_api_key`
-when the mode is ``"api_key"``, and with :func:`proxy_trust_dependency`
-otherwise. Read-only probes (``/healthz``, ``/readyz``) stay un-gated.
+FastAPI REST (``fastapi_app``) and the admin console gate their write
+endpoints with :func:`require_api_key` when the mode is ``"api_key"`` and with
+:func:`proxy_trust_dependency` otherwise; read-only probes (``/healthz``,
+``/readyz``) stay un-gated. The MCP HTTP transport mounts neither: its one gate
+is ``wrap_http_with_api_key``. So the ``proxy_trust`` vetting lives in
+:func:`_vet_forwarded_user`, which :func:`caller_identity` calls itself — every
+surface resolving a caller is vetted, whether or not it mounted a dependency.
 """
 
 from __future__ import annotations
@@ -101,6 +104,7 @@ def caller_identity(
     auth_mode: str = "api_key",
     keys: list[Any] | None = None,
     agent_subjects: dict[str, str] | None = None,
+    trusted_proxies: list[str] | None = None,
 ) -> dict[str, Any]:
     """Who the transport authenticated this request as (§4.15, readiness §2).
 
@@ -123,8 +127,11 @@ def caller_identity(
     - ``peer`` — the socket address, recorded for provenance and used as the
       ledger key's fallback only when the deployment authenticates nobody.
     - ``agent_id`` — the *only* agent this credential may speak for, or ``None``
-      when nothing binds it (a bare-string key, or an unregistered subject).
-      ``None`` is the historical behaviour: the caller names its own agent.
+      when nothing binds it: a bare-string key, or a deployment that registers
+      no ``agents.<id>.subject`` at all. ``None`` is the historical behaviour:
+      the caller names its own agent. A subject that is unregistered *while
+      others are registered* does not land here — it is refused, because
+      unbound is a promotion, not a fallback.
     - ``capabilities`` — what this credential may do. Everything, unless a
       structured key entry says otherwise.
 
@@ -132,17 +139,21 @@ def caller_identity(
     and only REST ever called it, so the same client presenting the same key to
     the MCP port accumulated into a different ledger and escaped escalation by
     switching transport.
+
+    Raises:
+        HTTPException: 401 under ``proxy_trust`` when the forwarded identity
+            does not survive :func:`_vet_forwarded_user` — see there for why
+            this function does the vetting rather than assuming it.
     """
     agent_id: str | None = None
     capabilities = ALL_CAPABILITIES
     if auth_mode == "proxy_trust":
-        auth = request.headers.get("X-Forwarded-User") or ""
         # The ingress authenticated the subject; ``agents.<id>.subject`` is what
-        # says which agent it is. ``proxy_trust_dependency`` has already refused
-        # a subject no agent claims, whenever the config names any subject at
-        # all, so ``None`` here means the deployment binds nobody.
-        if auth and agent_subjects:
-            agent_id = agent_subjects.get(auth)
+        # says which agent it is. The vetting happens here rather than in a
+        # dependency, so ``agent_subjects.get`` is reached only for a subject
+        # this deployment believes, and ``None`` means it binds nobody.
+        auth = _vet_forwarded_user(request, trusted_proxies or [], agent_subjects or {})
+        agent_id = (agent_subjects or {}).get(auth)
     else:
         # The admin console authenticates a browser with a ``nautilus_key``
         # cookie, and that cookie holds an API key — ``/admin/login`` verifies
@@ -254,26 +265,43 @@ def _peer_is_trusted(peer: str, trusted: list[str]) -> bool:
     return False
 
 
-async def proxy_trust_dependency(request: Request) -> str:
-    """Return the upstream-proxy-asserted user from ``X-Forwarded-User``.
+def _vet_forwarded_user(
+    request: Request,
+    trusted_proxies: list[str],
+    agent_subjects: Mapping[str, str],
+) -> str:
+    """The ``X-Forwarded-User`` this deployment may believe, or 401.
 
-    Used when ``config.api.auth.mode == "proxy_trust"`` — the upstream
-    mesh/ingress has already authenticated the caller (mTLS, SPIFFE, OIDC) and
-    forwarded the resolved identity. Under this mode the header *is* the
-    credential, so it is only an identity while nobody but the proxy can set
-    it: the socket peer must fall inside ``api.auth.trusted_proxies``, which
-    the config refuses to omit.
+    Under ``proxy_trust`` the upstream mesh/ingress has already authenticated
+    the caller (mTLS, SPIFFE, OIDC) and the header *is* the credential — so it
+    is only an identity while nobody but the proxy can set it. Two things make
+    that true, and both are checked here:
 
-    A subject the proxy authenticated but that ``agents.<id>.subject`` never
-    named is refused here, whenever the config names any subject at all.
-    ``caller_identity`` resolves an unmapped subject to ``agent_id=None``, and
-    ``None`` is the *unbound* case — the caller names its own agent and holds
-    ``ALL_CAPABILITIES``, ``govern`` and key rotation included. So one typo in a
-    SPIFFE ID, or one workload the mesh authenticates before anybody adds it to
-    the config, silently upgraded a bound credential to a root one. The refusal
-    is scoped to deployments that have bound somebody: with no ``subject``
-    anywhere the operator has stated no intent, and that deployment keeps the
-    unbound behaviour a bare API-key string already has.
+    - the socket peer falls inside ``api.auth.trusted_proxies``, which the
+      config refuses to omit under this mode. Without it, ``X-Forwarded-User``
+      is a field the caller fills in: it may name any subject, and rotating it
+      per request mints a fresh ledger principal, which resets the cumulative
+      exposure the product is built to accumulate.
+    - the subject is one ``agents.<id>.subject`` names, whenever the config
+      names any subject at all. An unmapped subject resolves to
+      ``agent_id=None``, and ``None`` is the *unbound* case — the caller names
+      its own agent and holds ``ALL_CAPABILITIES``, ``govern`` and key rotation
+      included. So one typo in a SPIFFE ID, or one workload the mesh
+      authenticates before anybody adds it to the config, silently upgraded a
+      bound credential to a root one. The refusal is scoped to deployments that
+      have bound somebody: with no ``subject`` anywhere the operator has stated
+      no intent, and that deployment keeps the unbound behaviour a bare
+      API-key string already has.
+
+    This is a plain function, not only a dependency, because a dependency
+    protects the routes somebody remembered to wire it into.
+    ``proxy_trust_dependency`` was wired into REST and the admin console and
+    into neither the MCP server nor its ``serve`` wiring, whose only gate is
+    ``wrap_http_with_api_key``; ``caller_identity`` read the raw header there
+    and cited that dependency in a comment as the reason it was safe to.
+    Calling this from ``caller_identity`` itself makes the citation true on
+    every transport, including ones not written yet: an omitted
+    ``trusted_proxies`` trusts nobody rather than everybody.
 
     Raises:
         HTTPException: 401 if the peer is not a configured proxy, if
@@ -281,11 +309,8 @@ async def proxy_trust_dependency(request: Request) -> str:
             set it when traffic reaches us; a missing header implies a bypass
             attempt — or if the subject is not one the config binds.
     """
-    app = request.scope.get("app")
-    state = getattr(app, "state", None)
-    trusted: list[str] = list(getattr(state, "trusted_proxies", []) or [])
     peer = request.client.host if request.client else ""
-    if not _peer_is_trusted(peer, trusted):
+    if not _peer_is_trusted(peer, trusted_proxies):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Forwarded identity rejected: peer is not a trusted proxy",
@@ -296,8 +321,7 @@ async def proxy_trust_dependency(request: Request) -> str:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing X-Forwarded-User",
         )
-    subjects: dict[str, str] = dict(getattr(state, "agent_subjects", {}) or {})
-    if subjects and user not in subjects:
+    if agent_subjects and user not in agent_subjects:
         log.warning("refusing forwarded subject %r: no agents.<id>.subject names it", user)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -308,6 +332,28 @@ async def proxy_trust_dependency(request: Request) -> str:
             ),
         )
     return user
+
+
+async def proxy_trust_dependency(request: Request) -> str:
+    """Return the upstream-proxy-asserted user from ``X-Forwarded-User``.
+
+    Used when ``config.api.auth.mode == "proxy_trust"``: the FastAPI-shaped
+    front for :func:`_vet_forwarded_user`, reading the deployment's
+    ``trusted_proxies`` and ``agent_subjects`` off ``app.state``. It is the
+    401-at-the-door for the surfaces that mount it; the vetting itself is
+    shared, so a surface that does not mount it is refused all the same when it
+    resolves a caller.
+
+    Raises:
+        HTTPException: 401 — see :func:`_vet_forwarded_user`.
+    """
+    app = request.scope.get("app")
+    state = getattr(app, "state", None)
+    return _vet_forwarded_user(
+        request,
+        list(getattr(state, "trusted_proxies", []) or []),
+        dict(getattr(state, "agent_subjects", {}) or {}),
+    )
 
 
 async def verify_session_token(

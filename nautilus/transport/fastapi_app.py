@@ -599,6 +599,7 @@ def create_app(
             auth_mode=getattr(state, "auth_mode", "api_key"),
             keys=list(getattr(state, "api_keys", []) or []),
             agent_subjects=dict(getattr(state, "agent_subjects", {}) or {}),
+            trusted_proxies=list(getattr(state, "trusted_proxies", []) or []),
         )
 
     def _require_capability(capability: str) -> Any:

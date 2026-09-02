@@ -54,6 +54,7 @@ def _require_capability(capability: str) -> Any:
             auth_mode=getattr(state, "auth_mode", "api_key"),
             keys=list(getattr(state, "api_keys", []) or []),
             agent_subjects=dict(getattr(state, "agent_subjects", {}) or {}),
+            trusted_proxies=list(getattr(state, "trusted_proxies", []) or []),
         )
         refusal = capability_refusal(caller, capability)
         if refusal is not None:
@@ -282,6 +283,7 @@ async def playground_query(
         auth_mode=getattr(state, "auth_mode", "api_key"),
         keys=list(getattr(state, "api_keys", []) or []),
         agent_subjects=dict(getattr(state, "agent_subjects", {}) or {}),
+        trusted_proxies=list(getattr(state, "trusted_proxies", []) or []),
     )
     refusal = capability_refusal(caller, "query")
     if refusal is not None:
@@ -345,8 +347,19 @@ async def source_status(
         return _broker_not_ready()
 
     # Same clearance filter /v1/sources applies: the console reaches the same
-    # broker, so it must not publish a catalogue the API refuses to.
-    sources = broker.sources_visible_to(caller_identity(request)["agent_id"])
+    # broker, so it must not publish a catalogue the API refuses to. The
+    # deployment's auth config has to be handed over for that to hold --
+    # without ``keys`` the registry lookup is skipped, the credential binds no
+    # agent, and ``sources_visible_to(None)`` is the whole catalogue.
+    state = request.app.state
+    caller = caller_identity(
+        request,
+        auth_mode=getattr(state, "auth_mode", "api_key"),
+        keys=list(getattr(state, "api_keys", []) or []),
+        agent_subjects=dict(getattr(state, "agent_subjects", {}) or {}),
+        trusted_proxies=list(getattr(state, "trusted_proxies", []) or []),
+    )
+    sources = broker.sources_visible_to(caller["agent_id"])
     source_rows = [
         {
             "id": s.id,

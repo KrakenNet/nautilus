@@ -121,6 +121,7 @@ def _caller(
     auth_mode: str,
     keys: list[Any] | None = None,
     agent_subjects: dict[str, str] | None = None,
+    trusted_proxies: list[str] | None = None,
 ) -> dict[str, Any] | None:
     """The caller identity to key the exposure ledger with, or ``None``.
 
@@ -143,7 +144,13 @@ def _caller(
         return None
     if request is None or not hasattr(request, "headers"):
         return None
-    return caller_identity(request, auth_mode=auth_mode, keys=keys, agent_subjects=agent_subjects)
+    return caller_identity(
+        request,
+        auth_mode=auth_mode,
+        keys=keys,
+        agent_subjects=agent_subjects,
+        trusted_proxies=trusted_proxies,
+    )
 
 
 def _bound_response(response: BrokerResponse, max_bytes: int | None) -> BrokerResponse:
@@ -215,6 +222,23 @@ def _mcp_settings(broker: Broker | None) -> tuple[bool, str, list[Any], int | No
     if isinstance(keys_raw, list):
         keys = list(cast("list[Any]", keys_raw))
     return (expose_handoff, mode, keys, max_bytes)
+
+
+def _trusted_proxies(broker: Broker | None) -> list[str]:
+    """``api.auth.trusted_proxies`` — who may assert ``X-Forwarded-User``.
+
+    This port mounts no ``proxy_trust_dependency``; ``caller_identity`` does the
+    vetting, and it can only do it with the list. Omitting it trusts nobody, so
+    a deployment whose list never reached this door 401s rather than believing
+    whatever the caller typed.
+    """
+    config = getattr(broker, "_config", None) if broker is not None else None
+    api_cfg = getattr(config, "api", None)
+    auth_obj = getattr(api_cfg, "auth", None)
+    proxies: object = getattr(auth_obj, "trusted_proxies", None)
+    if not isinstance(proxies, list):
+        return []
+    return [str(entry) for entry in cast("list[object]", proxies)]
 
 
 def _agent_subjects(broker: Broker | None) -> dict[str, str]:
@@ -347,7 +371,7 @@ def create_server(
         # adopted by ``SIGHUP`` has to reach this door too, or the retired key
         # keeps naming a caller here after it stopped opening the front one.
         _, auth_mode, api_keys, _ = _mcp_settings(broker)
-        return _caller(ctx, auth_mode, api_keys, agent_subjects)
+        return _caller(ctx, auth_mode, api_keys, agent_subjects, _trusted_proxies(broker))
 
     def _refuse_without_capability(caller: dict[str, Any] | None, capability: str) -> None:
         """The credential must hold ``capability``, exactly as it must on REST.
