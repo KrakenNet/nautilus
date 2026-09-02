@@ -7,7 +7,7 @@ HTTP these are unreachable — the transport owns the lifecycle.
 
 ### `Broker.request() called inside a running event loop. Use Broker.arequest() (async) from async contexts.`
 
-**`RuntimeError`**, `nautilus/core/broker.py:1829-1833`.
+**`RuntimeError`**, `nautilus/core/broker.py:1882-1885`.
 
 **Means.** The synchronous facade was called from inside a coroutine. It would need to drive an
 event loop that is already running.
@@ -59,7 +59,7 @@ RuntimeError: Broker.request() called inside a running event loop. Use Broker.ar
 
 ### `Broker.close() called inside a running event loop. Use Broker.aclose() (async) from async contexts.`
 
-**`RuntimeError`**, `nautilus/core/broker.py:4081-4085`. Same rule for shutdown: `await
+**`RuntimeError`**, `nautilus/core/broker.py:4201-4204`. Same rule for shutdown: `await
 broker.aclose()`. No interpolation.
 
 **Means.** `close()` drains the attestation sink and the session store synchronously; from inside a
@@ -113,7 +113,7 @@ RuntimeError: Broker.close() called inside a running event loop. Use Broker.aclo
 
 ### `Broker.{method}() called after close(); the attestation sink and session store are already shut down, so this request could not be receipted. Build a new Broker.`
 
-**`RuntimeError`**, `nautilus/core/broker.py:2350-2355`. `{method}` is the method you called.
+**`RuntimeError`**, `nautilus/core/broker.py:2402-2407`. `{method}` is the method you called.
 
 **Means.** The broker is closed. It is not reusable: the sink and the session store are gone, so
 the request could not be receipted, and an unreceipted decision is not served.
@@ -168,18 +168,18 @@ and the guard fires inside the async one, so `{method}` reads `arequest` even wh
 
 ### `Broker.declare_handoff() failed for source={source_agent_id!r} receiving={receiving_agent_id!r}: {exc}`
 
-**`PolicyEngineError`**, `nautilus/core/broker.py:2131-2135`. The handoff could not be recorded.
+**`PolicyEngineError`**, `nautilus/core/broker.py:2183-2187`. The handoff could not be recorded.
 `{source_agent_id!r}` and `{receiving_agent_id!r}` are the two agent ids with `repr()`, so they
 arrive quoted; `{exc}` is the exception the rules engine raised, with its own message.
 
 **Means.** `declare_handoff` clears the shared engine, asserts one `data_handoff` fact per declared
-classification, evaluates, and queries `denial_record` (`nautilus/core/broker.py:2129-2145`). Any
+classification, evaluates, and queries `denial_record` (`nautilus/core/broker.py:2166-2182`). Any
 exception from those four calls is re-wrapped here. It is the engine failing, not the handoff being
 denied — a *denied* handoff returns a `HandoffDecision` carrying `DenialRecord`s, and an unknown
 agent id likewise returns a decision, not this error.
 
 **Status.** No REST route reaches this. MCP does, when `mcp.expose_declare_handoff: true`
-(`nautilus/transport/mcp_server.py:447-527`): the tool call fails and the client receives the
+(`nautilus/transport/mcp_server.py:480-560`): the tool call fails and the client receives the
 sentence as the tool error. In-process it is a `PolicyEngineError` and, uncaught, exit **1**.
 
 **Fix.** Read `{exc}` — it is the engine's own message. The same wrapper guards `arequest`, so an
@@ -257,7 +257,7 @@ failure; uncaught it is exit **1**.
 
 ### `create_server requires either config_path or existing_broker`
 
-**`ValueError`**, `nautilus/transport/mcp_server.py:314-318`. No interpolation. The MCP
+**`ValueError`**, `nautilus/transport/mcp_server.py:343-347`. No interpolation. The MCP
 equivalent of the message above, same signature:
 `create_server(config_path, *, existing_broker=None)`.
 
@@ -293,7 +293,7 @@ schema, which is deliberate: an adapter is usable for queries before it can desc
 
 **Status.** `GET /v1/adapters/{name}/schema` answers **501** with
 `{"detail": "Adapter '<name>' does not support schema introspection"}`
-(`nautilus/transport/fastapi_app.py:1194-1199`) — a permanent refusal, not a retryable one, which
+(`nautilus/transport/fastapi_app.py:1210-1215`) — a permanent refusal, not a retryable one, which
 is why it is not the 503 the other schema failures get. Inside a request the drift gate treats a
 raising `get_schema` as "cannot check" and the request still answers **200**.
 

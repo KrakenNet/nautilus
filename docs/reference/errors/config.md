@@ -77,7 +77,7 @@ The list is the live `ADAPTER_REGISTRY`, so it grows when you register a custom 
 `nautilus/config/loader.py:167-171`. A typo, or a custom adapter that is configured under
 `sources:` but not registered under `adapters:`. Also raised later as
 `Unsupported source type '{source.type}' for id='{source.id}'`
-(`nautilus/core/broker.py:1471`) when the broker builds the adapter.
+(`nautilus/core/broker.py:1522`) when the broker builds the adapter.
 
 ```bash
 python - <<'PY'
@@ -152,12 +152,12 @@ and `pgvector`, `index` for `elasticsearch`, `label` for `neo4j`, `model` for `l
 
 ### `analysis.mode={analysis.mode!r} requires analysis.provider to be set`
 
-**`ConfigError`**, `nautilus/core/broker.py:1222-1226`. `analysis.mode: llm` needs a provider
+**`ConfigError`**, `nautilus/core/broker.py:1308-1312`. `analysis.mode: llm` needs a provider
 block. Either add one, or return to `analysis.mode: pattern`.
 
 ### `rkm.auto_promote.enabled: auto-promotion is not implemented.` …
 
-`nautilus/config/models.py:686-690`. Startup refuses rather than silently ignoring the key. In
+`nautilus/config/models.py:701-705`. Startup refuses rather than silently ignoring the key. In
 full:
 
 ```text
@@ -197,7 +197,7 @@ in the `adapters:` list, so `adapters[0]:` is the first entry.
 
 ### `source id='{source.id}' has type '{source.type}', whose driver is not installed: pip install 'nautilus-rkm[{extra}]' (import failed: {…})`
 
-**`ConfigError`**, `nautilus/core/broker.py:1473-1481`. The source type is built in, but its
+**`ConfigError`**, `nautilus/core/broker.py:1529-1534`. The source type is built in, but its
 optional driver is not installed, so `nautilus.adapters` registered a stand-in. `{extra}` is the
 extra to install; the parenthesised text is the original `ImportError`. Install the extra, or
 remove the source.
@@ -214,7 +214,7 @@ remove the source.
 
 ## What the CLI shows
 
-`nautilus serve` wraps the above (`nautilus/cli/serve.py:335-376`):
+`nautilus serve` wraps the above (`nautilus/cli/serve.py:345-386`):
 
 ```text
 ERROR: config path does not exist or is not a file: {config_path}

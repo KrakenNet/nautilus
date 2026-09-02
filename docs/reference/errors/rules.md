@@ -79,8 +79,8 @@ through: `GET`, approve and reject all answer **404** with
 
 ### `{"error": "already_decided", "current_status": …}`
 
-**HTTP 409**, a JSON object rather than a string. `nautilus/transport/fastapi_app.py:1471-1475`
-and `:1492-1496`, from `AlreadyDecidedError` (`nautilus/rkm/review.py:39`). `current_status` is
+**HTTP 409**, a JSON object rather than a string. `nautilus/transport/fastapi_app.py:1487-1491`
+and `:1549-1553`, from `AlreadyDecidedError` (`nautilus/rkm/review.py:39`). `current_status` is
 the status the proposal already holds — `approved`, `rejected` or `retracted`. Decisions are not
 idempotent replays: a second one is refused, not silently ignored.
 

@@ -4292,7 +4292,7 @@ sudo install -d -m 0750 -o nautilus -g nautilus /var/lib/nautilus/state
 
 ## Environment variables
 
-Nautilus reads exactly nine environment variables by fixed name, plus any name
+Nautilus reads exactly ten environment variables by fixed name, plus any name
 you reference from the config with `${VAR}` or name in
 [`analysis.provider.api_key_env`](#analysisproviderapi_key_env). There is no
 `NAUTILUS_*` override for config keys: the file is the config.
@@ -4302,6 +4302,7 @@ the package is not, so check the list against it rather than trusting this page:
 
 ```console
 $ grep -rn 'os\.environ\|os\.getenv' nautilus/ --include='*.py'
+nautilus/build.py:41:    return os.environ.get(BUILD_REV_ENV, "").strip() or UNKNOWN
 nautilus/cli/_common.py:34:    reviewer = os.environ.get("NAUTILUS_REVIEWER", "").strip()
 nautilus/cli/_common.py:247:    return os.environ.get(API_KEY_ENV, "").strip() or None
 nautilus/analysis/llm/local_provider.py:70:        if not os.getenv(self.api_key_env):
@@ -4311,16 +4312,16 @@ nautilus/analysis/llm/anthropic_provider.py:115:            api_key=os.getenv(se
 nautilus/analysis/llm/openai_provider.py:92:        key = os.getenv(self.api_key_env)
 nautilus/analysis/llm/openai_provider.py:107:            api_key=os.getenv(self.api_key_env),
 nautilus/config/loader.py:68:        self._env = env if env is not None else dict(os.environ)
-nautilus/core/broker.py:1309:                dsn = os.environ.get("TEST_PG_DSN")
+nautilus/core/broker.py:1395:                dsn = os.environ.get("TEST_PG_DSN")
 nautilus/adapters/influxdb.py:224:            token = _auth_token(config) or os.environ.get("INFLUXDB_V2_TOKEN")
 nautilus/adapters/influxdb.py:225:            org = os.environ.get("INFLUXDB_V2_ORG")
-nautilus/observability/__init__.py:16:    if os.environ.get("OTEL_SDK_DISABLED", "").lower() == "true":
 nautilus/observability/instrumentation.py:32:    os.environ.setdefault(
 nautilus/observability/instrumentation.py:50:    if os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT") or os.environ.get(
+nautilus/observability/__init__.py:16:    if os.environ.get("OTEL_SDK_DISABLED", "").lower() == "true":
 ```
 
-Three classes, and only the first is a fixed name. **Nine fixed names** across
-eight call sites — the two OTLP endpoints share one `if`, and `API_KEY_ENV` is
+Three classes, and only the first is a fixed name. **Ten fixed names** across
+nine call sites — the two OTLP endpoints share one `if`, and `API_KEY_ENV` is
 the module constant `"NAUTILUS_API_KEY"` (`nautilus/cli/_common.py:197`). **Six
 reads of whatever you named** in `analysis.provider.api_key_env`. **One copy of
 the whole environment**, in the loader: that is the `${VAR}` interpolator, and it
@@ -4511,6 +4512,43 @@ One name, two directions. On the broker host the same variable is what
 accepts — and what the CLI now sends. That is deliberate: a host that already
 holds the value for the server does not need a second name for the operator
 shell. On a workstation it is only ever the sending half.
+
+### `NAUTILUS_BUILD_REV`
+
+Read by `nautilus/build.py:build_rev` · reported as `build` by `GET /healthz`
+
+**Defends** the provenance of a rollout. `nautilus.__version__` names the release
+line, so every image built between two releases answers with the same string;
+this variable names the commit, which is what tells two of them apart when one
+of them is misbehaving.
+
+**Costs** you passing it at image build time — `.dockerignore` excludes `.git/`,
+so nothing inside a layer can derive it:
+
+```bash
+docker build --build-arg BUILD_REV=$(git rev-parse HEAD) -t nautilus:dev .
+```
+
+`Dockerfile:104` and `:163` turn that `ARG` into this variable for the runtime
+image.
+
+**Fails with** no message. An image built without it answers `unknown`, which is
+deliberately not a version string, so a build that lost its provenance says so
+rather than repeating `version`:
+
+```console
+$ curl -s http://127.0.0.1:8000/healthz
+{"status":"ok","version":"0.2.6.dev0","build":"unknown"}
+```
+
+**Example**
+
+```bash
+# Read it back off a running container (the distroless image has no shell
+# utilities; its $PATH is the virtualenv's console scripts):
+docker exec nautilus /app/.venv/bin/python -c \
+  'import os; print(os.environ.get("NAUTILUS_BUILD_REV") or "<unset>")'
+```
 
 ### `TEST_PG_DSN`
 
@@ -6537,7 +6575,7 @@ by `log.exception` is still a readable multi-line traceback — it is generated
 from the interpreter's own frames, not from anybody's input.
 
 Here is the product doing it, from its own startup path, with nothing staged.
-`nautilus/core/broker.py:1056` logs the config path when no `agents:` block is
+`nautilus/core/broker.py:1142` logs the config path when no `agents:` block is
 declared, and a path is a filename, and a filename may contain a newline:
 
 ```console
@@ -6657,28 +6695,28 @@ sys.exit(1 if bad else 0)
 ```console
 $ python logscan.py
 ok     nautilus/core/broker.py:601 %r on request_id
-ok     nautilus/core/broker.py:2642 %r on state.request_id
-ok     nautilus/core/broker.py:2642 %r on state.intent_analysis.raw_intent
-ok     nautilus/core/broker.py:2642 %r on state.intent_analysis.data_types_needed
-ok     nautilus/core/broker.py:3111 %r on record.source_id
-ok     nautilus/core/broker.py:3208 %r on source_id
-ok     nautilus/core/broker.py:3432 %r on agent_id
-ok     nautilus/core/broker.py:3432 %r on state.session_id
-ok     nautilus/core/broker.py:3432 %r on purpose
-ok     nautilus/core/broker.py:3759 %r on source_id
-ok     nautilus/core/broker.py:4007 %r on source_id
-ok     nautilus/core/broker.py:2657 %r on state.request_id
-ok     nautilus/core/broker.py:2657 %r on source_id
-ok     nautilus/core/broker.py:3420 %r on agent_id
-ok     nautilus/core/broker.py:3420 %r on purpose
-ok     nautilus/core/broker.py:2155 %r on receiving_agent_id
-ok     nautilus/core/broker.py:2155 %r on session_id
-ok     nautilus/core/broker.py:2989 %r on state.request_id
-ok     nautilus/core/broker.py:2989 %r on source_id
-ok     nautilus/core/broker.py:3012 %r on state.request_id
-ok     nautilus/core/broker.py:3012 %r on source_id
-ok     nautilus/core/broker.py:3739 %r on source_id
-ok     nautilus/transport/auth.py:287 %r on user
+ok     nautilus/core/broker.py:2728 %r on state.request_id
+ok     nautilus/core/broker.py:2728 %r on state.intent_analysis.raw_intent
+ok     nautilus/core/broker.py:2728 %r on state.intent_analysis.data_types_needed
+ok     nautilus/core/broker.py:3197 %r on record.source_id
+ok     nautilus/core/broker.py:3294 %r on source_id
+ok     nautilus/core/broker.py:3518 %r on agent_id
+ok     nautilus/core/broker.py:3518 %r on state.session_id
+ok     nautilus/core/broker.py:3518 %r on purpose
+ok     nautilus/core/broker.py:3845 %r on source_id
+ok     nautilus/core/broker.py:4160 %r on source_id
+ok     nautilus/core/broker.py:2743 %r on state.request_id
+ok     nautilus/core/broker.py:2743 %r on source_id
+ok     nautilus/core/broker.py:3506 %r on agent_id
+ok     nautilus/core/broker.py:3506 %r on purpose
+ok     nautilus/core/broker.py:2241 %r on receiving_agent_id
+ok     nautilus/core/broker.py:2241 %r on session_id
+ok     nautilus/core/broker.py:3075 %r on state.request_id
+ok     nautilus/core/broker.py:3075 %r on source_id
+ok     nautilus/core/broker.py:3098 %r on state.request_id
+ok     nautilus/core/broker.py:3098 %r on source_id
+ok     nautilus/core/broker.py:3825 %r on source_id
+ok     nautilus/transport/auth.py:325 %r on user
 
 0 unescaped interpolations
 $ echo $?
@@ -6687,11 +6725,11 @@ $ echo $?
 
 Run it from the repository root; the paths are relative to it. Twenty-three
 rows, every one of them `%r`, `0 unescaped interpolations`, exit `0`.
-`auth.py:287` logs the `X-Forwarded-User` header a proxy sent;
-`broker.py:3420` logs the `agent_id` and `purpose` out of a request body; `broker.py:2155` logs a handoff's `agent_id` and `session_id`,
+`auth.py:325` logs the `X-Forwarded-User` header a proxy sent;
+`broker.py:3506` logs the `agent_id` and `purpose` out of a request body; `broker.py:2241` logs a handoff's `agent_id` and `session_id`,
 also from the body; the `broker.py` `source_id` rows are the per-source
 failure, schema-fetch, drift, quarantine-lift and truncation sites plus the
-`--log-level debug` routing and dial records; `broker.py:3432` is the
+`--log-level debug` routing and dial records; `broker.py:3518` is the
 `debug`-level session-token mint line.
 
 `broker.py:601` is the broker-level failure record. Its `request_id` is the
@@ -7204,14 +7242,14 @@ $ grep -rnE '\bamr\b|\bacr\b|auth_time' nautilus/ --include='*.py' | wc -l
 mode you run:
 
 - `api.auth.mode: api_key` — an opaque secret in `X-API-Key`, compared against
-  `api.keys` in constant time (`nautilus/transport/auth.py:73`). Whoever holds
+  `api.keys` in constant time (`nautilus/transport/auth.py:77`). Whoever holds
   the string is the caller. The admin console is the same secret in a form
   field: `nautilus/ui/templates/pages/login.html:92` is an
   `<input type="password">` whose value is an API key, exchanged for a cookie
   that *is* the key.
 - `api.auth.mode: proxy_trust` — Nautilus authenticates nobody. It reads the
   subject your ingress already resolved out of `X-Forwarded-User`
-  (`nautilus/transport/auth.py:243`).
+  (`nautilus/transport/auth.py:337`).
 
 **What compensates**, and only in the second mode: put an authenticating proxy
 in front and make it the only reachable peer. The factors then live in the
@@ -7248,7 +7286,7 @@ Two things this does **not** cover, and both are load-bearing:
    other. The control is enforced entirely in a component this page does not
    configure; verify it there.
 2. **`POST /admin/login` still validates an API key in `proxy_trust` mode.** It
-   calls `verify_api_key` unconditionally (`nautilus/ui/router.py:194`), so
+   calls `verify_api_key` unconditionally (`nautilus/ui/router.py:195`), so
    it answers `302` for a correct key and `401` for a wrong one even when no key
    authorises anything — a live oracle for guessing `api.keys`, with no rate
    limit in front of it. The cookie it hands back opens nothing, which is the
@@ -7285,7 +7323,7 @@ is one opaque string:
 ```console
 $ grep -rniE 'oidc|saml|oauth|openid|id_token' nautilus/ --include='*.py'
 nautilus/transport/auth.py:9:  (mTLS, SPIFFE, OIDC) and forwards its identity in ``X-Forwarded-User``.
-nautilus/transport/auth.py:247:    mesh/ingress has already authenticated the caller (mTLS, SPIFFE, OIDC) and
+nautilus/transport/auth.py:276:    the caller (mTLS, SPIFFE, OIDC) and the header *is* the credential — so it
 nautilus/config/models.py:242:    # id, an OIDC subject, a certificate CN. Matched against ``X-Forwarded-User``
 ```
 
@@ -7296,7 +7334,7 @@ Three comments, no implementation. Every one of them describes something the
 issuers:
 
 - `api.auth.trusted_proxies` — a list of CIDR blocks. A socket peer inside **any**
-  block may assert **any** subject (`nautilus/transport/auth.py:226`). There is
+  block may assert **any** subject (`nautilus/transport/auth.py:251`). There is
   no per-proxy subject allowlist, so front the broker with two proxies and
   either one can assert the other's identities.
 - `agents.<id>.subject` — a `dict[subject → agent_id]` built by
@@ -7385,7 +7423,7 @@ any subject in the file regardless of how well it is namespaced.
 **What is still not covered:** a compromised or misconfigured proxy inside
 `trusted_proxies` can assert every identity in the config, and nothing in the
 audit trail records which proxy did. The `peer` field
-(`nautilus/transport/auth.py:147`) holds the socket address, so a forensic
+(`nautilus/transport/auth.py:172`) holds the socket address, so a forensic
 answer exists after the fact if your proxies have distinct addresses — but it is
 not an authorization input, and the exposure ledger keys on the subject, not on
 the pair.
@@ -7565,10 +7603,10 @@ base table, and a rule change or a routing surprise is enough to lose it.
 The transcript below needs
 [`session_tokens.enabled: true`](#session_tokensenabled); on a default config
 the route answers `409 session tokens are disabled`.
-`POST /v1/sessions` takes an untyped body (`nautilus/transport/fastapi_app.py:939`),
+`POST /v1/sessions` takes an untyped body (`nautilus/transport/fastapi_app.py:955`),
 and `clearance` in that body would be an authorization assertion signed by
 Nautilus and verifiable by anyone against the public JWKS. It is not a parameter
-of `Broker.issue_session_token` at all (`nautilus/core/broker.py:1611-1617`) —
+of `Broker.issue_session_token` at all (`nautilus/core/broker.py:1697-1703`) —
 the value comes from the agent registry, so the body cannot reach it:
 
 ```console

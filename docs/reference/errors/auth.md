@@ -29,7 +29,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST "$NAUTILUS/v1/request" \
 
 ## `API key required`
 
-**HTTP 401.** `nautilus/transport/auth.py:189-192`, raised by `verify_api_key` when the
+**HTTP 401.** `nautilus/transport/auth.py:215-221`, raised by `verify_api_key` when the
 operator-configured allow-list is empty.
 
 **Means.** `api.keys` has zero entries, so nobody is allowed. This is fail-closed on purpose: an
@@ -62,7 +62,7 @@ PY
 
 ## `Invalid API key`
 
-**HTTP 401.** `nautilus/transport/auth.py:195-198`.
+**HTTP 401.** `nautilus/transport/auth.py:224-227`.
 
 **Means.** The header was present and matched none of the configured keys. Comparison is
 `secrets.compare_digest` per entry, so a near-miss and a wild guess take the same time.
@@ -81,7 +81,7 @@ curl -s -X POST "$NAUTILUS/v1/request" \
 
 ## `This credential does not hold the {capability!r} capability (it holds {sorted(held)})`
 
-**HTTP 403.** `capability_refusal`, `nautilus/transport/auth.py:166`. Rendered example:
+**HTTP 403.** `capability_refusal`, `nautilus/transport/auth.py:194`. Rendered example:
 
 ```text
 This credential does not hold the 'audit_read' capability (it holds ['query'])
@@ -111,8 +111,8 @@ curl -s "$NAUTILUS/v1/audit" -H 'X-API-Key: query-key'
 
 ## `This credential is bound to agent_id={bound!r}, so it cannot ask as {body.agent_id!r}`
 
-**HTTP 403.** `nautilus/transport/fastapi_app.py:663-670`. The MCP transport raises the same
-sentence as a tool error (`nautilus/transport/mcp_server.py:369-373`, with `{agent_id!r}` in
+**HTTP 403.** `nautilus/transport/fastapi_app.py:673-679`. The MCP transport raises the same
+sentence as a tool error (`nautilus/transport/mcp_server.py:402-406`, with `{agent_id!r}` in
 place of `{body.agent_id!r}`). Rendered example:
 
 ```text
@@ -137,7 +137,7 @@ curl -s -X POST "$NAUTILUS/v1/request" \
 
 ## `This credential is bound to agent_id={bound!r}, so it cannot mint a session token for {requested_agent!r}`
 
-**HTTP 403.** `nautilus/transport/fastapi_app.py:969-976`, on `POST /v1/sessions`.
+**HTTP 403.** `nautilus/transport/fastapi_app.py:979-985`, on `POST /v1/sessions`.
 
 **Means.** Same binding rule, applied to token minting. Without it a key bound to a low-clearance
 agent could mint a broker-valid token naming a high-clearance one, and the token verifies against
@@ -154,7 +154,7 @@ curl -s -X POST "$NAUTILUS/v1/sessions" \
 
 ## `Forwarded identity rejected: peer is not a trusted proxy`
 
-**HTTP 401.** `nautilus/transport/auth.py:259-263`, `proxy_trust_dependency`.
+**HTTP 401.** `nautilus/transport/auth.py:313-317`, `_vet_forwarded_user`.
 
 **Means.** `api.auth.mode` is `proxy_trust`, so `X-Forwarded-User` *is* the credential — and the
 socket peer address is not inside any entry of `api.auth.trusted_proxies`.
@@ -169,7 +169,7 @@ whatever opened the TCP connection, not the contents of `X-Forwarded-For`.
 
 ## `Missing X-Forwarded-User`
 
-**HTTP 401.** `nautilus/transport/auth.py:265-269`.
+**HTTP 401.** `nautilus/transport/auth.py:318-323`.
 
 **Means.** The peer is trusted but the header is absent or empty. A trusted proxy should always
 set it, so a missing header reads as a bypass attempt rather than an oversight.
@@ -179,7 +179,7 @@ request, including health-check and retry paths.
 
 ## `X-Nautilus-Reviewer header required`
 
-**HTTP 400.** `_require_reviewer`, `nautilus/transport/fastapi_app.py:1282-1288`.
+**HTTP 400.** `_require_reviewer`, `nautilus/transport/fastapi_app.py:1299-1307`.
 
 **Means.** A governance route needs a human identity to write into the audit record and the
 credential could not supply one. The header is only consulted when the `api.keys` entry has no
@@ -218,17 +218,17 @@ These are `ConfigError`s wrapping pydantic validation; see [config.md](config.md
 
 ### `api.auth.mode 'proxy_trust' requires api.auth.trusted_proxies. Without it, X-Forwarded-User is settable by anyone who can reach the port, so every caller can assert every identity.`
 
-`nautilus/config/models.py:493-497`. Set `api.auth.trusted_proxies` to the ingress addresses, or
+`nautilus/config/models.py:508-513`. Set `api.auth.trusted_proxies` to the ingress addresses, or
 return to `api.auth.mode: api_key`.
 
 ### `api.auth.trusted_proxies entry {entry!r} is not an address or CIDR block: {exc}`
 
-`nautilus/config/models.py:502-506`. `{exc}` is the `ipaddress` parse failure. Use
+`nautilus/config/models.py:517-522`. `{exc}` is the `ipaddress` parse failure. Use
 `10.0.0.0/8`, `192.168.1.7`, or an IPv6 equivalent — hostnames are not resolved.
 
 ### `api.keys entry declares unknown capabilities {unknown}. Known capabilities: {list(CAPABILITIES)}`
 
-`nautilus/config/models.py:467-471`. Rendered example:
+`nautilus/config/models.py:482-487`. Rendered example:
 
 ```text
 api.keys entry declares unknown capabilities ['bogus'].

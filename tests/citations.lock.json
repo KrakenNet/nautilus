@@ -82,47 +82,47 @@
    }
   },
   {
-   "citation": "auth.py:287",
+   "citation": "auth.py:325",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/transport/auth.py",
    "sha": "cd42dbc8b1140e13",
    "lines": {
-    "287": "log.warning(\"refusing forwarded subject %r: no agents.<id>.subject names it\", user)"
+    "325": "log.warning(\"refusing forwarded subject %r: no agents.<id>.subject names it\", user)"
    }
   },
   {
-   "citation": "broker.py:2155",
+   "citation": "broker.py:2241",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "2155": "log.warning("
+    "2241": "log.warning("
    }
   },
   {
-   "citation": "broker.py:3420",
+   "citation": "broker.py:3506",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "3420": "log.warning("
+    "3506": "log.warning("
    }
   },
   {
-   "citation": "broker.py:3432",
+   "citation": "broker.py:3518",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "e4d962289f8a515a",
    "lines": {
-    "3432": "log.debug("
+    "3518": "log.debug("
    }
   },
   {
@@ -232,77 +232,76 @@
    }
   },
   {
-   "citation": "fastapi_app.py:1055",
+   "citation": "fastapi_app.py:1056-1059",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
-   "sha": "eb20c85537dd2d84",
+   "sha": "994bd1184491ab21",
    "lines": {
-    "1055": "detail=str(exc),"
+    "1056": "raise HTTPException(",
+    "1057": "status_code=status.HTTP_503_SERVICE_UNAVAILABLE,",
+    "1058": "detail=\"Broker not ready\",",
+    "1059": ")"
    }
   },
   {
-   "citation": "fastapi_app.py:1094",
+   "citation": "fastapi_app.py:1064",
+   "cited_in": [
+    "docs/reference/errors/attestation.md"
+   ],
+   "file": "nautilus/transport/fastapi_app.py",
+   "sha": "95a449072d630017",
+   "lines": {
+    "1064": "detail=\"reviewer is required (no control characters)\","
+   }
+  },
+  {
+   "citation": "fastapi_app.py:1068-1072",
+   "cited_in": [
+    "docs/reference/errors/attestation.md"
+   ],
+   "file": "nautilus/transport/fastapi_app.py",
+   "sha": "b607759d35b85ef1",
+   "lines": {
+    "1068": "except RuntimeError as exc:",
+    "1069": "raise HTTPException(",
+    "1070": "status_code=status.HTTP_409_CONFLICT,",
+    "1071": "detail=str(exc),",
+    "1072": ") from exc"
+   }
+  },
+  {
+   "citation": "fastapi_app.py:1103",
+   "cited_in": [
+    "docs/reference/errors/attestation.md"
+   ],
+   "file": "nautilus/transport/fastapi_app.py",
+   "sha": "7d1e644298df5931",
+   "lines": {
+    "1103": "detail=\"kid must be a UUID\","
+   }
+  },
+  {
+   "citation": "fastapi_app.py:1110",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "a355f9133862ca8d",
    "lines": {
-    "1094": "detail=\"reviewer and reason are required (no control characters)\","
+    "1110": "detail=\"reviewer and reason are required (no control characters)\","
    }
   },
   {
-   "citation": "fastapi_app.py:1101",
+   "citation": "fastapi_app.py:1128",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
-   "sha": "eb20c85537dd2d84",
+   "sha": "afe0f6e0f601642e",
    "lines": {
-    "1101": "detail=str(exc),"
-   }
-  },
-  {
-   "citation": "fastapi_app.py:1108-1116",
-   "cited_in": [
-    "docs/reference/errors/attestation.md"
-   ],
-   "file": "nautilus/transport/fastapi_app.py",
-   "sha": "b5b5de69ecd5c3d2",
-   "lines": {
-    "1108": ") from exc",
-    "1109": "except KeyError as exc:",
-    "1110": "raise HTTPException(",
-    "1111": "status_code=status.HTTP_404_NOT_FOUND,",
-    "1112": "detail=f\"kid {kid!r} not found\",",
-    "1113": ") from exc",
-    "1114": "return {\"revoked_kid\": kid, \"reviewer\": reviewer, \"reason\": reason}",
-    "1115": "",
-    "1116": "# ------------------------------------------------------------------"
-   }
-  },
-  {
-   "citation": "fastapi_app.py:1121",
-   "cited_in": [
-    "docs/reference/errors/attestation.md"
-   ],
-   "file": "nautilus/transport/fastapi_app.py",
-   "sha": "f50057e60a824c80",
-   "lines": {
-    "1121": "\"/v1/adapters\","
-   }
-  },
-  {
-   "citation": "fastapi_app.py:983",
-   "cited_in": [
-    "docs/reference/errors/attestation.md"
-   ],
-   "file": "nautilus/transport/fastapi_app.py",
-   "sha": "a7f5e09eefd8793b",
-   "lines": {
-    "983": "broker: Broker | None = getattr(request.app.state, \"broker\", None)"
+    "1128": "detail=f\"kid {kid!r} not found\","
    }
   },
   {
@@ -1694,6 +1693,17 @@
    }
   },
   {
+   "citation": "nautilus/build.py:41",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/build.py",
+   "sha": "3274498b6d421e8f",
+   "lines": {
+    "41": "return os.environ.get(BUILD_REV_ENV, \"\").strip() or UNKNOWN"
+   }
+  },
+  {
    "citation": "nautilus/cli/__init__.py:224-309",
    "cited_in": [
     "docs/reference/errors/cli.md"
@@ -2661,18 +2671,19 @@
    }
   },
   {
-   "citation": "nautilus/cli/serve.py:254-258",
+   "citation": "nautilus/cli/serve.py:262-267",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/serve.py",
-   "sha": "c67330e5b02e2f8e",
+   "sha": "145c45d274565914",
    "lines": {
-    "254": "await server.serve()",
-    "255": "if not server.started:",
-    "256": "raise RuntimeError(",
-    "257": "\"application startup failed; the server never accepted a \"",
-    "258": "\"connection. The cause is logged above.\""
+    "262": "await server.serve()",
+    "263": "if not server.started:",
+    "264": "raise RuntimeError(",
+    "265": "\"application startup failed; the server never accepted a \"",
+    "266": "\"connection. The cause is logged above.\"",
+    "267": ")"
    }
   },
   {
@@ -2689,7 +2700,7 @@
    }
   },
   {
-   "citation": "nautilus/cli/serve.py:335-376",
+   "citation": "nautilus/cli/serve.py:345-386",
    "cited_in": [
     "docs/reference/errors/cli.md",
     "docs/reference/errors/config.md"
@@ -2697,81 +2708,81 @@
    "file": "nautilus/cli/serve.py",
    "sha": "e0c84b13cc404d27",
    "lines": {
-    "335": "def broker_for_serve(config_path: Path, *, air_gapped: bool) -> Broker:",
-    "336": "\"\"\"Everything ``serve`` does between the path and the socket.",
-    "337": "",
-    "338": "Path check, the ``--air-gapped`` pre-pass, and ``Broker.from_config`` —",
-    "339": "the sequence ``nautilus serve`` runs before uvicorn binds, factored out",
-    "340": "so ``nautilus config check`` runs it rather than a second copy of it. A",
-    "341": "reimplementation would drift, and the failure mode of a drifted validator",
-    "342": "is that it blesses a config ``serve`` then refuses, which is worse than",
-    "343": "having no check at all.",
-    "344": "",
-    "345": "What it deliberately does not reach: ``Broker.setup()``. ``serve`` does",
-    "346": "not call it either until the transport is already up (the FastAPI",
-    "347": "lifespan does), and it is where a durable session store is first dialled",
-    "348": "and adapter schema fingerprints are checked — questions about the",
-    "349": "environment the process lands in, not about the file. Those failures are",
-    "350": "what ``/readyz`` and the rollout's readiness gate are for. Everything the",
-    "351": "file alone decides, including whether ``audit.path`` can be opened for",
-    "352": "writing, is settled here.",
-    "353": "",
-    "354": "Raises:",
-    "355": "ConfigRefusedError: On any config ``serve`` would exit 2 on.",
-    "356": "\"\"\"",
-    "357": "if not config_path.is_file():",
-    "358": "raise ConfigRefusedError(f\"config path does not exist or is not a file: {config_path}\")",
-    "359": "",
-    "360": "try:",
-    "361": "effective_path = _load_config_for_serve(config_path, air_gapped=air_gapped)",
-    "362": "except RuntimeError as exc:",
-    "363": "raise ConfigRefusedError(str(exc)) from exc",
-    "364": "",
-    "365": "# Broker.from_config surfaces ConfigError / validation errors with",
-    "366": "# readable messages; the caller turns these into a non-zero exit before",
-    "367": "# any bind.",
-    "368": "from nautilus.config.loader import ConfigError",
-    "369": "from nautilus.core.broker import Broker",
-    "370": "",
-    "371": "try:",
-    "372": "return Broker.from_config(effective_path)",
-    "373": "except ConfigError as exc:",
-    "374": "raise ConfigRefusedError(f\"invalid config: {exc}\") from exc",
-    "375": "except Exception as exc:  # noqa: BLE001 - surface wiring failures cleanly",
-    "376": "raise ConfigRefusedError(f\"broker construction failed: {exc}\") from exc"
+    "345": "def broker_for_serve(config_path: Path, *, air_gapped: bool) -> Broker:",
+    "346": "\"\"\"Everything ``serve`` does between the path and the socket.",
+    "347": "",
+    "348": "Path check, the ``--air-gapped`` pre-pass, and ``Broker.from_config`` —",
+    "349": "the sequence ``nautilus serve`` runs before uvicorn binds, factored out",
+    "350": "so ``nautilus config check`` runs it rather than a second copy of it. A",
+    "351": "reimplementation would drift, and the failure mode of a drifted validator",
+    "352": "is that it blesses a config ``serve`` then refuses, which is worse than",
+    "353": "having no check at all.",
+    "354": "",
+    "355": "What it deliberately does not reach: ``Broker.setup()``. ``serve`` does",
+    "356": "not call it either until the transport is already up (the FastAPI",
+    "357": "lifespan does), and it is where a durable session store is first dialled",
+    "358": "and adapter schema fingerprints are checked — questions about the",
+    "359": "environment the process lands in, not about the file. Those failures are",
+    "360": "what ``/readyz`` and the rollout's readiness gate are for. Everything the",
+    "361": "file alone decides, including whether ``audit.path`` can be opened for",
+    "362": "writing, is settled here.",
+    "363": "",
+    "364": "Raises:",
+    "365": "ConfigRefusedError: On any config ``serve`` would exit 2 on.",
+    "366": "\"\"\"",
+    "367": "if not config_path.is_file():",
+    "368": "raise ConfigRefusedError(f\"config path does not exist or is not a file: {config_path}\")",
+    "369": "",
+    "370": "try:",
+    "371": "effective_path = _load_config_for_serve(config_path, air_gapped=air_gapped)",
+    "372": "except RuntimeError as exc:",
+    "373": "raise ConfigRefusedError(str(exc)) from exc",
+    "374": "",
+    "375": "# Broker.from_config surfaces ConfigError / validation errors with",
+    "376": "# readable messages; the caller turns these into a non-zero exit before",
+    "377": "# any bind.",
+    "378": "from nautilus.config.loader import ConfigError",
+    "379": "from nautilus.core.broker import Broker",
+    "380": "",
+    "381": "try:",
+    "382": "return Broker.from_config(effective_path)",
+    "383": "except ConfigError as exc:",
+    "384": "raise ConfigRefusedError(f\"invalid config: {exc}\") from exc",
+    "385": "except Exception as exc:  # noqa: BLE001 - surface wiring failures cleanly",
+    "386": "raise ConfigRefusedError(f\"broker construction failed: {exc}\") from exc"
    }
   },
   {
-   "citation": "nautilus/cli/serve.py:358",
+   "citation": "nautilus/cli/serve.py:368",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/serve.py",
    "sha": "e7c361bc687dc575",
    "lines": {
-    "358": "raise ConfigRefusedError(f\"config path does not exist or is not a file: {config_path}\")"
+    "368": "raise ConfigRefusedError(f\"config path does not exist or is not a file: {config_path}\")"
    }
   },
   {
-   "citation": "nautilus/cli/serve.py:374",
+   "citation": "nautilus/cli/serve.py:384",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/serve.py",
    "sha": "e9ece20d76f6b79f",
    "lines": {
-    "374": "raise ConfigRefusedError(f\"invalid config: {exc}\") from exc"
+    "384": "raise ConfigRefusedError(f\"invalid config: {exc}\") from exc"
    }
   },
   {
-   "citation": "nautilus/cli/serve.py:376",
+   "citation": "nautilus/cli/serve.py:386",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/serve.py",
    "sha": "f4d881b5612e32ea",
    "lines": {
-    "376": "raise ConfigRefusedError(f\"broker construction failed: {exc}\") from exc"
+    "386": "raise ConfigRefusedError(f\"broker construction failed: {exc}\") from exc"
    }
   },
   {
@@ -3141,144 +3152,150 @@
    }
   },
   {
-   "citation": "nautilus/config/models.py:467-471",
+   "citation": "nautilus/config/models.py:482-487",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/config/models.py",
-   "sha": "5f84d68b6c17a5e5",
+   "sha": "bdc961570fd3b9a8",
    "lines": {
-    "467": "unknown = [c for c in self.capabilities if c not in CAPABILITIES]",
-    "468": "if unknown:",
-    "469": "raise ValueError(",
-    "470": "f\"api.keys entry declares unknown capabilities {unknown}. \"",
-    "471": "f\"Known capabilities: {list(CAPABILITIES)}\""
+    "482": "unknown = [c for c in self.capabilities if c not in CAPABILITIES]",
+    "483": "if unknown:",
+    "484": "raise ValueError(",
+    "485": "f\"api.keys entry declares unknown capabilities {unknown}. \"",
+    "486": "f\"Known capabilities: {list(CAPABILITIES)}\"",
+    "487": ")"
    }
   },
   {
-   "citation": "nautilus/config/models.py:493-497",
+   "citation": "nautilus/config/models.py:508-513",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/config/models.py",
-   "sha": "399cb4ca40bfde7a",
+   "sha": "f0211f910b479a97",
    "lines": {
-    "493": "\"\"\"Refuse ``proxy_trust`` with no peer restriction.\"\"\"",
-    "494": "if self.mode == \"proxy_trust\" and not self.trusted_proxies:",
-    "495": "raise ValueError(",
-    "496": "\"api.auth.mode 'proxy_trust' requires api.auth.trusted_proxies. \"",
-    "497": "\"Without it, X-Forwarded-User is settable by anyone who can reach \""
+    "508": "\"\"\"Refuse ``proxy_trust`` with no peer restriction.\"\"\"",
+    "509": "if self.mode == \"proxy_trust\" and not self.trusted_proxies:",
+    "510": "raise ValueError(",
+    "511": "\"api.auth.mode 'proxy_trust' requires api.auth.trusted_proxies. \"",
+    "512": "\"Without it, X-Forwarded-User is settable by anyone who can reach \"",
+    "513": "\"the port, so every caller can assert every identity.\""
    }
   },
   {
-   "citation": "nautilus/config/models.py:502-506",
+   "citation": "nautilus/config/models.py:517-522",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/config/models.py",
-   "sha": "3eecbca458fa3c46",
+   "sha": "962e4503348d14f5",
    "lines": {
-    "502": "ip_network(entry, strict=False)",
-    "503": "except ValueError as exc:",
-    "504": "raise ValueError(",
-    "505": "f\"api.auth.trusted_proxies entry {entry!r} is not an address \"",
-    "506": "f\"or CIDR block: {exc}\""
+    "517": "ip_network(entry, strict=False)",
+    "518": "except ValueError as exc:",
+    "519": "raise ValueError(",
+    "520": "f\"api.auth.trusted_proxies entry {entry!r} is not an address \"",
+    "521": "f\"or CIDR block: {exc}\"",
+    "522": ") from exc"
    }
   },
   {
-   "citation": "nautilus/config/models.py:594-598",
+   "citation": "nautilus/config/models.py:609-616",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/config/models.py",
-   "sha": "38116d3d76baa2f5",
+   "sha": "243aa74d0f624a87",
    "lines": {
-    "594": "\"\"\"Name what happened to ``redis`` rather than listing it as a typo.\"\"\"",
-    "595": "if value == \"redis\":",
-    "596": "raise ValueError(",
-    "597": "\"session_store.backend: redis has no implementation. It used to \"",
-    "598": "\"load and serve sessions from memory instead, which gives \""
+    "609": "\"\"\"Name what happened to ``redis`` rather than listing it as a typo.\"\"\"",
+    "610": "if value == \"redis\":",
+    "611": "raise ValueError(",
+    "612": "\"session_store.backend: redis has no implementation. It used to \"",
+    "613": "\"load and serve sessions from memory instead, which gives \"",
+    "614": "\"replicas a per-process view of cumulative exposure and no \"",
+    "615": "\"signal that this is happening. Use postgres for a store shared \"",
+    "616": "\"across replicas, or sqlite for a durable single-node one.\""
    }
   },
   {
-   "citation": "nautilus/config/models.py:686-690",
+   "citation": "nautilus/config/models.py:701-705",
    "cited_in": [
     "docs/reference/errors/config.md"
    ],
    "file": "nautilus/config/models.py",
    "sha": "3cac630950f66587",
    "lines": {
-    "686": "def _reject_unimplemented_auto_promotion(self) -> AutoPromoteConfig:",
-    "687": "if self.enabled:",
-    "688": "raise ValueError(",
-    "689": "\"rkm.auto_promote.enabled: auto-promotion is not implemented. \"",
-    "690": "\"Every proposal routes to the human-review queue \""
+    "701": "def _reject_unimplemented_auto_promotion(self) -> AutoPromoteConfig:",
+    "702": "if self.enabled:",
+    "703": "raise ValueError(",
+    "704": "\"rkm.auto_promote.enabled: auto-promotion is not implemented. \"",
+    "705": "\"Every proposal routes to the human-review queue \""
    }
   },
   {
-   "citation": "nautilus/config/models.py:782-812",
+   "citation": "nautilus/config/models.py:797-827",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/config/models.py",
    "sha": "0b518d13fcd30d2b",
    "lines": {
-    "782": "def redact_connection(connection: str) -> str | None:",
-    "783": "\"\"\"Return ``scheme://host[:port]`` for a DSN / base URL, or ``None``.",
-    "784": "",
-    "785": "Built by **allowlist**, not by stripping: only the scheme, the host and the",
-    "786": "port are copied out, so userinfo (``postgres://user:pw@…``), path",
-    "787": "(``https://hooks.example/services/T0/B0/SECRET``), query",
-    "788": "(``?password=…``, ``?token=…``) and fragment cannot survive into anything",
-    "789": "built from the result. That matters because the result goes into",
-    "790": ":attr:`~nautilus.core.models.ErrorRecord.endpoint`, which reaches the",
-    "791": "process log, the audit trail and the requesting agent -- three audiences",
-    "792": "strictly wider than the one that reads ``nautilus.yaml``.",
-    "793": "",
-    "794": "A ``connection`` with no host -- a filesystem path, an empty string, a",
-    "795": "libpq keyword DSN (``host=db password=pw``) -- returns ``None`` rather than",
-    "796": "a guess, because a guess is how the withheld half gets echoed by accident.",
-    "797": "\"\"\"",
-    "798": "try:",
-    "799": "parts = urlsplit(connection)",
-    "800": "host = parts.hostname",
-    "801": "port = parts.port",
-    "802": "except ValueError:",
-    "803": "# urlsplit defers parsing to attribute access: a non-numeric or",
-    "804": "# out-of-range port raises here, and a connection we cannot parse is",
-    "805": "# one we must not paraphrase.",
-    "806": "return None",
-    "807": "if not host or not parts.scheme:",
-    "808": "return None",
-    "809": "# An IPv6 literal comes back unbracketed; re-bracket so the result is a",
-    "810": "# URL an operator can paste back.",
-    "811": "host = f\"[{host}]\" if \":\" in host else host",
-    "812": "return f\"{parts.scheme}://{host}\" + (f\":{port}\" if port is not None else \"\")"
+    "797": "def redact_connection(connection: str) -> str | None:",
+    "798": "\"\"\"Return ``scheme://host[:port]`` for a DSN / base URL, or ``None``.",
+    "799": "",
+    "800": "Built by **allowlist**, not by stripping: only the scheme, the host and the",
+    "801": "port are copied out, so userinfo (``postgres://user:pw@…``), path",
+    "802": "(``https://hooks.example/services/T0/B0/SECRET``), query",
+    "803": "(``?password=…``, ``?token=…``) and fragment cannot survive into anything",
+    "804": "built from the result. That matters because the result goes into",
+    "805": ":attr:`~nautilus.core.models.ErrorRecord.endpoint`, which reaches the",
+    "806": "process log, the audit trail and the requesting agent -- three audiences",
+    "807": "strictly wider than the one that reads ``nautilus.yaml``.",
+    "808": "",
+    "809": "A ``connection`` with no host -- a filesystem path, an empty string, a",
+    "810": "libpq keyword DSN (``host=db password=pw``) -- returns ``None`` rather than",
+    "811": "a guess, because a guess is how the withheld half gets echoed by accident.",
+    "812": "\"\"\"",
+    "813": "try:",
+    "814": "parts = urlsplit(connection)",
+    "815": "host = parts.hostname",
+    "816": "port = parts.port",
+    "817": "except ValueError:",
+    "818": "# urlsplit defers parsing to attribute access: a non-numeric or",
+    "819": "# out-of-range port raises here, and a connection we cannot parse is",
+    "820": "# one we must not paraphrase.",
+    "821": "return None",
+    "822": "if not host or not parts.scheme:",
+    "823": "return None",
+    "824": "# An IPv6 literal comes back unbracketed; re-bracket so the result is a",
+    "825": "# URL an operator can paste back.",
+    "826": "host = f\"[{host}]\" if \":\" in host else host",
+    "827": "return f\"{parts.scheme}://{host}\" + (f\":{port}\" if port is not None else \"\")"
    }
   },
   {
-   "citation": "nautilus/config/models.py:798-812",
+   "citation": "nautilus/config/models.py:813-827",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/config/models.py",
    "sha": "97c30338ec51da9d",
    "lines": {
-    "798": "try:",
-    "799": "parts = urlsplit(connection)",
-    "800": "host = parts.hostname",
-    "801": "port = parts.port",
-    "802": "except ValueError:",
-    "803": "# urlsplit defers parsing to attribute access: a non-numeric or",
-    "804": "# out-of-range port raises here, and a connection we cannot parse is",
-    "805": "# one we must not paraphrase.",
-    "806": "return None",
-    "807": "if not host or not parts.scheme:",
-    "808": "return None",
-    "809": "# An IPv6 literal comes back unbracketed; re-bracket so the result is a",
-    "810": "# URL an operator can paste back.",
-    "811": "host = f\"[{host}]\" if \":\" in host else host",
-    "812": "return f\"{parts.scheme}://{host}\" + (f\":{port}\" if port is not None else \"\")"
+    "813": "try:",
+    "814": "parts = urlsplit(connection)",
+    "815": "host = parts.hostname",
+    "816": "port = parts.port",
+    "817": "except ValueError:",
+    "818": "# urlsplit defers parsing to attribute access: a non-numeric or",
+    "819": "# out-of-range port raises here, and a connection we cannot parse is",
+    "820": "# one we must not paraphrase.",
+    "821": "return None",
+    "822": "if not host or not parts.scheme:",
+    "823": "return None",
+    "824": "# An IPv6 literal comes back unbracketed; re-bracket so the result is a",
+    "825": "# URL an operator can paste back.",
+    "826": "host = f\"[{host}]\" if \":\" in host else host",
+    "827": "return f\"{parts.scheme}://{host}\" + (f\":{port}\" if port is not None else \"\")"
    }
   },
   {
@@ -3370,323 +3387,330 @@
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1056",
+   "citation": "nautilus/core/broker.py:1142",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "1056": "log.warning("
+    "1142": "log.warning("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1222-1226",
+   "citation": "nautilus/core/broker.py:1308-1312",
    "cited_in": [
     "docs/reference/errors/config.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "811addfcc4aac984",
    "lines": {
-    "1222": "if analysis.provider is None:",
-    "1223": "raise ConfigError(",
-    "1224": "f\"analysis.mode={analysis.mode!r} requires analysis.provider to be set\"",
-    "1225": ")",
-    "1226": "provider = cls._build_llm_provider(analysis.provider, known_data_types)"
+    "1308": "if analysis.provider is None:",
+    "1309": "raise ConfigError(",
+    "1310": "f\"analysis.mode={analysis.mode!r} requires analysis.provider to be set\"",
+    "1311": ")",
+    "1312": "provider = cls._build_llm_provider(analysis.provider, known_data_types)"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1308-1312",
+   "citation": "nautilus/core/broker.py:1394-1398",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "cf1c51c54172f854",
    "lines": {
-    "1308": "if not dsn:",
-    "1309": "dsn = os.environ.get(\"TEST_PG_DSN\")",
-    "1310": "if dsn:",
-    "1311": "# A test-shaped name reaching a production code path. It stays",
-    "1312": "# (the integration fixtures dial a container DSN through it),"
+    "1394": "if not dsn:",
+    "1395": "dsn = os.environ.get(\"TEST_PG_DSN\")",
+    "1396": "if dsn:",
+    "1397": "# A test-shaped name reaching a production code path. It stays",
+    "1398": "# (the integration fixtures dial a container DSN through it),"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1309",
+   "citation": "nautilus/core/broker.py:1395",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "5c0fa3606b254ef7",
    "lines": {
-    "1309": "dsn = os.environ.get(\"TEST_PG_DSN\")"
+    "1395": "dsn = os.environ.get(\"TEST_PG_DSN\")"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1361-1364",
+   "citation": "nautilus/core/broker.py:1460-1462",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/core/broker.py",
-   "sha": "f839b58851bf09db",
+   "sha": "ee36fe1b87bd40d3",
    "lines": {
-    "1361": "",
-    "1362": "- ``\"null\"`` (default) → :class:`NullAttestationSink` — no-op; preserves",
-    "1363": "NFR-5 for Phase-1 YAML fixtures with no ``attestation.sink`` entry.",
-    "1364": "- ``\"file\"`` → :class:`FileAttestationSink` — append-only JSONL with"
+    "1460": "if attestation is None:",
+    "1461": "msg = \"attestation.sink.chained requires attestation.enabled with a signing key\"",
+    "1462": "raise ValueError(msg)"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1471",
+   "citation": "nautilus/core/broker.py:1522",
    "cited_in": [
     "docs/reference/errors/config.md"
    ],
    "file": "nautilus/core/broker.py",
-   "sha": "eb033019f187851d",
+   "sha": "16c6c4d1b2da3679",
    "lines": {
-    "1471": "A source's name, prose description and data types are what a caller"
+    "1522": "raise ConfigError(f\"Unsupported source type '{source.type}' for id='{source.id}'\")"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1473-1481",
+   "citation": "nautilus/core/broker.py:1529-1534",
    "cited_in": [
     "docs/reference/errors/config.md"
    ],
    "file": "nautilus/core/broker.py",
-   "sha": "dc46cb72fe93c6f5",
+   "sha": "041cea7b9cf8a229",
    "lines": {
-    "1473": "classification rules refuse. Listing every source to every caller told",
-    "1474": "an unclassified key exactly what it was being kept from, so the",
-    "1475": "catalogue is filtered by the same clearance ladder the router routes",
-    "1476": "by.",
-    "1477": "",
-    "1478": "``None`` means no bound agent — a bare key, which is documented as",
-    "1479": "\"any agent_id, every capability\" and has no clearance to filter",
-    "1480": "against — or a deployment with no ``classification`` hierarchy",
-    "1481": "registered, which has no ladder at all. Both see the whole catalogue."
+    "1529": "if extra is not None:",
+    "1530": "raise ConfigError(",
+    "1531": "f\"source id='{source.id}' has type '{source.type}', whose driver is not \"",
+    "1532": "f\"installed: pip install 'nautilus-rkm[{extra}]' \"",
+    "1533": "f\"(import failed: {getattr(adapter_cls, 'import_error', '?')})\"",
+    "1534": ")"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1611-1617",
+   "citation": "nautilus/core/broker.py:1697-1703",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "905b2a59d9cdb539",
    "lines": {
-    "1611": "def issue_session_token(",
-    "1612": "self,",
-    "1613": "*,",
-    "1614": "session_id: str,",
-    "1615": "agent_id: str,",
-    "1616": "purpose: str,",
-    "1617": ") -> str:"
+    "1697": "def issue_session_token(",
+    "1698": "self,",
+    "1699": "*,",
+    "1700": "session_id: str,",
+    "1701": "agent_id: str,",
+    "1702": "purpose: str,",
+    "1703": ") -> str:"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1679",
+   "citation": "nautilus/core/broker.py:1730",
    "cited_in": [
     "docs/reference/errors/session-tokens.md"
    ],
    "file": "nautilus/core/broker.py",
-   "sha": "2a9b5e72b68a1d0b",
+   "sha": "ae43136e8dd58f3e",
    "lines": {
-    "1679": "wrong-instance token."
+    "1730": "raise RuntimeError(\"session tokens are disabled (session_tokens.enabled: false)\")"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1683-1687",
+   "citation": "nautilus/core/broker.py:1736-1739",
    "cited_in": [
     "docs/reference/errors/session-tokens.md"
    ],
    "file": "nautilus/core/broker.py",
-   "sha": "fb2c2b2fe73ac099",
+   "sha": "b403de4e80197212",
    "lines": {
-    "1683": "try:",
-    "1684": "return self._session_tokens.verify(token)",
-    "1685": "except SessionTokenError as exc:",
-    "1686": "request_id = str(uuid.uuid4())",
-    "1687": "self._emit_session_token_event("
+    "1736": "raise PurposeNotPermittedError(",
+    "1737": "f\"purpose {purpose!r} is not one of the purposes agent \"",
+    "1738": "f\"{agent_id!r} may claim ({sorted(record.allowed_purposes)})\"",
+    "1739": ")"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1796",
+   "citation": "nautilus/core/broker.py:1847",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/core/broker.py",
-   "sha": "d7557aae12da7324",
+   "sha": "3a0dd49e7f12a5ff",
    "lines": {
-    "1796": "raise RuntimeError("
+    "1847": "raise ValueError(f\"kid {kid!r} is the current primary; rotate first, then revoke\")"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1829-1833",
+   "citation": "nautilus/core/broker.py:1882-1885",
    "cited_in": [
     "docs/reference/errors/library.md"
    ],
    "file": "nautilus/core/broker.py",
-   "sha": "ea5bb8ff93b057e5",
+   "sha": "752a08d573ad8661",
    "lines": {
-    "1829": ") -> BrokerResponse:",
-    "1830": "\"\"\"Async request pipeline (design §3.1, §8, §9).",
-    "1831": "",
-    "1832": "``caller`` is the transport's view of who is calling -- ``{\"auth\":",
-    "1833": "<authenticated principal>, \"peer\": <network address>}`` -- and is what"
+    "1882": "raise RuntimeError(",
+    "1883": "\"Broker.request() called inside a running event loop. \"",
+    "1884": "\"Use Broker.arequest() (async) from async contexts.\"",
+    "1885": ")"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:1950",
+   "citation": "nautilus/core/broker.py:2001",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/broker.py",
-   "sha": "9c34f9bb4365f61d",
+   "sha": "8217e78c2bc79919",
    "lines": {
-    "1950": "``event_type=\"handoff_declared\"`` and the populated"
+    "2001": "async def declare_handoff("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2129-2145",
+   "citation": "nautilus/core/broker.py:2166-2182",
    "cited_in": [
     "docs/reference/errors/library.md"
    ],
    "file": "nautilus/core/broker.py",
-   "sha": "8cec7252b3e0971e",
+   "sha": "e574d79dff9ec1c4",
    "lines": {
-    "2129": ")",
-    "2130": "return decision",
-    "2131": "",
-    "2132": "async def _record_handoff_partner(self, session_id: str, receiving_agent_id: str) -> None:",
-    "2133": "\"\"\"Let the receiving agent of an allowed handoff into the session.",
-    "2134": "",
-    "2135": "Read-merge-write on the session row's ``handoff_agents``. Best effort:",
-    "2136": "a store that cannot take the note must not turn an allowed handoff into",
-    "2137": "a denial — the receiving agent is refused later by the ownership gate,",
-    "2138": "which is the safe direction to fail.",
-    "2139": "\"\"\"",
-    "2140": "try:",
-    "2141": "row = await self._session_get(session_id)",
-    "2142": "prior: Any = row.get(\"handoff_agents\")",
-    "2143": "partners: list[str] = (",
-    "2144": "[str(a) for a in cast(\"list[Any]\", prior)] if isinstance(prior, list) else []",
-    "2145": ")"
+    "2166": "engine = self._router.engine",
+    "2167": "try:",
+    "2168": "engine.clear_facts()",
+    "2169": "for classification in data_classifications:",
+    "2170": "engine.assert_fact(",
+    "2171": "\"data_handoff\",",
+    "2172": "{",
+    "2173": "\"from_agent\": source_agent_id,",
+    "2174": "\"to_agent\": receiving_agent_id,",
+    "2175": "\"session_id\": session_id,",
+    "2176": "\"classification\": classification,",
+    "2177": "\"from_clearance\": source_agent.clearance,",
+    "2178": "\"to_clearance\": receiving_agent.clearance,",
+    "2179": "},",
+    "2180": ")",
+    "2181": "eval_result = engine.evaluate()",
+    "2182": "raw_denials = engine.query(\"denial_record\")"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2131-2135",
+   "citation": "nautilus/core/broker.py:2183-2187",
    "cited_in": [
     "docs/reference/errors/library.md"
    ],
    "file": "nautilus/core/broker.py",
-   "sha": "0d75463cf77bbd7b",
+   "sha": "d4bc2e2c80fc9e27",
    "lines": {
-    "2131": "",
-    "2132": "async def _record_handoff_partner(self, session_id: str, receiving_agent_id: str) -> None:",
-    "2133": "\"\"\"Let the receiving agent of an allowed handoff into the session.",
-    "2134": "",
-    "2135": "Read-merge-write on the session row's ``handoff_agents``. Best effort:"
+    "2183": "except Exception as exc:  # noqa: BLE001 — re-wrap as PolicyEngineError per §3.4",
+    "2184": "raise PolicyEngineError(",
+    "2185": "f\"Broker.declare_handoff() failed for source={source_agent_id!r}\"",
+    "2186": "f\" receiving={receiving_agent_id!r}: {exc}\"",
+    "2187": ") from exc"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2155",
+   "citation": "nautilus/core/broker.py:2241",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "2155": "log.warning("
+    "2241": "log.warning("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2265",
+   "citation": "nautilus/core/broker.py:2314-2318",
    "cited_in": [
     "docs/reference/errors/session-tokens.md"
    ],
    "file": "nautilus/core/broker.py",
-   "sha": "ad2f90cfd9b5409d",
+   "sha": "7292161cd8262f72",
    "lines": {
-    "2265": "token_trace.append("
+    "2314": "return DenialRecord(",
+    "2315": "source_id=session_id,",
+    "2316": "reason=\"handoff requires the originating agent's session token\",",
+    "2317": "rule_name=\"session-token-required\",",
+    "2318": ")"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2288",
+   "citation": "nautilus/core/broker.py:2337-2341",
    "cited_in": [
     "docs/reference/errors/session-tokens.md"
    ],
    "file": "nautilus/core/broker.py",
-   "sha": "83f5de42b2f77754",
+   "sha": "b86fd233335011f8",
    "lines": {
-    "2288": "whose async ``analyze`` returns a ``(IntentAnalysis, LLMProvenance)``"
+    "2337": "return DenialRecord(",
+    "2338": "source_id=session_id,",
+    "2339": "reason=f\"session token rejected: {exc.reason_code}\",",
+    "2340": "rule_name=\"session-token-invalid\",",
+    "2341": ")"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2350-2355",
+   "citation": "nautilus/core/broker.py:2402-2407",
    "cited_in": [
     "docs/reference/errors/library.md"
    ],
    "file": "nautilus/core/broker.py",
-   "sha": "d7f5acce06de767c",
+   "sha": "ce90fb0a716bcc92",
    "lines": {
-    "2350": "# ``alock_all`` holds every key on one pooled connection. Entering the",
-    "2351": "# store's per-key lock separately took a connection per key, which made",
-    "2352": "# the store's ceiling ``pool_max_size / keys-per-request``.",
-    "2353": "store_lock_all = getattr(self._session_store, \"alock_all\", None)",
-    "2354": "store_lock = getattr(self._session_store, \"alock\", None)",
-    "2355": "# The wait is bounded because the hold is long: the lock spans the whole"
+    "2402": "if self._closed:",
+    "2403": "raise RuntimeError(",
+    "2404": "f\"Broker.{method}() called after close(); the attestation sink \"",
+    "2405": "f\"and session store are already shut down, so this request \"",
+    "2406": "f\"could not be receipted. Build a new Broker.\"",
+    "2407": ")"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2560-2564",
+   "citation": "nautilus/core/broker.py:2606-2615",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/core/broker.py",
-   "sha": "842a90b5e8793512",
+   "sha": "310ab332a76120c3",
    "lines": {
-    "2560": "The source is therefore denied for this request rather than queried",
-    "2561": "under whatever restrictions happen to survive — the fail-closed",
-    "2562": "reading of the window that :mod:`nautilus.core.temporal` documents.",
-    "2563": "Re-granting means issuing a fresh, unexpired constraint.",
-    "2564": "\"\"\""
+    "2606": "except ValidationError as exc:",
+    "2607": "# Caller input, so a typo is a client error. Unwrapped, the",
+    "2608": "# ValidationError left arequest as a 500 with no audit entry.",
+    "2609": "reasons = \"; \".join(",
+    "2610": "f\"{'.'.join(str(p) for p in e['loc']) or '(root)'}: {e['msg']}\"",
+    "2611": "for e in exc.errors()",
+    "2612": ")",
+    "2613": "raise ValueError(",
+    "2614": "f\"context['scope_constraints'] entry is not a scope constraint: {reasons}\"",
+    "2615": ") from exc"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2642",
+   "citation": "nautilus/core/broker.py:2728",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "e4d962289f8a515a",
    "lines": {
-    "2642": "log.debug("
+    "2728": "log.debug("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2657",
+   "citation": "nautilus/core/broker.py:2743",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "e4d962289f8a515a",
    "lines": {
-    "2657": "log.debug("
+    "2743": "log.debug("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2734-2739",
+   "citation": "nautilus/core/broker.py:2787-2792",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/broker.py",
-   "sha": "5f5ab125913deb5f",
+   "sha": "45587e6e087aa7d2",
    "lines": {
-    "2734": "if allowed and \"purpose\" in reason.lower():",
-    "2735": "names = \", \".join(sorted(allowed))",
-    "2736": "reason = f\"{reason} (source '{source.id}' allows purposes: {names})\"",
-    "2737": "return denial.model_copy(update={\"relevant\": relevant, \"reason\": reason})",
-    "2738": "",
-    "2739": "def _skip_records(self, state: _RequestState) -> list[SkipRecord]:"
+    "2787": "raise SessionNotOwnedError(",
+    "2788": "f\"session_not_yours: session {state.session_id!r} belongs to \"",
+    "2789": "f\"another principal. A session id is not a credential — either use \"",
+    "2790": "f\"your own, or have its owner declare a handoff to \"",
+    "2791": "f\"agent_id={agent_id!r} in it first.\"",
+    "2792": ")"
    }
   },
   {
@@ -3746,146 +3770,121 @@
    }
   },
   {
-   "citation": "nautilus/core/broker.py:2989",
+   "citation": "nautilus/core/broker.py:3075",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "e4d962289f8a515a",
    "lines": {
-    "2989": "log.debug("
+    "3075": "log.debug("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3006",
+   "citation": "nautilus/core/broker.py:3092",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "33b7ae9382dd5af3",
    "lines": {
-    "3006": "f\"connect() failed: {exc}\","
+    "3092": "f\"connect() failed: {exc}\","
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3012",
+   "citation": "nautilus/core/broker.py:3098",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "e4d962289f8a515a",
    "lines": {
-    "3012": "log.debug("
+    "3098": "log.debug("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3072-3075",
+   "citation": "nautilus/core/broker.py:3158-3161",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "45d17966985fdc02",
    "lines": {
-    "3072": "budget = self._registry.get(source_id).timeout_s",
-    "3073": "if budget is None:",
-    "3074": "return \"exceeded the source's timeout_s budget\"",
-    "3075": "return f\"exceeded the source's timeout_s budget of {budget}s\""
+    "3158": "budget = self._registry.get(source_id).timeout_s",
+    "3159": "if budget is None:",
+    "3160": "return \"exceeded the source's timeout_s budget\"",
+    "3161": "return f\"exceeded the source's timeout_s budget of {budget}s\""
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3109-3119",
+   "citation": "nautilus/core/broker.py:3195-3205",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "725b604008949701",
    "lines": {
-    "3109": "if record.endpoint is None:",
-    "3110": "record = record.model_copy(update={\"endpoint\": self._source_endpoint(record.source_id)})",
-    "3111": "log.warning(",
-    "3112": "\"source %r failed (endpoint=%s, error_type=%s, trace_id=%s): %s\",",
-    "3113": "record.source_id,",
-    "3114": "record.endpoint or \"<none configured>\",",
-    "3115": "record.error_type,",
-    "3116": "record.trace_id,",
-    "3117": "record.message,",
-    "3118": ")",
-    "3119": "state.errored.append(record)"
+    "3195": "if record.endpoint is None:",
+    "3196": "record = record.model_copy(update={\"endpoint\": self._source_endpoint(record.source_id)})",
+    "3197": "log.warning(",
+    "3198": "\"source %r failed (endpoint=%s, error_type=%s, trace_id=%s): %s\",",
+    "3199": "record.source_id,",
+    "3200": "record.endpoint or \"<none configured>\",",
+    "3201": "record.error_type,",
+    "3202": "record.trace_id,",
+    "3203": "record.message,",
+    "3204": ")",
+    "3205": "state.errored.append(record)"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3111",
+   "citation": "nautilus/core/broker.py:3197",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "3111": "log.warning("
+    "3197": "log.warning("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3208",
+   "citation": "nautilus/core/broker.py:3294",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "3208": "log.warning("
+    "3294": "log.warning("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3361-3364",
+   "citation": "nautilus/core/broker.py:3413-3414",
    "cited_in": [
     "docs/reference/errors/session-tokens.md"
    ],
    "file": "nautilus/core/broker.py",
-   "sha": "9d0c5a9fe8f4ae13",
+   "sha": "a999e90bdad29952",
    "lines": {
-    "3361": "# verifies (grace window), but we hand back a fresh primary-signed",
-    "3362": "# token on the response so agents converge on the new key without",
-    "3363": "# a push channel — tokens are bearer credentials. The re-signed",
-    "3364": "# token keeps the ORIGINAL expiry (security review C2): re-keying"
+    "3413": "if not isinstance(presented, str):",
+    "3414": "raise SessionTokenError(\"missing\", \"session_token must be a string\")"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3368-3374",
+   "citation": "nautilus/core/broker.py:3421-3426",
    "cited_in": [
     "docs/reference/errors/session-tokens.md"
    ],
    "file": "nautilus/core/broker.py",
-   "sha": "cbeb6c56cdafef4a",
+   "sha": "22ec3e79d2fbfe59",
    "lines": {
-    "3368": "# a downstream reader has nothing but the signature and the claims.",
-    "3369": "# ``purpose`` and ``clearance`` are written at mint time, so a",
-    "3370": "# session carried into a second purpose kept attesting to the",
-    "3371": "# first. Re-mint when either drifts, so what is signed is what was",
-    "3372": "# enforced. The ORIGINAL expiry is kept in both cases (security",
-    "3373": "# review C2): neither re-keying nor re-binding extends a session.",
-    "3374": "purpose, clearance = self._request_grant(agent_id, context)"
-   }
-  },
-  {
-   "citation": "nautilus/core/broker.py:3420",
-   "cited_in": [
-    "docs/how-to/hardening.md"
-   ],
-   "file": "nautilus/core/broker.py",
-   "sha": "dfbf1883e63b66b0",
-   "lines": {
-    "3420": "log.warning("
-   }
-  },
-  {
-   "citation": "nautilus/core/broker.py:3432",
-   "cited_in": [
-    "docs/how-to/hardening.md"
-   ],
-   "file": "nautilus/core/broker.py",
-   "sha": "e4d962289f8a515a",
-   "lines": {
-    "3432": "log.debug("
+    "3421": "if claims.agent_id != agent_id:",
+    "3422": "raise SessionTokenError(",
+    "3423": "\"agent_mismatch\",",
+    "3424": "f\"session token was minted for agent {claims.agent_id!r}, \"",
+    "3425": "f\"presented by {agent_id!r}\",",
+    "3426": ")"
    }
   },
   {
@@ -3931,98 +3930,119 @@
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3540-3565",
+   "citation": "nautilus/core/broker.py:3506",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/core/broker.py",
+   "sha": "dfbf1883e63b66b0",
+   "lines": {
+    "3506": "log.warning("
+   }
+  },
+  {
+   "citation": "nautilus/core/broker.py:3518",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/core/broker.py",
+   "sha": "e4d962289f8a515a",
+   "lines": {
+    "3518": "log.debug("
+   }
+  },
+  {
+   "citation": "nautilus/core/broker.py:3626-3651",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "1f75a9a859d879b8",
    "lines": {
-    "3540": "try:",
-    "3541": "return await adapter.execute(intent, scope, context)",
-    "3542": "except ScopeEnforcementError as exc:",
-    "3543": "return AdapterResult(",
-    "3544": "source_id=source_id,",
-    "3545": "rows=[],",
-    "3546": "duration_ms=0,",
-    "3547": "error=ErrorRecord(",
-    "3548": "source_id=source_id,",
-    "3549": "error_type=\"ScopeEnforcementError\",",
-    "3550": "message=str(exc),",
-    "3551": "trace_id=\"\",  # filled in by _gather_adapter_results",
-    "3552": "),",
-    "3553": ")",
-    "3554": "except AdapterError as exc:",
-    "3555": "return AdapterResult(",
-    "3556": "source_id=source_id,",
-    "3557": "rows=[],",
-    "3558": "duration_ms=0,",
-    "3559": "error=ErrorRecord(",
-    "3560": "source_id=source_id,",
-    "3561": "error_type=type(exc).__name__,",
-    "3562": "message=str(exc),",
-    "3563": "trace_id=\"\",",
-    "3564": "),",
-    "3565": ")"
+    "3626": "try:",
+    "3627": "return await adapter.execute(intent, scope, context)",
+    "3628": "except ScopeEnforcementError as exc:",
+    "3629": "return AdapterResult(",
+    "3630": "source_id=source_id,",
+    "3631": "rows=[],",
+    "3632": "duration_ms=0,",
+    "3633": "error=ErrorRecord(",
+    "3634": "source_id=source_id,",
+    "3635": "error_type=\"ScopeEnforcementError\",",
+    "3636": "message=str(exc),",
+    "3637": "trace_id=\"\",  # filled in by _gather_adapter_results",
+    "3638": "),",
+    "3639": ")",
+    "3640": "except AdapterError as exc:",
+    "3641": "return AdapterResult(",
+    "3642": "source_id=source_id,",
+    "3643": "rows=[],",
+    "3644": "duration_ms=0,",
+    "3645": "error=ErrorRecord(",
+    "3646": "source_id=source_id,",
+    "3647": "error_type=type(exc).__name__,",
+    "3648": "message=str(exc),",
+    "3649": "trace_id=\"\",",
+    "3650": "),",
+    "3651": ")"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3647",
+   "citation": "nautilus/core/broker.py:3698",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/core/broker.py",
-   "sha": "a315211e467c4c21",
+   "sha": "3fb87dde372c74af",
    "lines": {
-    "3647": "decision = f\"nautilus:{request_id}:agent={agent_id}:principal={principal_id}\""
+    "3698": "raise RuntimeError(\"attestation is disabled\")"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3739",
+   "citation": "nautilus/core/broker.py:3825",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "3739": "log.warning("
+    "3825": "log.warning("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3759",
+   "citation": "nautilus/core/broker.py:3845",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "3759": "log.warning("
+    "3845": "log.warning("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:4007",
+   "citation": "nautilus/core/broker.py:4160",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "be7a933a835bb215",
    "lines": {
-    "4007": "log.info(\"quarantine lifted for adapter %r; baseline now matches\", source_id)"
+    "4160": "log.info(\"quarantine lifted for adapter %r; baseline now matches\", source_id)"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:4081-4085",
+   "citation": "nautilus/core/broker.py:4201-4204",
    "cited_in": [
     "docs/reference/errors/library.md"
    ],
    "file": "nautilus/core/broker.py",
-   "sha": "2c937a3e9a8eea6a",
+   "sha": "5cdbe6930ab326c0",
    "lines": {
-    "4081": "# 1. Session store: flush any in-flight writes before downstream close.",
-    "4082": "if hasattr(self._session_store, \"aclose\"):",
-    "4083": "with contextlib.suppress(Exception):",
-    "4084": "await self._session_store.aclose()  # type: ignore[attr-defined]",
-    "4085": "# 2. Attestation sink: release the store-and-forward handle AFTER"
+    "4201": "raise RuntimeError(",
+    "4202": "\"Broker.close() called inside a running event loop. \"",
+    "4203": "\"Use Broker.aclose() (async) from async contexts.\"",
+    "4204": ")"
    }
   },
   {
@@ -4660,152 +4680,156 @@
    }
   },
   {
-   "citation": "nautilus/transport/auth.py:147",
+   "citation": "nautilus/transport/auth.py:172",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/transport/auth.py",
    "sha": "17d14279573ebe96",
    "lines": {
-    "147": "peer = request.client.host if request.client else \"\""
+    "172": "peer = request.client.host if request.client else \"\""
    }
   },
   {
-   "citation": "nautilus/transport/auth.py:166",
+   "citation": "nautilus/transport/auth.py:194",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/transport/auth.py",
-   "sha": "a762249791c75d0c",
+   "sha": "d4c9fb8fce6bdc97",
    "lines": {
-    "166": "held = caller.get(\"capabilities\") or ALL_CAPABILITIES"
+    "194": "return f\"This credential does not hold the {capability!r} capability (it holds {sorted(held)})\""
    }
   },
   {
-   "citation": "nautilus/transport/auth.py:189-192",
+   "citation": "nautilus/transport/auth.py:215-221",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/transport/auth.py",
-   "sha": "7d9b9931d94311da",
+   "sha": "f68190cd14528c0e",
    "lines": {
-    "189": "\"\"\"",
-    "190": "if not keys:",
-    "191": "# Fail-closed: an empty allow-list means \"nobody is allowed\",",
-    "192": "# not \"everybody is allowed\" (FR-26 — api_key is a hard gate)."
+    "215": "if not keys:",
+    "216": "# Fail-closed: an empty allow-list means \"nobody is allowed\",",
+    "217": "# not \"everybody is allowed\" (FR-26 — api_key is a hard gate).",
+    "218": "raise HTTPException(",
+    "219": "status_code=status.HTTP_401_UNAUTHORIZED,",
+    "220": "detail=\"API key required\",",
+    "221": ")"
    }
   },
   {
-   "citation": "nautilus/transport/auth.py:195-198",
+   "citation": "nautilus/transport/auth.py:224-227",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/transport/auth.py",
-   "sha": "bf75117589a05c5c",
+   "sha": "f61924ba9b442ff8",
    "lines": {
-    "195": "detail=\"API key required\",",
-    "196": ")",
-    "197": "if _match_key(header_value, list(keys)) is not None:",
-    "198": "return"
+    "224": "raise HTTPException(",
+    "225": "status_code=status.HTTP_401_UNAUTHORIZED,",
+    "226": "detail=\"Invalid API key\",",
+    "227": ")"
    }
   },
   {
-   "citation": "nautilus/transport/auth.py:226",
+   "citation": "nautilus/transport/auth.py:251",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/transport/auth.py",
    "sha": "5ecd06cd7ef5b7d6",
    "lines": {
-    "226": "def _peer_is_trusted(peer: str, trusted: list[str]) -> bool:"
+    "251": "def _peer_is_trusted(peer: str, trusted: list[str]) -> bool:"
    }
   },
   {
-   "citation": "nautilus/transport/auth.py:243",
+   "citation": "nautilus/transport/auth.py:276",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/transport/auth.py",
-   "sha": "4f4ff001ec9be017",
+   "sha": "28bcc49a73fd4fdd",
    "lines": {
-    "243": "async def proxy_trust_dependency(request: Request) -> str:"
+    "276": "the caller (mTLS, SPIFFE, OIDC) and the header *is* the credential — so it"
    }
   },
   {
-   "citation": "nautilus/transport/auth.py:247",
-   "cited_in": [
-    "docs/how-to/hardening.md"
-   ],
-   "file": "nautilus/transport/auth.py",
-   "sha": "8216e2485293ac38",
-   "lines": {
-    "247": "mesh/ingress has already authenticated the caller (mTLS, SPIFFE, OIDC) and"
-   }
-  },
-  {
-   "citation": "nautilus/transport/auth.py:259-263",
+   "citation": "nautilus/transport/auth.py:313-317",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/transport/auth.py",
-   "sha": "61578e84f9a5c773",
+   "sha": "783e87da71a0cbbf",
    "lines": {
-    "259": "the config, silently upgraded a bound credential to a root one. The refusal",
-    "260": "is scoped to deployments that have bound somebody: with no ``subject``",
-    "261": "anywhere the operator has stated no intent, and that deployment keeps the",
-    "262": "unbound behaviour a bare API-key string already has.",
-    "263": ""
+    "313": "if not _peer_is_trusted(peer, trusted_proxies):",
+    "314": "raise HTTPException(",
+    "315": "status_code=status.HTTP_401_UNAUTHORIZED,",
+    "316": "detail=\"Forwarded identity rejected: peer is not a trusted proxy\",",
+    "317": ")"
    }
   },
   {
-   "citation": "nautilus/transport/auth.py:265-269",
+   "citation": "nautilus/transport/auth.py:318-323",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/transport/auth.py",
-   "sha": "9f3c5f126bb7dc32",
+   "sha": "ad701c5eae07febb",
    "lines": {
-    "265": "HTTPException: 401 if the peer is not a configured proxy, if",
-    "266": "``X-Forwarded-User`` is missing or empty — the proxy SHOULD always",
-    "267": "set it when traffic reaches us; a missing header implies a bypass",
-    "268": "attempt — or if the subject is not one the config binds.",
-    "269": "\"\"\""
+    "318": "user = request.headers.get(\"X-Forwarded-User\")",
+    "319": "if not user:",
+    "320": "raise HTTPException(",
+    "321": "status_code=status.HTTP_401_UNAUTHORIZED,",
+    "322": "detail=\"Missing X-Forwarded-User\",",
+    "323": ")"
    }
   },
   {
-   "citation": "nautilus/transport/auth.py:287",
+   "citation": "nautilus/transport/auth.py:325",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/transport/auth.py",
    "sha": "cd42dbc8b1140e13",
    "lines": {
-    "287": "log.warning(\"refusing forwarded subject %r: no agents.<id>.subject names it\", user)"
+    "325": "log.warning(\"refusing forwarded subject %r: no agents.<id>.subject names it\", user)"
    }
   },
   {
-   "citation": "nautilus/transport/auth.py:300-303",
+   "citation": "nautilus/transport/auth.py:337",
+   "cited_in": [
+    "docs/how-to/hardening.md"
+   ],
+   "file": "nautilus/transport/auth.py",
+   "sha": "4f4ff001ec9be017",
+   "lines": {
+    "337": "async def proxy_trust_dependency(request: Request) -> str:"
+   }
+  },
+  {
+   "citation": "nautilus/transport/auth.py:388-391",
    "cited_in": [
     "docs/reference/errors/session-tokens.md"
    ],
    "file": "nautilus/transport/auth.py",
-   "sha": "718b24e5cfa53b38",
+   "sha": "9525a47f277c85f3",
    "lines": {
-    "300": "request: Request,",
-    "301": ") -> SessionTokenClaims | None:",
-    "302": "\"\"\"Optional FastAPI dependency — validate ``X-Nautilus-Session-Token`` if present.",
-    "303": ""
+    "388": "raise HTTPException(",
+    "389": "status_code=status.HTTP_401_UNAUTHORIZED,",
+    "390": "detail=f\"Invalid session token: {exc.reason_code}\",",
+    "391": ") from exc"
    }
   },
   {
-   "citation": "nautilus/transport/auth.py:73",
+   "citation": "nautilus/transport/auth.py:77",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/transport/auth.py",
    "sha": "6152ff4d2bcd7a73",
    "lines": {
-    "73": "def _match_key(header_value: str, keys: list[Any]) -> Any | None:"
+    "77": "def _match_key(header_value: str, keys: list[Any]) -> Any | None:"
    }
   },
   {
@@ -4820,83 +4844,86 @@
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1181-1186",
+   "citation": "nautilus/transport/fastapi_app.py:1187-1193",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
-   "sha": "d22f6ed0efbc2a57",
+   "sha": "ef36c1898c567ba8",
    "lines": {
-    "1181": "raise HTTPException(",
-    "1182": "status_code=status.HTTP_501_NOT_IMPLEMENTED,",
-    "1183": "detail=f\"Adapter '{name}' does not support schema introspection\",",
-    "1184": ")",
-    "1185": "try:",
-    "1186": "schema = await adapter.get_schema()"
+    "1187": "if adapter is None:",
+    "1188": "from fastapi import HTTPException",
+    "1189": "",
+    "1190": "raise HTTPException(",
+    "1191": "status_code=status.HTTP_404_NOT_FOUND,",
+    "1192": "detail=f\"Adapter '{name}' not found\",",
+    "1193": ")"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1194-1199",
+   "citation": "nautilus/transport/fastapi_app.py:1210-1215",
    "cited_in": [
     "docs/reference/errors/library.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "9caaba2bb9987081",
    "lines": {
-    "1194": "from fastapi import HTTPException",
-    "1195": "",
-    "1196": "raise HTTPException(",
-    "1197": "status_code=status.HTTP_501_NOT_IMPLEMENTED,",
-    "1198": "detail=f\"Adapter '{name}' does not support schema introspection\",",
-    "1199": ") from exc"
+    "1210": "from fastapi import HTTPException",
+    "1211": "",
+    "1212": "raise HTTPException(",
+    "1213": "status_code=status.HTTP_501_NOT_IMPLEMENTED,",
+    "1214": "detail=f\"Adapter '{name}' does not support schema introspection\",",
+    "1215": ") from exc"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1200-1205",
+   "citation": "nautilus/transport/fastapi_app.py:1216-1221",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "9b93e271e7d698c4",
    "lines": {
-    "1200": "except Exception as exc:  # noqa: BLE001",
-    "1201": "from fastapi import HTTPException",
-    "1202": "",
-    "1203": "raise HTTPException(",
-    "1204": "status_code=status.HTTP_503_SERVICE_UNAVAILABLE,",
-    "1205": "detail=f\"Schema fetch failed: {exc}\","
+    "1216": "except Exception as exc:  # noqa: BLE001",
+    "1217": "from fastapi import HTTPException",
+    "1218": "",
+    "1219": "raise HTTPException(",
+    "1220": "status_code=status.HTTP_503_SERVICE_UNAVAILABLE,",
+    "1221": "detail=f\"Schema fetch failed: {exc}\","
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1282-1288",
+   "citation": "nautilus/transport/fastapi_app.py:1299-1307",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
-   "sha": "d2a0c20c58cde3e7",
+   "sha": "9ec15c2b8912043a",
    "lines": {
-    "1282": "",
-    "1283": "bound: str | None = _caller_identity(request)[\"agent_id\"]",
-    "1284": "if bound:",
-    "1285": "return bound",
-    "1286": "reviewer = request.headers.get(\"X-Nautilus-Reviewer\") or request.headers.get(\"X-Reviewer\")",
-    "1287": "if not reviewer:",
-    "1288": "raise HTTPException("
+    "1299": "bound: str | None = _caller_identity(request)[\"agent_id\"]",
+    "1300": "if bound:",
+    "1301": "return bound",
+    "1302": "reviewer = request.headers.get(\"X-Nautilus-Reviewer\") or request.headers.get(\"X-Reviewer\")",
+    "1303": "if not reviewer:",
+    "1304": "raise HTTPException(",
+    "1305": "status_code=status.HTTP_400_BAD_REQUEST,",
+    "1306": "detail=\"X-Nautilus-Reviewer header required\",",
+    "1307": ")"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1471-1475",
+   "citation": "nautilus/transport/fastapi_app.py:1487-1491",
    "cited_in": [
     "docs/reference/errors/rules.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "8eafd6401bff9005",
    "lines": {
-    "1471": "except AlreadyDecidedError as exc:",
-    "1472": "raise HTTPException(",
-    "1473": "status_code=status.HTTP_409_CONFLICT,",
-    "1474": "detail={\"error\": \"already_decided\", \"current_status\": exc.current_status},",
-    "1475": ") from exc"
+    "1487": "except AlreadyDecidedError as exc:",
+    "1488": "raise HTTPException(",
+    "1489": "status_code=status.HTTP_409_CONFLICT,",
+    "1490": "detail={\"error\": \"already_decided\", \"current_status\": exc.current_status},",
+    "1491": ") from exc"
    }
   },
   {
@@ -4916,26 +4943,26 @@
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1802-1814",
+   "citation": "nautilus/transport/fastapi_app.py:1818-1830",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "296c6cc1243dfb25",
    "lines": {
-    "1802": "def _parse_audit_dt(value: str | None) -> datetime | None:",
-    "1803": "\"\"\"Parse an ISO-8601 datetime query param, or 400 on bad input.\"\"\"",
-    "1804": "if not value:",
-    "1805": "return None",
-    "1806": "try:",
-    "1807": "return datetime.fromisoformat(value)",
-    "1808": "except ValueError as exc:",
-    "1809": "from fastapi import HTTPException",
-    "1810": "",
-    "1811": "raise HTTPException(",
-    "1812": "status_code=status.HTTP_400_BAD_REQUEST,",
-    "1813": "detail=f\"invalid datetime: {value!r}\",",
-    "1814": ") from exc"
+    "1818": "def _parse_audit_dt(value: str | None) -> datetime | None:",
+    "1819": "\"\"\"Parse an ISO-8601 datetime query param, or 400 on bad input.\"\"\"",
+    "1820": "if not value:",
+    "1821": "return None",
+    "1822": "try:",
+    "1823": "return datetime.fromisoformat(value)",
+    "1824": "except ValueError as exc:",
+    "1825": "from fastapi import HTTPException",
+    "1826": "",
+    "1827": "raise HTTPException(",
+    "1828": "status_code=status.HTTP_400_BAD_REQUEST,",
+    "1829": "detail=f\"invalid datetime: {value!r}\",",
+    "1830": ") from exc"
    }
   },
   {
@@ -4974,14 +5001,14 @@
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:243",
+   "citation": "nautilus/transport/fastapi_app.py:234",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
-   "sha": "e86ed4932c210db0",
+   "sha": "04a5325b963b9272",
    "lines": {
-    "243": "could drive tens of MB/s onto the audit volume. That volume is the"
+    "234": "class BodyTooLargeError(Exception):"
    }
   },
   {
@@ -5062,424 +5089,429 @@
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:645",
+   "citation": "nautilus/transport/fastapi_app.py:661",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "01e803e1366458c2",
    "lines": {
-    "645": "detail=\"Broker not ready\","
+    "661": "detail=\"Broker not ready\","
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:663-670",
+   "citation": "nautilus/transport/fastapi_app.py:673-679",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
-   "sha": "127a4bd6d1b2c776",
+   "sha": "dba2af7fed9d9631",
    "lines": {
-    "663": ")",
-    "664": "context = dict(body.context)",
-    "665": "header_token = request.headers.get(SESSION_TOKEN_HEADER)",
-    "666": "if header_token and \"session_token\" not in context:",
-    "667": "context[\"session_token\"] = header_token",
-    "668": "try:",
-    "669": "return await broker.arequest(",
-    "670": "body.agent_id,"
+    "673": "raise HTTPException(",
+    "674": "status_code=status.HTTP_403_FORBIDDEN,",
+    "675": "detail=(",
+    "676": "f\"This credential is bound to agent_id={bound!r}, \"",
+    "677": "f\"so it cannot ask as {body.agent_id!r}\"",
+    "678": "),",
+    "679": ")"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:692-699",
+   "citation": "nautilus/transport/fastapi_app.py:695-706",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
-   "sha": "783169764293d7e3",
+   "sha": "eec9cf58876edfbf",
    "lines": {
-    "692": "# The credential is real; the session it named is not its own.",
-    "693": "from fastapi import HTTPException",
-    "694": "",
-    "695": "raise HTTPException(",
-    "696": "status_code=status.HTTP_403_FORBIDDEN,",
-    "697": "detail=str(exc),",
-    "698": ") from exc",
-    "699": "except SessionTokenError as exc:"
+    "695": "except BrokerBusyError as exc:",
+    "696": "# Backpressure, not failure: either the caller's own earlier request",
+    "697": "# still holds the exposure ledger, or the store is slow. A 500 says",
+    "698": "# \"something broke\"; this says \"come back\", which is the only thing",
+    "699": "# a client can act on.",
+    "700": "from fastapi import HTTPException",
+    "701": "",
+    "702": "raise HTTPException(",
+    "703": "status_code=status.HTTP_503_SERVICE_UNAVAILABLE,",
+    "704": "detail=str(exc),",
+    "705": "headers={\"Retry-After\": \"1\"},",
+    "706": ") from exc"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:701-707",
+   "citation": "nautilus/transport/fastapi_app.py:707-714",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
-   "sha": "6480d6108eb1edfb",
+   "sha": "0efe4432dcba06ed",
    "lines": {
-    "701": "# ``verify_session_token`` already answers 401 for the header; a",
-    "702": "# caller that put the same token in ``context`` got a 500, so the",
-    "703": "# status reported which field was used rather than what was wrong,",
-    "704": "# and every refused credential looked like a Nautilus fault.",
-    "705": "from fastapi import HTTPException",
-    "706": "",
-    "707": "raise HTTPException("
+    "707": "except SessionNotOwnedError as exc:",
+    "708": "# The credential is real; the session it named is not its own.",
+    "709": "from fastapi import HTTPException",
+    "710": "",
+    "711": "raise HTTPException(",
+    "712": "status_code=status.HTTP_403_FORBIDDEN,",
+    "713": "detail=str(exc),",
+    "714": ") from exc"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:714-720",
+   "citation": "nautilus/transport/fastapi_app.py:723-727",
    "cited_in": [
     "docs/reference/errors/session-tokens.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
-   "sha": "9c0cd0c5bd0d2af2",
+   "sha": "c5c55db1e0a78918",
    "lines": {
-    "714": "# closed is right — an unrecorded decision must not be served — but",
-    "715": "# this is our recorder being down, not a bad request, and the",
-    "716": "# caller's only useful move is to retry once /readyz clears. It",
-    "717": "# already reports the same sink, so the pod drains on its own.",
-    "718": "from fastapi import HTTPException",
-    "719": "",
-    "720": "log.error(\"audit write failed, refusing the request: %s\", exc)"
+    "723": "raise HTTPException(",
+    "724": "status_code=status.HTTP_401_UNAUTHORIZED,",
+    "725": "detail=f\"Invalid session token ({exc.reason_code}): {exc}\",",
+    "726": "headers={\"WWW-Authenticate\": \"Bearer\"},",
+    "727": ") from exc"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:724-737",
+   "citation": "nautilus/transport/fastapi_app.py:728-744",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
-   "sha": "47c05116e8055244",
+   "sha": "f25d814d58e5c1ba",
    "lines": {
-    "724": "f\"Nautilus could not record this request and will not \"",
-    "725": "f\"serve what it cannot account for: {exc}\"",
-    "726": "),",
-    "727": "headers={\"Retry-After\": \"5\"},",
-    "728": ") from exc",
-    "729": "except ValueError as exc:",
-    "730": "# Malformed caller input inside ``context`` — notably",
-    "731": "# ``scope_constraints`` — which used to leave here as a 500.",
-    "732": "from fastapi import HTTPException",
-    "733": "",
-    "734": "raise HTTPException(",
-    "735": "status_code=status.HTTP_400_BAD_REQUEST,",
-    "736": "detail=str(exc),",
-    "737": ") from exc"
+    "728": "except OSError as exc:",
+    "729": "# The audit sink stopped accepting writes mid-request. Failing",
+    "730": "# closed is right — an unrecorded decision must not be served — but",
+    "731": "# this is our recorder being down, not a bad request, and the",
+    "732": "# caller's only useful move is to retry once /readyz clears. It",
+    "733": "# already reports the same sink, so the pod drains on its own.",
+    "734": "from fastapi import HTTPException",
+    "735": "",
+    "736": "log.error(\"audit write failed, refusing the request: %s\", exc)",
+    "737": "raise HTTPException(",
+    "738": "status_code=status.HTTP_503_SERVICE_UNAVAILABLE,",
+    "739": "detail=(",
+    "740": "f\"Nautilus could not record this request and will not \"",
+    "741": "f\"serve what it cannot account for: {exc}\"",
+    "742": "),",
+    "743": "headers={\"Retry-After\": \"5\"},",
+    "744": ") from exc"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:739-746",
+   "citation": "nautilus/transport/fastapi_app.py:745-753",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
-   "sha": "a0c40c2042d15ec8",
+   "sha": "bbc3ddd20e2b0adf",
    "lines": {
-    "739": "# ------------------------------------------------------------------",
-    "740": "# Route registrations",
-    "741": "# ------------------------------------------------------------------",
-    "742": "",
-    "743": "@app.post(",
-    "744": "\"/v1/request\",",
-    "745": "response_model=BrokerResponse,",
-    "746": "dependencies=["
+    "745": "except ValueError as exc:",
+    "746": "# Malformed caller input inside ``context`` — notably",
+    "747": "# ``scope_constraints`` — which used to leave here as a 500.",
+    "748": "from fastapi import HTTPException",
+    "749": "",
+    "750": "raise HTTPException(",
+    "751": "status_code=status.HTTP_400_BAD_REQUEST,",
+    "752": "detail=str(exc),",
+    "753": ") from exc"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:836-917",
+   "citation": "nautilus/transport/fastapi_app.py:852-933",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "b82befba781ebe04",
    "lines": {
-    "836": "serve an ``aget`` against the sentinel key ``_ready_probe_``.",
-    "837": "Any exception from the store downgrades to 503 so rolling",
-    "838": "restarts take the pod out of rotation cleanly.",
-    "839": "",
-    "840": "Each stage is timed and the whole run is emitted as one ``DEBUG``",
-    "841": "record. ``reason: session_store_timeout`` names a budget without",
-    "842": "saying which of the two session-store stages spent it, and the two",
-    "843": "are bounded separately -- so a probe that overran the shipped",
-    "844": "``timeoutSeconds`` could not be attributed to the sentinel read or to",
-    "845": "the schema check from outside the process.",
-    "846": "\"\"\"",
-    "847": "stages: list[str] = []",
-    "848": "marks = [time.perf_counter()]",
-    "849": "",
-    "850": "def mark(name: str) -> None:",
-    "851": "now = time.perf_counter()",
-    "852": "stages.append(f\"{name} {(now - marks[-1]) * 1000:.1f} ms\")",
-    "853": "marks.append(now)",
-    "854": "",
-    "855": "try:",
-    "856": "broker: Broker | None = getattr(request.app.state, \"broker\", None)",
-    "857": "ready = bool(getattr(request.app.state, \"ready\", False))",
-    "858": "if broker is None or not ready:",
-    "859": "mark(\"startup gate (incomplete)\")",
-    "860": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "861": "return {\"status\": \"not_ready\", \"reason\": \"startup_incomplete\"}",
-    "862": "# The audit sink is checked first: an entry is written before any",
-    "863": "# request answers, so a sink that has stopped accepting writes fails",
-    "864": "# every request, and the probe that exists to drain a pod said ok.",
-    "865": "audit_logger: Any = getattr(broker, \"audit_logger\", None)",
-    "866": "audit_problem = audit_logger.probe() if audit_logger is not None else None",
-    "867": "mark(\"audit sink probe\")",
-    "868": "if audit_problem is not None:",
-    "869": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "870": "return {\"status\": \"not_ready\", \"reason\": audit_problem}",
-    "871": "store: Any = getattr(broker, \"session_store\", None)",
-    "872": "if store is None:",
-    "873": "# Broker without an exposed session_store still counts as ready",
-    "874": "# (the probe is best-effort — AC-12.5).",
-    "875": "return {\"status\": \"ok\"}",
-    "876": "stage = \"session store sentinel read\"",
-    "877": "try:",
-    "878": "if hasattr(store, \"aget\"):",
-    "879": "# Bounded, because a store that is *down* answers fast and a",
-    "880": "# store that is reachable but frozen does not answer at all:",
-    "881": "# ``acquire_timeout_s`` covers taking a new pooled connection,",
-    "882": "# and the sentinel read runs on one that is already open. An",
-    "883": "# unbounded probe is a probe the kubelet gives up on, so the pod",
-    "884": "# is never drained and every probe leaves a wedged handler.",
-    "885": "await asyncio.wait_for(store.aget(_READY_PROBE_KEY), _READY_PROBE_TIMEOUT_S)",
-    "886": "elif hasattr(store, \"get\"):",
-    "887": "store.get(_READY_PROBE_KEY)",
-    "888": "mark(stage)",
-    "889": "# The schema stamp is checked at boot, which covers the replica",
-    "890": "# coming up and misses the one already serving: a rolling upgrade",
-    "891": "# migrates the shared store under every pod that has not been",
-    "892": "# replaced yet. Re-reading it here drains this pod instead of",
-    "893": "# letting it read-modify-write rows it does not understand.",
-    "894": "verify: Any = getattr(store, \"averify_schema\", None)",
-    "895": "if callable(verify):",
-    "896": "stage = \"session store schema check\"",
-    "897": "probe: Any = verify()",
-    "898": "await asyncio.wait_for(probe, _READY_PROBE_TIMEOUT_S)",
-    "899": "mark(stage)",
-    "900": "except TimeoutError:",
-    "901": "mark(f\"{stage} (timed out)\")",
-    "902": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "903": "return {\"status\": \"not_ready\", \"reason\": \"session_store_timeout\"}",
-    "904": "except Exception as exc:  # noqa: BLE001 — any backend failure → 503.",
-    "905": "mark(f\"{stage} (failed)\")",
-    "906": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "907": "return {\"status\": \"not_ready\", \"reason\": type(exc).__name__}",
-    "908": "return {\"status\": \"ok\"}",
-    "909": "finally:",
-    "910": "log.debug(",
-    "911": "\"readyz stages: %s (total %.1f ms; each session-store stage is \"",
-    "912": "\"bounded at %.1fs, so the kubelet timeoutSeconds must exceed \"",
-    "913": "\"their sum, not one of them)\",",
-    "914": "\"; \".join(stages) or \"none reached\",",
-    "915": "(time.perf_counter() - marks[0]) * 1000,",
-    "916": "_READY_PROBE_TIMEOUT_S,",
-    "917": ")"
+    "852": "serve an ``aget`` against the sentinel key ``_ready_probe_``.",
+    "853": "Any exception from the store downgrades to 503 so rolling",
+    "854": "restarts take the pod out of rotation cleanly.",
+    "855": "",
+    "856": "Each stage is timed and the whole run is emitted as one ``DEBUG``",
+    "857": "record. ``reason: session_store_timeout`` names a budget without",
+    "858": "saying which of the two session-store stages spent it, and the two",
+    "859": "are bounded separately -- so a probe that overran the shipped",
+    "860": "``timeoutSeconds`` could not be attributed to the sentinel read or to",
+    "861": "the schema check from outside the process.",
+    "862": "\"\"\"",
+    "863": "stages: list[str] = []",
+    "864": "marks = [time.perf_counter()]",
+    "865": "",
+    "866": "def mark(name: str) -> None:",
+    "867": "now = time.perf_counter()",
+    "868": "stages.append(f\"{name} {(now - marks[-1]) * 1000:.1f} ms\")",
+    "869": "marks.append(now)",
+    "870": "",
+    "871": "try:",
+    "872": "broker: Broker | None = getattr(request.app.state, \"broker\", None)",
+    "873": "ready = bool(getattr(request.app.state, \"ready\", False))",
+    "874": "if broker is None or not ready:",
+    "875": "mark(\"startup gate (incomplete)\")",
+    "876": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "877": "return {\"status\": \"not_ready\", \"reason\": \"startup_incomplete\"}",
+    "878": "# The audit sink is checked first: an entry is written before any",
+    "879": "# request answers, so a sink that has stopped accepting writes fails",
+    "880": "# every request, and the probe that exists to drain a pod said ok.",
+    "881": "audit_logger: Any = getattr(broker, \"audit_logger\", None)",
+    "882": "audit_problem = audit_logger.probe() if audit_logger is not None else None",
+    "883": "mark(\"audit sink probe\")",
+    "884": "if audit_problem is not None:",
+    "885": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "886": "return {\"status\": \"not_ready\", \"reason\": audit_problem}",
+    "887": "store: Any = getattr(broker, \"session_store\", None)",
+    "888": "if store is None:",
+    "889": "# Broker without an exposed session_store still counts as ready",
+    "890": "# (the probe is best-effort — AC-12.5).",
+    "891": "return {\"status\": \"ok\"}",
+    "892": "stage = \"session store sentinel read\"",
+    "893": "try:",
+    "894": "if hasattr(store, \"aget\"):",
+    "895": "# Bounded, because a store that is *down* answers fast and a",
+    "896": "# store that is reachable but frozen does not answer at all:",
+    "897": "# ``acquire_timeout_s`` covers taking a new pooled connection,",
+    "898": "# and the sentinel read runs on one that is already open. An",
+    "899": "# unbounded probe is a probe the kubelet gives up on, so the pod",
+    "900": "# is never drained and every probe leaves a wedged handler.",
+    "901": "await asyncio.wait_for(store.aget(_READY_PROBE_KEY), _READY_PROBE_TIMEOUT_S)",
+    "902": "elif hasattr(store, \"get\"):",
+    "903": "store.get(_READY_PROBE_KEY)",
+    "904": "mark(stage)",
+    "905": "# The schema stamp is checked at boot, which covers the replica",
+    "906": "# coming up and misses the one already serving: a rolling upgrade",
+    "907": "# migrates the shared store under every pod that has not been",
+    "908": "# replaced yet. Re-reading it here drains this pod instead of",
+    "909": "# letting it read-modify-write rows it does not understand.",
+    "910": "verify: Any = getattr(store, \"averify_schema\", None)",
+    "911": "if callable(verify):",
+    "912": "stage = \"session store schema check\"",
+    "913": "probe: Any = verify()",
+    "914": "await asyncio.wait_for(probe, _READY_PROBE_TIMEOUT_S)",
+    "915": "mark(stage)",
+    "916": "except TimeoutError:",
+    "917": "mark(f\"{stage} (timed out)\")",
+    "918": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "919": "return {\"status\": \"not_ready\", \"reason\": \"session_store_timeout\"}",
+    "920": "except Exception as exc:  # noqa: BLE001 — any backend failure → 503.",
+    "921": "mark(f\"{stage} (failed)\")",
+    "922": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "923": "return {\"status\": \"not_ready\", \"reason\": type(exc).__name__}",
+    "924": "return {\"status\": \"ok\"}",
+    "925": "finally:",
+    "926": "log.debug(",
+    "927": "\"readyz stages: %s (total %.1f ms; each session-store stage is \"",
+    "928": "\"bounded at %.1fs, so the kubelet timeoutSeconds must exceed \"",
+    "929": "\"their sum, not one of them)\",",
+    "930": "\"; \".join(stages) or \"none reached\",",
+    "931": "(time.perf_counter() - marks[0]) * 1000,",
+    "932": "_READY_PROBE_TIMEOUT_S,",
+    "933": ")"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:857-861",
+   "citation": "nautilus/transport/fastapi_app.py:873-877",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "8f0237dbc61b367f",
    "lines": {
-    "857": "ready = bool(getattr(request.app.state, \"ready\", False))",
-    "858": "if broker is None or not ready:",
-    "859": "mark(\"startup gate (incomplete)\")",
-    "860": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "861": "return {\"status\": \"not_ready\", \"reason\": \"startup_incomplete\"}"
+    "873": "ready = bool(getattr(request.app.state, \"ready\", False))",
+    "874": "if broker is None or not ready:",
+    "875": "mark(\"startup gate (incomplete)\")",
+    "876": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "877": "return {\"status\": \"not_ready\", \"reason\": \"startup_incomplete\"}"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:868-870",
+   "citation": "nautilus/transport/fastapi_app.py:884-886",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "cdbe48b063fabab7",
    "lines": {
-    "868": "if audit_problem is not None:",
-    "869": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "870": "return {\"status\": \"not_ready\", \"reason\": audit_problem}"
+    "884": "if audit_problem is not None:",
+    "885": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "886": "return {\"status\": \"not_ready\", \"reason\": audit_problem}"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:900-903",
+   "citation": "nautilus/transport/fastapi_app.py:916-919",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "211ac9bee8d25e04",
    "lines": {
-    "900": "except TimeoutError:",
-    "901": "mark(f\"{stage} (timed out)\")",
-    "902": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "903": "return {\"status\": \"not_ready\", \"reason\": \"session_store_timeout\"}"
+    "916": "except TimeoutError:",
+    "917": "mark(f\"{stage} (timed out)\")",
+    "918": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "919": "return {\"status\": \"not_ready\", \"reason\": \"session_store_timeout\"}"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:904-907",
+   "citation": "nautilus/transport/fastapi_app.py:920-923",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "0f068338a926382b",
    "lines": {
-    "904": "except Exception as exc:  # noqa: BLE001 — any backend failure → 503.",
-    "905": "mark(f\"{stage} (failed)\")",
-    "906": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "907": "return {\"status\": \"not_ready\", \"reason\": type(exc).__name__}"
+    "920": "except Exception as exc:  # noqa: BLE001 — any backend failure → 503.",
+    "921": "mark(f\"{stage} (failed)\")",
+    "922": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "923": "return {\"status\": \"not_ready\", \"reason\": type(exc).__name__}"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:939",
+   "citation": "nautilus/transport/fastapi_app.py:955",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "77e419c46ccc8ab6",
    "lines": {
-    "939": "body: dict[str, Any],"
+    "955": "body: dict[str, Any],"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:969-976",
+   "citation": "nautilus/transport/fastapi_app.py:979-985",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
-   "sha": "78b5b4a72afab153",
+   "sha": "5bdbc093b595c58c",
    "lines": {
-    "969": ")",
-    "970": "key_ring: KeyRing | None = getattr(request.app.state, \"key_ring\", None)",
-    "971": "if key_ring is None:",
-    "972": "from fastapi import HTTPException",
-    "973": "",
-    "974": "raise HTTPException(",
-    "975": "status_code=status.HTTP_503_SERVICE_UNAVAILABLE,",
-    "976": "detail=\"Key ring not ready\","
+    "979": "raise HTTPException(",
+    "980": "status_code=status.HTTP_403_FORBIDDEN,",
+    "981": "detail=(",
+    "982": "f\"This credential is bound to agent_id={bound!r}, so it cannot \"",
+    "983": "f\"mint a session token for {requested_agent!r}\"",
+    "984": "),",
+    "985": ")"
    }
   },
   {
-   "citation": "nautilus/transport/mcp_server.py:314-318",
+   "citation": "nautilus/transport/mcp_server.py:343-347",
    "cited_in": [
     "docs/reference/errors/library.md"
    ],
    "file": "nautilus/transport/mcp_server.py",
    "sha": "3761d45a9e3cd945",
    "lines": {
-    "314": "\"\"\"",
-    "315": "if existing_broker is None and config_path is None:",
-    "316": "raise ValueError(",
-    "317": "\"create_server requires either config_path or existing_broker\",",
-    "318": ")"
+    "343": "\"\"\"",
+    "344": "if existing_broker is None and config_path is None:",
+    "345": "raise ValueError(",
+    "346": "\"create_server requires either config_path or existing_broker\",",
+    "347": ")"
    }
   },
   {
-   "citation": "nautilus/transport/mcp_server.py:369-373",
+   "citation": "nautilus/transport/mcp_server.py:402-406",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/transport/mcp_server.py",
    "sha": "5254780715cea6da",
    "lines": {
-    "369": "bound = (caller or {}).get(\"agent_id\")",
-    "370": "if bound is not None and bound != agent_id:",
-    "371": "raise ValueError(",
-    "372": "f\"This credential is bound to agent_id={bound!r}, so it cannot ask as {agent_id!r}\"",
-    "373": ")"
+    "402": "bound = (caller or {}).get(\"agent_id\")",
+    "403": "if bound is not None and bound != agent_id:",
+    "404": "raise ValueError(",
+    "405": "f\"This credential is bound to agent_id={bound!r}, so it cannot ask as {agent_id!r}\"",
+    "406": ")"
    }
   },
   {
-   "citation": "nautilus/transport/mcp_server.py:447-527",
+   "citation": "nautilus/transport/mcp_server.py:480-560",
    "cited_in": [
     "docs/reference/errors/library.md"
    ],
    "file": "nautilus/transport/mcp_server.py",
    "sha": "5823862521602161",
    "lines": {
-    "447": "# Optional tool: nautilus_declare_handoff — gated on",
-    "448": "# ``config.mcp.expose_declare_handoff`` (D-12). Registered only when",
-    "449": "# the operator has opted in.",
-    "450": "# ------------------------------------------------------------------",
-    "451": "",
-    "452": "# ------------------------------------------------------------------",
-    "453": "# Tool: nautilus_sources — what a client may ask for. The REST surface",
-    "454": "# has answered this at ``GET /v1/sources`` since AC-12.3; an MCP client",
-    "455": "# had to guess.",
-    "456": "# ------------------------------------------------------------------",
-    "457": "",
-    "458": "@mcp.tool(",
-    "459": "description=(",
-    "460": "\"List the data sources this broker can route to: id, type, \"",
-    "461": "\"description, classification, the data types each one holds and \"",
-    "462": "\"the purposes it accepts. Metadata only — never connection \"",
-    "463": "\"strings or credentials. Use it to phrase an intent that some \"",
-    "464": "\"source can actually answer, and to pick a purpose from \"",
-    "465": "\"'allowed_purposes' rather than guessing one.\"",
-    "466": ")",
-    "467": ")",
-    "468": "async def nautilus_sources(  # pyright: ignore[reportUnusedFunction]",
-    "469": "ctx: Context[Any, Any, Any] | None = None,",
-    "470": ") -> list[dict[str, Any]]:",
-    "471": "\"\"\"Metadata-only source listing, the same shape as ``GET /v1/sources``.",
-    "472": "",
-    "473": "``ctx`` is here only to resolve the caller: the REST twin is gated on",
-    "474": "the ``query`` capability and this must be too, or the gate is a door",
-    "475": "with a second entrance.",
-    "476": "\"\"\"",
-    "477": "_refuse_without_capability(_resolve_caller(ctx), \"query\")",
-    "478": "return [",
-    "479": "{",
-    "480": "\"id\": source.id,",
-    "481": "\"type\": source.type,",
-    "482": "\"description\": source.description,",
-    "483": "\"classification\": source.classification,",
-    "484": "\"data_types\": list(source.data_types),",
-    "485": "\"allowed_purposes\": list(source.allowed_purposes or []),",
-    "486": "}",
-    "487": "for source in broker.sources",
-    "488": "]",
-    "489": "",
-    "490": "if expose_handoff:",
-    "491": "",
-    "492": "@mcp.tool(",
-    "493": "description=(",
-    "494": "\"Declare that one agent is handing data to another, and get \"",
-    "495": "\"the broker's decision before you do it. Reasoning only: no \"",
-    "496": "\"source is queried. Returns action 'allow' or 'deny', and on \"",
-    "497": "\"a denial the rule that refused it and why.\"",
-    "498": ")",
+    "480": "# Optional tool: nautilus_declare_handoff — gated on",
+    "481": "# ``config.mcp.expose_declare_handoff`` (D-12). Registered only when",
+    "482": "# the operator has opted in.",
+    "483": "# ------------------------------------------------------------------",
+    "484": "",
+    "485": "# ------------------------------------------------------------------",
+    "486": "# Tool: nautilus_sources — what a client may ask for. The REST surface",
+    "487": "# has answered this at ``GET /v1/sources`` since AC-12.3; an MCP client",
+    "488": "# had to guess.",
+    "489": "# ------------------------------------------------------------------",
+    "490": "",
+    "491": "@mcp.tool(",
+    "492": "description=(",
+    "493": "\"List the data sources this broker can route to: id, type, \"",
+    "494": "\"description, classification, the data types each one holds and \"",
+    "495": "\"the purposes it accepts. Metadata only — never connection \"",
+    "496": "\"strings or credentials. Use it to phrase an intent that some \"",
+    "497": "\"source can actually answer, and to pick a purpose from \"",
+    "498": "\"'allowed_purposes' rather than guessing one.\"",
     "499": ")",
-    "500": "async def nautilus_declare_handoff(  # pyright: ignore[reportUnusedFunction]",
-    "501": "source_agent_id: str,",
-    "502": "receiving_agent_id: str,",
-    "503": "data_classifications: list[str],",
-    "504": "session_id: str | None = None,",
-    "505": "data_compartments: list[str] | None = None,",
-    "506": "ctx: Context[Any, Any, Any] | None = None,",
-    "507": ") -> HandoffDecision:",
-    "508": "\"\"\"Invoke :meth:`Broker.declare_handoff` from an MCP client.",
-    "509": "",
-    "510": "``session_id`` follows the same D-10 fallback as",
-    "511": "``nautilus_request``: caller-supplied → transport-supplied →",
-    "512": "stdio ``request_id`` → generated UUID.",
-    "513": "\"\"\"",
-    "514": "handoff_caller = _resolve_caller(ctx)",
-    "515": "_refuse_without_capability(handoff_caller, \"query\")",
-    "516": "_refuse_impersonation(handoff_caller, source_agent_id)",
-    "517": "resolved_session, _source = _resolve_session(",
-    "518": "{\"session_id\": session_id} if session_id else {},",
-    "519": "ctx,",
-    "520": ")",
-    "521": "return await broker.declare_handoff(",
-    "522": "source_agent_id=source_agent_id,",
-    "523": "receiving_agent_id=receiving_agent_id,",
-    "524": "session_id=resolved_session,",
-    "525": "data_classifications=data_classifications,",
-    "526": "data_compartments=data_compartments,",
-    "527": ")"
+    "500": ")",
+    "501": "async def nautilus_sources(  # pyright: ignore[reportUnusedFunction]",
+    "502": "ctx: Context[Any, Any, Any] | None = None,",
+    "503": ") -> list[dict[str, Any]]:",
+    "504": "\"\"\"Metadata-only source listing, the same shape as ``GET /v1/sources``.",
+    "505": "",
+    "506": "``ctx`` is here only to resolve the caller: the REST twin is gated on",
+    "507": "the ``query`` capability and this must be too, or the gate is a door",
+    "508": "with a second entrance.",
+    "509": "\"\"\"",
+    "510": "_refuse_without_capability(_resolve_caller(ctx), \"query\")",
+    "511": "return [",
+    "512": "{",
+    "513": "\"id\": source.id,",
+    "514": "\"type\": source.type,",
+    "515": "\"description\": source.description,",
+    "516": "\"classification\": source.classification,",
+    "517": "\"data_types\": list(source.data_types),",
+    "518": "\"allowed_purposes\": list(source.allowed_purposes or []),",
+    "519": "}",
+    "520": "for source in broker.sources",
+    "521": "]",
+    "522": "",
+    "523": "if expose_handoff:",
+    "524": "",
+    "525": "@mcp.tool(",
+    "526": "description=(",
+    "527": "\"Declare that one agent is handing data to another, and get \"",
+    "528": "\"the broker's decision before you do it. Reasoning only: no \"",
+    "529": "\"source is queried. Returns action 'allow' or 'deny', and on \"",
+    "530": "\"a denial the rule that refused it and why.\"",
+    "531": ")",
+    "532": ")",
+    "533": "async def nautilus_declare_handoff(  # pyright: ignore[reportUnusedFunction]",
+    "534": "source_agent_id: str,",
+    "535": "receiving_agent_id: str,",
+    "536": "data_classifications: list[str],",
+    "537": "session_id: str | None = None,",
+    "538": "data_compartments: list[str] | None = None,",
+    "539": "ctx: Context[Any, Any, Any] | None = None,",
+    "540": ") -> HandoffDecision:",
+    "541": "\"\"\"Invoke :meth:`Broker.declare_handoff` from an MCP client.",
+    "542": "",
+    "543": "``session_id`` follows the same D-10 fallback as",
+    "544": "``nautilus_request``: caller-supplied → transport-supplied →",
+    "545": "stdio ``request_id`` → generated UUID.",
+    "546": "\"\"\"",
+    "547": "handoff_caller = _resolve_caller(ctx)",
+    "548": "_refuse_without_capability(handoff_caller, \"query\")",
+    "549": "_refuse_impersonation(handoff_caller, source_agent_id)",
+    "550": "resolved_session, _source = _resolve_session(",
+    "551": "{\"session_id\": session_id} if session_id else {},",
+    "552": "ctx,",
+    "553": ")",
+    "554": "return await broker.declare_handoff(",
+    "555": "source_agent_id=source_agent_id,",
+    "556": "receiving_agent_id=receiving_agent_id,",
+    "557": "session_id=resolved_session,",
+    "558": "data_classifications=data_classifications,",
+    "559": "data_compartments=data_compartments,",
+    "560": ")"
    }
   },
   {
@@ -5505,14 +5537,14 @@
    }
   },
   {
-   "citation": "nautilus/ui/router.py:194",
+   "citation": "nautilus/ui/router.py:195",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/ui/router.py",
    "sha": "4721c9036772aba0",
    "lines": {
-    "194": "verify_api_key(api_key, keys)"
+    "195": "verify_api_key(api_key, keys)"
    }
   },
   {
