@@ -284,9 +284,7 @@ async def proxy_trust_dependency(request: Request) -> str:
         )
     subjects: dict[str, str] = dict(getattr(state, "agent_subjects", {}) or {})
     if subjects and user not in subjects:
-        log.warning(
-            "refusing forwarded subject %r: no agents.<id>.subject names it", user
-        )
+        log.warning("refusing forwarded subject %r: no agents.<id>.subject names it", user)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=(

@@ -66,9 +66,7 @@ def _lab_config(tmp_path: Path) -> Path:
         yaml.safe_dump(
             {
                 "api": {
-                    "keys": [
-                        {"key": "k", "agent_id": "a", "capabilities": ["query", "audit_read"]}
-                    ]
+                    "keys": [{"key": "k", "agent_id": "a", "capabilities": ["query", "audit_read"]}]
                 },
                 "agents": {"a": {"id": "a", "clearance": "unclassified", "default_purpose": "p"}},
                 "sources": [
@@ -200,8 +198,7 @@ def test_e27_console_static_assets_stay_cacheable(lab_client: Any) -> None:
     resp = lab_client.get("/admin/static/styles.css")
     assert resp.status_code == 200, resp.text
     assert "cache-control" not in resp.headers, (
-        "the static mount must be left alone: "
-        f"cache-control={resp.headers.get('cache-control')!r}"
+        f"the static mount must be left alone: cache-control={resp.headers.get('cache-control')!r}"
     )
     assert resp.headers.get("etag"), "control failed: StaticFiles sent no validator"
     assert resp.headers.get("last-modified"), "control failed: StaticFiles sent no validator"
@@ -415,9 +412,7 @@ def test_e27_the_text_formatter_escapes_control_characters(
     except ZeroDivisionError:
         import sys
 
-        record = logging.LogRecord(
-            "n", logging.ERROR, __file__, 1, "boom", (), sys.exc_info()
-        )
+        record = logging.LogRecord("n", logging.ERROR, __file__, 1, "boom", (), sys.exc_info())
     assert len(formatter.format(record).splitlines()) > 1
 
 

@@ -6566,22 +6566,22 @@ ok     nautilus/core/broker.py:2642 %r on state.intent_analysis.raw_intent
 ok     nautilus/core/broker.py:2642 %r on state.intent_analysis.data_types_needed
 ok     nautilus/core/broker.py:3111 %r on record.source_id
 ok     nautilus/core/broker.py:3208 %r on source_id
-ok     nautilus/core/broker.py:3433 %r on agent_id
-ok     nautilus/core/broker.py:3433 %r on state.session_id
-ok     nautilus/core/broker.py:3433 %r on purpose
-ok     nautilus/core/broker.py:3760 %r on source_id
-ok     nautilus/core/broker.py:4008 %r on source_id
+ok     nautilus/core/broker.py:3432 %r on agent_id
+ok     nautilus/core/broker.py:3432 %r on state.session_id
+ok     nautilus/core/broker.py:3432 %r on purpose
+ok     nautilus/core/broker.py:3759 %r on source_id
+ok     nautilus/core/broker.py:4007 %r on source_id
 ok     nautilus/core/broker.py:2657 %r on state.request_id
 ok     nautilus/core/broker.py:2657 %r on source_id
-ok     nautilus/core/broker.py:3421 %r on agent_id
-ok     nautilus/core/broker.py:3421 %r on purpose
+ok     nautilus/core/broker.py:3420 %r on agent_id
+ok     nautilus/core/broker.py:3420 %r on purpose
 ok     nautilus/core/broker.py:2155 %r on receiving_agent_id
 ok     nautilus/core/broker.py:2155 %r on session_id
 ok     nautilus/core/broker.py:2989 %r on state.request_id
 ok     nautilus/core/broker.py:2989 %r on source_id
 ok     nautilus/core/broker.py:3012 %r on state.request_id
 ok     nautilus/core/broker.py:3012 %r on source_id
-ok     nautilus/core/broker.py:3740 %r on source_id
+ok     nautilus/core/broker.py:3739 %r on source_id
 ok     nautilus/transport/auth.py:287 %r on user
 
 0 unescaped interpolations
@@ -6592,10 +6592,10 @@ $ echo $?
 Run it from the repository root; the paths are relative to it. Twenty-three
 rows, every one of them `%r`, `0 unescaped interpolations`, exit `0`.
 `auth.py:287` logs the `X-Forwarded-User` header a proxy sent;
-`broker.py:3421` logs the `agent_id` and `purpose` out of a request body; `broker.py:2155` logs a handoff's `agent_id` and `session_id`,
+`broker.py:3420` logs the `agent_id` and `purpose` out of a request body; `broker.py:2155` logs a handoff's `agent_id` and `session_id`,
 also from the body; the `broker.py` `source_id` rows are the per-source
 failure, schema-fetch, drift, quarantine-lift and truncation sites plus the
-`--log-level debug` routing and dial records; `broker.py:3433` is the
+`--log-level debug` routing and dial records; `broker.py:3432` is the
 `debug`-level session-token mint line.
 
 `broker.py:601` is the broker-level failure record. Its `request_id` is the

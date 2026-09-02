@@ -3393,8 +3393,7 @@ class Broker:
                     trace.append(f"resigned-from-kid={claims.kid}")
                 if drifted:
                     trace.append(
-                        f"rebound-from-purpose={claims.purpose!r}/"
-                        f"clearance={claims.clearance!r}"
+                        f"rebound-from-purpose={claims.purpose!r}/clearance={claims.clearance!r}"
                     )
                 state.session_token = fresh
                 context["session_token"] = fresh

@@ -653,7 +653,7 @@ your `rkm:` block were absent, this line is why.
 
 ### `WARN: no lineage records for {id!r}`
 
-`nautilus/cli/rkm.py:478`. **Exit 0**. `{id}` is the positional argument of
+`nautilus/cli/rkm.py:475`. **Exit 0**. `{id}` is the positional argument of
 `nautilus rkm lineage`, which accepts either a proposal ID or a rule name.
 
 ## `nautilus adapters`

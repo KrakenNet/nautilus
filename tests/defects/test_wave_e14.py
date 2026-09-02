@@ -69,9 +69,7 @@ def _config(path: Path, **overrides: Any) -> str:
         ],
         "agents": {"a1": {"id": "a1", "clearance": "unclassified"}},
         "audit": {"path": str(path.parent / "audit.jsonl")},
-        "api": {
-            "keys": [{"key": _KEY, "agent_id": "a1", "capabilities": ["query", "audit_read"]}]
-        },
+        "api": {"keys": [{"key": _KEY, "agent_id": "a1", "capabilities": ["query", "audit_read"]}]},
     }
     document.update(overrides)
     path.write_text(yaml.safe_dump(document), encoding="utf-8")
@@ -121,8 +119,7 @@ async def test_e14_the_catalogue_hides_what_the_caller_cannot_reach(tmp_path: Pa
     ids = {s["id"] for s in listed.json()["sources"]}
     assert "orders" in ids, f"the caller lost a source it can read: {ids}"
     assert "crown_jewels" not in ids, (
-        f"an unclassified-clearance key was shown a secret source: "
-        f"{listed.json()['sources']}"
+        f"an unclassified-clearance key was shown a secret source: {listed.json()['sources']}"
     )
     assert "crown jewels" not in listed.text, "the description leaked with it"
 
@@ -187,7 +184,7 @@ def test_e14_documented_counters_are_present_on_a_cold_metrics(tmp_path: Path) -
 
 
 def test_e14_the_demo_shows_an_audit_entry_it_still_has() -> None:
-    """"Every decision is recorded" is a claim the demo can just demonstrate.
+    """ "Every decision is recorded" is a claim the demo can just demonstrate.
 
     It writes real entries into a temp directory and deletes it on the way out,
     so the one line about the audit log points at a path that no longer exists

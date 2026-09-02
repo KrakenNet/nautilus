@@ -358,9 +358,7 @@ class PostgresSessionStore:
         if self._degraded_memory is not None:
             return self._degraded_memory.get(session_id)
         if self._pool is None:
-            raise self._unavailable(
-                "PostgresSessionStore.aget() called before setup() succeeded"
-            )
+            raise self._unavailable("PostgresSessionStore.aget() called before setup() succeeded")
         # Bounded: ``pool.fetchrow`` acquires with no deadline, and /readyz
         # calls this. A probe that hangs instead of answering 503 leaves a pod
         # that cannot serve sitting in the load balancer.

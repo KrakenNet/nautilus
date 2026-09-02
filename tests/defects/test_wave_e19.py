@@ -131,9 +131,7 @@ def test_e19_the_gate_fails_an_adapter_that_ignores_the_constraint() -> None:
 def test_e19_the_gate_fails_an_ignoring_adapter_that_returns_no_id() -> None:
     """The pin, second shape. No ``id`` to contradict, so nothing narrowed."""
     with pytest.raises(AssertionError) as excinfo:
-        asyncio.run(
-            _suite(_IgnoresScopeAndProjectsIdAway).test_scope_enforcement_valid_operator()
-        )
+        asyncio.run(_suite(_IgnoresScopeAndProjectsIdAway).test_scope_enforcement_valid_operator())
 
     assert "changed nothing" in str(excinfo.value), str(excinfo.value)
 

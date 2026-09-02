@@ -381,9 +381,7 @@ def test_e11_the_image_carries_no_driver_extras() -> None:
             continue
         words = line.split()
         installed |= {
-            words[index + 1]
-            for index, word in enumerate(words[:-1])
-            if word == "--extra"
+            words[index + 1] for index, word in enumerate(words[:-1]) if word == "--extra"
         }
     drivers = {"postgres", "pgvector", "elasticsearch", "neo4j", "influxdb", "s3"}
     assert not (installed & drivers), (
@@ -405,8 +403,16 @@ def _free_port() -> int:
 
 def _serve(config: str, port: int) -> subprocess.Popen[bytes]:
     return subprocess.Popen(  # noqa: S603 — this interpreter, a literal argv
-        [sys.executable, "-m", "nautilus", "serve", "--config", config,
-         "--bind", f"127.0.0.1:{port}"],
+        [
+            sys.executable,
+            "-m",
+            "nautilus",
+            "serve",
+            "--config",
+            config,
+            "--bind",
+            f"127.0.0.1:{port}",
+        ],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         cwd=str(_REPO_ROOT),
@@ -593,9 +599,7 @@ def test_e11_the_readme_only_names_commands_that_exist() -> None:
 
 def test_e11_the_quickstart_still_authenticates() -> None:
     """Control: adding a header must not drop the one that was already there."""
-    assert "X-API-Key" in _quickstart_curl(), (
-        "the quickstart curl no longer sends X-API-Key"
-    )
+    assert "X-API-Key" in _quickstart_curl(), "the quickstart curl no longer sends X-API-Key"
 
 
 def test_e11_the_quickstart_body_is_valid_json() -> None:

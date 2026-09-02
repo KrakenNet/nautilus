@@ -138,9 +138,7 @@ class AdapterComplianceSuite:
             )
 
             contradicting = [
-                row
-                for row in refuting.rows
-                if "id" in row and str(row["id"]) != _NO_SUCH_VALUE
+                row for row in refuting.rows if "id" in row and str(row["id"]) != _NO_SUCH_VALUE
             ]
             assert not contradicting, (
                 f"the adapter returned {len(contradicting)} row(s) that contradict the "

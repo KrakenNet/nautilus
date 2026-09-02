@@ -57,9 +57,7 @@ class _NoSchema:
     """A third-party adapter that never overrode the protocol's default."""
 
     async def get_schema(self) -> Any:
-        raise NotImplementedError(
-            "AC-21.b: this adapter must implement get_schema() (task-006)"
-        )
+        raise NotImplementedError("AC-21.b: this adapter must implement get_schema() (task-006)")
 
 
 class _NotEvenAnAttribute:

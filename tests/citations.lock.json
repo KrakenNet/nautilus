@@ -87,9 +87,9 @@
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/transport/auth.py",
-   "sha": "dfbf1883e63b66b0",
+   "sha": "cd42dbc8b1140e13",
    "lines": {
-    "287": "log.warning("
+    "287": "log.warning(\"refusing forwarded subject %r: no agents.<id>.subject names it\", user)"
    }
   },
   {
@@ -104,25 +104,25 @@
    }
   },
   {
-   "citation": "broker.py:3421",
+   "citation": "broker.py:3420",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "3421": "log.warning("
+    "3420": "log.warning("
    }
   },
   {
-   "citation": "broker.py:3433",
+   "citation": "broker.py:3432",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "e4d962289f8a515a",
    "lines": {
-    "3433": "log.debug("
+    "3432": "log.debug("
    }
   },
   {
@@ -232,66 +232,66 @@
    }
   },
   {
-   "citation": "fastapi_app.py:1057",
+   "citation": "fastapi_app.py:1055",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "eb20c85537dd2d84",
    "lines": {
-    "1057": "detail=str(exc),"
+    "1055": "detail=str(exc),"
    }
   },
   {
-   "citation": "fastapi_app.py:1096",
+   "citation": "fastapi_app.py:1094",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "a355f9133862ca8d",
    "lines": {
-    "1096": "detail=\"reviewer and reason are required (no control characters)\","
+    "1094": "detail=\"reviewer and reason are required (no control characters)\","
    }
   },
   {
-   "citation": "fastapi_app.py:1103",
+   "citation": "fastapi_app.py:1101",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "eb20c85537dd2d84",
    "lines": {
-    "1103": "detail=str(exc),"
+    "1101": "detail=str(exc),"
    }
   },
   {
-   "citation": "fastapi_app.py:1110-1118",
+   "citation": "fastapi_app.py:1108-1116",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "b5b5de69ecd5c3d2",
    "lines": {
-    "1110": ") from exc",
-    "1111": "except KeyError as exc:",
-    "1112": "raise HTTPException(",
-    "1113": "status_code=status.HTTP_404_NOT_FOUND,",
-    "1114": "detail=f\"kid {kid!r} not found\",",
-    "1115": ") from exc",
-    "1116": "return {\"revoked_kid\": kid, \"reviewer\": reviewer, \"reason\": reason}",
-    "1117": "",
-    "1118": "# ------------------------------------------------------------------"
+    "1108": ") from exc",
+    "1109": "except KeyError as exc:",
+    "1110": "raise HTTPException(",
+    "1111": "status_code=status.HTTP_404_NOT_FOUND,",
+    "1112": "detail=f\"kid {kid!r} not found\",",
+    "1113": ") from exc",
+    "1114": "return {\"revoked_kid\": kid, \"reviewer\": reviewer, \"reason\": reason}",
+    "1115": "",
+    "1116": "# ------------------------------------------------------------------"
    }
   },
   {
-   "citation": "fastapi_app.py:1123",
+   "citation": "fastapi_app.py:1121",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "f50057e60a824c80",
    "lines": {
-    "1123": "\"/v1/adapters\","
+    "1121": "\"/v1/adapters\","
    }
   },
   {
@@ -2378,14 +2378,14 @@
    }
   },
   {
-   "citation": "nautilus/cli/rkm.py:478",
+   "citation": "nautilus/cli/rkm.py:475",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/rkm.py",
    "sha": "e0017fb5ef843b44",
    "lines": {
-    "478": "print(f\"  proposal : {args.proposal_id}\")"
+    "475": "print(f\"  proposal : {args.proposal_id}\")"
    }
   },
   {
@@ -3867,25 +3867,25 @@
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3421",
+   "citation": "nautilus/core/broker.py:3420",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "3421": "log.warning("
+    "3420": "log.warning("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3433",
+   "citation": "nautilus/core/broker.py:3432",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "e4d962289f8a515a",
    "lines": {
-    "3433": "log.debug("
+    "3432": "log.debug("
    }
   },
   {
@@ -3931,98 +3931,98 @@
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3541-3566",
+   "citation": "nautilus/core/broker.py:3540-3565",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "1f75a9a859d879b8",
    "lines": {
-    "3541": "try:",
-    "3542": "return await adapter.execute(intent, scope, context)",
-    "3543": "except ScopeEnforcementError as exc:",
-    "3544": "return AdapterResult(",
-    "3545": "source_id=source_id,",
-    "3546": "rows=[],",
-    "3547": "duration_ms=0,",
-    "3548": "error=ErrorRecord(",
-    "3549": "source_id=source_id,",
-    "3550": "error_type=\"ScopeEnforcementError\",",
-    "3551": "message=str(exc),",
-    "3552": "trace_id=\"\",  # filled in by _gather_adapter_results",
-    "3553": "),",
-    "3554": ")",
-    "3555": "except AdapterError as exc:",
-    "3556": "return AdapterResult(",
-    "3557": "source_id=source_id,",
-    "3558": "rows=[],",
-    "3559": "duration_ms=0,",
-    "3560": "error=ErrorRecord(",
-    "3561": "source_id=source_id,",
-    "3562": "error_type=type(exc).__name__,",
-    "3563": "message=str(exc),",
-    "3564": "trace_id=\"\",",
-    "3565": "),",
-    "3566": ")"
+    "3540": "try:",
+    "3541": "return await adapter.execute(intent, scope, context)",
+    "3542": "except ScopeEnforcementError as exc:",
+    "3543": "return AdapterResult(",
+    "3544": "source_id=source_id,",
+    "3545": "rows=[],",
+    "3546": "duration_ms=0,",
+    "3547": "error=ErrorRecord(",
+    "3548": "source_id=source_id,",
+    "3549": "error_type=\"ScopeEnforcementError\",",
+    "3550": "message=str(exc),",
+    "3551": "trace_id=\"\",  # filled in by _gather_adapter_results",
+    "3552": "),",
+    "3553": ")",
+    "3554": "except AdapterError as exc:",
+    "3555": "return AdapterResult(",
+    "3556": "source_id=source_id,",
+    "3557": "rows=[],",
+    "3558": "duration_ms=0,",
+    "3559": "error=ErrorRecord(",
+    "3560": "source_id=source_id,",
+    "3561": "error_type=type(exc).__name__,",
+    "3562": "message=str(exc),",
+    "3563": "trace_id=\"\",",
+    "3564": "),",
+    "3565": ")"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3648",
+   "citation": "nautilus/core/broker.py:3647",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "a315211e467c4c21",
    "lines": {
-    "3648": "decision = f\"nautilus:{request_id}:agent={agent_id}:principal={principal_id}\""
+    "3647": "decision = f\"nautilus:{request_id}:agent={agent_id}:principal={principal_id}\""
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3740",
+   "citation": "nautilus/core/broker.py:3739",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "3740": "log.warning("
+    "3739": "log.warning("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:3760",
+   "citation": "nautilus/core/broker.py:3759",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "dfbf1883e63b66b0",
    "lines": {
-    "3760": "log.warning("
+    "3759": "log.warning("
    }
   },
   {
-   "citation": "nautilus/core/broker.py:4008",
+   "citation": "nautilus/core/broker.py:4007",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "be7a933a835bb215",
    "lines": {
-    "4008": "log.info(\"quarantine lifted for adapter %r; baseline now matches\", source_id)"
+    "4007": "log.info(\"quarantine lifted for adapter %r; baseline now matches\", source_id)"
    }
   },
   {
-   "citation": "nautilus/core/broker.py:4082-4086",
+   "citation": "nautilus/core/broker.py:4081-4085",
    "cited_in": [
     "docs/reference/errors/library.md"
    ],
    "file": "nautilus/core/broker.py",
    "sha": "2c937a3e9a8eea6a",
    "lines": {
-    "4082": "# 1. Session store: flush any in-flight writes before downstream close.",
-    "4083": "if hasattr(self._session_store, \"aclose\"):",
-    "4084": "with contextlib.suppress(Exception):",
-    "4085": "await self._session_store.aclose()  # type: ignore[attr-defined]",
-    "4086": "# 2. Attestation sink: release the store-and-forward handle AFTER"
+    "4081": "# 1. Session store: flush any in-flight writes before downstream close.",
+    "4082": "if hasattr(self._session_store, \"aclose\"):",
+    "4083": "with contextlib.suppress(Exception):",
+    "4084": "await self._session_store.aclose()  # type: ignore[attr-defined]",
+    "4085": "# 2. Attestation sink: release the store-and-forward handle AFTER"
    }
   },
   {
@@ -4249,64 +4249,63 @@
    }
   },
   {
-   "citation": "nautilus/core/session_pg.py:359-362",
+   "citation": "nautilus/core/session_pg.py:359-361",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/session_pg.py",
-   "sha": "9678dec1209c0500",
+   "sha": "a610f4ad50877d42",
    "lines": {
     "359": "return self._degraded_memory.get(session_id)",
     "360": "if self._pool is None:",
-    "361": "raise self._unavailable(",
-    "362": "\"PostgresSessionStore.aget() called before setup() succeeded\""
+    "361": "raise self._unavailable(\"PostgresSessionStore.aget() called before setup() succeeded\")"
    }
   },
   {
-   "citation": "nautilus/core/session_pg.py:397-401",
+   "citation": "nautilus/core/session_pg.py:395-399",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/session_pg.py",
    "sha": "31bdf515f5594c18",
    "lines": {
-    "397": "row = await conn.fetchrow(\"SELECT version FROM nautilus_schema_version\")",
-    "398": "if row is not None and int(row[\"version\"]) != _SCHEMA_VERSION:",
-    "399": "raise SessionSchemaError(",
-    "400": "f\"session store at {self._sanitized_dsn()} now carries schema \"",
-    "401": "f\"version {int(row['version'])}; this build understands version \""
+    "395": "row = await conn.fetchrow(\"SELECT version FROM nautilus_schema_version\")",
+    "396": "if row is not None and int(row[\"version\"]) != _SCHEMA_VERSION:",
+    "397": "raise SessionSchemaError(",
+    "398": "f\"session store at {self._sanitized_dsn()} now carries schema \"",
+    "399": "f\"version {int(row['version'])}; this build understands version \""
    }
   },
   {
-   "citation": "nautilus/core/session_pg.py:462-467",
+   "citation": "nautilus/core/session_pg.py:460-465",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/session_pg.py",
    "sha": "9bbcfdae6fbfc273",
    "lines": {
-    "462": "conn = await self._pool.acquire(timeout=self._acquire_timeout_s)",
-    "463": "except TimeoutError as exc:",
-    "464": "raise self._unavailable(",
-    "465": "f\"session-store pool exhausted: no connection became free within \"",
-    "466": "f\"{self._acquire_timeout_s}s (pool max_size={self._pool_max_size}). \"",
-    "467": "f\"Raise session_store.pool_max_size to at least your peak concurrency.\""
+    "460": "conn = await self._pool.acquire(timeout=self._acquire_timeout_s)",
+    "461": "except TimeoutError as exc:",
+    "462": "raise self._unavailable(",
+    "463": "f\"session-store pool exhausted: no connection became free within \"",
+    "464": "f\"{self._acquire_timeout_s}s (pool max_size={self._pool_max_size}). \"",
+    "465": "f\"Raise session_store.pool_max_size to at least your peak concurrency.\""
    }
   },
   {
-   "citation": "nautilus/core/session_pg.py:536-541",
+   "citation": "nautilus/core/session_pg.py:534-539",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/session_pg.py",
    "sha": "7b5c144d5429244c",
    "lines": {
-    "536": "conn = await self._lock_pool.acquire(timeout=self._acquire_timeout_s)",
-    "537": "except TimeoutError as exc:",
-    "538": "raise self._unavailable(",
-    "539": "f\"session-store lock pool exhausted: no connection became free within \"",
-    "540": "f\"{self._acquire_timeout_s}s (lock pool max_size={self._lock_pool_max_size}). \"",
-    "541": "f\"One is held per in-flight request, so raise \""
+    "534": "conn = await self._lock_pool.acquire(timeout=self._acquire_timeout_s)",
+    "535": "except TimeoutError as exc:",
+    "536": "raise self._unavailable(",
+    "537": "f\"session-store lock pool exhausted: no connection became free within \"",
+    "538": "f\"{self._acquire_timeout_s}s (lock pool max_size={self._lock_pool_max_size}). \"",
+    "539": "f\"One is held per in-flight request, so raise \""
    }
   },
   {
@@ -4779,23 +4778,23 @@
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/transport/auth.py",
-   "sha": "dfbf1883e63b66b0",
+   "sha": "cd42dbc8b1140e13",
    "lines": {
-    "287": "log.warning("
+    "287": "log.warning(\"refusing forwarded subject %r: no agents.<id>.subject names it\", user)"
    }
   },
   {
-   "citation": "nautilus/transport/auth.py:302-305",
+   "citation": "nautilus/transport/auth.py:300-303",
    "cited_in": [
     "docs/reference/errors/session-tokens.md"
    ],
    "file": "nautilus/transport/auth.py",
    "sha": "718b24e5cfa53b38",
    "lines": {
-    "302": "request: Request,",
-    "303": ") -> SessionTokenClaims | None:",
-    "304": "\"\"\"Optional FastAPI dependency — validate ``X-Nautilus-Session-Token`` if present.",
-    "305": ""
+    "300": "request: Request,",
+    "301": ") -> SessionTokenClaims | None:",
+    "302": "\"\"\"Optional FastAPI dependency — validate ``X-Nautilus-Session-Token`` if present.",
+    "303": ""
    }
   },
   {
@@ -4821,83 +4820,83 @@
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1183-1188",
+   "citation": "nautilus/transport/fastapi_app.py:1181-1186",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "d22f6ed0efbc2a57",
    "lines": {
-    "1183": "raise HTTPException(",
-    "1184": "status_code=status.HTTP_501_NOT_IMPLEMENTED,",
-    "1185": "detail=f\"Adapter '{name}' does not support schema introspection\",",
-    "1186": ")",
-    "1187": "try:",
-    "1188": "schema = await adapter.get_schema()"
+    "1181": "raise HTTPException(",
+    "1182": "status_code=status.HTTP_501_NOT_IMPLEMENTED,",
+    "1183": "detail=f\"Adapter '{name}' does not support schema introspection\",",
+    "1184": ")",
+    "1185": "try:",
+    "1186": "schema = await adapter.get_schema()"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1196-1201",
+   "citation": "nautilus/transport/fastapi_app.py:1194-1199",
    "cited_in": [
     "docs/reference/errors/library.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "9caaba2bb9987081",
    "lines": {
-    "1196": "from fastapi import HTTPException",
-    "1197": "",
-    "1198": "raise HTTPException(",
-    "1199": "status_code=status.HTTP_501_NOT_IMPLEMENTED,",
-    "1200": "detail=f\"Adapter '{name}' does not support schema introspection\",",
-    "1201": ") from exc"
+    "1194": "from fastapi import HTTPException",
+    "1195": "",
+    "1196": "raise HTTPException(",
+    "1197": "status_code=status.HTTP_501_NOT_IMPLEMENTED,",
+    "1198": "detail=f\"Adapter '{name}' does not support schema introspection\",",
+    "1199": ") from exc"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1202-1207",
+   "citation": "nautilus/transport/fastapi_app.py:1200-1205",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "9b93e271e7d698c4",
    "lines": {
-    "1202": "except Exception as exc:  # noqa: BLE001",
-    "1203": "from fastapi import HTTPException",
-    "1204": "",
-    "1205": "raise HTTPException(",
-    "1206": "status_code=status.HTTP_503_SERVICE_UNAVAILABLE,",
-    "1207": "detail=f\"Schema fetch failed: {exc}\","
+    "1200": "except Exception as exc:  # noqa: BLE001",
+    "1201": "from fastapi import HTTPException",
+    "1202": "",
+    "1203": "raise HTTPException(",
+    "1204": "status_code=status.HTTP_503_SERVICE_UNAVAILABLE,",
+    "1205": "detail=f\"Schema fetch failed: {exc}\","
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1284-1290",
+   "citation": "nautilus/transport/fastapi_app.py:1282-1288",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "d2a0c20c58cde3e7",
    "lines": {
-    "1284": "",
-    "1285": "bound: str | None = _caller_identity(request)[\"agent_id\"]",
-    "1286": "if bound:",
-    "1287": "return bound",
-    "1288": "reviewer = request.headers.get(\"X-Nautilus-Reviewer\") or request.headers.get(\"X-Reviewer\")",
-    "1289": "if not reviewer:",
-    "1290": "raise HTTPException("
+    "1282": "",
+    "1283": "bound: str | None = _caller_identity(request)[\"agent_id\"]",
+    "1284": "if bound:",
+    "1285": "return bound",
+    "1286": "reviewer = request.headers.get(\"X-Nautilus-Reviewer\") or request.headers.get(\"X-Reviewer\")",
+    "1287": "if not reviewer:",
+    "1288": "raise HTTPException("
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1473-1477",
+   "citation": "nautilus/transport/fastapi_app.py:1471-1475",
    "cited_in": [
     "docs/reference/errors/rules.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "8eafd6401bff9005",
    "lines": {
-    "1473": "except AlreadyDecidedError as exc:",
-    "1474": "raise HTTPException(",
-    "1475": "status_code=status.HTTP_409_CONFLICT,",
-    "1476": "detail={\"error\": \"already_decided\", \"current_status\": exc.current_status},",
-    "1477": ") from exc"
+    "1471": "except AlreadyDecidedError as exc:",
+    "1472": "raise HTTPException(",
+    "1473": "status_code=status.HTTP_409_CONFLICT,",
+    "1474": "detail={\"error\": \"already_decided\", \"current_status\": exc.current_status},",
+    "1475": ") from exc"
    }
   },
   {
@@ -4917,26 +4916,26 @@
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1805-1817",
+   "citation": "nautilus/transport/fastapi_app.py:1802-1814",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "296c6cc1243dfb25",
    "lines": {
-    "1805": "def _parse_audit_dt(value: str | None) -> datetime | None:",
-    "1806": "\"\"\"Parse an ISO-8601 datetime query param, or 400 on bad input.\"\"\"",
-    "1807": "if not value:",
-    "1808": "return None",
-    "1809": "try:",
-    "1810": "return datetime.fromisoformat(value)",
-    "1811": "except ValueError as exc:",
-    "1812": "from fastapi import HTTPException",
-    "1813": "",
-    "1814": "raise HTTPException(",
-    "1815": "status_code=status.HTTP_400_BAD_REQUEST,",
-    "1816": "detail=f\"invalid datetime: {value!r}\",",
-    "1817": ") from exc"
+    "1802": "def _parse_audit_dt(value: str | None) -> datetime | None:",
+    "1803": "\"\"\"Parse an ISO-8601 datetime query param, or 400 on bad input.\"\"\"",
+    "1804": "if not value:",
+    "1805": "return None",
+    "1806": "try:",
+    "1807": "return datetime.fromisoformat(value)",
+    "1808": "except ValueError as exc:",
+    "1809": "from fastapi import HTTPException",
+    "1810": "",
+    "1811": "raise HTTPException(",
+    "1812": "status_code=status.HTTP_400_BAD_REQUEST,",
+    "1813": "detail=f\"invalid datetime: {value!r}\",",
+    "1814": ") from exc"
    }
   },
   {

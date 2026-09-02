@@ -12,10 +12,10 @@ Both routes need the `keys` capability. `curl` examples assume the
 
 | Message | Status | Line | Meaning |
 | --- | --- | --- | --- |
-| `reviewer is required (no control characters)` | 400 | `fastapi_app.py:1057` | `POST /v1/keys/rotate` needs `reviewer` in the body. Control characters are stripped, so a value made only of them reads as absent. |
-| `reviewer and reason are required (no control characters)` | 400 | `fastapi_app.py:1103` | `POST /v1/keys/{kid}/revoke` needs both. |
-| `kid must be a UUID` | 400 | `fastapi_app.py:1096` | The `{kid}` path segment is not a UUID. Take it from `/v1/keys/jwks.json`. |
-| `kid {kid!r} not found` | 404 | `fastapi_app.py:1123` | No key with that id in the ring. |
+| `reviewer is required (no control characters)` | 400 | `fastapi_app.py:1055` | `POST /v1/keys/rotate` needs `reviewer` in the body. Control characters are stripped, so a value made only of them reads as absent. |
+| `reviewer and reason are required (no control characters)` | 400 | `fastapi_app.py:1101` | `POST /v1/keys/{kid}/revoke` needs both. |
+| `kid must be a UUID` | 400 | `fastapi_app.py:1094` | The `{kid}` path segment is not a UUID. Take it from `/v1/keys/jwks.json`. |
+| `kid {kid!r} not found` | 404 | `fastapi_app.py:1121` | No key with that id in the ring. |
 
 ```bash
 curl -s -X POST "$NAUTILUS/v1/keys/rotate" \
@@ -26,7 +26,7 @@ curl -s -X POST "$NAUTILUS/v1/keys/not-a-uuid/revoke" \
 ```
 
 Rotation and revocation are also refused with **HTTP 409** carrying the underlying `ValueError`
-text (`fastapi_app.py:1110-1118`) — most often:
+text (`fastapi_app.py:1108-1116`) — most often:
 
 ### `kid {kid!r} is the current primary; rotate first, then revoke`
 
@@ -53,7 +53,7 @@ public key where a private one was expected. Nautilus signs with Ed25519 only.
 
 ### `attestation is disabled`
 
-**`RuntimeError`**, `nautilus/core/broker.py:3648`. An attestation API was called while
+**`RuntimeError`**, `nautilus/core/broker.py:3647`. An attestation API was called while
 `attestation.enabled` is false. Enable it, or stop calling that API.
 
 ## Chained log configuration

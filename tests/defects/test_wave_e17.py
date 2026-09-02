@@ -41,9 +41,7 @@ pytestmark = [pytest.mark.integration]
 _KEY = "e17-key"
 
 
-def _write_config(
-    path: Path, *, ui_enabled: bool, audit: Path, rules_dir: bool = True
-) -> str:
+def _write_config(path: Path, *, ui_enabled: bool, audit: Path, rules_dir: bool = True) -> str:
     user_rules = path / "user-rules"
     user_rules.mkdir(exist_ok=True)
     document: dict[str, Any] = {
@@ -295,9 +293,9 @@ def test_e17_a_rule_that_cannot_compile_is_refused_at_submission(tmp_path: Path)
     assert submitted.status_code == 201, submitted.text
     assert submitted.json()["status"] == "rejected", submitted.text
     assert submitted.json()["static_ok"] is False
-    assert any(
-        "no_such_template_anywhere" in e for e in submitted.json()["static_errors"]
-    ), submitted.json()["static_errors"]
+    assert any("no_such_template_anywhere" in e for e in submitted.json()["static_errors"]), (
+        submitted.json()["static_errors"]
+    )
 
 
 def test_e17_a_proposal_whose_rule_does_load_still_promotes(tmp_path: Path) -> None:

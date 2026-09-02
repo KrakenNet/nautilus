@@ -68,9 +68,7 @@ def _client(config: str, *, base_url: str = "http://testserver") -> Any:
 def test_e20_the_admin_cookie_is_secure_over_tls(tmp_path: Path) -> None:
     """The pin. The cookie is the API key; over TLS it must not leak to http."""
     with _client(_config(tmp_path), base_url="https://testserver") as client:
-        resp = client.post(
-            "/admin/login", data={"api_key": "secret-key"}, follow_redirects=False
-        )
+        resp = client.post("/admin/login", data={"api_key": "secret-key"}, follow_redirects=False)
 
     assert resp.status_code == 302, resp.text
     cookie = resp.headers.get("set-cookie", "")
@@ -102,9 +100,7 @@ def test_e20_the_admin_cookie_honours_a_terminating_proxy(tmp_path: Path) -> Non
 def test_e20_a_plaintext_console_still_gets_a_usable_cookie(tmp_path: Path) -> None:
     """Control. A Secure cookie over http is dropped, which is a login loop."""
     with _client(_config(tmp_path)) as client:
-        resp = client.post(
-            "/admin/login", data={"api_key": "secret-key"}, follow_redirects=False
-        )
+        resp = client.post("/admin/login", data={"api_key": "secret-key"}, follow_redirects=False)
 
     cookie = resp.headers.get("set-cookie", "")
     assert "nautilus_key=" in cookie, cookie
@@ -137,9 +133,7 @@ def test_e20_a_plaintext_attestation_sink_says_so(caplog: pytest.LogCaptureFixtu
         "http://127.0.0.1:9000/attestations",
     ],
 )
-def test_e20_tls_and_loopback_sinks_stay_quiet(
-    url: str, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_e20_tls_and_loopback_sinks_stay_quiet(url: str, caplog: pytest.LogCaptureFixture) -> None:
     """Control. Warning on a sink that leaks nothing trains operators to ignore it."""
     from nautilus.core.attestation_sink import HttpAttestationSink
 

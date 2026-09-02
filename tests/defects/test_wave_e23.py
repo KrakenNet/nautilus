@@ -101,6 +101,7 @@ def test_e23_an_accepted_submit_still_says_ok(
         lineage={},
         decisions=[],
     )
+
     def _accepted(*args: Any, **kwargs: Any) -> Proposal:  # noqa: ARG001
         return accepted
 
@@ -204,9 +205,7 @@ def test_e23_rejecting_a_promoted_proposal_still_fails(
     )
 
 
-def _approve_against_409(
-    monkeypatch: pytest.MonkeyPatch, current_status: str
-) -> tuple[int, str]:
+def _approve_against_409(monkeypatch: pytest.MonkeyPatch, current_status: str) -> tuple[int, str]:
     import httpx
 
     from nautilus.cli import rkm as rkm_cli
@@ -224,9 +223,7 @@ def _approve_against_409(
         def post(self, *args: Any, **kwargs: Any) -> httpx.Response:  # noqa: ARG002
             return httpx.Response(
                 409,
-                json={
-                    "detail": {"error": "already_decided", "current_status": current_status}
-                },
+                json={"detail": {"error": "already_decided", "current_status": current_status}},
                 request=httpx.Request("POST", "http://broker/v1/rkm/queue/prop_x/approve"),
             )
 

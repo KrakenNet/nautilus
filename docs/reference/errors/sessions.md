@@ -86,8 +86,8 @@ directory. Fix the directory, or fix Postgres.
 
 ### `PostgresSessionStore.aget() called before setup() succeeded`
 
-`nautilus/core/session_pg.py:359-362`. Also `PostgresSessionStore.aupdate() called before
-setup() succeeded` (`:421-422`) and `SqliteSessionStore({self._path}) used before setup()
+`nautilus/core/session_pg.py:359-361`. Also `PostgresSessionStore.aupdate() called before
+setup() succeeded` (`:420`) and `SqliteSessionStore({self._path}) used before setup()
 succeeded` (`nautilus/core/session_sqlite.py:156-159`).
 
 **Means.** The store object exists but `setup()` never completed, so there is no pool and no
@@ -96,11 +96,11 @@ embedding Nautilus, it means the store was constructed and used without awaiting
 
 ### `session-store pool exhausted: no connection became free within {self._acquire_timeout_s}s (pool max_size={self._pool_max_size}). Raise session_store.pool_max_size to at least your peak concurrency.`
 
-`nautilus/core/session_pg.py:462-467`.
+`nautilus/core/session_pg.py:460-465`.
 
 ### `session-store lock pool exhausted: no connection became free within {self._acquire_timeout_s}s (lock pool max_size={self._lock_pool_max_size}). One is held per in-flight request, so raise session_store.lock_pool_max_size to at least your peak concurrency.`
 
-`nautilus/core/session_pg.py:536-541`. The second pool is separate because a connection is held
+`nautilus/core/session_pg.py:534-539`. The second pool is separate because a connection is held
 for the whole lifetime of a request holding the advisory lock. Size it to peak in-flight
 requests, not to average load — the first pool being adequate says nothing about this one.
 
@@ -115,7 +115,7 @@ read-modify-writing rows whose shape it is guessing at.
 
 ### `session store at {…} now carries schema version {…}; this build understands version {_SCHEMA_VERSION}. Another Nautilus migrated the store while this one was running.`
 
-`nautilus/core/session_pg.py:397-401`. Re-checked by `/readyz`, so the running pod drains itself
+`nautilus/core/session_pg.py:395-399`. Re-checked by `/readyz`, so the running pod drains itself
 mid-rollout instead of writing rows it does not understand.
 
 ### `session database {self._path} carries schema version {found}; this build understands version {_SCHEMA_VERSION}. It was written by a different Nautilus — point session_store.sqlite_path at a fresh file, or run the matching build.`

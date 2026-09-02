@@ -105,8 +105,16 @@ class _Server:
         handle = self.log.open("wb")
         self._handle = handle
         self.proc = subprocess.Popen(  # noqa: S603 — this interpreter, a literal argv
-            [sys.executable, "-m", "nautilus", "serve", "--config", config,
-             "--bind", f"127.0.0.1:{self.port}"],
+            [
+                sys.executable,
+                "-m",
+                "nautilus",
+                "serve",
+                "--config",
+                config,
+                "--bind",
+                f"127.0.0.1:{self.port}",
+            ],
             stdout=handle,
             stderr=subprocess.STDOUT,
             cwd=str(cwd),

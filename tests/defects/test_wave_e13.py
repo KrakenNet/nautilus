@@ -187,7 +187,7 @@ async def test_e13_a_declared_handoff_partner_may_join(tmp_path: Path) -> None:
 
     assert joined.outcome != "errored", (
         f"the declared handoff recipient was refused its own session: "
-        f"{[ (e.error_type, e.message) for e in joined.errored ]}"
+        f"{[(e.error_type, e.message) for e in joined.errored]}"
     )
 
 
@@ -254,9 +254,7 @@ async def _client(config: str) -> Any:
     ],
 )
 @pytest.mark.asyncio
-async def test_e13_a_bad_body_token_is_401_not_500(
-    tmp_path: Path, label: str, token: str
-) -> None:
+async def test_e13_a_bad_body_token_is_401_not_500(tmp_path: Path, label: str, token: str) -> None:
     """Fail-closed is right; calling it a server error is not.
 
     The header path already answers 401. A caller that puts the same token in
@@ -289,8 +287,7 @@ async def test_e13_a_bad_body_token_is_401_not_500(
         await broker.aclose()
 
     assert via_header.status_code == 401, (
-        f"the control path stopped answering 401 to a {label} token: "
-        f"{via_header.status_code}"
+        f"the control path stopped answering 401 to a {label} token: {via_header.status_code}"
     )
     assert via_body.status_code == 401, (
         f"a {label} session token in the request body answered "
@@ -343,7 +340,7 @@ async def test_e13_a_good_token_still_serves(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_e13_an_unwritable_audit_log_is_503_not_500(tmp_path: Path) -> None:
-    """"Our recorder is down, retry" and "your request was bad" are different answers.
+    """ "Our recorder is down, retry" and "your request was bad" are different answers.
 
     ``FileSink.write`` reopens the file on every write, so a log that becomes
     unwritable mid-request raises ``PermissionError`` out of
@@ -371,9 +368,7 @@ async def test_e13_an_unwritable_audit_log_is_503_not_500(tmp_path: Path) -> Non
 
         audit_path.chmod(0o000)
         try:
-            broken = await client.post(
-                "/v1/request", headers={"X-API-Key": _KEY_A}, json=body
-            )
+            broken = await client.post("/v1/request", headers={"X-API-Key": _KEY_A}, json=body)
         finally:
             audit_path.chmod(0o644)
     finally:

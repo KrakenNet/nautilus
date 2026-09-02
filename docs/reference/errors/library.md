@@ -59,7 +59,7 @@ RuntimeError: Broker.request() called inside a running event loop. Use Broker.ar
 
 ### `Broker.close() called inside a running event loop. Use Broker.aclose() (async) from async contexts.`
 
-**`RuntimeError`**, `nautilus/core/broker.py:4082-4086`. Same rule for shutdown: `await
+**`RuntimeError`**, `nautilus/core/broker.py:4081-4085`. Same rule for shutdown: `await
 broker.aclose()`. No interpolation.
 
 **Means.** `close()` drains the attestation sink and the session store synchronously; from inside a
@@ -293,7 +293,7 @@ schema, which is deliberate: an adapter is usable for queries before it can desc
 
 **Status.** `GET /v1/adapters/{name}/schema` answers **501** with
 `{"detail": "Adapter '<name>' does not support schema introspection"}`
-(`nautilus/transport/fastapi_app.py:1196-1201`) — a permanent refusal, not a retryable one, which
+(`nautilus/transport/fastapi_app.py:1194-1199`) — a permanent refusal, not a retryable one, which
 is why it is not the 503 the other schema failures get. Inside a request the drift gate treats a
 raising `get_schema` as "cannot check" and the request still answers **200**.
 

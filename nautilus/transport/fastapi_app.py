@@ -994,9 +994,7 @@ def create_app(
             except PurposeNotPermittedError as exc:
                 from fastapi import HTTPException
 
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)
-                ) from exc
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
         else:
             # No broker to read a registry from (mock-broker tests). Signing an
             # empty clearance is the honest answer; the caller's is never it.
@@ -1487,8 +1485,7 @@ def create_app(
                     "message": str(exc),
                     "current_status": "approved",
                     "recovery": (
-                        "fix the rule and re-approve to retry the promotion, "
-                        "or reject the proposal"
+                        "fix the rule and re-approve to retry the promotion, or reject the proposal"
                     ),
                 },
             ) from exc

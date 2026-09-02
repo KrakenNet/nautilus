@@ -434,10 +434,7 @@ def _cmd_queue_reject(args: argparse.Namespace) -> int:
         if exc.current_status == "rejected":
             ok(f"proposal {args.proposal_id} was already rejected")
             return 0
-        err(
-            f"proposal {args.proposal_id} cannot be rejected: "
-            f"it is {exc.current_status}"
-        )
+        err(f"proposal {args.proposal_id} cannot be rejected: it is {exc.current_status}")
         return 1
     except KeyError:
         err(f"proposal {args.proposal_id} not found")
