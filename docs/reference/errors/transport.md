@@ -13,8 +13,8 @@ lookups — before or around the policy decision. Source: `nautilus/transport/fa
 **HTTP 503.** Seven guards, one per place the broker is read:
 `nautilus/transport/fastapi_app.py:667` covers `/v1/request` and `/v1/query`, which share
 `_handle_request`; then `:1086` (`/v1/keys/rotate`), `:1124` (`/v1/keys/{kid}/revoke`),
-`:1230` (`/v1/adapters/{name}/schema`), `:1415` (`/v1/rkm/queue`), `:1640` (`/v1/rules`) and
-`:1868`, which is in the `_audit_reader` dependency and so covers both `/v1/audit` and
+`:1238` (`/v1/adapters/{name}/schema`), `:1429` (`/v1/rkm/queue`), `:1654` (`/v1/rules`) and
+`:1882`, which is in the `_audit_reader` dependency and so covers both `/v1/audit` and
 `/v1/audit/{request_id}`.
 
 **Means.** `app.state.broker` is unset: the ASGI lifespan has not finished, or it failed.
@@ -182,7 +182,7 @@ pod drains itself; it recovers without a restart once writes succeed.
 
 ### `context['scope_constraints'] entry is not a scope constraint: {reasons}`
 
-**HTTP 400.** `nautilus/core/broker.py:2746-2755`, surfaced by
+**HTTP 400.** `nautilus/core/broker.py:2769-2778`, surfaced by
 `nautilus/transport/fastapi_app.py:751-759`. Rendered example:
 
 ```text
@@ -205,7 +205,7 @@ curl -s -X POST "$NAUTILUS/v1/request" \
 
 ### `invalid datetime: {value!r}`
 
-**HTTP 400.** `_parse_audit_dt`, `nautilus/transport/fastapi_app.py:1877-1889`. The `start` or
+**HTTP 400.** `_parse_audit_dt`, `nautilus/transport/fastapi_app.py:1891-1903`. The `start` or
 `end` query parameter on `GET /v1/audit` is not ISO-8601. Parsed with
 `datetime.fromisoformat`, so `2026-01-01T00:00:00Z` and `2026-01-01` both work.
 
@@ -217,7 +217,7 @@ curl -s "$NAUTILUS/v1/audit?start=yesterday" -H 'X-API-Key: govern-key'
 
 ### `Adapter '{name}' not found`
 
-**HTTP 404.** `nautilus/transport/fastapi_app.py:1233-1239`. `{name}` is the path segment of
+**HTTP 404.** `nautilus/transport/fastapi_app.py:1247-1253`. `{name}` is the path segment of
 `GET /v1/adapters/{name}/schema` and must be a configured **source id**, not a source type.
 `GET /v1/adapters` lists what exists.
 

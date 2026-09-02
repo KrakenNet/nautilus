@@ -319,9 +319,9 @@ and the message arrives as one entry in `sources_errored[]`:
 `error_type` is the exception class name (`ScopeEnforcementError`, `AdapterError`,
 `SSRFBlockedError`, `EmbeddingUnavailableError`), and the failed source contributes no rows —
 partial answers are labelled, never silently merged. Anything raised from `connect()` is prefixed
-`connect() failed: ` by `nautilus/core/broker.py:3232`, and that source is not retried for
+`connect() failed: ` by `nautilus/core/broker.py:3255`, and that source is not retried for
 `connect_cooldown_s`. Anything raised from `execute()` arrives unprefixed
-(`nautilus/core/broker.py:3822-3847`). The per-entry **Status** lines below say which of the two
+(`nautilus/core/broker.py:3847-3872`). The per-entry **Status** lines below say which of the two
 it is.
 
 ### `endpoint` — which backend this was
@@ -356,7 +356,7 @@ an `ErrorRecord` it returns and the broker leaves it alone — strip credentials
 
 ### The matching log line
 
-`nautilus/core/broker.py:3391-3401`. Every per-source failure — unknown source, connect cooldown,
+`nautilus/core/broker.py:3416-3426`. Every per-source failure — unknown source, connect cooldown,
 connect error, schema quarantine, wall-clock timeout, adapter contract violation, and the typed
 record an adapter returns — emits exactly one `WARNING` on the `nautilus.core.broker` logger
 before it reaches the response:
@@ -372,7 +372,7 @@ WARNING:nautilus.core.broker:source 'ledger' failed (endpoint=postgresql://127.0
 
 ### `exceeded the source's timeout_s budget of {timeout_s}s`
 
-`nautilus/core/broker.py:3354-3357`, with `error_type: "TimeoutError"`. The broker wraps each
+`nautilus/core/broker.py:3379-3382`, with `error_type: "TimeoutError"`. The broker wraps each
 source's `connect()` + `execute()` in one wall-clock deadline
 (`SourceConfig.timeout_s`, default `15.0`); this is what the entry says when the deadline fired
 before the source answered. Rendered example:
@@ -795,7 +795,7 @@ indistinguishable from major drift and would quarantine a source that is merely 
 
 **Status.** Two callers, two answers. `GET /v1/adapters/{name}/schema` answers **503** with
 `{"detail": "Schema fetch failed: neo4j: get_schema failed for source 'cases': ..."}`
-(`nautilus/transport/fastapi_app.py:1275-1280`). Inside a request, the broker's drift gate treats a
+(`nautilus/transport/fastapi_app.py:1289-1294`). Inside a request, the broker's drift gate treats a
 raising `get_schema` as "cannot check" and proceeds, so the request itself still answers **200**.
 
 **Fix.** Read `{exc}`: it is the driver's diagnosis, not ours. Restore the database, or fix the
@@ -1013,7 +1013,7 @@ returning `unknown()`, so an outage is not mistaken for schema drift.
 
 **Status.** `GET /v1/adapters/{name}/schema` answers **503** with
 `{"detail": "Schema fetch failed: influxdb: get_schema failed for source 'metrics': ..."}`
-(`nautilus/transport/fastapi_app.py:1275-1280`); inside a request the drift gate skips the check
+(`nautilus/transport/fastapi_app.py:1289-1294`); inside a request the drift gate skips the check
 and the request still answers **200**.
 
 **Fix.** Grant the token read access to the bucket, or fix the bucket name (`table:`, falling back
@@ -1851,7 +1851,7 @@ is *not* in this message — correlate with `source_id` on the `sources_errored[
 hits the source's `timeout_s` budget first and reports
 `exceeded the source's timeout_s budget of {timeout_s}s` instead — see
 [that entry](#exceeded-the-sources-timeout_s-budget-of-timeout_ss)
-(`nautilus/core/broker.py:3354-3357`).
+(`nautilus/core/broker.py:3379-3382`).
 
 **Fix.** Read `{exc}`. A `401`/`403` is the token; `Name or service not known` is the `connection:`
 host; a timeout usually means `timeout_s` is too tight for the model.

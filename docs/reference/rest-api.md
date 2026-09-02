@@ -1803,9 +1803,13 @@ Add `-H 'HX-Request: true'` to get just `partials/source_table_body.html`.
 
 Server-sent events stream of source-table updates, one `source-update` event
 every 5 s until the client disconnects. Authenticated by `get_auth_user`
-(header or cookie). `data` is the rendered HTML table body the page swaps in.
+(header or cookie) and gated on capability `query`, the same as the
+`GET /admin/sources` page it feeds. `data` is the rendered HTML table body the
+page swaps in, trimmed to the sources this caller's clearance admits — a stream
+is a door to the catalogue like any other, and it filters like one.
 
-**Status codes:** `200`, `text/event-stream` · `401` unauthenticated.
+**Status codes:** `200`, `text/event-stream` · `401` unauthenticated · `403`
+authenticated without `query`.
 
 <!-- not-executed: long-lived stream; interrupt with Ctrl-C -->
 ```bash

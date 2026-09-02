@@ -4326,7 +4326,7 @@ nautilus/analysis/llm/anthropic_provider.py:117:            api_key=os.getenv(se
 nautilus/analysis/llm/openai_provider.py:93:        key = os.getenv(self.api_key_env)
 nautilus/analysis/llm/openai_provider.py:108:            api_key=os.getenv(self.api_key_env),
 nautilus/config/loader.py:68:        self._env = env if env is not None else dict(os.environ)
-nautilus/core/broker.py:1535:                dsn = os.environ.get("TEST_PG_DSN")
+nautilus/core/broker.py:1558:                dsn = os.environ.get("TEST_PG_DSN")
 nautilus/adapters/influxdb.py:224:            token = _auth_token(config) or os.environ.get("INFLUXDB_V2_TOKEN")
 nautilus/adapters/influxdb.py:225:            org = os.environ.get("INFLUXDB_V2_ORG")
 nautilus/observability/instrumentation.py:32:    os.environ.setdefault(
@@ -6645,7 +6645,7 @@ by `log.exception` is still a readable multi-line traceback — it is generated
 from the interpreter's own frames, not from anybody's input.
 
 Here is the product doing it, from its own startup path, with nothing staged.
-`nautilus/core/broker.py:1266` logs the config path when no `agents:` block is
+`nautilus/core/broker.py:1274` logs the config path when no `agents:` block is
 declared, and a path is a filename, and a filename may contain a newline:
 
 ```console
@@ -6764,28 +6764,28 @@ sys.exit(1 if bad else 0)
 
 ```console
 $ python logscan.py
-ok     nautilus/core/broker.py:718 %r on request_id
-ok     nautilus/core/broker.py:2868 %r on state.request_id
-ok     nautilus/core/broker.py:2868 %r on state.intent_analysis.raw_intent
-ok     nautilus/core/broker.py:2868 %r on state.intent_analysis.data_types_needed
-ok     nautilus/core/broker.py:3393 %r on record.source_id
-ok     nautilus/core/broker.py:3490 %r on source_id
-ok     nautilus/core/broker.py:3714 %r on agent_id
-ok     nautilus/core/broker.py:3714 %r on state.session_id
-ok     nautilus/core/broker.py:3714 %r on purpose
-ok     nautilus/core/broker.py:4041 %r on source_id
-ok     nautilus/core/broker.py:4356 %r on source_id
-ok     nautilus/core/broker.py:2883 %r on state.request_id
-ok     nautilus/core/broker.py:2883 %r on source_id
-ok     nautilus/core/broker.py:3702 %r on agent_id
-ok     nautilus/core/broker.py:3702 %r on purpose
-ok     nautilus/core/broker.py:2381 %r on receiving_agent_id
-ok     nautilus/core/broker.py:2381 %r on session_id
-ok     nautilus/core/broker.py:3215 %r on state.request_id
-ok     nautilus/core/broker.py:3215 %r on source_id
+ok     nautilus/core/broker.py:726 %r on request_id
+ok     nautilus/core/broker.py:2891 %r on state.request_id
+ok     nautilus/core/broker.py:2891 %r on state.intent_analysis.raw_intent
+ok     nautilus/core/broker.py:2891 %r on state.intent_analysis.data_types_needed
+ok     nautilus/core/broker.py:3418 %r on record.source_id
+ok     nautilus/core/broker.py:3515 %r on source_id
+ok     nautilus/core/broker.py:3739 %r on agent_id
+ok     nautilus/core/broker.py:3739 %r on state.session_id
+ok     nautilus/core/broker.py:3739 %r on purpose
+ok     nautilus/core/broker.py:4066 %r on source_id
+ok     nautilus/core/broker.py:4381 %r on source_id
+ok     nautilus/core/broker.py:2906 %r on state.request_id
+ok     nautilus/core/broker.py:2906 %r on source_id
+ok     nautilus/core/broker.py:3727 %r on agent_id
+ok     nautilus/core/broker.py:3727 %r on purpose
+ok     nautilus/core/broker.py:2404 %r on receiving_agent_id
+ok     nautilus/core/broker.py:2404 %r on session_id
 ok     nautilus/core/broker.py:3238 %r on state.request_id
 ok     nautilus/core/broker.py:3238 %r on source_id
-ok     nautilus/core/broker.py:4021 %r on source_id
+ok     nautilus/core/broker.py:3261 %r on state.request_id
+ok     nautilus/core/broker.py:3261 %r on source_id
+ok     nautilus/core/broker.py:4046 %r on source_id
 ok     nautilus/transport/auth.py:325 %r on user
 
 0 unescaped interpolations
@@ -6796,13 +6796,13 @@ $ echo $?
 Run it from the repository root; the paths are relative to it. Twenty-three
 rows, every one of them `%r`, `0 unescaped interpolations`, exit `0`.
 `auth.py:325` logs the `X-Forwarded-User` header a proxy sent;
-`broker.py:3702` logs the `agent_id` and `purpose` out of a request body; `broker.py:2381` logs a handoff's `agent_id` and `session_id`,
+`broker.py:3727` logs the `agent_id` and `purpose` out of a request body; `broker.py:2404` logs a handoff's `agent_id` and `session_id`,
 also from the body; the `broker.py` `source_id` rows are the per-source
 failure, schema-fetch, drift, quarantine-lift and truncation sites plus the
-`--log-level debug` routing and dial records; `broker.py:3714` is the
+`--log-level debug` routing and dial records; `broker.py:3739` is the
 `debug`-level session-token mint line.
 
-`broker.py:718` is the broker-level failure record. Its `request_id` is the
+`broker.py:726` is the broker-level failure record. Its `request_id` is the
 `uuid4()` minted in `_new_request_state`, so no caller can put a byte in it —
 and it is `%r` anyway, because the scan matches on argument *names* and a rule
 that has to be argued with at one call site is a rule that gets lost at the
@@ -7676,7 +7676,7 @@ the route answers `409 session tokens are disabled`.
 `POST /v1/sessions` takes an untyped body (`nautilus/transport/fastapi_app.py:983`),
 and `clearance` in that body would be an authorization assertion signed by
 Nautilus and verifiable by anyone against the public JWKS. It is not a parameter
-of `Broker.issue_session_token` at all (`nautilus/core/broker.py:1837-1843`) —
+of `Broker.issue_session_token` at all (`nautilus/core/broker.py:1860-1866`) —
 the value comes from the agent registry, so the body cannot reach it:
 
 ```console

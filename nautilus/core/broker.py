@@ -249,13 +249,21 @@ async def _dial(host: str, port: int, scheme: str) -> str | None:
             host, port, ssl=ssl.create_default_context() if tls else None
         )
     except ssl.SSLError as exc:
-        # Reachable, and unusable by this process. Reporting the first half
-        # and dropping the second gave an operator an unqualified green for a
-        # source no query will ever reach, which is the harder outage to find.
-        return f"answered, but this process refused its certificate: {exc}"
+        # Reachable, and unusable by this process. Reporting the first half and
+        # dropping the second gave an operator an unqualified green for a source
+        # no query will ever reach, which is the harder outage to find. Name the
+        # handshake, not a cause: this class also carries WRONG_VERSION_NUMBER
+        # (TLS spoken at a plaintext port) and a server-side mTLS rejection,
+        # neither of which is this process refusing a certificate. The error's
+        # own text says which one it was.
+        return f"answered, but the TLS handshake failed: {exc}"
     try:
         hello = _PROBE_HELLO.get(scheme)
-        if hello is None:  # pragma: no cover - every _DEFAULT_PORTS scheme has one
+        if hello is None:
+            # Reachable, and not marked unreachable-by-construction: a DSN that
+            # names an explicit port never consults ``_DEFAULT_PORTS``, so any
+            # scheme at all can land here. Say that nothing was asked rather
+            # than reporting a green on a completed TCP handshake.
             return "connected; no hello is defined for this scheme, so nothing was asked"
         writer.write(hello)
         await writer.drain()
@@ -1346,7 +1354,22 @@ class Broker:
                 f"degrading. Either the volume for it is not mounted, or it is "
                 f"not writable by the UID this process runs as."
             ) from exc
-        audit_logger = AuditLogger(sink=build_audit_sink(config, audit_path, attestation))
+        try:
+            audit_logger = AuditLogger(sink=build_audit_sink(config, audit_path, attestation))
+        except OSError as exc:
+            # The second of the two causes named above arrives here, not at the
+            # mkdir: ``exist_ok=True`` succeeds on a directory that exists, so a
+            # mounted-but-unwritable volume walks straight past it and fails on
+            # the open instead -- and refused with a bare
+            # ``[Errno 13] Permission denied: '.../audit.jsonl'``. Same
+            # consequence, same sentence.
+            raise OSError(
+                f"cannot open the audit log {audit_path}: {exc}. Nautilus "
+                f"records one line per decision and will not serve unrecorded "
+                f"requests, so this refuses startup rather than degrading. The "
+                f"audit log directory exists but is not writable by the UID this "
+                f"process runs as, or the file itself is not."
+            ) from exc
 
         session_store = cls._build_session_store(config, base_dir=base_dir)
 
@@ -3320,13 +3343,15 @@ class Broker:
             return SourceProbe(
                 endpoint, False, f"no answer from {endpoint} within {timeout_s:.1f}s"
             )
-        # ``UnicodeError`` is not an ``OSError``: a host the resolver cannot
-        # even encode -- an over-long label, a surrogate that survived a config
-        # round-trip -- raises ``UnicodeEncodeError`` straight past a bare
-        # ``except OSError``. This is the whole of one source's probe, and
-        # ``GET /v1/adapters?probe=true`` gathers every source's, so one
-        # unencodable host answered 500 and discarded every healthy sibling.
-        except (OSError, UnicodeError) as exc:
+        # Total, deliberately. This is the whole of one source's answer and
+        # ``GET /v1/adapters?probe=true`` gathers every source's, so anything
+        # that escapes here 500s the endpoint and discards every healthy
+        # sibling's result. Enumerating classes did not hold: ``except OSError``
+        # missed ``UnicodeEncodeError`` from a host the resolver cannot encode,
+        # and adding ``UnicodeError`` still missed ``OverflowError`` from a port
+        # above 65535. A malformed address is a probe failure, not a crash, and
+        # the class name is what the operator needs to see.
+        except Exception as exc:
             return SourceProbe(endpoint, False, f"{type(exc).__name__}: {exc}")
         return SourceProbe(endpoint, True, note)
 

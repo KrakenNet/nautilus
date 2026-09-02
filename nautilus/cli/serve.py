@@ -379,7 +379,15 @@ def broker_for_serve(config_path: Path, *, air_gapped: bool) -> Broker:
 
     try:
         effective_path = _load_config_for_serve(config_path, air_gapped=air_gapped)
-    except RuntimeError as exc:
+    except Exception as exc:  # noqa: BLE001 - the contract is total, see below
+        # By contract, not by class. This function's job is to raise
+        # ``ConfigRefusedError`` for anything ``serve`` would exit 2 on, and
+        # ``reload_config`` catches exactly that to write the
+        # ``config_reload_refused`` receipt. Catching ``RuntimeError`` alone
+        # left the whole ``--air-gapped`` rewrite -- two ``yaml.safe_dump``
+        # calls, ``_enforce_air_gap`` and a ``NamedTemporaryFile`` write --
+        # able to reach the SIGHUP task raw: no refusal log line, no receipt,
+        # and an operator with nothing to read.
         raise ConfigRefusedError(str(exc)) from exc
 
     # Broker.from_config surfaces ConfigError / validation errors with

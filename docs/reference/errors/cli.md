@@ -110,7 +110,7 @@ exit=2
 `nautilus/cli/__init__.py:224-309` and `nautilus/cli/serve.py`. All of these exit **2**.
 
 The three config messages are raised as `ConfigRefusedError` by
-`broker_for_serve` (`nautilus/cli/serve.py:355-396`) and printed by whichever
+`broker_for_serve` (`nautilus/cli/serve.py:355-404`) and printed by whichever
 command called it — `serve` at `__init__.py:256`, `config check` in
 `nautilus/cli/config.py`. That is why the two commands refuse a config in
 identical words.
@@ -118,8 +118,8 @@ identical words.
 | Message | Line |
 | --- | --- |
 | `ERROR: config path does not exist or is not a file: {config_path}` | `nautilus/cli/serve.py:378` |
-| `ERROR: invalid config: {exc}` | `nautilus/cli/serve.py:394` |
-| `ERROR: broker construction failed: {exc}` | `nautilus/cli/serve.py:396` |
+| `ERROR: invalid config: {exc}` | `nautilus/cli/serve.py:402` |
+| `ERROR: broker construction failed: {exc}` | `nautilus/cli/serve.py:404` |
 | `ERROR: {exc}` (bind parsing, air-gapped load, serve failure) | `__init__.py:246,256,300` |
 
 The wrapped `{exc}` texts:

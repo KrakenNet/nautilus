@@ -407,7 +407,7 @@ configure one.
 | `/config` | `config` | ConfigMap `nautilus-config` | read-only | `nautilus.yaml` | `ERROR: config path does not exist or is not a file: /config/nautilus.yaml`, exit 2, CrashLoopBackOff |
 | `/etc/nautilus/keys` | `attestation-key` | Secret `nautilus-attestation-key` | read-only | `attestation.pem`, the Ed25519 key from `attestation.private_key_path` | `ERROR: broker construction failed: [Errno 2] No such file or directory: '/etc/nautilus/keys/attestation.pem'`, exit 2 — `attestation.enabled: true` reads the key at construction |
 | `/var/lib/nautilus` | `state` | `emptyDir`, `sizeLimit: 512Mi` | **read-write** | `keyring.json` (`session_tokens.key_ring_path`) and the schema-drift baselines (`state_dir`) | the broker tries to write under the read-only `/config` mount and under a `readOnlyRootFilesystem`; session tokens cannot be signed |
-| `/var/log/nautilus` | `audit` | `emptyDir`, `sizeLimit: 2Gi` | **read-write** | `audit.jsonl` (`audit.path`) — one line per decision | `/readyz` returns 503 `{"status":"not_ready","reason":"audit log directory /var/log/nautilus is not writable"}` and the pod never becomes ready. It does not serve unrecorded requests |
+| `/var/log/nautilus` | `audit` | `emptyDir`, `sizeLimit: 2Gi` | **read-write** | `audit.jsonl` (`audit.path`) — one line per decision | startup refuses, exit 2, before anything binds: `ERROR: broker construction failed: cannot open the audit log directory /var/log/nautilus`. The pod crash-loops rather than serving unrecorded requests, and there is no `/readyz` to ask ([§11.5](#115-when-the-audit-volume-is-missing)) |
 
 Both writable volumes are `emptyDir`, which means **their contents die with the
 pod**. That is deliberate for an example you can apply anywhere, and wrong for

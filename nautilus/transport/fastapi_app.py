@@ -1189,13 +1189,21 @@ def create_app(
         if broker is None:
             return {"adapters": []}
         quarantined: set[str] = getattr(broker, "_quarantined_adapters", set())
+        # Trimmed to what this caller may see, like every other door to the
+        # catalogue. ``query`` is the *default* capability for a structured
+        # key, and ``/v1/sources`` -- gated on that same capability -- filters,
+        # so reading ``broker.sources`` whole here handed a low-clearance
+        # caller the id, type and quarantine state of sources the rule ladder
+        # denies it, and under ``?probe=true`` the internal ``host:port`` and
+        # reachability besides. The capability decides whether you get a
+        # listing; clearance decides which rows are in it.
         adapters: list[dict[str, Any]] = [
             {
                 "id": source.id,
                 "type": source.type,
                 "status": "quarantined" if source.id in quarantined else "active",
             }
-            for source in broker.sources
+            for source in broker.sources_visible_to(_caller_identity(request)["agent_id"])
         ]
         if probe:
             # Concurrently: serially, one source at its timeout ceiling would
@@ -1229,7 +1237,13 @@ def create_app(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Broker not ready",
             )
-        adapter = getattr(broker, "_adapters", {}).get(name)
+        # A source this caller may not see must answer exactly as one that does
+        # not exist. Answering 503 "postgresql://classified-db.internal:6432 is
+        # unreachable" for a source the rule ladder denies confirmed the name,
+        # the adapter type and the internal address in one reply -- the listing
+        # one route over filters for precisely that reason.
+        visible = {s.id for s in broker.sources_visible_to(_caller_identity(request)["agent_id"])}
+        adapter = getattr(broker, "_adapters", {}).get(name) if name in visible else None
         if adapter is None:
             from fastapi import HTTPException
 

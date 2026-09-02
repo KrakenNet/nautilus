@@ -65,9 +65,17 @@ red until its fix lands.
   text the lock recorded for each line and find where that text lives now; a
   `difflib` map is only trustworthy over its `equal` opcodes, because a line
   inside a `replace` span has no honest new home. Two attempts to renumber by
-  span arithmetic turned 29 problems into 56. After `--write`, diff the old and
-  new lockfiles: retired and added counts should match the number you moved,
-  and `lines` must not have changed for any citation you kept.
+  span arithmetic turned 29 problems into 56.
+- **Rewrite the numbers in one simultaneous pass.** Applying `A -> B` and then
+  `B -> C` in separate passes sends `A` all the way to `C`, collapsing two
+  distinct citations onto one range. **The lock cannot catch this**: it dedupes
+  by citation string, so the survivor validates at 0 problems while the other
+  reference silently names the wrong code. It happened, to two adjacent
+  `DenialRecord` returns in `session-tokens.md`.
+- **Audit the lockfile diff after `--write`.** Retired and added counts should
+  match the number you moved, `lines` must not have changed for any citation
+  you kept, and the total must not drop -- a citation count that falls by one
+  is two references that collapsed onto each other.
 - **Some docs publish a script *and its output*, and the output quotes line
   numbers.** `docs/how-to/hardening.md` embeds `logscan.py` and the rows it
   printed. Hand-editing those numbers makes the transcript a lie. Extract the

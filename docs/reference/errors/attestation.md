@@ -30,7 +30,7 @@ text (`fastapi_app.py:1096-1100` for rotation, `:1126-1136` for revocation) — 
 
 ### `kid {kid!r} is the current primary; rotate first, then revoke`
 
-`nautilus/core/broker.py:1987`. Revoking the primary would leave nothing to sign with. Call
+`nautilus/core/broker.py:2010`. Revoking the primary would leave nothing to sign with. Call
 `POST /v1/keys/rotate` first, then revoke the now-superseded kid.
 
 Both routes answer **503 `Broker not ready`** (`fastapi_app.py:1084-1087` and `:1106-1109`) when
@@ -53,7 +53,7 @@ public key where a private one was expected. Nautilus signs with Ed25519 only.
 
 ### `attestation is disabled`
 
-**`RuntimeError`**, `nautilus/core/broker.py:3894`. An attestation API was called while
+**`RuntimeError`**, `nautilus/core/broker.py:3919`. An attestation API was called while
 `attestation.enabled` is false. Enable it, or stop calling that API.
 
 ## Chained log configuration
@@ -62,7 +62,7 @@ All raised at startup while building sinks.
 
 ### `attestation.sink.chained requires attestation.enabled with a signing key`
 
-**`ValueError`**, `nautilus/core/broker.py:1600-1602`. A chained sink signs every line, so it
+**`ValueError`**, `nautilus/core/broker.py:1623-1625`. A chained sink signs every line, so it
 needs `attestation.enabled: true`.
 
 ### `audit.chained requires attestation.enabled with a signing key: each chained line carries a JWS, and there is nothing to sign with`

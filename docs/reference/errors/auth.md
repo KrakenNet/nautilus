@@ -179,7 +179,7 @@ request, including health-check and retry paths.
 
 ## `X-Nautilus-Reviewer header required`
 
-**HTTP 400.** `_require_reviewer`, `nautilus/transport/fastapi_app.py:1358-1366`.
+**HTTP 400.** `_require_reviewer`, `nautilus/transport/fastapi_app.py:1372-1380`.
 
 **Means.** A governance route needs a human identity to write into the audit record and the
 credential could not supply one. The header is only consulted when the `api.keys` entry has no

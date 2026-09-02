@@ -9,7 +9,7 @@ serialised per caller, and it lives in the session store — so most failures he
 ### `session_not_yours: session {state.session_id!r} belongs to another principal. A session id is not a credential — either use your own, or have its owner declare a handoff to agent_id={agent_id!r} in it first.`
 
 **`SessionNotOwnedError`** (`nautilus/core/__init__.py:32`), raised at
-`nautilus/core/broker.py:2927-2932`. **HTTP 403** via
+`nautilus/core/broker.py:2950-2955`. **HTTP 403** via
 `nautilus/transport/fastapi_app.py:713-720`.
 
 **Interpolates.** `{state.session_id!r}` — the session named in the request.
@@ -24,14 +24,14 @@ handoff was performed downstream without being declared to the broker.
 **Fix.** Use a session id of your own — omitting `session_id` lets the broker pick one — or have
 the current owner declare the transfer before the receiving agent asks —
 `await broker.declare_handoff(source_agent_id=…, receiving_agent_id=…, session_id=…,
-data_classifications=[…])` (`nautilus/core/broker.py:2141`, keyword-only and async).
+data_classifications=[…])` (`nautilus/core/broker.py:2164`, keyword-only and async).
 
 ## Contention
 
 ### `Broker busy: waited {budget}s to take the exposure ledger on {what!r} and did not get it. Either another request from this caller still holds it — requests from one caller are served one at a time so cumulative exposure is counted once — or the session store is slow or unreachable. This timeout does not tell the two apart: the session store is {endpoint}, so reach it from here to rule that one out. Retry, or raise session_store.lock_timeout_s.`
 
 **`BrokerBusyError`** (`nautilus/core/__init__.py:46`), built by `_busy_message`
-(`nautilus/core/broker.py:463-494`) and raised at `:2556` and `:2560`. **HTTP 503** with
+(`nautilus/core/broker.py:471-502`) and raised at `:2556` and `:2560`. **HTTP 503** with
 `Retry-After: 1` (`nautilus/transport/fastapi_app.py:701-712`).
 
 **Interpolates.** `{budget}` — `session_store.lock_timeout_s`. `{what!r}` — which ledger was
@@ -173,7 +173,7 @@ nautilus session version --sqlite-path /tmp/nautilus-errors/sessions.db; echo "e
 
 ### `session_store.backend=postgres requires 'dsn' or TEST_PG_DSN env var`
 
-**`ConfigError`**, `nautilus/core/broker.py:1534-1538`. Set `session_store.dsn`, or export
+**`ConfigError`**, `nautilus/core/broker.py:1557-1561`. Set `session_store.dsn`, or export
 `TEST_PG_DSN`.
 
 ```bash
