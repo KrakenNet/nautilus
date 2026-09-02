@@ -55,7 +55,7 @@ red until its fix lands.
   "`session_pg.py:72`, `:104`" has only its first reference locked. A sweep of
   `docs/**.md` counted 61 continuations, 30 of them pointing at the wrong
   content, so a green lock is not evidence that a page's later numbers are
-  right — read them. `tests/defects/test_wave13_bare_citations.py` pins the
+  right — read them. `tests/defects/test_wave_ops12_bare_citations.py` pins the
   three that have been fixed, by deriving the correct lines from the source
   rather than recording them.
 
