@@ -112,7 +112,7 @@ curl -s "$NAUTILUS/v1/audit" -H 'X-API-Key: query-key'
 ## `This credential is bound to agent_id={bound!r}, so it cannot ask as {body.agent_id!r}`
 
 **HTTP 403.** `nautilus/transport/fastapi_app.py:679-685`. The MCP transport raises the same
-sentence as a tool error (`nautilus/transport/mcp_server.py:402-406`, with `{agent_id!r}` in
+sentence as a tool error (`nautilus/transport/mcp_server.py:413-417`, with `{agent_id!r}` in
 place of `{body.agent_id!r}`). Rendered example:
 
 ```text

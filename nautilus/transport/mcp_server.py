@@ -58,8 +58,8 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from starlette.applications import Starlette
-    from starlette.types import ASGIApp, Receive, Scope, Send
-
+from starlette.datastructures import Headers
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 # Header name is shared verbatim with :mod:`nautilus.transport.fastapi_app`
 # so operators can configure one allow-list for both surfaces (D-11).
@@ -241,6 +241,19 @@ def _trusted_proxies(broker: Broker | None) -> list[str]:
     return [str(entry) for entry in cast("list[object]", proxies)]
 
 
+def _api_key_from_scope(scope: Scope) -> str:
+    """The ``X-API-Key`` value ``caller_identity`` will read, from a raw scope.
+
+    ``dict(scope["headers"])`` keeps the **last** value of a repeated header;
+    Starlette's ``Headers.get`` -- which is what ``caller_identity`` reads
+    through -- keeps the **first**. Authenticating on one and authorising on the
+    other let a caller who sent ``X-API-Key`` twice pass the gate on a valid key
+    and then match no registry entry, falling through to the unauthenticated
+    default: every capability, bound to no agent. One reader, one answer.
+    """
+    return Headers(scope=scope).get(_API_KEY_HEADER, "")
+
+
 def _agent_subjects(broker: Broker | None) -> dict[str, str]:
     """``agents.<id>.subject`` → agent id, for ``proxy_trust`` (see REST twin)."""
     config = getattr(broker, "_config", None) if broker is not None else None
@@ -290,9 +303,7 @@ def wrap_http_with_api_key(app: Starlette, keys: list[Any] | Callable[[], list[A
             # of caller identity.
             await app(scope, receive, send)
             return
-        headers = dict(scope.get("headers") or [])
-        raw_value = headers.get(_API_KEY_HEADER.encode("latin-1"), b"")
-        header_value = raw_value.decode("latin-1") if raw_value else ""
+        header_value = _api_key_from_scope(scope)
         try:
             verify_api_key(header_value, list(keys()) if callable(keys) else keys)
         except Exception:  # noqa: BLE001 — translate 401 to ASGI response
@@ -507,7 +518,13 @@ def create_server(
         the ``query`` capability and this must be too, or the gate is a door
         with a second entrance.
         """
-        _refuse_without_capability(_resolve_caller(ctx), "query")
+        sources_caller = _resolve_caller(ctx)
+        _refuse_without_capability(sources_caller, "query")
+        # The capability decides *whether* you get a catalogue; the clearance
+        # filter decides *which*. ``GET /v1/sources`` and both console surfaces
+        # trim to ``sources_visible_to``; this door read ``broker.sources``
+        # whole, so the second entrance the docstring warns about was open
+        # after all -- just one guard further in.
         return [
             {
                 "id": source.id,
@@ -517,7 +534,7 @@ def create_server(
                 "data_types": list(source.data_types),
                 "allowed_purposes": list(source.allowed_purposes or []),
             }
-            for source in broker.sources
+            for source in broker.sources_visible_to((sources_caller or {}).get("agent_id"))
         ]
 
     if expose_handoff:

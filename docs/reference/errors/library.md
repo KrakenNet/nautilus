@@ -179,7 +179,7 @@ denied — a *denied* handoff returns a `HandoffDecision` carrying `DenialRecord
 agent id likewise returns a decision, not this error.
 
 **Status.** No REST route reaches this. MCP does, when `mcp.expose_declare_handoff: true`
-(`nautilus/transport/mcp_server.py:480-560`): the tool call fails and the client receives the
+(`nautilus/transport/mcp_server.py:490-577`): the tool call fails and the client receives the
 sentence as the tool error. In-process it is a `PolicyEngineError` and, uncaught, exit **1**.
 
 **Fix.** Read `{exc}` — it is the engine's own message. The same wrapper guards `arequest`, so an
@@ -257,7 +257,7 @@ failure; uncaught it is exit **1**.
 
 ### `create_server requires either config_path or existing_broker`
 
-**`ValueError`**, `nautilus/transport/mcp_server.py:343-347`. No interpolation. The MCP
+**`ValueError`**, `nautilus/transport/mcp_server.py:354-358`. No interpolation. The MCP
 equivalent of the message above, same signature:
 `create_server(config_path, *, existing_broker=None)`.
 
