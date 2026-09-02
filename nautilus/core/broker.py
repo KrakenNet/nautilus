@@ -697,12 +697,22 @@ RELOADABLE_API_KEYS: tuple[str, ...] = ("keys",)
 The auth guard resolves ``app.state.api_keys`` per request on purpose, so a
 rotation takes effect on the next one -- which is the whole of "rotate without
 a restart", and was unreachable while the ``api`` stanza was refused whole.
+
+The whole list is adopted, so this reloads **authorization**, not only the
+secret: ``api.keys[].capabilities`` and ``api.keys[].agent_id`` are live too,
+and a reload can widen what a credential may do and which agent it may speak
+for. That is deliberate -- the operational case is revoking or narrowing a
+credential without a restart, and narrowing it is worth less if it needs one --
+but it is a larger power than "rotate a secret" and the reason ``auth.mode``
+stays restart-only is not that it changes authorization. It is that ``mode``
+and ``trusted_proxies`` decide how a caller is authenticated at all: under
+``proxy_trust`` the credential is a header the ingress is trusted to set, so
+switching modes under a running process changes what the peer restriction is
+protecting mid-flight.
+
 Everything else under ``api`` stays restart-only. ``max_concurrent_requests``
 and ``max_request_bytes`` are values inside middleware objects installed when
-the app is built, and ``host``/``port`` are a bound socket. ``auth.mode`` and
-``auth.trusted_proxies`` change *how* a caller is authenticated rather than
-*which* credential is, which is a different decision from rotating a secret and
-not one a reload takes.
+the app is built, and ``host``/``port`` are a bound socket.
 """
 
 _RELOADABLE_SUBKEYS: dict[str, tuple[str, ...]] = {
@@ -764,7 +774,7 @@ def _adopted_changes(old: NautilusConfig, new: NautilusConfig) -> list[str]:
     return changed
 
 
-def _warn_about_orphaned_ledgers(old: NautilusConfig, new: NautilusConfig) -> None:
+def _warn_about_orphaned_ledgers(old: NautilusConfig, new: NautilusConfig) -> int:
     """Name the credentials whose cumulative exposure this reload left behind.
 
     An ``api.keys`` entry accumulates exposure under the identity
@@ -779,6 +789,11 @@ def _warn_about_orphaned_ledgers(old: NautilusConfig, new: NautilusConfig) -> No
 
     Positions, principals and agent bindings only: a log line is not a place
     for a secret, and for an unnamed entry the identity *is* the secret.
+
+    Returns:
+        How many ledgers were orphaned, so the count reaches the audit entry as
+        well as the process log. A warning is for the operator who was
+        watching; the receipt is what answers for the reset afterwards.
     """
     surviving = {ledger_identity(entry) for entry in new.api.keys}
     orphaned = [
@@ -787,7 +802,7 @@ def _warn_about_orphaned_ledgers(old: NautilusConfig, new: NautilusConfig) -> No
         if ledger_identity(entry) not in surviving
     ]
     if not orphaned:
-        return
+        return 0
     named = ", ".join(
         f"api.keys[{index}] (principal={principal!r}, agent_id={agent!r})"
         for index, principal, agent in orphaned
@@ -803,6 +818,7 @@ def _warn_about_orphaned_ledgers(old: NautilusConfig, new: NautilusConfig) -> No
         len(orphaned),
         named,
     )
+    return len(orphaned)
 
 
 _PINNED_GENERATION: ContextVar[tuple[Broker, _ConfigGeneration] | None] = ContextVar(
@@ -904,6 +920,7 @@ class Broker:
         # and ``reload`` replaces the config object rather than mutating it, so
         # a rotation the broker adopted would otherwise never reach the door.
         self._reload_listeners: list[Callable[[], None]] = []
+        self._last_reload_notes: list[str] = []
         # How long a reload waits in silence for the previous generation to
         # drain before saying so in the log. It bounds the log line, never the
         # wait -- see :meth:`_retire`. Tune it to the slowest source's
@@ -3848,8 +3865,31 @@ class Broker:
         and re-reads per request. The reload has already installed the new
         generation when this runs, so a listener reads :attr:`config` and gets
         what was just adopted.
+
+        A listener that raises does not fail the reload, does not stop the
+        ones after it, and is named in :attr:`last_reload_notes` so the audit
+        entry records that some outside state did not follow the config.
+
+        There is no ``off_reload``: a listener stays registered for the
+        lifetime of the broker. Building two apps against one broker therefore
+        pins the first app's closure until the broker is closed. Acceptable
+        rather than fixed: ``create_app`` registers once per app, one broker
+        per process is the only shape ``serve`` builds, and a listener that
+        writes to a dead app's ``state`` is a write nothing reads.
         """
         self._reload_listeners.append(listener)
+
+    @property
+    def last_reload_notes(self) -> list[str]:
+        """What the last adopted reload did beyond adopting keys.
+
+        Cumulative-exposure ledgers it left with nothing to accumulate under,
+        and listeners that failed. Both are things the audit entry has to say
+        and the adopted-key list cannot: one is a security budget cleared by a
+        routine operation, the other is state outside the broker that no longer
+        matches the config the broker is running.
+        """
+        return list(self._last_reload_notes)
 
     async def reload(self, candidate: Broker) -> list[str]:
         """Adopt ``candidate``'s sources, rules, credentials and live limits.
@@ -3922,10 +3962,31 @@ class Broker:
             )
             adopted = _adopted_changes(outgoing.config, incoming.config)
 
+        notes: list[str] = []
+        self._last_reload_notes = notes
         if "api.keys" in adopted:
-            _warn_about_orphaned_ledgers(outgoing.config, incoming.config)
+            orphaned = _warn_about_orphaned_ledgers(outgoing.config, incoming.config)
+            if orphaned:
+                notes.append(f"cleared {orphaned} cumulative-exposure ledger(s)")
         for listener in self._reload_listeners:
-            listener()
+            # ``on_reload`` is public, so this loop calls code the broker does
+            # not own, after the generation is already installed and before the
+            # outgoing one is retired. An escaping raise left the reload applied
+            # but unrecorded (``reload_config`` catches only
+            # ``ConfigNotReloadableError``), leaked the outgoing router and
+            # retired adapters, and skipped every listener after the first --
+            # so a second transport went on serving a retired credential while
+            # the audit log said nothing. The failure is recorded instead, on
+            # the receipt as well as in the log, because a listener that did
+            # not run is state that no longer matches the adopted config.
+            try:
+                listener()
+            except Exception:
+                log.exception("a post-reload listener failed; the reload stands")
+                # Its name, never its ``repr``: a listener bound to the
+                # credential list would print it.
+                named = getattr(listener, "__qualname__", type(listener).__name__)
+                notes.append(f"a post-reload listener failed: {named}")
 
         # The candidate is now a shell around exactly what this reload retired:
         # the outgoing router, the adapters no longer in service, and its own

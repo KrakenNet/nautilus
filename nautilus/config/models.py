@@ -467,7 +467,14 @@ class ApiKeyEntry(_Strict):
     # the overlap window, which is what makes a rotation zero-downtime.
     # ``None`` keys on the secret itself -- the pre-1.0 behaviour, and what
     # every ledger a running deployment already holds is keyed by.
-    principal: str | None = Field(default=None, min_length=1)
+    #
+    # No control characters: this name is handed to
+    # ``derive_principal_id`` as the authenticated principal, and U+001F is
+    # what separates that key's components -- a name carrying one is refused
+    # there, per request, on the hot path. The pattern allows the empty string
+    # so ``min_length`` remains the constraint that reports it, which is the
+    # error the hardening guide documents.
+    principal: str | None = Field(default=None, min_length=1, pattern=r"^[^\x00-\x1f\x7f]*$")
     capabilities: list[str] = Field(default_factory=lambda: ["query"])
 
     @model_validator(mode="after")

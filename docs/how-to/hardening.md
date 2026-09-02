@@ -506,6 +506,19 @@ ask as and is enforced against the request body; `principal` says which
 all. Two keys bound to the same agent are still two callers unless they also
 share a `principal`.
 
+**And it keeps your key out of the receipt.** For an entry naming no
+`principal`, the derived `principal_id` is a truncated SHA-256 over the agent
+id and the API key value — one pass, no salt, no iteration — and that digest is
+written to the audit log and carried in the signed attestation's `decision`
+claim. The same record carries `agent_id` in clear, so anyone holding one audit
+line holds everything needed to test a guess offline: hash `agent\x1f<agent_id>\x1fauth\x1f<guess>`
+and compare. Against a key a human chose (`ops13-key-v1`) that is a dictionary
+attack, not a search — and audit logs are routinely shipped to places the
+credential is not. Naming a `principal` takes the secret out of the preimage
+entirely: the digest is then over `...auth\x1fkey\x1f<principal>`, a name that is already
+public in your config. If you name a principal for one reason, make it this
+one; carrying the ledger across a rotation is the smaller half.
+
 **Costs** you a name in the config, and a decision you have to make before your
 first rotation rather than during it: an entry that names no principal keeps
 the old derivation, so its ledger does not survive a key change and never will.
@@ -531,6 +544,13 @@ step 0 of [the procedure](#the-api-keys):
 ```text
 WARNING:nautilus.core.broker:Reload left 1 credential(s) with no surviving api.keys[].principal to accumulate under: api.keys[0] (principal=None, agent_id='reporting'). Their cumulative exposure (sources_visited, data_types_seen, pii_sources_accessed_list) does NOT carry -- each caller resumes on an empty escalation budget, and requests naming a session it opened are refused session_not_yours. Rotate the key value under a stable api.keys[].principal to keep the ledger; nothing migrates one onto a principal added later.
 ```
+
+The count goes on the receipt as well as in the log, because a warning is only
+seen by whoever was watching. The reload's `config_reloaded` audit entry reads
+`adopted api.keys; cleared 1 cumulative-exposure ledger(s)` — so an operator
+reconstructing why an agent's escalation budget looks empty finds the answer in
+the log that is supposed to explain decisions, not only in a process log that
+may have rotated away.
 
 **Example**
 

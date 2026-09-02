@@ -189,6 +189,14 @@ async def reload_config(broker: Broker, config_path: Path, *, air_gapped: bool) 
         return False
 
     detail = "adopted " + ", ".join(adopted) if adopted else "no reloadable key changed"
+    # What the reload cost besides the keys it adopted: exposure ledgers left
+    # with nothing to accumulate under, and listeners that did not run. The
+    # adopted-key list says a credential changed; it cannot say that a
+    # cumulative-exposure budget was cleared with it, and that is the half an
+    # audit log has to answer for.
+    notes = broker.last_reload_notes
+    if notes:
+        detail = f"{detail}; " + "; ".join(notes)
     _log.info("SIGHUP: reloaded %s (%s)", config_path, detail)
     broker.emit_reload_event("config_reloaded", detail)
     return True
