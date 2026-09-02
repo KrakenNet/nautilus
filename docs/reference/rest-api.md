@@ -642,9 +642,10 @@ credential is sent and nothing but the first byte is read, so `reachable: true`
 means *the process behind that address is answering* — not that the credentials
 still work, not that the table still exists, and not that a database finished
 recovering. A certificate this broker will not verify is reported as reachable,
-because the server sent it: the handshake failure is an answer. Two schemes have
-no hello to send — `bolt` and `neo4j` without TLS — and are checked at the
-transport layer only.
+because the server sent it: the handshake failure is an answer — and `detail`
+says so, so a green with a note is a source this process cannot actually open.
+Every scheme with a default port has a hello, `bolt` and `neo4j` included: they
+send the Bolt handshake and wait for the version the server chooses.
 
 `probe` is off by default because `nautilus adapters list --url` reads this
 route, and a listing should not put a dial on its own critical path.

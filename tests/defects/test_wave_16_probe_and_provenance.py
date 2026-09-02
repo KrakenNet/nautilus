@@ -279,3 +279,21 @@ def test_w16_the_deploy_guide_does_not_promise_a_probe_that_cannot_run() -> None
         "startup before any port is bound"
     )
     assert "### 11.5 When the audit volume is missing" in guide
+
+
+def test_w16_no_page_still_says_bolt_has_no_hello() -> None:
+    """Two pages described the probe as the code behaved before this wave.
+
+    ``rest-api.md`` and ``operator-guide.md`` both told an operator that ``bolt``
+    and ``neo4j`` were "checked at the transport layer only" -- which was true,
+    and was the defect. A fix that leaves the page describing the old behaviour
+    has moved the wrong half.
+    """
+    docs = Path(__file__).resolve().parents[2] / "docs"
+    for page in sorted(docs.rglob("*.md")):
+        text = page.read_text(encoding="utf-8")
+        for stale in ("no hello to send", "transport layer only"):
+            assert stale not in text, (
+                f"{page.relative_to(docs)} still describes the pre-WAVE-16 probe "
+                f"({stale!r}); every scheme with a default port now sends a hello"
+            )

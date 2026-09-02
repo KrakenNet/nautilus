@@ -764,12 +764,15 @@ restart and no cache to clear.
 
 **What the probe does not claim.** It asks whether the process behind the
 address is answering, and it sends no credential to find out: an HTTP/1.0
-`HEAD /`, or libpq's pre-authentication `SSLRequest` for Postgres, or for a TLS
-scheme just the handshake. So `reachable: true` does not mean the password still
-works, the table still exists, or a database has finished recovering — for that,
-send a request. `bolt` and `neo4j` without TLS have no hello to send and are
-checked at the transport layer only, which is the one place a frozen backend can
-still read as reachable. Each dial is bounded by that source's `timeout_s`,
+`HEAD /`, or libpq's pre-authentication `SSLRequest` for Postgres, or Bolt's
+version handshake for `bolt` and `neo4j`. So `reachable: true` does not mean the
+password still works, the table still exists, or a database has finished
+recovering — for that, send a request. Every scheme with a default port sends
+one of those three and waits for a reply, so a frozen backend reads as
+unreachable rather than healthy. A `reachable: true` that carries a `detail` is
+the one green worth reading: the server answered and this process still cannot
+use it — a certificate it will not verify is the case that produces it. Each
+dial is bounded by that source's `timeout_s`,
 capped at 5 s, and all sources are dialled at once, so the slowest sets the
 response time rather than their sum.
 
