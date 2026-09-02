@@ -510,11 +510,96 @@ the warnings and errors and lose the discoveries and the access log; at
 filter downstream over raising the threshold, unless the access log is what
 you are trying to silence.
 
-`--log-level debug` adds `DEBUG` from every library on the root logger, not
-only from `nautilus.*` — the first extra line on a normal boot is
-`DEBUG:asyncio:Using selector: EpollSelector`. It is a debugging setting, not
-a "more detail about routing" setting: the broker's own reasoning is not on
-this stream at all, it is in the audit entry's `rule_trace`.
+#### What `--log-level debug` adds
+
+`debug` is where the broker says *why*. It answers seven questions the default
+stream cannot, and it still adds `DEBUG` from every library on the root logger
+along the way — the first extra line on a normal boot is
+`DEBUG:asyncio:Using selector: EpollSelector`, and any library that is chatty
+is chatty here.
+
+| Question | Logger | Where |
+| --- | --- | --- |
+| What config did this process load, and what did its paths and connections resolve to? | `nautilus.core.broker` | once, at construction |
+| Why was each source queried, skipped or denied on this request? | `nautilus.core.broker` | one line per configured source, per request |
+| Which rules were evaluated, and which fired? | `nautilus.core.broker` | one summary line per request |
+| What did an adapter dial, and did it connect? | `nautilus.core.broker` | on the first request that reaches the source |
+| Did the SSRF guard resolve a name, and to what? | `nautilus.adapters.base` | on every `rest` / `servicenow` / `llm` connect |
+| Why is this request minting a session token? | `nautilus.core.broker` | when one is minted |
+| Which stage of `/readyz` spent the time? | `nautilus.transport.fastapi_app` | every probe |
+
+Here is the whole of a real boot, one `/readyz`, and one
+`POST /v1/request` against a five-source config — two sources unreachable on
+purpose, one above the agent's clearance, one irrelevant to the intent:
+
+```console
+$ nautilus serve --config /tmp/nautilus-ops14/nautilus.yaml --bind 127.0.0.1:8814 --log-level debug
+INFO:nautilus.core.broker:discovered adapter entry-point 'influxdb' -> InfluxDBAdapter (from 'nautilus-rkm')
+INFO:nautilus.core.broker:discovered adapter entry-point 's3' -> S3Adapter (from 'nautilus-rkm')
+DEBUG:nautilus.core.broker:loaded config /tmp/nautilus-ops14/nautilus.yaml: 5 source(s), 1 agent(s), audit -> /tmp/nautilus-ops14/audit.jsonl, session store 'memory', session tokens on, state dir /tmp/nautilus-ops14
+DEBUG:nautilus.core.broker:config source 'orders': type 'static', classification 'unclassified', data types ['orders'], dials nothing
+DEBUG:nautilus.core.broker:config source 'hr-people': type 'static', classification 'unclassified', data types ['personnel'], dials nothing
+DEBUG:nautilus.core.broker:config source 'vault': type 'static', classification 'secret', data types ['orders'], dials nothing
+DEBUG:nautilus.core.broker:config source 'ext-cases': type 'postgres', classification 'unclassified', data types ['orders'], dials postgresql://cases.example.invalid:5432
+DEBUG:nautilus.core.broker:config source 'ext-feeds': type 'rest', classification 'unclassified', data types ['orders'], dials https://localhost:8443
+DEBUG:asyncio:Using selector: EpollSelector
+INFO:     Started server process [801119]
+INFO:     Waiting for application startup.
+WARNING:nautilus.transport.fastapi_app:api.keys[0] is a bare string: bound to no agent_id, so it can ask as any agent and call every governance route. Use the {key, agent_id, capabilities} form to scope it.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8814 (Press CTRL+C to quit)
+DEBUG:nautilus.transport.fastapi_app:readyz stages: audit sink probe 0.0 ms; session store sentinel read 0.0 ms (total 0.1 ms; each session-store stage is bounded at 2.0s, so the kubelet timeoutSeconds must exceed their sum, not one of them)
+INFO:     127.0.0.1:48114 - "GET /readyz HTTP/1.1" 200 OK
+DEBUG:nautilus.core.broker:minting a session token for agent 'analyst' in session 'f7d2aef1-2582-43a3-8695-272ed61ea638' (purpose 'reporting', clearance 'unclassified'): the caller declared no session_id, so it is its own session. This writes a session_token_issued audit entry beside the request's own.
+DEBUG:nautilus.core.broker:request 'bdafd902-b333-4db4-990b-97851e32e533': intent 'list orders' parsed to data types ['orders']; 6 rules in force, 2 fired: ['nautilus-routing::default-classification-deny', 'nautilus-routing::match-sources-by-data-type']
+DEBUG:nautilus.core.broker:request 'bdafd902-b333-4db4-990b-97851e32e533': source 'ext-cases' queried -- data_types overlap
+DEBUG:nautilus.core.broker:request 'bdafd902-b333-4db4-990b-97851e32e533': source 'ext-feeds' queried -- data_types overlap
+DEBUG:nautilus.core.broker:request 'bdafd902-b333-4db4-990b-97851e32e533': source 'hr-people' skipped -- no data type in common with the intent: source 'hr-people' offers ['personnel'], the request needed ['orders']
+DEBUG:nautilus.core.broker:request 'bdafd902-b333-4db4-990b-97851e32e533': source 'orders' queried -- data_types overlap
+DEBUG:nautilus.core.broker:request 'bdafd902-b333-4db4-990b-97851e32e533': source 'vault' denied -- clearance does not dominate source classification
+DEBUG:nautilus.core.broker:request 'bdafd902-b333-4db4-990b-97851e32e533': source 'ext-feeds' dialling https://localhost:8443 via RestAdapter
+DEBUG:nautilus.core.broker:request 'bdafd902-b333-4db4-990b-97851e32e533': source 'ext-cases' dialling postgresql://cases.example.invalid:5432 via PostgresAdapter
+DEBUG:nautilus.core.broker:request 'bdafd902-b333-4db4-990b-97851e32e533': source 'orders' dialling no remote endpoint via StaticAdapter
+DEBUG:nautilus.core.broker:request 'bdafd902-b333-4db4-990b-97851e32e533': source 'orders' connected to no remote endpoint in 0.0 ms
+DEBUG:nautilus.adapters.base:RestAdapter SSRF guard: base_url host localhost resolves to ['127.0.0.1']
+WARNING:nautilus.core.broker:source 'ext-feeds' failed (endpoint=https://localhost:8443, error_type=SSRFBlockedError, trace_id=bdafd902-b333-4db4-990b-97851e32e533): connect() failed: RestAdapter refuses base_url host 'localhost': it resolves to private/loopback/link-local address 127.0.0.1
+WARNING:nautilus.core.broker:source 'ext-cases' failed (endpoint=postgresql://cases.example.invalid:5432, error_type=AdapterError, trace_id=bdafd902-b333-4db4-990b-97851e32e533): connect() failed: PostgresAdapter failed to connect to source 'ext-cases': [Errno -2] Name or service not known
+INFO:     127.0.0.1:48126 - "POST /v1/request HTTP/1.1" 200 OK
+```
+
+The same run at the default `info` is eleven lines to the same point and
+answers none of the seven — the two `WARNING`s survive, every `DEBUG` above
+is gone:
+
+```console
+$ nautilus serve --config /tmp/nautilus-ops14/nautilus.yaml --bind 127.0.0.1:8815
+INFO:nautilus.core.broker:discovered adapter entry-point 'influxdb' -> InfluxDBAdapter (from 'nautilus-rkm')
+INFO:nautilus.core.broker:discovered adapter entry-point 's3' -> S3Adapter (from 'nautilus-rkm')
+INFO:     Started server process [803280]
+INFO:     Waiting for application startup.
+WARNING:nautilus.transport.fastapi_app:api.keys[0] is a bare string: bound to no agent_id, so it can ask as any agent and call every governance route. Use the {key, agent_id, capabilities} form to scope it.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8815 (Press CTRL+C to quit)
+INFO:     127.0.0.1:59540 - "GET /readyz HTTP/1.1" 200 OK
+WARNING:nautilus.core.broker:source 'ext-feeds' failed (endpoint=https://localhost:8443, error_type=SSRFBlockedError, trace_id=d135a3e2-0149-468e-a47c-338be1c815b2): connect() failed: RestAdapter refuses base_url host 'localhost': it resolves to private/loopback/link-local address 127.0.0.1
+WARNING:nautilus.core.broker:source 'ext-cases' failed (endpoint=postgresql://cases.example.invalid:5432, error_type=AdapterError, trace_id=d135a3e2-0149-468e-a47c-338be1c815b2): connect() failed: PostgresAdapter failed to connect to source 'ext-cases': [Errno -2] Name or service not known
+INFO:     127.0.0.1:59550 - "POST /v1/request HTTP/1.1" 200 OK
+```
+
+**Nothing on this stream is a credential.** Every address above is rebuilt
+from scheme, host and port by the same allowlist redactor the error records
+use, so the userinfo, path, query and fragment of a `connection` cannot reach
+it: the config behind that run holds
+`postgresql://nautilus:s3cr3t-dsn-password@cases.example.invalid:5432/nautilus`
+and `https://localhost:8443/api?token=s3cr3t-query-token` with a bearer token
+beside it, and `grep -c` for each of the three secrets over the whole `debug`
+run and over `audit.jsonl` returns **0** — while the two `scheme://host:port`
+endpoints appear three times each on stdout and once each in `audit.jsonl`.
+Session tokens are named by their session id, never printed.
+
+`DEBUG` is still `DEBUG`: it is per-request, it is `O(sources)` lines per
+request, and it turns on every library's debug records too. Raise it while you
+are looking, lower it when you are done — do not run a busy deployment on it.
 
 The two flags compose. `--log-format json --log-level warning` emits the
 warning above as one object:
@@ -1175,9 +1260,14 @@ state_dir: /var/lib/nautilus
     WARNING:nautilus.core.broker:source 'ledger' failed (endpoint=postgresql://127.0.0.1:15499, error_type=AdapterError, trace_id=b8f39914-…): PostgresAdapter: execute failed for source 'ledger': ConnectionRefusedError: [Errno 111] Connect call failed ('127.0.0.1', 15499)
     ```
 
-    It is a `WARNING`, so it is on stdout at the default `--log-level info`;
-    `--log-level debug` is not needed and does not help (it adds every
-    library's records, not the broker's reasoning). `endpoint` is rebuilt from
+    It is a `WARNING`, so it is on stdout at the default `--log-level info`
+    and you do not have to raise verbosity to see *which* host failed.
+    `--log-level debug` adds what happened before it — one
+    `source '…' dialling <endpoint> via <Adapter>` line per source, and the
+    address the SSRF guard resolved a name to — which is what you want when
+    the failure is "why is this source being refused at all"
+    ([What `--log-level debug` adds](#what-log-level-debug-adds)).
+    `endpoint` is rebuilt from
     scheme, host and port only, so a DSN password or a URL token in
     `connection` is not in the log, the audit trail or the agent's response —
     which also means a `connection` with no host (a filesystem path, a libpq

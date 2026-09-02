@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import functools
 import ipaddress
+import logging
 import re
 import socket
 from collections.abc import Awaitable, Callable
@@ -24,6 +25,8 @@ from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
 # Either IP family; the SSRF guards test the same predicates on both.
 _IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
+
+log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import ssl
@@ -149,14 +152,29 @@ async def resolve_base_url(base_url: str, adapter: str) -> tuple[str, list[_IPAd
             f"because a connection string can carry credentials)"
         )
     try:
-        return host, [ipaddress.ip_address(host)]
+        addresses = [ipaddress.ip_address(host)]  # a literal resolves to itself
     except ValueError:
-        pass  # a name, not a literal — resolve it
-    try:
-        infos = await asyncio.get_running_loop().getaddrinfo(host, None, type=socket.SOCK_STREAM)
-    except (OSError, UnicodeError):
-        return host, []
-    return host, [ipaddress.ip_address(str(info[4][0])) for info in infos]
+        try:
+            infos = await asyncio.get_running_loop().getaddrinfo(
+                host, None, type=socket.SOCK_STREAM
+            )
+        except (OSError, UnicodeError):
+            addresses = []
+        else:
+            addresses = [ipaddress.ip_address(str(info[4][0])) for info in infos]
+    # The lookup is the thing that decides whether the config works, and it
+    # happens inside a guard the operator never sees run: a ``rest`` source
+    # that started being refused after this stopped testing IP literals had no
+    # line anywhere saying which address its name answers with. Emitted for
+    # literals too, so "the guard did resolve, and this is what it saw" is one
+    # grep rather than two cases.
+    log.debug(
+        "%s SSRF guard: base_url host %s resolves to %s",
+        adapter,
+        host,
+        [str(address) for address in addresses] if addresses else "no address",
+    )
+    return host, addresses
 
 
 def validate_operator(op: str) -> None:

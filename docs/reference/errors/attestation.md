@@ -12,10 +12,10 @@ Both routes need the `keys` capability. `curl` examples assume the
 
 | Message | Status | Line | Meaning |
 | --- | --- | --- | --- |
-| `reviewer is required (no control characters)` | 400 | `fastapi_app.py:1023` | `POST /v1/keys/rotate` needs `reviewer` in the body. Control characters are stripped, so a value made only of them reads as absent. |
-| `reviewer and reason are required (no control characters)` | 400 | `fastapi_app.py:1069` | `POST /v1/keys/{kid}/revoke` needs both. |
-| `kid must be a UUID` | 400 | `fastapi_app.py:1062` | The `{kid}` path segment is not a UUID. Take it from `/v1/keys/jwks.json`. |
-| `kid {kid!r} not found` | 404 | `fastapi_app.py:1089` | No key with that id in the ring. |
+| `reviewer is required (no control characters)` | 400 | `fastapi_app.py:1057` | `POST /v1/keys/rotate` needs `reviewer` in the body. Control characters are stripped, so a value made only of them reads as absent. |
+| `reviewer and reason are required (no control characters)` | 400 | `fastapi_app.py:1103` | `POST /v1/keys/{kid}/revoke` needs both. |
+| `kid must be a UUID` | 400 | `fastapi_app.py:1096` | The `{kid}` path segment is not a UUID. Take it from `/v1/keys/jwks.json`. |
+| `kid {kid!r} not found` | 404 | `fastapi_app.py:1123` | No key with that id in the ring. |
 
 ```bash
 curl -s -X POST "$NAUTILUS/v1/keys/rotate" \
@@ -26,14 +26,14 @@ curl -s -X POST "$NAUTILUS/v1/keys/not-a-uuid/revoke" \
 ```
 
 Rotation and revocation are also refused with **HTTP 409** carrying the underlying `ValueError`
-text (`fastapi_app.py:1076-1084`) — most often:
+text (`fastapi_app.py:1110-1118`) — most often:
 
 ### `kid {kid!r} is the current primary; rotate first, then revoke`
 
-`nautilus/core/broker.py:1553`. Revoking the primary would leave nothing to sign with. Call
+`nautilus/core/broker.py:1581`. Revoking the primary would leave nothing to sign with. Call
 `POST /v1/keys/rotate` first, then revoke the now-superseded kid.
 
-Both routes answer **503 `Key ring not ready`** (`fastapi_app.py:949`) when
+Both routes answer **503 `Key ring not ready`** (`fastapi_app.py:983`) when
 `app.state.key_ring` is unset, and raise
 `session tokens are disabled (session_tokens.enabled: false)` when tokens are off — see
 [session-tokens.md](session-tokens.md).
@@ -53,7 +53,7 @@ public key where a private one was expected. Nautilus signs with Ed25519 only.
 
 ### `attestation is disabled`
 
-**`RuntimeError`**, `nautilus/core/broker.py:3280`. An attestation API was called while
+**`RuntimeError`**, `nautilus/core/broker.py:3391`. An attestation API was called while
 `attestation.enabled` is false. Enable it, or stop calling that API.
 
 ## Chained log configuration
@@ -62,7 +62,7 @@ All raised at startup while building sinks.
 
 ### `attestation.sink.chained requires attestation.enabled with a signing key`
 
-**`ValueError`**, `nautilus/core/broker.py:1118-1121`. A chained sink signs every line, so it
+**`ValueError`**, `nautilus/core/broker.py:1146-1149`. A chained sink signs every line, so it
 needs `attestation.enabled: true`.
 
 ### `audit.chained requires attestation.enabled with a signing key: each chained line carries a JWS, and there is nothing to sign with`

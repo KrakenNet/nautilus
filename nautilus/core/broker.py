@@ -596,7 +596,7 @@ def _broker_error(exc: BaseException, request_id: str) -> ErrorRecord:
     # failed was invisible in the process log while a request that merely lost
     # a source got a WARNING. Same shape as ``_fail_source``'s.
     log.warning(
-        "request %s failed at the broker (error_type=%s, endpoint=%s): %s",
+        "request %r failed at the broker (error_type=%s, endpoint=%s): %s",
         request_id,
         record.error_type,
         record.endpoint or "-",
@@ -930,6 +930,34 @@ class Broker:
         broker_instance_id = config.session_tokens.broker_instance_id or (
             "shared" if key_ring_path else None
         )
+
+        if log.isEnabledFor(logging.DEBUG):
+            # ``config check`` prints this; a running server did not, so
+            # "which file is this process actually serving, and what did its
+            # relative paths resolve to" was answerable only by reading the
+            # deployment. ``dials`` goes through the same allowlist redactor as
+            # every other endpoint the broker publishes, so a DSN password in
+            # the file does not reach the process log with it.
+            log.debug(
+                "loaded config %s: %d source(s), %d agent(s), audit -> %s, "
+                "session store %r, session tokens %s, state dir %s",
+                Path(path).resolve(),
+                len(registry.sources),
+                len(config.agents),
+                audit_path,
+                config.session_store.backend,
+                "on" if config.session_tokens.enabled else "off",
+                cls._resolve(base_dir, config.state_dir) if config.state_dir else base_dir,
+            )
+            for source in registry:
+                log.debug(
+                    "config source %r: type %r, classification %r, data types %s, dials %s",
+                    source.id,
+                    source.type,
+                    source.classification,
+                    source.data_types,
+                    redact_connection(source.connection) or "nothing",
+                )
 
         return cls(
             config=config,
@@ -2335,6 +2363,47 @@ class Broker:
         )
         state.skip_records = self._skip_records(state)
         state.denial_records = [self._annotate_denial(d, state) for d in state.denial_records]
+        if log.isEnabledFor(logging.DEBUG):
+            self._log_route(state)
+
+    def _log_route(self, state: _RequestState) -> None:
+        """Put this request's routing reasoning on the process log (DEBUG).
+
+        The reasoning existed only in the audit entry's ``rule_trace``, written
+        after the request finished and readable only by whoever holds the audit
+        file -- so "two brokers behind one address answered the same request
+        with different ``sources_skipped``" was a question the process log could
+        not answer at any verbosity. One summary line (what the intent parsed
+        to, how many rules were evaluated, which fired), then one line per
+        configured source giving its disposition and the reason the response
+        already carries.
+
+        Called under :meth:`~logging.Logger.isEnabledFor` because the loop is
+        O(sources) of formatting on the path every request takes, and it has to
+        cost nothing at the default level.
+        """
+        log.debug(
+            "request %r: intent %r parsed to data types %r; %d rules in force, %d fired: %s",
+            state.request_id,
+            state.intent_analysis.raw_intent,
+            state.intent_analysis.data_types_needed,
+            len(self._router.rules_in_force()),
+            len(state.rule_trace),
+            state.rule_trace,
+        )
+        # Later assignments win, and the three sets are disjoint by
+        # construction (``sources_skipped`` excludes both of the others).
+        dispositions = {rd.source_id: ("queried", rd.reason) for rd in state.routing_decisions}
+        dispositions.update({d.source_id: ("denied", d.reason) for d in state.denial_records})
+        dispositions.update({s.source_id: ("skipped", s.reason) for s in state.skip_records})
+        for source_id, (disposition, reason) in sorted(dispositions.items()):
+            log.debug(
+                "request %r: source %r %s -- %s",
+                state.request_id,
+                source_id,
+                disposition,
+                reason,
+            )
 
     def _gate_session_ownership(self, agent_id: str, state: _RequestState) -> None:
         """Refuse a session that belongs to somebody else (§4.15 follow-on).
@@ -2651,6 +2720,23 @@ class Broker:
             if source_id in self._connected_adapters:
                 drifted = source_id in self._quarantined_adapters
             else:
+                # What this source dials, and how long dialling took. A source
+                # pointed at a stopped backend answered 200 with a
+                # ``sources_errored[]`` entry and left nothing on any
+                # ``nautilus.*`` logger until it failed; a source that connects
+                # normally left nothing at all, so "which backends did this
+                # request actually open, and which one was slow" had no answer.
+                # ``endpoint`` is rebuilt by allowlist from the connection
+                # string, so the DSN password beside it cannot ride out here.
+                endpoint = self._source_endpoint(source_id) or "no remote endpoint"
+                log.debug(
+                    "request %r: source %r dialling %s via %s",
+                    state.request_id,
+                    source_id,
+                    endpoint,
+                    type(adapter).__name__,
+                )
+                dial_started = time.monotonic()
                 try:
                     await adapter.connect(self._registry.get(source_id))
                 except Exception as exc:  # noqa: BLE001 — surface as per-source error
@@ -2666,6 +2752,13 @@ class Broker:
                     )
                     return None
                 self._connect_failures.pop(source_id, None)
+                log.debug(
+                    "request %r: source %r connected to %s in %.1f ms",
+                    state.request_id,
+                    source_id,
+                    endpoint,
+                    (time.monotonic() - dial_started) * 1000,
+                )
                 # Connect is lazy, so this is where an adapter's schema is
                 # first reachable — checking only in setup() left the gate dead.
                 drifted = await self._check_adapter_schema(source_id, adapter)
@@ -3061,6 +3154,9 @@ class Broker:
         if not state.session_id:
             state.session_id = str(uuid.uuid4())
             context["session_id"] = state.session_id
+            why = "the caller declared no session_id, so it is its own session"
+        else:
+            why = "no session_token was presented for the declared session_id"
         purpose, clearance = self._request_grant(agent_id, context)
         if not self._may_claim_purpose(agent_id, purpose):
             # The request still runs and the router still denies it. What must
@@ -3072,6 +3168,21 @@ class Broker:
                 purpose,
             )
             return
+        # Every request from a caller that carries no session_id mints a token,
+        # which writes a session_token_issued entry beside the request's own --
+        # three audit lines where the documentation describes two. That is a
+        # property of the caller, invisible from outside the process, so the
+        # reason is said here rather than inferred from the entry count.
+        log.debug(
+            "minting a session token for agent %r in session %r (purpose %r, "
+            "clearance %r): %s. This writes a session_token_issued audit entry "
+            "beside the request's own.",
+            agent_id,
+            state.session_id,
+            purpose,
+            clearance,
+            why,
+        )
         token = self._session_tokens.issue(
             session_id=state.session_id,
             agent_id=agent_id,

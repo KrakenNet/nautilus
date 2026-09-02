@@ -7,7 +7,7 @@ HTTP these are unreachable — the transport owns the lifecycle.
 
 ### `Broker.request() called inside a running event loop. Use Broker.arequest() (async) from async contexts.`
 
-**`RuntimeError`**, `nautilus/core/broker.py:1586-1590`.
+**`RuntimeError`**, `nautilus/core/broker.py:1614-1618`.
 
 **Means.** The synchronous facade was called from inside a coroutine. It would need to drive an
 event loop that is already running.
@@ -59,7 +59,7 @@ RuntimeError: Broker.request() called inside a running event loop. Use Broker.ar
 
 ### `Broker.close() called inside a running event loop. Use Broker.aclose() (async) from async contexts.`
 
-**`RuntimeError`**, `nautilus/core/broker.py:3532-3536`. Same rule for shutdown: `await
+**`RuntimeError`**, `nautilus/core/broker.py:3643-3647`. Same rule for shutdown: `await
 broker.aclose()`. No interpolation.
 
 **Means.** `close()` drains the attestation sink and the session store synchronously; from inside a
@@ -113,7 +113,7 @@ RuntimeError: Broker.close() called inside a running event loop. Use Broker.aclo
 
 ### `Broker.{method}() called after close(); the attestation sink and session store are already shut down, so this request could not be receipted. Build a new Broker.`
 
-**`RuntimeError`**, `nautilus/core/broker.py:2065-2070`. `{method}` is the method you called.
+**`RuntimeError`**, `nautilus/core/broker.py:2093-2098`. `{method}` is the method you called.
 
 **Means.** The broker is closed. It is not reusable: the sink and the session store are gone, so
 the request could not be receipted, and an unreceipted decision is not served.
@@ -168,12 +168,12 @@ and the guard fires inside the async one, so `{method}` reads `arequest` even wh
 
 ### `Broker.declare_handoff() failed for source={source_agent_id!r} receiving={receiving_agent_id!r}: {exc}`
 
-**`PolicyEngineError`**, `nautilus/core/broker.py:1846-1850`. The handoff could not be recorded.
+**`PolicyEngineError`**, `nautilus/core/broker.py:1874-1878`. The handoff could not be recorded.
 `{source_agent_id!r}` and `{receiving_agent_id!r}` are the two agent ids with `repr()`, so they
 arrive quoted; `{exc}` is the exception the rules engine raised, with its own message.
 
 **Means.** `declare_handoff` clears the shared engine, asserts one `data_handoff` fact per declared
-classification, evaluates, and queries `denial_record` (`nautilus/core/broker.py:1844-1860`). Any
+classification, evaluates, and queries `denial_record` (`nautilus/core/broker.py:1872-1888`). Any
 exception from those four calls is re-wrapped here. It is the engine failing, not the handoff being
 denied — a *denied* handoff returns a `HandoffDecision` carrying `DenialRecord`s, and an unknown
 agent id likewise returns a decision, not this error.
@@ -243,7 +243,7 @@ PolicyEngineError: Broker.declare_handoff() failed for source='analyst' receivin
 
 ### `create_app requires either config_path or existing_broker`
 
-**`ValueError`**, `nautilus/transport/fastapi_app.py:505-509`. No interpolation. Both
+**`ValueError`**, `nautilus/transport/fastapi_app.py:506-510`. No interpolation. Both
 `config_path` (positional) and `existing_broker` were `None`.
 
 **Means.** `create_app` builds the ASGI app around a broker. With neither argument there is nothing
@@ -285,7 +285,7 @@ create_app requires either config_path or existing_broker
 
 ### `AC-21.b: this adapter must implement get_schema() (task-006)`
 
-**`NotImplementedError`**, `nautilus/adapters/base.py:378`. No interpolation. The default
+**`NotImplementedError`**, `nautilus/adapters/base.py:396`. No interpolation. The default
 `get_schema()` inherited from the `Adapter` protocol.
 
 **Means.** Registration succeeds at import time and the gap only shows when something asks for the
@@ -293,7 +293,7 @@ schema, which is deliberate: an adapter is usable for queries before it can desc
 
 **Status.** `GET /v1/adapters/{name}/schema` answers **501** with
 `{"detail": "Adapter '<name>' does not support schema introspection"}`
-(`nautilus/transport/fastapi_app.py:1162-1167`) — a permanent refusal, not a retryable one, which
+(`nautilus/transport/fastapi_app.py:1196-1201`) — a permanent refusal, not a retryable one, which
 is why it is not the 503 the other schema failures get. Inside a request the drift gate treats a
 raising `get_schema` as "cannot check" and the request still answers **200**.
 

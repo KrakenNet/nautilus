@@ -53,6 +53,7 @@ import asyncio
 import json
 import logging
 import re
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -835,52 +836,85 @@ def create_app(
         serve an ``aget`` against the sentinel key ``_ready_probe_``.
         Any exception from the store downgrades to 503 so rolling
         restarts take the pod out of rotation cleanly.
+
+        Each stage is timed and the whole run is emitted as one ``DEBUG``
+        record. ``reason: session_store_timeout`` names a budget without
+        saying which of the two session-store stages spent it, and the two
+        are bounded separately -- so a probe that overran the shipped
+        ``timeoutSeconds`` could not be attributed to the sentinel read or to
+        the schema check from outside the process.
         """
-        broker: Broker | None = getattr(request.app.state, "broker", None)
-        ready = bool(getattr(request.app.state, "ready", False))
-        if broker is None or not ready:
-            response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-            return {"status": "not_ready", "reason": "startup_incomplete"}
-        # The audit sink is checked first: an entry is written before any
-        # request answers, so a sink that has stopped accepting writes fails
-        # every request, and the probe that exists to drain a pod said ok.
-        audit_logger: Any = getattr(broker, "audit_logger", None)
-        audit_problem = audit_logger.probe() if audit_logger is not None else None
-        if audit_problem is not None:
-            response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-            return {"status": "not_ready", "reason": audit_problem}
-        store: Any = getattr(broker, "session_store", None)
-        if store is None:
-            # Broker without an exposed session_store still counts as ready
-            # (the probe is best-effort — AC-12.5).
-            return {"status": "ok"}
+        stages: list[str] = []
+        marks = [time.perf_counter()]
+
+        def mark(name: str) -> None:
+            now = time.perf_counter()
+            stages.append(f"{name} {(now - marks[-1]) * 1000:.1f} ms")
+            marks.append(now)
+
         try:
-            if hasattr(store, "aget"):
-                # Bounded, because a store that is *down* answers fast and a
-                # store that is reachable but frozen does not answer at all:
-                # ``acquire_timeout_s`` covers taking a new pooled connection,
-                # and the sentinel read runs on one that is already open. An
-                # unbounded probe is a probe the kubelet gives up on, so the pod
-                # is never drained and every probe leaves a wedged handler.
-                await asyncio.wait_for(store.aget(_READY_PROBE_KEY), _READY_PROBE_TIMEOUT_S)
-            elif hasattr(store, "get"):
-                store.get(_READY_PROBE_KEY)
-            # The schema stamp is checked at boot, which covers the replica
-            # coming up and misses the one already serving: a rolling upgrade
-            # migrates the shared store under every pod that has not been
-            # replaced yet. Re-reading it here drains this pod instead of
-            # letting it read-modify-write rows it does not understand.
-            verify: Any = getattr(store, "averify_schema", None)
-            if callable(verify):
-                probe: Any = verify()
-                await asyncio.wait_for(probe, _READY_PROBE_TIMEOUT_S)
-        except TimeoutError:
-            response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-            return {"status": "not_ready", "reason": "session_store_timeout"}
-        except Exception as exc:  # noqa: BLE001 — any backend failure → 503.
-            response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
-            return {"status": "not_ready", "reason": type(exc).__name__}
-        return {"status": "ok"}
+            broker: Broker | None = getattr(request.app.state, "broker", None)
+            ready = bool(getattr(request.app.state, "ready", False))
+            if broker is None or not ready:
+                mark("startup gate (incomplete)")
+                response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+                return {"status": "not_ready", "reason": "startup_incomplete"}
+            # The audit sink is checked first: an entry is written before any
+            # request answers, so a sink that has stopped accepting writes fails
+            # every request, and the probe that exists to drain a pod said ok.
+            audit_logger: Any = getattr(broker, "audit_logger", None)
+            audit_problem = audit_logger.probe() if audit_logger is not None else None
+            mark("audit sink probe")
+            if audit_problem is not None:
+                response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+                return {"status": "not_ready", "reason": audit_problem}
+            store: Any = getattr(broker, "session_store", None)
+            if store is None:
+                # Broker without an exposed session_store still counts as ready
+                # (the probe is best-effort — AC-12.5).
+                return {"status": "ok"}
+            stage = "session store sentinel read"
+            try:
+                if hasattr(store, "aget"):
+                    # Bounded, because a store that is *down* answers fast and a
+                    # store that is reachable but frozen does not answer at all:
+                    # ``acquire_timeout_s`` covers taking a new pooled connection,
+                    # and the sentinel read runs on one that is already open. An
+                    # unbounded probe is a probe the kubelet gives up on, so the pod
+                    # is never drained and every probe leaves a wedged handler.
+                    await asyncio.wait_for(store.aget(_READY_PROBE_KEY), _READY_PROBE_TIMEOUT_S)
+                elif hasattr(store, "get"):
+                    store.get(_READY_PROBE_KEY)
+                mark(stage)
+                # The schema stamp is checked at boot, which covers the replica
+                # coming up and misses the one already serving: a rolling upgrade
+                # migrates the shared store under every pod that has not been
+                # replaced yet. Re-reading it here drains this pod instead of
+                # letting it read-modify-write rows it does not understand.
+                verify: Any = getattr(store, "averify_schema", None)
+                if callable(verify):
+                    stage = "session store schema check"
+                    probe: Any = verify()
+                    await asyncio.wait_for(probe, _READY_PROBE_TIMEOUT_S)
+                    mark(stage)
+            except TimeoutError:
+                mark(f"{stage} (timed out)")
+                response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+                return {"status": "not_ready", "reason": "session_store_timeout"}
+            except Exception as exc:  # noqa: BLE001 — any backend failure → 503.
+                mark(f"{stage} (failed)")
+                response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+                return {"status": "not_ready", "reason": type(exc).__name__}
+            return {"status": "ok"}
+        finally:
+            log.debug(
+                "readyz stages: %s (total %.1f ms; each session-store stage is "
+                "bounded at %.1fs, so the kubelet timeoutSeconds must exceed "
+                "their sum, not one of them)",
+                "; ".join(stages) or "none reached",
+                (time.perf_counter() - marks[0]) * 1000,
+                _READY_PROBE_TIMEOUT_S,
+            )
 
     # ------------------------------------------------------------------
     # Session-token endpoints (AC-18.a–g)

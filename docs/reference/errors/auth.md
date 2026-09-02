@@ -47,7 +47,7 @@ Only /healthz, /readyz and /metrics are reachable. Add a key under 'api: keys:' 
 'nautilus init' writes one for you.
 ```
 
-(`nautilus/transport/fastapi_app.py:185-191`, one `log.warning` line.)
+(`nautilus/transport/fastapi_app.py:186-192`, one `log.warning` line.)
 
 ```bash
 python - <<'PY'
@@ -111,7 +111,7 @@ curl -s "$NAUTILUS/v1/audit" -H 'X-API-Key: query-key'
 
 ## `This credential is bound to agent_id={bound!r}, so it cannot ask as {body.agent_id!r}`
 
-**HTTP 403.** `nautilus/transport/fastapi_app.py:662-669`. The MCP transport raises the same
+**HTTP 403.** `nautilus/transport/fastapi_app.py:663-670`. The MCP transport raises the same
 sentence as a tool error (`nautilus/transport/mcp_server.py:369-373`, with `{agent_id!r}` in
 place of `{body.agent_id!r}`). Rendered example:
 
@@ -137,7 +137,7 @@ curl -s -X POST "$NAUTILUS/v1/request" \
 
 ## `This credential is bound to agent_id={bound!r}, so it cannot mint a session token for {requested_agent!r}`
 
-**HTTP 403.** `nautilus/transport/fastapi_app.py:935-942`, on `POST /v1/sessions`.
+**HTTP 403.** `nautilus/transport/fastapi_app.py:969-976`, on `POST /v1/sessions`.
 
 **Means.** Same binding rule, applied to token minting. Without it a key bound to a low-clearance
 agent could mint a broker-valid token naming a high-clearance one, and the token verifies against
@@ -179,7 +179,7 @@ request, including health-check and retry paths.
 
 ## `X-Nautilus-Reviewer header required`
 
-**HTTP 400.** `_require_reviewer`, `nautilus/transport/fastapi_app.py:1250-1256`.
+**HTTP 400.** `_require_reviewer`, `nautilus/transport/fastapi_app.py:1284-1290`.
 
 **Means.** A governance route needs a human identity to write into the audit record and the
 credential could not supply one. The header is only consulted when the `api.keys` entry has no
@@ -198,7 +198,7 @@ api.keys[0] is a bare string: bound to no agent_id, so it can ask as any agent a
 every governance route. Use the {key, agent_id, capabilities} form to scope it.
 ```
 
-`nautilus/transport/fastapi_app.py:194-201`. The index and the pluralisation change with the
+`nautilus/transport/fastapi_app.py:195-202`. The index and the pluralisation change with the
 number of bare entries — `api.keys[0] is` for one, `api.keys[0, 2] are` for several.
 
 **Fix.** Rewrite each entry as a mapping:

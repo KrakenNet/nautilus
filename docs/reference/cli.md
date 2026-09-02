@@ -500,7 +500,7 @@ Load a config, construct a `Broker`, and run the transports. `--bind` wins over
 | `--bind` | `str` | `None` | — | `HOST:PORT` for the REST (and MCP-over-http) listener. Overrides `api.host` / `api.port`. |
 | `--air-gapped` | flag (`store_true`) | `False` | — | Force `analysis.mode='pattern'`, drop any `type: llm` source whose `connection` host is not loopback, and refuse an `analysis.provider` (NFR-1, #43). A `WARN:` line names each field it overrode. |
 | `--log-format` | `str` | `text` | `text`, `json` | Application log format. `json` emits SIEM-ingestable structured lines on stdout. |
-| `--log-level` | `str` | `info` | `debug`, `info`, `warning`, `error`, `critical` | Threshold for the root logger every `nautilus.*` module writes to and for uvicorn's own logger, which owns the startup and access lines. |
+| `--log-level` | `str` | `info` | `debug`, `info`, `warning`, `error`, `critical` | Threshold for the root logger every `nautilus.*` module writes to and for uvicorn's own logger, which owns the startup and access lines. `debug` adds the broker's per-request reasoning — the config it loaded, why each source was queried/skipped/denied, which rules fired, what each adapter dialled and whether it connected, what the SSRF guard resolved a name to, why a session token was minted, and which `/readyz` stage spent the time — plus `DEBUG` from every third-party library on the root logger. Sample output: [operator-guide § What `--log-level debug` adds](../how-to/operator-guide.md#what-log-level-debug-adds). |
 
 Setup A. This runs until interrupted; everything below `Started server process`
 is uvicorn's:

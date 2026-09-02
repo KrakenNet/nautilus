@@ -4193,7 +4193,7 @@ nautilus/analysis/llm/anthropic_provider.py:115:            api_key=os.getenv(se
 nautilus/analysis/llm/openai_provider.py:92:        key = os.getenv(self.api_key_env)
 nautilus/analysis/llm/openai_provider.py:107:            api_key=os.getenv(self.api_key_env),
 nautilus/config/loader.py:68:        self._env = env if env is not None else dict(os.environ)
-nautilus/core/broker.py:1066:                dsn = os.environ.get("TEST_PG_DSN")
+nautilus/core/broker.py:1094:                dsn = os.environ.get("TEST_PG_DSN")
 nautilus/adapters/influxdb.py:224:            token = _auth_token(config) or os.environ.get("INFLUXDB_V2_TOKEN")
 nautilus/adapters/influxdb.py:225:            org = os.environ.get("INFLUXDB_V2_ORG")
 nautilus/observability/__init__.py:16:    if os.environ.get("OTEL_SDK_DISABLED", "").lower() == "true":
@@ -5561,9 +5561,17 @@ $ echo $?
 
 Reaching DEBUG therefore takes an explicit `--log-level debug` on the command
 line, which makes it a grep of the unit files and the Deployment's `args:`,
-exactly as for `--bind`. Raising the threshold the other way has its own cost —
-[Log verbosity](operator-guide.md#log-verbosity) lists the startup lines this
-page tells you to read that `warning` and above take away.
+exactly as for `--bind`. What that flag turns on is the broker's own
+per-request reasoning — the config it loaded, why each source was queried,
+skipped or denied, which rules fired, what each adapter dialled, what the SSRF
+guard resolved a name to, why a session token was minted, and which `/readyz`
+stage spent the time — and every library's `DEBUG` alongside it
+([What `--log-level debug` adds](operator-guide.md#what-log-level-debug-adds)).
+No credential is on that stream: every address in it is rebuilt from scheme,
+host and port by `redact_connection`, and session tokens are named by their
+session id rather than printed. Raising the threshold the other way has its
+own cost — [Log verbosity](operator-guide.md#log-verbosity) lists the startup
+lines this page tells you to read that `warning` and above take away.
 
 If you run uvicorn yourself — one of the two supported TLS answers,
 [Option A](#option-a-run-uvicorn-yourself-with-certificates) — then `--reload` is
@@ -6530,15 +6538,28 @@ sys.exit(1 if bad else 0)
 
 ```console
 $ python logscan.py
-ok     nautilus/core/broker.py:2761 %r on record.source_id
-ok     nautilus/core/broker.py:2858 %r on source_id
-ok     nautilus/core/broker.py:3392 %r on source_id
-ok     nautilus/core/broker.py:3458 %r on source_id
-ok     nautilus/core/broker.py:3068 %r on agent_id
-ok     nautilus/core/broker.py:3068 %r on purpose
-ok     nautilus/core/broker.py:1870 %r on receiving_agent_id
-ok     nautilus/core/broker.py:1870 %r on session_id
-ok     nautilus/core/broker.py:3372 %r on source_id
+ok     nautilus/core/broker.py:598 %r on request_id
+ok     nautilus/core/broker.py:2385 %r on state.request_id
+ok     nautilus/core/broker.py:2385 %r on state.intent_analysis.raw_intent
+ok     nautilus/core/broker.py:2385 %r on state.intent_analysis.data_types_needed
+ok     nautilus/core/broker.py:2854 %r on record.source_id
+ok     nautilus/core/broker.py:2951 %r on source_id
+ok     nautilus/core/broker.py:3176 %r on agent_id
+ok     nautilus/core/broker.py:3176 %r on state.session_id
+ok     nautilus/core/broker.py:3176 %r on purpose
+ok     nautilus/core/broker.py:3503 %r on source_id
+ok     nautilus/core/broker.py:3569 %r on source_id
+ok     nautilus/core/broker.py:2400 %r on state.request_id
+ok     nautilus/core/broker.py:2400 %r on source_id
+ok     nautilus/core/broker.py:3164 %r on agent_id
+ok     nautilus/core/broker.py:3164 %r on purpose
+ok     nautilus/core/broker.py:1898 %r on receiving_agent_id
+ok     nautilus/core/broker.py:1898 %r on session_id
+ok     nautilus/core/broker.py:2732 %r on state.request_id
+ok     nautilus/core/broker.py:2732 %r on source_id
+ok     nautilus/core/broker.py:2755 %r on state.request_id
+ok     nautilus/core/broker.py:2755 %r on source_id
+ok     nautilus/core/broker.py:3483 %r on source_id
 ok     nautilus/transport/auth.py:287 %r on user
 
 0 unescaped interpolations
@@ -6546,14 +6567,28 @@ $ echo $?
 0
 ```
 
-Run it from the repository root; the paths are relative to it. Ten rows, no
-`UNSAFE`. `auth.py:287` logs the `X-Forwarded-User` header a proxy sent;
-`broker.py:3068` logs the `agent_id` and `purpose` out of a request body;
-`broker.py:1870` logs a handoff's `agent_id` and `session_id`, also from the
-body; the five `broker.py` `source_id` rows are the per-source failure,
-schema-fetch, drift, quarantine-lift and truncation sites. Confirm the caller-facing half against a
-live broker rather than reading the source — send a purpose with a newline in it
-and count lines:
+Run it from the repository root; the paths are relative to it. Twenty-three
+rows, every one of them `%r`, `0 unescaped interpolations`, exit `0`.
+`auth.py:287` logs the `X-Forwarded-User` header a proxy sent;
+`broker.py:3164` logs the `agent_id` and `purpose` out of a request body; `broker.py:1898` logs a handoff's `agent_id` and `session_id`,
+also from the body; the `broker.py` `source_id` rows are the per-source
+failure, schema-fetch, drift, quarantine-lift and truncation sites plus the
+`--log-level debug` routing and dial records; `broker.py:3176` is the
+`debug`-level session-token mint line.
+
+`broker.py:598` is the broker-level failure record. Its `request_id` is the
+`uuid4()` minted in `_new_request_state`, so no caller can put a byte in it —
+and it is `%r` anyway, because the scan matches on argument *names* and a rule
+that has to be argued with at one call site is a rule that gets lost at the
+next one. The cost of the convention is nothing: `repr()` of a uuid4 string is
+the same characters inside quotes.
+
+Neither layer is the only one. `%r` escapes the value at the call site;
+`TextFormatter` escapes C0 controls and DEL out of the whole interpolated
+message afterwards, so a value that reaches a `%s` — a `data_types` entry
+quoted into a `debug` skip reason, say — is still one record. Confirm the
+caller-facing half against a live broker rather than reading the source — send
+a purpose with a newline in it and count lines:
 
 ```console
 $ curl -s -o /dev/null -X POST http://127.0.0.1:8000/v1/request \
@@ -7111,7 +7146,7 @@ issuers:
   no per-proxy subject allowlist, so front the broker with two proxies and
   either one can assert the other's identities.
 - `agents.<id>.subject` — a `dict[subject → agent_id]` built by
-  `nautilus/transport/fastapi_app.py:166-171`. The key is the raw header value.
+  `nautilus/transport/fastapi_app.py:167-172`. The key is the raw header value.
 
 Both properties are visible from one host. Two agents bound to two subjects that
 differ only in their namespace, and a single peer asserting each in turn:
@@ -7376,10 +7411,10 @@ base table, and a rule change or a routing surprise is enough to lose it.
 The transcript below needs
 [`session_tokens.enabled: true`](#session_tokensenabled); on a default config
 the route answers `409 session tokens are disabled`.
-`POST /v1/sessions` takes an untyped body (`nautilus/transport/fastapi_app.py:905`),
+`POST /v1/sessions` takes an untyped body (`nautilus/transport/fastapi_app.py:939`),
 and `clearance` in that body would be an authorization assertion signed by
 Nautilus and verifiable by anyone against the public JWKS. It is not a parameter
-of `Broker.issue_session_token` at all (`nautilus/core/broker.py:1368-1374`) —
+of `Broker.issue_session_token` at all (`nautilus/core/broker.py:1396-1402`) —
 the value comes from the agent registry, so the body cannot reach it:
 
 ```console

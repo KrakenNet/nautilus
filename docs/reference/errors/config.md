@@ -77,7 +77,7 @@ The list is the live `ADAPTER_REGISTRY`, so it grows when you register a custom 
 `nautilus/config/loader.py:167-171`. A typo, or a custom adapter that is configured under
 `sources:` but not registered under `adapters:`. Also raised later as
 `Unsupported source type '{source.type}' for id='{source.id}'`
-(`nautilus/core/broker.py:1228`) when the broker builds the adapter.
+(`nautilus/core/broker.py:1256`) when the broker builds the adapter.
 
 ```bash
 python - <<'PY'
@@ -152,7 +152,7 @@ and `pgvector`, `index` for `elasticsearch`, `label` for `neo4j`, `model` for `l
 
 ### `analysis.mode={analysis.mode!r} requires analysis.provider to be set`
 
-**`ConfigError`**, `nautilus/core/broker.py:979-983`. `analysis.mode: llm` needs a provider
+**`ConfigError`**, `nautilus/core/broker.py:1007-1011`. `analysis.mode: llm` needs a provider
 block. Either add one, or return to `analysis.mode: pattern`.
 
 ### `rkm.auto_promote.enabled: auto-promotion is not implemented.` …
@@ -197,7 +197,7 @@ in the `adapters:` list, so `adapters[0]:` is the first entry.
 
 ### `source id='{source.id}' has type '{source.type}', whose driver is not installed: pip install 'nautilus-rkm[{extra}]' (import failed: {…})`
 
-**`ConfigError`**, `nautilus/core/broker.py:1230-1238`. The source type is built in, but its
+**`ConfigError`**, `nautilus/core/broker.py:1258-1266`. The source type is built in, but its
 optional driver is not installed, so `nautilus.adapters` registered a stand-in. `{extra}` is the
 extra to install; the parenthesised text is the original `ImportError`. Install the extra, or
 remove the source.

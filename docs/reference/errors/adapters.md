@@ -2,14 +2,14 @@
 
 Two exception types cover almost everything here, and the difference matters:
 
-- **`ScopeEnforcementError`** (`nautilus/adapters/base.py:39`) — the adapter **cannot honestly
+- **`ScopeEnforcementError`** (`nautilus/adapters/base.py:42`) — the adapter **cannot honestly
   enforce** what policy asked for. It refuses instead of returning data it cannot vouch for.
   Every one of these is a refusal to over-return.
-- **`AdapterError`** (`nautilus/adapters/base.py:35`) — the source itself failed: not connected,
+- **`AdapterError`** (`nautilus/adapters/base.py:38`) — the source itself failed: not connected,
   misconfigured, unreachable, or over a size ceiling.
 
 `SSRFBlockedError` (`nautilus/adapters/rest.py:85`) and `EmbeddingUnavailableError`
-(`nautilus/adapters/base.py:47`) are subclasses of `AdapterError`.
+(`nautilus/adapters/base.py:50`) are subclasses of `AdapterError`.
 
 ## Shared scope validation
 
@@ -17,7 +17,7 @@ Applied by every SQL-shaped adapter through `nautilus/adapters/base.py`.
 
 ### `Operator '{op}' not in allowlist: {sorted(_OPERATOR_ALLOWLIST)}`
 
-`validate_operator`, `nautilus/adapters/base.py:166-169`. Rendered example:
+`validate_operator`, `nautilus/adapters/base.py:184-187`. Rendered example:
 
 ```text
 Operator 'DROP' not in allowlist: ['!=', '<', '<=', '=', '>', '>=', 'BETWEEN', 'IN',
@@ -29,13 +29,13 @@ The allowlist is closed: an operator that is not on it is refused, never passed 
 
 ### `Invalid field identifier '{f}'`
 
-`validate_field`, `nautilus/adapters/base.py:179-182`. The field name does not match
+`validate_field`, `nautilus/adapters/base.py:197-200`. The field name does not match
 `_FIELD_PATTERN`. Spaces, quotes, semicolons and parentheses are all rejected — the name is
 interpolated into a query, so only identifier-shaped strings are allowed.
 
 ### `table name {table!r} has more than one schema qualifier`
 
-`quote_table`, `nautilus/adapters/base.py:217-220`. At most one `.` is allowed:
+`quote_table`, `nautilus/adapters/base.py:235-238`. At most one `.` is allowed:
 `public.orders` is fine, `db.public.orders` is not.
 
 ### `Operator '{op}' requires a list value, got {type(bad).__name__}`
@@ -133,7 +133,7 @@ mismatch. Read it first; Nautilus adds only the source id.
 
 ### `{type(self).__name__}: execute failed for source '{source_id}': {type(exc).__name__}[: {exc}]`
 
-`wrap_execute`, `nautilus/adapters/base.py:420-424`. The uniform wrapper around a query that
+`wrap_execute`, `nautilus/adapters/base.py:438-442`. The uniform wrapper around a query that
 raised. Rendered example:
 
 ```text
@@ -155,7 +155,7 @@ Read the failing entry's `endpoint` for the address that timed out.
 
 ### `source '{source_id}' declares mTLS but its client certificate could not be loaded (cert_path={auth.cert_path!r}, key_path={auth.key_path!r}): {exc}`
 
-`mtls_context`, `nautilus/adapters/base.py:269-275`. Both paths are echoed so you can see which
+`mtls_context`, `nautilus/adapters/base.py:287-293`. Both paths are echoed so you can see which
 one the process actually read. `{exc}` is the `ssl` failure: a missing file, an encrypted key
 with no passphrase, or a cert/key pair that does not match.
 
@@ -239,7 +239,7 @@ are never followed across hosts.
 
 ### `{adapter} requires a non-empty host in base_url (scheme={scheme!r}; the value is withheld because a connection string can carry credentials)`
 
-`resolve_base_url`, `nautilus/adapters/base.py:146-150`. `{adapter}` is `RestAdapter` or
+`resolve_base_url`, `nautilus/adapters/base.py:149-153`. `{adapter}` is `RestAdapter` or
 `LLMAdapter`. The URL parsed with no netloc — usually a missing `https://`. Rendered example:
 
 ```text
@@ -310,9 +310,9 @@ and the message arrives as one entry in `sources_errored[]`:
 `error_type` is the exception class name (`ScopeEnforcementError`, `AdapterError`,
 `SSRFBlockedError`, `EmbeddingUnavailableError`), and the failed source contributes no rows —
 partial answers are labelled, never silently merged. Anything raised from `connect()` is prefixed
-`connect() failed: ` by `nautilus/core/broker.py:2663`, and that source is not retried for
+`connect() failed: ` by `nautilus/core/broker.py:2749`, and that source is not retried for
 `connect_cooldown_s`. Anything raised from `execute()` arrives unprefixed
-(`nautilus/core/broker.py:3173-3198`). The per-entry **Status** lines below say which of the two
+(`nautilus/core/broker.py:3284-3309`). The per-entry **Status** lines below say which of the two
 it is.
 
 ### `endpoint` — which backend this was
@@ -347,7 +347,7 @@ an `ErrorRecord` it returns and the broker leaves it alone — strip credentials
 
 ### The matching log line
 
-`nautilus/core/broker.py:2759-2769`. Every per-source failure — unknown source, connect cooldown,
+`nautilus/core/broker.py:2852-2862`. Every per-source failure — unknown source, connect cooldown,
 connect error, schema quarantine, wall-clock timeout, adapter contract violation, and the typed
 record an adapter returns — emits exactly one `WARNING` on the `nautilus.core.broker` logger
 before it reaches the response:
@@ -363,7 +363,7 @@ WARNING:nautilus.core.broker:source 'ledger' failed (endpoint=postgresql://127.0
 
 ### `exceeded the source's timeout_s budget of {timeout_s}s`
 
-`nautilus/core/broker.py:2722-2725`, with `error_type: "TimeoutError"`. The broker wraps each
+`nautilus/core/broker.py:2815-2818`, with `error_type: "TimeoutError"`. The broker wraps each
 source's `connect()` + `execute()` in one wall-clock deadline
 (`SourceConfig.timeout_s`, default `15.0`); this is what the entry says when the deadline fired
 before the source answered. Rendered example:
@@ -786,7 +786,7 @@ indistinguishable from major drift and would quarantine a source that is merely 
 
 **Status.** Two callers, two answers. `GET /v1/adapters/{name}/schema` answers **503** with
 `{"detail": "Schema fetch failed: neo4j: get_schema failed for source 'cases': ..."}`
-(`nautilus/transport/fastapi_app.py:1168-1173`). Inside a request, the broker's drift gate treats a
+(`nautilus/transport/fastapi_app.py:1202-1207`). Inside a request, the broker's drift gate treats a
 raising `get_schema` as "cannot check" and proceeds, so the request itself still answers **200**.
 
 **Fix.** Read `{exc}`: it is the driver's diagnosis, not ours. Restore the database, or fix the
@@ -1004,7 +1004,7 @@ returning `unknown()`, so an outage is not mistaken for schema drift.
 
 **Status.** `GET /v1/adapters/{name}/schema` answers **503** with
 `{"detail": "Schema fetch failed: influxdb: get_schema failed for source 'metrics': ..."}`
-(`nautilus/transport/fastapi_app.py:1168-1173`); inside a request the drift gate skips the check
+(`nautilus/transport/fastapi_app.py:1202-1207`); inside a request the drift gate skips the check
 and the request still answers **200**.
 
 **Fix.** Grant the token read access to the bucket, or fix the bucket name (`table:`, falling back
@@ -1842,7 +1842,7 @@ is *not* in this message — correlate with `source_id` on the `sources_errored[
 hits the source's `timeout_s` budget first and reports
 `exceeded the source's timeout_s budget of {timeout_s}s` instead — see
 [that entry](#exceeded-the-sources-timeout_s-budget-of-timeout_ss)
-(`nautilus/core/broker.py:2722-2725`).
+(`nautilus/core/broker.py:2815-2818`).
 
 **Fix.** Read `{exc}`. A `401`/`403` is the token; `Name or service not known` is the `connection:`
 host; a timeout usually means `timeout_s` is too tight for the model.
