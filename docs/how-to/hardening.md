@@ -2694,16 +2694,24 @@ the ability to forge session provenance.
 ```
 
 Confirm the fleet shares one ring — every replica must return the same `kid`
-set:
+set. There is no `curl` in the runtime image, so the fetch and the parse are the
+same interpreter; two replicas started with the same `key_ring_path`:
 
 ```console
-$ for pod in $(kubectl get pods -l app=nautilus -o name); do
-    kubectl exec "$pod" -- curl -s localhost:8000/v1/keys/jwks.json \
-      | python -c 'import json,sys; print(sorted(k["kid"] for k in json.load(sys.stdin)["keys"]))'
+$ for c in nautilus-a nautilus-b; do
+    docker exec "$c" python -c 'import json,urllib.request; print(sorted(k["kid"] for k in json.load(urllib.request.urlopen("http://127.0.0.1:8000/v1/keys/jwks.json"))["keys"]))'
   done
-['ee0eb00e-38ae-4060-90dc-a9aac8da460d']
-['ee0eb00e-38ae-4060-90dc-a9aac8da460d']
+['834e7ee1-b86d-4d6d-b34a-1c3e4372a640']
+['834e7ee1-b86d-4d6d-b34a-1c3e4372a640']
 ```
+
+Identical lists is the assertion; a replica with its own ring prints a `kid`
+none of the others have. On Kubernetes the loop is
+`for pod in $(kubectl get pods -l app=nautilus -o name)` with
+`kubectl exec "$pod" --` in place of `docker exec "$c"` — the argv after it does
+not change. Why it cannot be `curl`, and what else the distroless image does and
+does not let you run, is in
+`deploy/README.md` §11, *Working inside a distroless container*.
 
 **Example**
 

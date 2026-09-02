@@ -17,7 +17,10 @@ Without `private_key_path` the broker auto-generates an Ed25519 keypair
 **per process** — fine for dev, but tokens from a previous run can no
 longer be verified against the current public key after a restart.
 Generate a key once and protect it like any private key. Nautilus reads a
-standard PKCS#8 Ed25519 PEM, so `openssl` is all it takes:
+standard PKCS#8 Ed25519 PEM, so `openssl` is all it takes. Run this **on the
+host**, before the broker starts — there is no `openssl`, no `chmod` and no
+shell in the container image, and on the container path the key is mounted
+read-only from a Secret (`deploy/README.md` §5):
 
 ```console
 $ openssl genpkey -algorithm ed25519 -out /var/lib/nautilus/attestation.pem && chmod 600 /var/lib/nautilus/attestation.pem

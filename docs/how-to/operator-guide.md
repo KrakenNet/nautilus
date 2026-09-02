@@ -780,6 +780,25 @@ $ curl -s -w ' HTTP %{http_code}\n' http://127.0.0.1:8000/readyz
 `/healthz` keeps answering `200` throughout: liveness is not readiness, and a
 broker with an unwritable audit log is working correctly by refusing traffic.
 
+That `chmod` is a **host** command, against a broker you started on the host.
+There is no `chmod` and no shell in the distroless container image, so on a
+container the same reproduction — and the same repair — goes through the
+interpreter that *is* in the image:
+
+```console
+$ docker exec nautilus python -c "import os; os.chmod('/var/log/nautilus/audit.jsonl', 0o444)"
+$ curl -s -w ' HTTP %{http_code}\n' localhost:8000/readyz
+{"status":"not_ready","reason":"audit log /var/log/nautilus/audit.jsonl is not writable"} HTTP 503
+$ docker exec nautilus python -c "import os; os.chmod('/var/log/nautilus/audit.jsonl', 0o644)"
+$ curl -s -w ' HTTP %{http_code}\n' localhost:8000/readyz
+{"status":"ok"} HTTP 200
+```
+
+Readiness comes back on the next probe, with no restart. `deploy/README.md`
+§11 is the full set: reading, listing, permissions and renaming inside an image
+with no shell, and the two things — `chown` and installing anything — that
+genuinely cannot be done from inside one.
+
 So size the volume before you rely on it — and size it from the line rate
 below, not from the request rate.
 
@@ -1656,7 +1675,7 @@ export CONFIG=/etc/nautilus/nautilus.yaml
 export STATE=/var/lib/nautilus          # state_dir, and the broker's cwd
 export BACKUP=/srv/backups/nautilus
 
-systemctl stop nautilus                 # or: kubectl scale deploy/nautilus --replicas=0
+systemctl stop nautilus
 
 tar -C "$(dirname "$STATE")" --exclude='*.lock' \
     -czf "$BACKUP/nautilus-$(date -u +%Y%m%dT%H%M%SZ).tgz" "$(basename "$STATE")"
@@ -1664,6 +1683,18 @@ cp "$CONFIG" "$BACKUP/"
 
 systemctl start nautilus
 ```
+
+**This runs where the files are, not inside the container.** On the container
+path that is the host directory you bind-mounted (`/srv/nautilus/state` in
+`deploy/README.md` §2.1) with the container stopped — `tar` is not in the
+runtime image and neither is a shell to run it from. On Kubernetes there is no
+host directory: with the shipped `emptyDir` volumes, scaling the Deployment to
+zero **destroys the state you were trying to back up**, so move `state` to a
+PersistentVolumeClaim first and then either mount that PVC into a short-lived
+`busybox` Job that writes the archive, or run a volume snapshot. Streaming the
+files out through `kubectl exec` works for a single file
+(`deploy/README.md` §11.3) but not for a consistent directory archive, and
+`kubectl cp` fails outright because it needs `tar` in the target container.
 
 The `--exclude='*.lock'` matters. `audit.jsonl.lock` and
 `.nautilus/rkm/queue/.lock` are the `flock` files that enforce one-writer-per

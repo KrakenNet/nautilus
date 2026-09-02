@@ -4,7 +4,8 @@ Two supported ways to run the broker in production: a plain container runtime
 (`docker` / `podman`) and Kubernetes. Both run the same image, the same
 `nautilus.yaml`, the same four mounts and the same two probes. Pick one; the
 rest of this file — environment, volumes, probes, upgrade, rollback,
-troubleshooting — applies to both.
+troubleshooting, and [what to run inside a container with no shell in
+it](#11-working-inside-a-distroless-container) — applies to both.
 
 Files in this directory:
 
@@ -34,8 +35,12 @@ Properties of the `runtime` image you have to design around:
 
 - **No shell, no package manager, no `pip`.** You cannot install anything into
   a built image. `kubectl exec -it … -- sh` will fail with
-  `exec: "sh": executable file not found in $PATH`. Use `--target debug` for a
-  shell, and do not run that image in production.
+  `exec: "sh": executable file not found in $PATH`. Every operational procedure
+  in this documentation set has a form that works anyway —
+  [§11](#11-working-inside-a-distroless-container). The `debug` stage is for
+  reproducing a problem on your laptop, not for diagnosing a running pod:
+  swapping the image is a new rollout, so the state you wanted to look at is
+  gone before the shell exists.
 - **`ENTRYPOINT ["/app/.venv/bin/python", "-m", "nautilus"]`**, so any
   `args:` / trailing `docker run` arguments are `nautilus` subcommand
   arguments, not a command line.
@@ -394,8 +399,8 @@ The 503 bodies, verbatim, and what each means:
 |---|---|---|
 | `{"status":"not_ready","reason":"startup_incomplete"}` | the ASGI lifespan has not finished — normal for the first seconds, permanent means startup is stuck | `kubectl logs` for the last line before it stopped |
 | `{"status":"not_ready","reason":"audit log directory /var/log/nautilus does not exist"}` | the `audit` volumeMount is missing | re-apply `deployment.yaml` |
-| `{"status":"not_ready","reason":"audit log directory /var/log/nautilus is not writable"}` | the volume is not writable by UID 65532 | `fsGroup: 65532` in the pod securityContext; on the docker path, `chown -R 65532:65532` the host dir |
-| `{"status":"not_ready","reason":"audit log /var/log/nautilus/audit.jsonl is not writable"}` | the file exists with wrong ownership — usually a volume first written by a root-run container | `chown 65532:65532` the file |
+| `{"status":"not_ready","reason":"audit log directory /var/log/nautilus is not writable"}` | the volume is not writable by UID 65532 | `fsGroup: 65532` in the pod securityContext; on the docker path, `sudo chown -R 65532:65532 /srv/nautilus/audit` **on the host** ([§2.1](#21-lay-out-the-host-directories)) — there is no `chown` inside the container, and no capability that would give you one ([§11.4](#114-what-you-cannot-do-from-inside)) |
+| `{"status":"not_ready","reason":"audit log /var/log/nautilus/audit.jsonl is not writable"}` | the file exists with wrong mode or wrong ownership — usually a volume first written by a root-run container | if UID 65532 owns it, `os.chmod` from inside fixes it in place; if it does not, rename it aside and let the broker create a new one. Both, measured, in [§11.3](#113-writing-renaming-and-fixing-permissions) |
 | `{"status":"not_ready","reason":"session_store_timeout"}` | the store did not answer within 2.0s | Postgres is overloaded or the network path is broken; check `pool_max_size` (default 10) against your in-flight request count |
 | `{"status":"not_ready","reason":"SessionStoreUnavailableError"}` | `on_failure: fail_closed` and Postgres is unreachable | fix `SESSION_DSN` / the database. This is the intended behaviour: no session store means no cumulative exposure accounting |
 | `{"status":"not_ready","reason":"SessionSchemaError"}` | another Nautilus migrated the shared store to a schema version this build does not understand | finish or roll back the other rollout; `nautilus session version --dsn "$SESSION_DSN"` prints what is on disk |
@@ -694,26 +699,358 @@ Check `container_cpu_cfs_throttled_seconds_total` and give it a full core;
 
 ### Getting a shell
 
-There isn't one. The `runtime` image is distroless:
-`kubectl exec … -- sh` fails with
-`exec: "sh": executable file not found in $PATH`. Options:
-
-```bash
-# Run any nautilus subcommand in the live pod — no shell needed.
-kubectl -n nautilus exec deploy/nautilus -- /app/.venv/bin/python -m nautilus health
-kubectl -n nautilus exec deploy/nautilus -- /app/.venv/bin/python -m nautilus version
-
-# Read a file out of the container.
-kubectl -n nautilus exec deploy/nautilus -- \
-  /app/.venv/bin/python -c "print(open('/config/nautilus.yaml').read())"
-
-# Or build the debug stage, which has bash. Not for production.
-docker build --target debug --build-arg EXTRAS="--extra postgres" -t nautilus:debug .
-```
+There isn't one, and you do not need one:
+[§11](#11-working-inside-a-distroless-container) is every procedure this
+documentation set asks you to run inside a container, rewritten for an image
+with no shell in it and measured against one.
 
 ---
 
-## 11. Why the manifests look like this
+## 11. Working inside a distroless container
+
+There is no shell, and the rest of this documentation set assumes you know what
+to run instead. `sh`, `bash`, `ls`, `cat`, `mv`, `cp`, `chmod`, `chown`, `sed`,
+`tar`, `curl` and `pip` are all absent from the `runtime` image, and `exec`
+reports each one identically:
+
+```console
+$ docker exec nautilus sh -c 'echo hi'
+OCI runtime exec failed: exec failed: unable to start container process: exec: "sh": executable file not found in $PATH
+$ docker exec nautilus ls -l /var/lib/nautilus
+OCI runtime exec failed: exec failed: unable to start container process: exec: "ls": executable file not found in $PATH
+$ docker exec nautilus curl -s localhost:8000/readyz
+OCI runtime exec failed: exec failed: unable to start container process: exec: "curl": executable file not found in $PATH
+$ docker exec nautilus pip --version
+OCI runtime exec failed: exec failed: unable to start container process: exec: "pip": executable file not found in $PATH
+```
+
+The binary is absent from the image, so it is absent under every exec
+transport — `kubectl exec … -- sh` has nothing to find either, and only the
+wrapper text around the error differs. Every transcript in this section was
+captured with `docker exec` against a container started as in
+[§2.3](#23-run-it), from an image built without `BUILD_REV` and without
+`--log-format json` — so the one block here that pastes a server log record,
+the `SIGHUP` reload in [§11.4](#114-what-you-cannot-do-from-inside), shows the
+default text form. Under §2.3's own flags that record is a JSON object
+carrying the same text in `msg`, which is why the filter below matches the
+message and not the line prefix. Substitute
+`kubectl -n nautilus exec deploy/nautilus --` for `docker exec nautilus` and
+the argv after it is unchanged.
+
+You do not have to take a list of absences on trust. This is **every**
+executable in the image, exhaustively — the `grep -v` only drops the venv's
+`activate` scripts and its Windows `.bat` shims, which are not executables on
+Linux:
+
+```console
+$ cid=$(docker create nautilus:0.2.6.dev0)
+$ docker export "$cid" | tar -t \
+    | grep -E '^(bin|sbin|usr/bin|usr/sbin|usr/local/bin|app/\.venv/bin)/[^/]+$' \
+    | grep -vE 'activate|\.bat$' | sort
+app/.venv/bin/dotenv
+app/.venv/bin/fastapi
+app/.venv/bin/fathom
+app/.venv/bin/httpx
+app/.venv/bin/jsonschema
+app/.venv/bin/mcp
+app/.venv/bin/nautilus
+app/.venv/bin/normalizer
+app/.venv/bin/opentelemetry-bootstrap
+app/.venv/bin/opentelemetry-instrument
+app/.venv/bin/python
+app/.venv/bin/python3
+app/.venv/bin/python3.14
+app/.venv/bin/uvicorn
+app/.venv/bin/watchfiles
+app/.venv/bin/websockets
+usr/local/bin/python3
+usr/local/bin/python3.14
+$ docker rm "$cid" > /dev/null
+```
+
+The four traditional `bin` directories contribute nothing: `/usr/bin` and
+`/usr/sbin` are empty, and `/bin` and `/sbin` are symlinks to them. Only
+`/usr/local/bin` (the interpreter) and the venv have anything in them. Run that
+grep on your own build before you believe any recipe on this page — an image
+built some other way is yours to check, not ours.
+
+So: CPython 3.14 with its whole standard library, reachable as `python`,
+`python3` or `/app/.venv/bin/python`, plus the `nautilus` console script,
+because the venv's `bin` is first on `PATH`:
+
+```console
+$ docker image inspect -f '{{index .Config.Env 0}}' nautilus:0.2.6.dev0
+PATH=/app/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+```
+
+That covers reading, listing, permissions, renaming, deleting and HTTP. It does
+not cover changing ownership or installing anything, and those two are
+genuinely impossible from inside — [§11.4](#114-what-you-cannot-do-from-inside)
+says what to do instead.
+
+### 11.1 Reading
+
+`nautilus` subcommands need no shell at all — they are the entrypoint's own
+console script:
+
+```console
+$ docker exec nautilus nautilus version
+0.2.6.dev0
+build: unknown
+$ docker exec nautilus nautilus health
+OK 200 http://localhost:8000/readyz
+```
+
+(`build: unknown` means the image was built without
+`--build-arg BUILD_REV=$(git rev-parse HEAD)`; see [§1](#1-the-image).)
+
+Read a file — this is the replacement for `cat`:
+
+```console
+$ docker exec nautilus python -c "print(open('/config/nautilus.yaml').read())" | head -4
+sources:
+  - id: orders
+    type: static
+    description: order rows
+```
+
+List a directory with modes, owners, sizes and mtimes — the replacement for
+`ls -l`. `stat.filemode` renders the same `-rw-------` string `ls` does:
+
+```console
+$ docker exec nautilus python -c "
+import os, stat, time
+d = '/var/lib/nautilus'
+for n in sorted(os.listdir(d)):
+    s = os.stat(os.path.join(d, n))
+    print(f'{stat.filemode(s.st_mode)} {s.st_uid}:{s.st_gid} {s.st_size:>8} {time.strftime(\"%Y-%m-%dT%H:%M:%SZ\", time.gmtime(s.st_mtime))} {n}')
+"
+-rw------- 65532:65532      403 2026-09-02T03:27:20Z keyring.json
+-rw-r--r-- 65532:65532        0 2026-09-02T03:27:20Z keyring.json.lock
+-rw-r--r-- 65532:65532     4096 2026-09-02T03:27:21Z sessions.db
+-rw-r--r-- 65532:65532    32768 2026-09-02T03:27:21Z sessions.db-shm
+-rw-r--r-- 65532:65532    16512 2026-09-02T03:27:21Z sessions.db-wal
+```
+
+Ask which of the mounts you can actually write. This one answer explains most
+readiness failures, and it is the first thing to run when [§6](#6-probes) tells
+you a path is not writable:
+
+```console
+$ docker exec nautilus python -c "
+import os
+for d in ('/', '/tmp', '/app', '/config', '/etc/nautilus/keys', '/var/lib/nautilus', '/var/log/nautilus'):
+    print(f'{\"rw\" if os.access(d, os.W_OK) else \"ro\"}  {d}')"
+ro  /
+rw  /tmp
+ro  /app
+ro  /config
+ro  /etc/nautilus/keys
+rw  /var/lib/nautilus
+rw  /var/log/nautilus
+```
+
+`/` is read-only because of `readOnlyRootFilesystem: true` / `--read-only`;
+`/config` and `/etc/nautilus/keys` because they are mounted `ro`. The two `rw`
+lines are the `state` and `audit` volumes from [§5](#5-volumes-and-mounts).
+
+### 11.2 Probing the broker's own HTTP surface
+
+`curl` is not in the image. `urllib.request` is, and it reaches the loopback
+listener that `-p` / the Service may not expose:
+
+```console
+$ docker exec nautilus python -c "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:8000/v1/keys/jwks.json').read().decode())"
+{"keys":[{"kty":"OKP","crv":"Ed25519","kid":"834e7ee1-b86d-4d6d-b34a-1c3e4372a640","x":"rfPubI4g9sRShE-tbtJLCvj7ZhKPR2tj6El786S5WfA","use":"sig"}]}
+```
+
+For an authenticated route add the header the same way —
+`urllib.request.Request(url, headers={'X-API-Key': ...}, data=..., method='POST')`.
+Note that this puts the key in the process table of the pod; prefer
+`kubectl port-forward` and a client on your laptop when you have the choice.
+
+The other way in needs nothing from the image at all: an ephemeral container
+joined to the running container's **network** namespace. It brings its own
+`wget`, and it does not require the target to cooperate:
+
+```console
+$ docker run --rm --network=container:nautilus busybox:latest wget -qO- http://127.0.0.1:8000/healthz
+{"status":"ok","version":"0.2.6.dev0","build":"unknown"}
+```
+
+On Kubernetes that is `kubectl debug -it <pod> --image=busybox --target=<container>`;
+an ephemeral container in a pod already shares the pod's network namespace.
+
+### 11.3 Writing, renaming and fixing permissions
+
+`os.chmod`, `os.rename`, `os.remove` and `os.makedirs` are the replacements for
+`chmod`, `mv`, `rm` and `mkdir -p`, and they work on anything the broker's own
+UID owns. Reproducing the [§6](#6-probes) `not writable` readiness failure and
+then repairing it, with no shell and no restart:
+
+```console
+$ docker exec nautilus python -c "import os; os.chmod('/var/log/nautilus/audit.jsonl', 0o444)"
+$ curl -s -w ' HTTP %{http_code}\n' localhost:8000/readyz
+{"status":"not_ready","reason":"audit log /var/log/nautilus/audit.jsonl is not writable"} HTTP 503
+$ curl -s -w ' HTTP %{http_code}\n' localhost:8000/healthz
+{"status":"ok","version":"0.2.6.dev0","build":"unknown"} HTTP 200
+$ docker exec nautilus python -c "import os; os.chmod('/var/log/nautilus/audit.jsonl', 0o644)"
+$ curl -s -w ' HTTP %{http_code}\n' localhost:8000/readyz
+{"status":"ok"} HTTP 200
+```
+
+Readiness recovers on the next probe — `periodSeconds: 10` — with no rollout.
+`/healthz` stays `200` throughout, which is the whole reason liveness and
+readiness are different endpoints.
+
+**When the file is owned by someone else**, `chmod` is not available to you at
+any privilege you hold, but `rename` is: the permission that governs renaming a
+file is write on its *directory*, not on the file. So move the bad file aside
+and let the broker create a fresh one on the next probe. This is the fix for
+the `audit log … is not writable` 503 caused by a volume first written by a
+root-run container:
+
+```console
+$ docker exec nautilus python -c "import os,stat; p='/var/log/nautilus/audit.jsonl'; s=os.stat(p); print(oct(stat.S_IMODE(s.st_mode)), s.st_uid, s.st_gid, os.access(p, os.W_OK), os.access('/var/log/nautilus', os.W_OK))"
+0o644 0 0 False True
+$ docker exec nautilus python -c "import os; os.rename('/var/log/nautilus/audit.jsonl', '/var/log/nautilus/audit.jsonl.root-owned')"
+$ curl -s -w ' HTTP %{http_code}\n' localhost:8000/readyz
+{"status":"ok"} HTTP 200
+```
+
+`0 0` is the owner — root, not 65532 — and `False True` is the whole diagnosis:
+the file is not writable, the directory is. The renamed file is still there and
+still holds every record written before the problem; copy it out with the
+recipe below and then delete it. If the audit log is chained
+(`audit.chained: true`) the new file starts a **new chain**: verify the old one
+separately, because `nautilus attestation verify` follows one file.
+
+**Copying a file out.** `docker cp` needs nothing in the container — it goes
+through the daemon:
+
+```console
+$ docker cp nautilus:/var/lib/nautilus/keyring.json ./keyring.json
+$ echo $?
+0
+```
+
+It prints nothing on success, which is why the `echo $?` is there.
+
+`kubectl cp` is **not** the equivalent and will fail here. Its own help says so:
+
+```console
+$ kubectl cp --help | grep -A3 'Important Note'
+  # !!!Important Note!!!
+  # Requires that the 'tar' binary is present in your container
+  # image.  If 'tar' is not present, 'kubectl cp' will fail.
+  #
+```
+
+Stream the bytes through `exec` instead. This is byte-exact, including for a
+SQLite database:
+
+```console
+$ docker exec nautilus \
+    python -c "import sys; sys.stdout.buffer.write(open('/var/lib/nautilus/sessions.db','rb').read())" > sessions.db
+$ docker exec nautilus \
+    python -c "import hashlib; print(hashlib.sha256(open('/var/lib/nautilus/sessions.db','rb').read()).hexdigest())"
+44e9b382070d7cf97c2d422aaa250eee7edbe9a9fa39516c42c54ccea43cae81
+$ sha256sum sessions.db
+44e9b382070d7cf97c2d422aaa250eee7edbe9a9fa39516c42c54ccea43cae81  sessions.db
+```
+
+`kubectl -n nautilus exec deploy/nautilus --` in place of `docker exec nautilus`
+does the same thing — this is the replacement for `kubectl cp` out of a
+distroless pod.
+
+Do not use `-t`/`--tty`: a TTY translates `\n` to `\r\n` and corrupts binary.
+Compare the two hashes every time — that is the check, not a formality. Copying
+`sessions.db` off a *running* broker gives you a torn database whatever the
+hashes say; see
+[Back up](../docs/how-to/operator-guide.md#back-up) for why the `-wal` matters.
+
+### 11.4 What you cannot do from inside
+
+These four have no in-container answer. The workaround column is the answer.
+
+| Impossible inside the container | Why | Do this instead |
+|---|---|---|
+| `chown` | the process is UID 65532 with `capabilities.drop: ["ALL"]`, so it has no `CAP_CHOWN` | for a bind mount, `sudo chown -R 65532:65532 <hostdir>` on the **host** ([§2.1](#21-lay-out-the-host-directories)); on Kubernetes, `fsGroup: 65532`, which the shipped `deployment.yaml` already sets. Or rename the file aside as in [§11.3](#113-writing-renaming-and-fixing-permissions) |
+| edit `nautilus.yaml` in place | `/config` is a `ro` mount of a ConfigMap | edit the ConfigMap (or the host file), then `kubectl rollout restart` — or send `SIGHUP`, which reloads the subset that can be reloaded safely and names what it refused |
+| install a package | no `pip`, no package manager, no writable `/usr` | add it to `pyproject.toml` and rebuild; or bring your own tools in an ephemeral container, [below](#getting-a-real-shell-next-to-the-container) |
+| write anywhere but the two volumes and `/tmp` | `readOnlyRootFilesystem: true` | use `/var/lib/nautilus` (persisted with the `state` volume) or `/tmp` (a 16 MiB tmpfs, gone on restart) |
+
+The `chown` failure and the read-only root, verbatim, so you can recognise them
+in a log rather than guessing:
+
+```console
+$ docker exec nautilus python -c "import os; os.chown('/var/log/nautilus/audit.jsonl', 0, 0)" 2>&1 | tail -1
+PermissionError: [Errno 1] Operation not permitted: '/var/log/nautilus/audit.jsonl'
+$ docker exec nautilus python -c "open('/probe','w').write('x')" 2>&1 | tail -1
+OSError: [Errno 30] Read-only file system: '/probe'
+$ docker exec nautilus python -c "open('/config/nautilus.yaml','a').write('x')" 2>&1 | tail -1
+PermissionError: [Errno 13] Permission denied: '/config/nautilus.yaml'
+```
+
+`SIGHUP` is worth knowing before you reach for a rollout — it re-reads the
+config file and applies what it can prove safe:
+
+```console
+$ docker kill -s HUP nautilus
+nautilus
+$ until docker logs nautilus 2>&1 | grep 'SIGHUP: '; do sleep 0.2; done
+INFO:nautilus.cli.serve:SIGHUP: reloaded /config/nautilus.yaml (no reloadable key changed)
+```
+
+Two lines in a running log say `SIGHUP`. The startup notice — `SIGHUP reloads
+sources, rules and the live session_store limits from …` — only means the
+handler is wired, and it is there before you signal anything. The *result* of a
+reload always carries the colon: `SIGHUP: reloaded …`, or `SIGHUP: refused; …`
+when the new file is rejected and the running config keeps answering. That
+colon is what the filter matches. Do not use `--tail 1` here — a readiness
+probe lands between the signal and the read often enough to show you an access
+log instead — and the `until` loop is what waits for the reload to finish
+rather than for the log to be read.
+
+### Getting a real shell next to the container
+
+Not *in* it — beside it. An ephemeral container in the target's namespaces
+brings its own `sh`, `ls`, `mv` and `chown`, and needs nothing from the
+distroless image. Reaching the target's filesystem through `/proc/1/root` also
+needs `CAP_SYS_PTRACE`, which is **not** in Docker's default set: without
+`--cap-add SYS_PTRACE` the path exists and every access to it is denied.
+
+```console
+$ docker run --rm --pid=container:nautilus busybox:latest ls -l /proc/1/root/var/log/nautilus
+ls: /proc/1/root/var/log/nautilus: Permission denied
+$ docker run --rm --cap-add SYS_PTRACE --pid=container:nautilus busybox:latest ls -l /proc/1/root/var/log/nautilus
+total 8
+-rw-r--r--    1 65532    65532         3070 Sep  2 03:34 audit.jsonl
+-rw-r--r--    1 root     root             3 Sep  2 03:30 audit.jsonl.root-owned
+```
+
+Mounting the volume into an ordinary container is simpler when you have the
+host, and needs no capability at all:
+`docker run --rm -u 0:0 -v /srv/nautilus/audit:/a busybox chown -R 65532:65532 /a`.
+
+On Kubernetes the equivalent is
+`kubectl debug -it <pod> --image=busybox --target=<container>`, and the same
+capability caveat applies — `--profile=sysadmin` is the flag that grants it
+(`kubectl debug --help` lists `legacy`, `general`, `baseline`, `netadmin`,
+`restricted`, `sysadmin`). Two things to expect: a namespace enforcing the
+`restricted` Pod Security Standard will reject that profile, which is the same
+admission rule that makes this Deployment safe; and `kubectl debug --help`
+warns that "when a non-root user is configured for the entire target Pod, some
+capabilities granted by debug profile may not work", which is exactly this pod.
+
+**Do not reach for `--target debug`.** The Dockerfile's `debug` stage has
+`bash`, but swapping an image means a rebuild and a new rollout — the pod whose
+state you wanted to look at is gone by the time the shell exists. It is for
+reproducing a problem locally, never for diagnosing a live one.
+
+---
+
+## 12. Why the manifests look like this
 
 - **The ConfigMap holds no credentials.** Source DSNs and the API key are
   `${ENV}` references resolved from the Secret at config load, so the file you
