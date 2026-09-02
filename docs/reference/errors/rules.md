@@ -79,7 +79,7 @@ through: `GET`, approve and reject all answer **404** with
 
 ### `{"error": "already_decided", "current_status": …}`
 
-**HTTP 409**, a JSON object rather than a string. `nautilus/transport/fastapi_app.py:1499-1503`
+**HTTP 409**, a JSON object rather than a string. `nautilus/transport/fastapi_app.py:1546-1550`
 and `:1561-1565`, from `AlreadyDecidedError` (`nautilus/rkm/review.py:39`). `current_status` is
 the status the proposal already holds — `approved`, `rejected` or `retracted`. Decisions are not
 idempotent replays: a second one is refused, not silently ignored.
@@ -105,11 +105,11 @@ be deleted to "clear" it. Retry; if it persists, find the process still running
 
 | Message | Line | Route |
 | --- | --- | --- |
-| `body must carry 'rule_yaml': the contents of the rule file` | `:1210` | `POST /v1/rkm/queue` — send the rule file's text, not a path |
-| `reason is required for rejection` | `:1365` | `POST /v1/rkm/queue/{id}/reject` |
-| `reason is required for retraction` | `:1481` | `POST /v1/rules/{name}/retract` |
-| `to_version is required for rollback` | `:1574` | `POST /v1/rules/{name}/rollback` |
-| `yes=true required for destructive operation` (**412**) | `:1475,1568` | retract and rollback |
+| `body must carry 'rule_yaml': the contents of the rule file` | `:1244` | `POST /v1/rkm/queue` — send the rule file's text, not a path |
+| `reason is required for rejection` | `:1412` | `POST /v1/rkm/queue/{id}/reject` |
+| `reason is required for retraction` | `:1528` | `POST /v1/rules/{name}/retract` |
+| `to_version is required for rollback` | `:1621` | `POST /v1/rules/{name}/rollback` |
+| `yes=true required for destructive operation` (**412**) | `:1522,1615` | retract and rollback |
 
 `X-Nautilus-Reviewer header required` is in [auth.md](auth.md).
 

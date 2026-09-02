@@ -342,7 +342,7 @@ curl -sS -X POST "$NAUTILUS/v1/request" -H "X-API-Key: $KEY" \
 | `outcome` | `allowed` \| `denied` \| `errored` \| `skipped` — what happened, in one word. `denied` only when a source the request actually concerned was refused; an unrelated refusal does not outrank a source that failed to answer |
 | `denial_records` | One `{source_id, reason, rule_name, relevant}` per denied source: why it was refused, which rule said so, and whether the refusal concerned this request at all. A purpose refusal names the purposes the source does accept — read it and retry |
 | `skip_records` | One `{source_id, reason}` per source that took no part — usually because its `data_types` have nothing to do with the intent |
-| `sources_errored` | One `ErrorRecord` per source that failed to answer: `source_id`, `error_type`, `message`, `trace_id`, and `endpoint` — the address that source dials, as `scheme://host[:port]`, or `null` for a source that dials nothing. `endpoint` carries no credential: it is rebuilt from scheme, host and port, so userinfo, path and query in `connection` never reach it. See [the error reference](errors/adapters.md#endpoint-which-backend-this-was) |
+| `sources_errored` | One `ErrorRecord` per source that failed to answer: `source_id`, `error_type`, `message`, `trace_id`, and `endpoint` — the address that source dials, as `scheme://host[:port]`, or `null` for a source that dials nothing. `endpoint` carries no credential: it is rebuilt from scheme, host and port, so userinfo, path and query in `connection` never reach it. See [the error reference](errors/adapters.md#endpoint-which-backend-this-was). This is the *caller's* view of a dead backend, inside a `200`; the operator's is [`GET /v1/adapters?probe=true`](#probetrue-is-the-backend-still-there) |
 | `source_info` | `{source_id: {description, classification, data_types}}` for each queried source — what the rows in `data` actually are |
 | `ruleset_hash` | Which ruleset answered. Mid-rollout two replicas hold different ones and the identical request alternates `allowed` / `denied` behind the load balancer; this is how a caller can tell |
 | `rule_trace` | The rules that fired, in order — the same trace the audit entry records |
@@ -571,8 +571,16 @@ Quarantine state is in-memory and per-process, so it cannot be answered by
 rebuilding a broker from the config file. `nautilus adapters list --url` reads
 this route.
 
+**Query parameters**
+
+| Name | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `probe` | boolean | no | `false` | Also dial every source and report whether its backend answers. Adds `endpoint`, `reachable` and `detail` to each entry |
+
 **Status codes:** `200` (no broker yet ⇒ `{"adapters": []}`) · `401` · `403`
-(`query`) · `503` (busy).
+(`query`) · `422` (`probe` is not a boolean) · `503` (busy). A source that does
+not answer is **not** an error status: the route succeeded, and what it found is
+in the body.
 
 ```bash
 curl -sS "$NAUTILUS/v1/adapters" -H "X-API-Key: $KEY"
@@ -582,7 +590,64 @@ curl -sS "$NAUTILUS/v1/adapters" -H "X-API-Key: $KEY"
 {"adapters": [{"id": "orders", "type": "static", "status": "active"}]}
 ```
 
-`status` is `active` or `quarantined`.
+`status` is `active` or `quarantined`. It is bookkeeping this process holds, not
+a statement about the backend — a source whose database was switched off an hour
+ago still reads `active`.
+
+#### `?probe=true` — is the backend still there
+
+```bash
+curl -sS "$NAUTILUS/v1/adapters?probe=true" -H "X-API-Key: $KEY"
+```
+
+```json
+{
+  "adapters": [
+    {
+      "id": "orders",
+      "type": "static",
+      "status": "active",
+      "endpoint": null,
+      "reachable": null,
+      "detail": "no remote endpoint"
+    }
+  ]
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `endpoint` | The address that source dials, as `scheme://host[:port]`, or `null` for one that dials nothing. Rebuilt from the `connection` by allowlist — scheme, host and port only — so a DSN password or a URL token cannot ride out here |
+| `reachable` | `true` the backend answered · `false` it did not · `null` **nothing was dialled**. Alert on `false`, never on "not `true`": `null` is not a failure and not a success |
+| `detail` | Why, when `reachable` is not `true`. `null` on a clean answer |
+
+`null` has exactly two causes: the source has no address (`static` serves rows
+from the config — the `orders` entry above), or the `connection` names no port
+and its scheme implies none. Neither is guessed at.
+
+**What "answered" means.** The probe opens the connection and then makes the
+server speak: an HTTP/1.0 `HEAD /` for `http`/`https`, libpq's 8-byte
+pre-authentication `SSLRequest` for `postgresql`, and for a TLS scheme the
+handshake itself. Completing the TCP handshake alone is **not** taken as an
+answer — a paused container still completes it, because the kernel accepts into
+a backlog the frozen process never drains, so a connect-only probe reports a
+wedged backend as healthy.
+
+Each dial is bounded by that source's own `timeout_s`, capped at **5 s**, and
+every source is dialled concurrently, so the slowest one sets the response time
+rather than their sum.
+
+**The ceiling.** This is a liveness question, not an authorisation one. No
+credential is sent and nothing but the first byte is read, so `reachable: true`
+means *the process behind that address is answering* — not that the credentials
+still work, not that the table still exists, and not that a database finished
+recovering. A certificate this broker will not verify is reported as reachable,
+because the server sent it: the handshake failure is an answer. Two schemes have
+no hello to send — `bolt` and `neo4j` without TLS — and are checked at the
+transport layer only.
+
+`probe` is off by default because `nautilus adapters list --url` reads this
+route, and a listing should not put a dial on its own critical path.
 
 ### `GET /v1/adapters/{name}/schema`
 
@@ -598,11 +663,26 @@ flags. Capability `query`. `name` is a source `id` from `GET /v1/adapters`.
 | `403` | `This credential does not hold the 'query' capability (it holds ['audit_read'])` |
 | `404` | `Adapter 'nope' not found` |
 | `501` | `Adapter 'custom' does not support schema introspection` — the adapter has no `get_schema`, or inherits the base one and never overrode it, so calling it raised `NotImplementedError`. Both are permanent: do not retry, implement `get_schema` |
-| `503` | `Broker not ready` · `Schema fetch failed: <error>` — the introspection call raised something other than `NotImplementedError`, so the condition is transient and worth retrying. Adapters connect lazily, so a broker that has served no request yet answers `Schema fetch failed: StaticAdapter.get_schema() called before connect()`. A store that refused the query puts its own driver error in the same slot |
+| `503` | `Broker not ready` · `Schema fetch failed: <endpoint> is unreachable (<error>)` — the source's backend did not answer the same dial [`GET /v1/adapters?probe=true`](#probetrue-is-the-backend-still-there) makes, checked **before** any schema is reported · `Schema fetch failed: <error>` — the introspection call itself raised something other than `NotImplementedError`. Both are transient and worth retrying. Adapters connect lazily, so a broker that has served no request yet answers `Schema fetch failed: StaticAdapter.get_schema() called before connect()`. A store that refused the query puts its own driver error in the same slot |
 
 Every adapter type shipped in `nautilus/adapters/` (`static`, `postgres`,
 `rest`, `s3`, `elasticsearch`, `neo4j`, `pgvector`, `influxdb`, `servicenow`,
 `llm`) overrides `get_schema`, so neither of those two applies to a stock config.
+
+**Not every one of them introspects.** `postgres`, `pgvector`, `elasticsearch`,
+`neo4j`, `influxdb` and `servicenow` query the backend and return its real
+tables and fields. `rest`, `s3` and `llm` have nothing introspectable — a
+bucket, an operator-declared endpoint and a chat-completions URL have no schema
+— so they return the capability-only shape (`"tables": []`,
+`"capability_flags": {}`) with `fetched_at` set to when you asked. That is why
+this route dials the endpoint first: without it, those three answered `200` with
+a *fresh* `fetched_at` for a backend that had been switched off, which reads as
+a probe that passed.
+
+<!-- not-executed: this page's broker has no remote source to switch off; body captured against a `type: postgres` source whose container was stopped. The full walkthrough is in the operator guide, [§4 Is a source still there](../how-to/operator-guide.md#is-a-source-still-there) -->
+```json
+{"detail": "Schema fetch failed: postgresql://127.0.0.1:15439 is unreachable (ConnectionRefusedError: [Errno 111] Connect call failed ('127.0.0.1', 15439))"}
+```
 
 ```bash
 curl -sS "$NAUTILUS/v1/adapters/orders/schema" -H "X-API-Key: $KEY"
@@ -1308,6 +1388,29 @@ kubectl exec <pod> -- nautilus version
 Readiness. **No credential**, exempt from the concurrency limit. `200` iff
 lifespan startup finished, the audit sink accepts writes, and the session store
 answers a sentinel read plus a schema check within 2.0 s each.
+
+**It does not probe your sources, and a broker whose every source is
+unreachable answers `200 {"status": "ok"}` here.** That is deliberate, and it is
+the difference between the two kinds of dependency this service has:
+
+- The audit sink and the session store are **total**. Every request writes an
+  audit entry before it answers and touches the exposure ledger, so if either is
+  gone the instance can serve nothing at all. Readiness gates traffic, and there
+  is no traffic this instance could still take.
+- A source is **partial**. Refusing what it cannot serve and returning what it
+  can is the broker's job, not a fault — a broker that can still answer from
+  three sources of four is working. Draining it would take away the only thing
+  that can answer for the other three, and because every replica shares those
+  backends, source-gated readiness turns one dead database into a fleet with
+  nothing in rotation and no console left to diagnose it from.
+
+So readiness is not where a dead source shows up. Two places are:
+
+- [`GET /v1/adapters?probe=true`](#probetrue-is-the-backend-still-there) —
+  dials every source and reports `reachable` per adapter. This is the operator's
+  probe, and it is the one to alert on.
+- `sources_errored[]` in a `POST /v1/request` response — the caller's view, with
+  the `endpoint` that failed. See [`POST /v1/request`](#post-v1request).
 
 **Status codes:** `200` · `503` — and the `reason` field names which check
 failed.

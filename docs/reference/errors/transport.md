@@ -11,10 +11,10 @@ lookups — before or around the policy decision. Source: `nautilus/transport/fa
 ### `Broker not ready`
 
 **HTTP 503.** Seven guards, one per place the broker is read:
-`nautilus/transport/fastapi_app.py:661` covers `/v1/request` and `/v1/query`, which share
-`_handle_request`; then `:1070` (`/v1/keys/rotate`), `:1108` (`/v1/keys/{kid}/revoke`),
-`:1196` (`/v1/adapters/{name}/schema`), `:1368` (`/v1/rkm/queue`), `:1593` (`/v1/rules`) and
-`:1821`, which is in the `_audit_reader` dependency and so covers both `/v1/audit` and
+`nautilus/transport/fastapi_app.py:667` covers `/v1/request` and `/v1/query`, which share
+`_handle_request`; then `:1086` (`/v1/keys/rotate`), `:1124` (`/v1/keys/{kid}/revoke`),
+`:1230` (`/v1/adapters/{name}/schema`), `:1415` (`/v1/rkm/queue`), `:1640` (`/v1/rules`) and
+`:1868`, which is in the `_audit_reader` dependency and so covers both `/v1/audit` and
 `/v1/audit/{request_id}`.
 
 **Means.** `app.state.broker` is unset: the ASGI lifespan has not finished, or it failed.
@@ -25,7 +25,7 @@ there. `/readyz` reports the same condition as `startup_incomplete`.
 ### `/readyz` refusal payloads
 
 `/readyz` returns **200** `{"status": "ok"}` or **503** with a `reason`
-(`nautilus/transport/fastapi_app.py:864-945`). The four reasons are checked in this order, and the
+(`nautilus/transport/fastapi_app.py:870-961`). The four reasons are checked in this order, and the
 first one to fire is the one you get.
 
 <!-- not-executed: needs the scratch broker from index.md -->
@@ -35,7 +35,7 @@ curl -s -o /dev/null -w '%{http_code} ' "$NAUTILUS/readyz"; curl -s "$NAUTILUS/r
 
 #### `{"status": "not_ready", "reason": "startup_incomplete"}`
 
-**HTTP 503.** `nautilus/transport/fastapi_app.py:885-889`. `app.state.broker` is `None` or
+**HTTP 503.** `nautilus/transport/fastapi_app.py:901-905`. `app.state.broker` is `None` or
 `app.state.ready` is false: the lifespan has not finished, or it failed. Nothing is interpolated.
 
 **Means.** The process is listening but the broker was never built. This is the normal answer for
@@ -48,7 +48,7 @@ store is printed there, and `serve` exits **2** with
 
 #### `{"status": "not_ready", "reason": "<audit probe text>"}`
 
-**HTTP 503.** `nautilus/transport/fastapi_app.py:896-898`. The `reason` is the string returned by
+**HTTP 503.** `nautilus/transport/fastapi_app.py:912-914`. The `reason` is the string returned by
 `broker.audit_logger.probe()` — free text from the sink, not a fixed vocabulary. A `FileSink`
 whose directory went read-only reports the `OSError` text.
 
@@ -68,7 +68,7 @@ chmod u+w /tmp/nautilus-errors/audit.jsonl
 
 #### `{"status": "not_ready", "reason": "session_store_timeout"}`
 
-**HTTP 503.** `nautilus/transport/fastapi_app.py:928-931`. The sentinel read of
+**HTTP 503.** `nautilus/transport/fastapi_app.py:944-947`. The sentinel read of
 `_READY_PROBE_KEY` (`_ready_probe_`) or the `averify_schema()` re-check exceeded
 `_READY_PROBE_TIMEOUT_S` — **2.0 seconds**. Nothing is interpolated; the reason is this literal
 string.
@@ -84,7 +84,7 @@ will also see `session-store pool exhausted: …` in the log
 
 #### `{"status": "not_ready", "reason": "{type(exc).__name__}"}`
 
-**HTTP 503.** `nautilus/transport/fastapi_app.py:932-935`. Any other exception from the store,
+**HTTP 503.** `nautilus/transport/fastapi_app.py:948-951`. Any other exception from the store,
 reported as its **class name only** — never its message, so a DSN in an exception string cannot
 leak through a probe endpoint that needs no credentials.
 
@@ -111,7 +111,7 @@ curl -s "$NAUTILUS/healthz"; echo
 
 ### `Request body is {declared} bytes; this broker accepts at most {limit} (api.max_request_bytes).`
 
-**HTTP 413.** `_send_too_large`, `nautilus/transport/fastapi_app.py:302-322`. Answered from
+**HTTP 413.** `_send_too_large`, `nautilus/transport/fastapi_app.py:308-328`. Answered from
 `Content-Length` before a single byte of body is read.
 
 **Means.** The declared body size exceeds `api.max_request_bytes`. The audit entry stores the
@@ -132,7 +132,7 @@ curl -s -X POST "$NAUTILUS/v1/request" \
 
 ### `request body exceeded api.max_request_bytes ({self.max_bytes} bytes)`
 
-**`BodyTooLargeError`** (`nautilus/transport/fastapi_app.py:234`), raised at `:273-276`.
+**`BodyTooLargeError`** (`nautilus/transport/fastapi_app.py:240`), raised at `:273-276`.
 
 **Means.** The same limit, hit by a client that sent **no** `Content-Length` — a chunked upload,
 counted as it streams. There is no clean JSON response here: the read is aborted mid-body, so
@@ -143,7 +143,7 @@ graceful than the 413.
 
 ### `Broker busy: {limit} requests are already in flight (api.max_concurrent_requests). Retry.`
 
-**HTTP 503** with `Retry-After: 1`. `_send_busy`, `nautilus/transport/fastapi_app.py:362-382`.
+**HTTP 503** with `Retry-After: 1`. `_send_busy`, `nautilus/transport/fastapi_app.py:368-388`.
 
 **Means.** `api.max_concurrent_requests` are in flight and this one was refused rather than
 queued behind them. Per-request work is dominated by synchronous CPU on one event loop, so
@@ -168,7 +168,7 @@ wait
 
 ### `Nautilus could not record this request and will not serve what it cannot account for: {exc}`
 
-**HTTP 503** with `Retry-After: 5`. `nautilus/transport/fastapi_app.py:728-744`, on any `OSError`
+**HTTP 503** with `Retry-After: 5`. `nautilus/transport/fastapi_app.py:734-750`, on any `OSError`
 from the audit sink. `{exc}` is the OS error — typically `[Errno 28] No space left on device` or
 a permission failure on `audit.path`.
 
@@ -182,8 +182,8 @@ pod drains itself; it recovers without a restart once writes succeed.
 
 ### `context['scope_constraints'] entry is not a scope constraint: {reasons}`
 
-**HTTP 400.** `nautilus/core/broker.py:2606-2615`, surfaced by
-`nautilus/transport/fastapi_app.py:745-753`. Rendered example:
+**HTTP 400.** `nautilus/core/broker.py:2702-2711`, surfaced by
+`nautilus/transport/fastapi_app.py:751-759`. Rendered example:
 
 ```text
 context['scope_constraints'] entry is not a scope constraint:
@@ -205,7 +205,7 @@ curl -s -X POST "$NAUTILUS/v1/request" \
 
 ### `invalid datetime: {value!r}`
 
-**HTTP 400.** `_parse_audit_dt`, `nautilus/transport/fastapi_app.py:1830-1842`. The `start` or
+**HTTP 400.** `_parse_audit_dt`, `nautilus/transport/fastapi_app.py:1877-1889`. The `start` or
 `end` query parameter on `GET /v1/audit` is not ISO-8601. Parsed with
 `datetime.fromisoformat`, so `2026-01-01T00:00:00Z` and `2026-01-01` both work.
 
@@ -217,7 +217,7 @@ curl -s "$NAUTILUS/v1/audit?start=yesterday" -H 'X-API-Key: govern-key'
 
 ### `Adapter '{name}' not found`
 
-**HTTP 404.** `nautilus/transport/fastapi_app.py:1199-1205`. `{name}` is the path segment of
+**HTTP 404.** `nautilus/transport/fastapi_app.py:1233-1239`. `{name}` is the path segment of
 `GET /v1/adapters/{name}/schema` and must be a configured **source id**, not a source type.
 `GET /v1/adapters` lists what exists.
 

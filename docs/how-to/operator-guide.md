@@ -667,9 +667,89 @@ warning above as one object:
   on an install that has the `otel` extra** — see
   [What `/metrics` exports](#what-metrics-exports) for the exact list, and for
   the two configurations in which most of it disappears.
+- `GET /v1/adapters?probe=true` — dials every source and says which ones
+  answer. This is the one that tells a healthy broker from one whose backends
+  are gone; neither probe above will, and that is deliberate. Capability
+  `query`, so unlike the two probes it needs a key —
+  [Is a source still there](#is-a-source-still-there).
 - `examples/full-showcase/` ships a docker-compose stack with Prometheus,
   Grafana (provisioned dashboards), and Tempo — see
   [Monitor with Grafana](monitor-with-grafana.md).
+
+### Is a source still there
+
+**`/readyz` will not tell you, on purpose.** It answers for the two dependencies
+whose loss is total — the audit sink and the session store — because every
+request writes an audit entry and touches the exposure ledger before it answers,
+so an instance that has lost either can serve nothing and should leave the
+rotation. A *source* is not like that. Refusing what it cannot serve and
+returning what it can is the broker's job, so an instance with three sources of
+four is working, and draining it would take away the only thing that can still
+answer for the three. Every replica dials the same backends, so gating readiness
+on a source would turn one dead database into a fleet with nothing in rotation
+and no console left to look at it from.
+
+The consequence is worth saying plainly, because it is the thing an operator
+gets wrong once: **a broker whose every source is unreachable answers `200
+{"status":"ok"}` on `/readyz` and `200` on every `POST /v1/request`.** The
+failure is in the `sources_errored[]` array inside that `200`, which is the
+right answer for the agent that asked and no answer at all for you.
+
+`GET /v1/adapters?probe=true` is the operator's version. Below, `orders` is a
+`type: postgres` source and `catalogue` is `type: static`. Everything is up:
+
+```console
+$ curl -sS -H "X-API-Key: $NAUTILUS_API_KEY" 'http://127.0.0.1:8000/v1/adapters?probe=true'
+{"adapters":[{"id":"orders","type":"postgres","status":"active","endpoint":"postgresql://127.0.0.1:15439","reachable":true,"detail":null},{"id":"catalogue","type":"static","status":"active","endpoint":null,"reachable":null,"detail":"no remote endpoint"}]}
+```
+
+Now freeze the database's container — `docker pause` on the container behind
+`orders`, which is the failure that is hardest to see, because the port stays
+open and the kernel still completes the TCP handshake:
+
+```console
+$ curl -sS -H "X-API-Key: $NAUTILUS_API_KEY" 'http://127.0.0.1:8000/v1/adapters?probe=true'
+{"adapters":[{"id":"orders","type":"postgres","status":"active","endpoint":"postgresql://127.0.0.1:15439","reachable":false,"detail":"no answer from postgresql://127.0.0.1:15439 within 5.0s"},{"id":"catalogue","type":"static","status":"active","endpoint":null,"reachable":null,"detail":"no remote endpoint"}]}
+$ curl -s -w ' HTTP %{http_code}\n' http://127.0.0.1:8000/readyz
+{"status":"ok"} HTTP 200
+```
+
+That `/readyz` is not a bug — it is the paragraph above, happening. Stop the
+container outright and the reason changes from "did not answer" to "refused":
+
+```console
+$ curl -sS -H "X-API-Key: $NAUTILUS_API_KEY" 'http://127.0.0.1:8000/v1/adapters?probe=true'
+{"adapters":[{"id":"orders","type":"postgres","status":"active","endpoint":"postgresql://127.0.0.1:15439","reachable":false,"detail":"ConnectionRefusedError: [Errno 111] Connect call failed ('127.0.0.1', 15439)"},{"id":"catalogue","type":"static","status":"active","endpoint":null,"reachable":null,"detail":"no remote endpoint"}]}
+$ curl -s -w ' HTTP %{http_code}\n' -H "X-API-Key: $NAUTILUS_API_KEY" http://127.0.0.1:8000/v1/adapters/orders/schema
+{"detail":"Schema fetch failed: postgresql://127.0.0.1:15439 is unreachable (ConnectionRefusedError: [Errno 111] Connect call failed ('127.0.0.1', 15439))"} HTTP 503
+```
+
+Start the container again and the next probe reads `"reachable":true` with no
+restart and no cache to clear.
+
+**Read the three fields this way.**
+
+| Field | What it means |
+| --- | --- |
+| `reachable: true` | The process behind that address answered |
+| `reachable: false` | It did not. `detail` says whether it refused, timed out or hung up — **this is what to alert on** |
+| `reachable: null` | Nothing was dialled. Either the source has no address (`catalogue` above serves rows from the config) or its `connection` names no port and the scheme implies none. Not a failure, and not a success — alert on `false`, never on "not `true`" |
+| `endpoint` | The address dialled, rebuilt from the `connection` as scheme, host and port only, so a DSN password cannot ride out into your monitoring |
+| `status` | Unrelated: `active`/`quarantined` is this process's own bookkeeping. A source whose database was switched off an hour ago still reads `active`, which is why the plain listing was never enough |
+
+**What the probe does not claim.** It asks whether the process behind the
+address is answering, and it sends no credential to find out: an HTTP/1.0
+`HEAD /`, or libpq's pre-authentication `SSLRequest` for Postgres, or for a TLS
+scheme just the handshake. So `reachable: true` does not mean the password still
+works, the table still exists, or a database has finished recovering — for that,
+send a request. `bolt` and `neo4j` without TLS have no hello to send and are
+checked at the transport layer only, which is the one place a frozen backend can
+still read as reachable. Each dial is bounded by that source's `timeout_s`,
+capped at 5 s, and all sources are dialled at once, so the slowest sets the
+response time rather than their sum.
+
+Full field reference: [`GET
+/v1/adapters`](../reference/rest-api.md#get-v1adapters).
 
 ### What `/metrics` exports
 
@@ -1293,6 +1373,11 @@ state_dir: /var/lib/nautilus
 
 ### When a source is down or answers with too much
 
+- **Ask, without waiting for a request to fail.** `GET
+  /v1/adapters?probe=true` dials every source and reports `reachable` per
+  adapter with the address it dialled — see [Is a source still
+  there](#is-a-source-still-there). Everything below is what happens to a
+  request that finds the source already gone.
 - **Which host is down is on the error record and in the log.** A failed
   source's `sources_errored[]` entry carries `endpoint` — the address that
   source dials, as `scheme://host[:port]` — and the same value is in the audit
@@ -1728,7 +1813,7 @@ exception, called out in the table.
 
 | Thing | Where | Set by | Lose it and… |
 |---|---|---|---|
-| Decision record | `audit.jsonl` | `audit.path` | The compliance trail is gone. Nothing else breaks; the broker starts a new file. |
+| Decision record | `audit.jsonl` | `audit.path` | Lose the **file** and the compliance trail is gone, but nothing else breaks: the broker starts a new one on the next request. Lose the **directory** it sits in and the broker stops — `/readyz` answers `503 {"reason": "audit log directory <path> does not exist"}` and every `POST /v1/request` answers `503`. That is the fail-closed path working: re-creating a missing mount point silently would write the trail to whatever is underneath a volume that failed to attach. `mkdir` it back and readiness returns on the next probe. |
 | Audit chain public key | `audit.jsonl.pub.pem` | derived — written beside `audit.path` | Recoverable, not critical: delete it and the next broker start re-exports a byte-identical file from the private key. It is in the archive so a third party can verify the log offline without ever touching the key. |
 | Attestation signing key | `attestation.pem` | `attestation.private_key_path` | **Every chained log signed with it becomes unappendable.** See [the ordering constraint](#restore-the-key-with-the-log-not-after-it). |
 | Attestation envelopes | e.g. `attestations.jsonl` (+ `.pub.pem`) | `attestation.sink.path`, when `type: file` | The independent receipt trail is gone. |

@@ -16,9 +16,15 @@ Endpoints (all under ``/v1`` except health probes):
 - ``GET /v1/sources`` — metadata-only listing (id, type, description,
   classification, data_types); never exposes DSNs or credentials
   (AC-12.3).
+- ``GET /v1/adapters`` — every adapter and its in-process status;
+  ``?probe=true`` also dials each source and reports whether it answers.
 - ``GET /healthz`` — 200 liveness probe naming the build (AC-12.4); no broker.
-- ``GET /readyz`` — 200 iff startup finished AND the session store's
-  ``aget('_ready_probe_')`` succeeds; else 503 (AC-12.5).
+- ``GET /readyz`` — 200 iff startup finished AND the audit sink accepts
+  writes AND the session store's ``aget('_ready_probe_')`` succeeds; else 503
+  (AC-12.5). It never dials a source: those two are *total* dependencies (no
+  request can be served without them) while a source is partial, and draining
+  every replica because one shared backend died leaves nothing in rotation.
+  ``GET /v1/adapters?probe=true`` is where a dead source shows up instead.
 - ``POST /v1/rkm/queue`` — submit a rule; validates and queues a proposal.
 - ``GET /v1/rkm/queue`` — list proposals (AC-35.9.b).
 - ``GET /v1/rkm/queue/{proposal_id}`` — show single proposal (AC-35.9.c).
@@ -865,6 +871,16 @@ def create_app(
         Any exception from the store downgrades to 503 so rolling
         restarts take the pod out of rotation cleanly.
 
+        A **source** is never dialled here, and a broker whose every source
+        is unreachable answers 200. The two dependencies this does check are
+        total -- every request writes an audit entry and touches the exposure
+        ledger before it answers, so losing either leaves nothing this
+        instance could serve. A source is partial: refusing what it cannot
+        serve and returning what it can is the broker's job, and since every
+        replica dials the same backends, gating on one would take the whole
+        fleet out of rotation over a database that only some requests need.
+        ``GET /v1/adapters?probe=true`` answers for sources instead.
+
         Each stage is timed and the whole run is emitted as one ``DEBUG``
         record. ``reason: session_store_timeout`` names a budget without
         saying which of the two session-store stages spent it, and the two
@@ -1152,28 +1168,46 @@ def create_app(
     )
     async def get_adapters(  # pyright: ignore[reportUnusedFunction]
         request: Request,
-    ) -> dict[str, list[dict[str, str]]]:
+        probe: bool = False,
+    ) -> dict[str, list[dict[str, Any]]]:
         """Adapters and their live status in *this* process.
 
         ``nautilus adapters list --url`` reads this. Quarantine state is
         in-memory and per-process, so it cannot be answered by rebuilding a
         broker from the config file -- which is what the CLI used to do, and
         why ``adapters list --status quarantined`` always reported nothing.
+
+        ``?probe=true`` additionally dials every source and adds ``endpoint``,
+        ``reachable`` and ``detail`` per adapter. Sources deliberately do not
+        gate ``/readyz`` (see :func:`readyz`), so without this a broker whose
+        every backend was gone answered ``200 {"status": "ok"}`` here and on
+        both probes, and the failure appeared only inside a *caller's* ``200``
+        as ``sources_errored``. Off by default: a dial does not belong on the
+        critical path of a listing.
         """
         broker: Broker | None = getattr(request.app.state, "broker", None)
         if broker is None:
             return {"adapters": []}
         quarantined: set[str] = getattr(broker, "_quarantined_adapters", set())
-        return {
-            "adapters": [
-                {
-                    "id": source.id,
-                    "type": source.type,
-                    "status": "quarantined" if source.id in quarantined else "active",
-                }
-                for source in broker.sources
-            ],
-        }
+        adapters: list[dict[str, Any]] = [
+            {
+                "id": source.id,
+                "type": source.type,
+                "status": "quarantined" if source.id in quarantined else "active",
+            }
+            for source in broker.sources
+        ]
+        if probe:
+            # Concurrently: serially, one source at its timeout ceiling would
+            # decide how long the whole answer takes.
+            results = await asyncio.gather(
+                *(broker.aprobe_source(entry["id"]) for entry in adapters)
+            )
+            for entry, result in zip(adapters, results, strict=True):
+                entry["endpoint"] = result.endpoint
+                entry["reachable"] = result.reachable
+                entry["detail"] = result.detail
+        return {"adapters": adapters}
 
     @app.get(
         "/v1/adapters/{name}/schema",
@@ -1209,6 +1243,19 @@ def create_app(
             raise HTTPException(
                 status_code=status.HTTP_501_NOT_IMPLEMENTED,
                 detail=f"Adapter '{name}' does not support schema introspection",
+            )
+        # This is the route the reference invites an operator to probe, and it
+        # answered for backends it never touched: ``llm``, ``rest`` and ``s3``
+        # return a capability-only ``AdapterSchema.unknown()`` stamped
+        # ``fetched_at = now()``, so a stopped endpoint came back ``200`` with a
+        # fresh timestamp. A false green on a probe is worse than no probe.
+        reach = await broker.aprobe_source(name)
+        if reach.reachable is False:
+            from fastapi import HTTPException
+
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Schema fetch failed: {reach.endpoint} is unreachable ({reach.detail})",
             )
         try:
             schema = await adapter.get_schema()

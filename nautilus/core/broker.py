@@ -26,6 +26,7 @@ import hashlib
 import importlib.metadata
 import importlib.util
 import logging
+import ssl
 import sys
 import threading
 import time
@@ -36,7 +37,8 @@ from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple, TypeVar, cast
+from urllib.parse import urlsplit
 
 from fathom.attestation import AttestationService
 from pydantic import ValidationError
@@ -150,6 +152,100 @@ def prime_metrics() -> None:
 _T = TypeVar("_T")
 
 log = logging.getLogger(__name__)
+
+
+class SourceProbe(NamedTuple):
+    """What :meth:`Broker.aprobe_source` found at one source's address.
+
+    ``reachable`` is tri-state on purpose: ``None`` means *nothing was dialled*
+    -- there is no address, or the connection string names no port and the
+    scheme implies none -- and is never conflated with ``True``.
+    """
+
+    endpoint: str | None
+    reachable: bool | None
+    detail: str | None
+
+
+# Longest one source probe may spend dialling. The source's own ``timeout_s``
+# is the budget when it is smaller; ``timeout_s: null`` means "wait
+# indefinitely", which is not a thing an HTTP probe may do.
+_PROBE_TIMEOUT_CEILING_S = 5.0
+
+# Port a scheme implies when the connection string omits one. Covers what the
+# shipped adapters dial; anything else probes nothing rather than guessing an
+# address and reporting on it.
+_DEFAULT_PORTS: dict[str, int] = {
+    "http": 80,
+    "https": 443,
+    "postgres": 5432,
+    "postgresql": 5432,
+    "bolt": 7687,
+    "bolt+s": 7687,
+    "bolt+ssc": 7687,
+    "neo4j": 7687,
+    "neo4j+s": 7687,
+    "neo4j+ssc": 7687,
+}
+
+# Schemes whose probe is wrapped in TLS. The handshake is itself a round trip,
+# so it answers the liveness question even where there is no hello to send.
+_TLS_SCHEMES = frozenset({"https", "bolt+s", "bolt+ssc", "neo4j+s", "neo4j+ssc"})
+
+# What to say so the server has to say something back.
+#
+# Completing the TCP handshake is not evidence that anything is alive behind
+# it: a ``docker pause``d ``postgres:16`` still accepts the connection in 0.00s,
+# because the kernel finishes the handshake into a backlog the frozen process
+# never drains. Measured -- that is the exact shape of the failure this probe
+# exists to report, so the probe waits for a reply.
+#
+# Both hellos are pre-authentication and carry no credential:
+# - HTTP/1.0 ``HEAD /`` asks for no body; any status line is an answer.
+# - libpq's 8-byte SSLRequest is what a Postgres server answers with a single
+#   ``S`` or ``N`` before it has asked who you are.
+#
+# A scheme with no entry and no TLS is checked at the transport layer only.
+_PROBE_HELLO: dict[str, bytes] = {
+    "http": b"HEAD / HTTP/1.0\r\n\r\n",
+    "https": b"HEAD / HTTP/1.0\r\n\r\n",
+    "postgres": b"\x00\x00\x00\x08\x04\xd2\x16\x2f",
+    "postgresql": b"\x00\x00\x00\x08\x04\xd2\x16\x2f",
+}
+
+
+async def _dial(host: str, port: int, scheme: str) -> None:
+    """Open ``host:port``, send the scheme's hello, and require a reply.
+
+    Raises whatever the dial raised. The caller owns the deadline.
+    """
+    tls = scheme in _TLS_SCHEMES
+    try:
+        # Verification is left on. A certificate this process will not accept
+        # is still a *reply* -- the server sent its Certificate message before
+        # we refused it -- so it answers the liveness question and is reported
+        # as reachable rather than as an outage. Turning verification off to
+        # "make the probe work" would hand a probe that reads bytes off the
+        # wire to anyone who can get in the middle of it, to learn something
+        # the handshake failure already told us.
+        reader, writer = await asyncio.open_connection(
+            host, port, ssl=ssl.create_default_context() if tls else None
+        )
+    except ssl.SSLError:
+        return
+    try:
+        hello = _PROBE_HELLO.get(scheme)
+        if hello is None:
+            return
+        writer.write(hello)
+        await writer.drain()
+        if not await reader.read(1):
+            raise ConnectionResetError("accepted the connection and closed it without answering")
+    finally:
+        writer.close()
+        with contextlib.suppress(OSError, asyncio.CancelledError):
+            await writer.wait_closed()
+
 
 # ---------------------------------------------------------------------------
 # Adapter registry — static built-ins + entry-point discovery (design §3.5)
@@ -3133,6 +3229,56 @@ class Broker:
         except KeyError:
             return None  # an id with no source: nothing to name
         return redact_connection(source.connection)
+
+    async def aprobe_source(self, source_id: str) -> SourceProbe:
+        """Dial what ``source_id`` connects to and report whether it answers.
+
+        Sources do not gate readiness -- a broker that can still serve three of
+        four is ready, and draining it would remove the only thing that can
+        answer for the three -- so nothing at HTTP level distinguished a
+        healthy broker from one whose every backend was gone. This is what
+        does: it opens the source's ``scheme://host[:port]``, makes the server
+        answer (see :data:`_PROBE_HELLO`), and is bounded by that source's own
+        ``timeout_s``, capped at :data:`_PROBE_TIMEOUT_CEILING_S`.
+
+        It is a deliberately smaller claim than "this source will serve a
+        query": a server that answers says nothing about credentials, about a
+        database that is up but still recovering, or about a model the endpoint
+        does not host. It is exactly the difference between a backend that is
+        *gone* and one that is there, which is the question an operator has.
+
+        ``reachable`` is ``None`` -- never ``True`` -- when there was nothing to
+        dial. A ``static`` source has no address, and a probe that answers for
+        what it did not check is the failure this exists to end.
+        """
+        endpoint = self._source_endpoint(source_id)
+        if endpoint is None:
+            return SourceProbe(None, None, "no remote endpoint")
+        parts = urlsplit(endpoint)
+        host = parts.hostname
+        # No entry in the table means no probe: guessing a port is the same
+        # mistake ``redact_connection`` refuses to make when it guesses a host.
+        port = parts.port or _DEFAULT_PORTS.get(parts.scheme)
+        if host is None or port is None:
+            return SourceProbe(
+                endpoint,
+                None,
+                f"no port in {endpoint!r} and no default for scheme {parts.scheme!r}",
+            )
+        try:
+            budget = self._registry.get(source_id).timeout_s
+        except KeyError:  # pragma: no cover -- _source_endpoint already returned
+            budget = None
+        timeout_s = min(budget or _PROBE_TIMEOUT_CEILING_S, _PROBE_TIMEOUT_CEILING_S)
+        try:
+            await asyncio.wait_for(_dial(host, port, parts.scheme), timeout_s)
+        except TimeoutError:
+            return SourceProbe(
+                endpoint, False, f"no answer from {endpoint} within {timeout_s:.1f}s"
+            )
+        except OSError as exc:
+            return SourceProbe(endpoint, False, f"{type(exc).__name__}: {exc}")
+        return SourceProbe(endpoint, True, None)
 
     def _session_store_endpoint(self) -> str | None:
         """What the session store dials, as ``scheme://host[:port]``, or ``None``.
