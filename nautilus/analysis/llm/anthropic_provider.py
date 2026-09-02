@@ -24,6 +24,7 @@ from typing import Any, cast
 
 from nautilus.analysis.llm.base import LLMProviderError
 from nautilus.core.models import IntentAnalysis
+from nautilus.extras import install_extra_hint
 
 try:
     from anthropic import (
@@ -75,7 +76,8 @@ class AnthropicProvider:
     ) -> None:
         if AsyncAnthropic is None:
             raise LLMProviderError(
-                "anthropic extra not installed; install nautilus[llm-anthropic]"
+                f"the 'llm-anthropic' extra is not installed -- "
+                f"{install_extra_hint('llm-anthropic')}"
             ) from _import_error
         self.api_key_env = api_key_env
         self.model = model

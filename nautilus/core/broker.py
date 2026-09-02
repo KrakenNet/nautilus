@@ -1625,7 +1625,7 @@ class Broker:
         if extra is not None:
             raise ConfigError(
                 f"source id='{source.id}' has type '{source.type}', whose driver is not "
-                f"installed: pip install 'nautilus-rkm[{extra}]' "
+                f"installed -- {getattr(adapter_cls, 'install_hint', extra)} "
                 f"(import failed: {getattr(adapter_cls, 'import_error', '?')})"
             )
 

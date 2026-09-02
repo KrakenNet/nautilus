@@ -28,6 +28,20 @@ the heading shows the template and the entry says what interpolates:
 - `{name!r}` — substituted with `repr()`, so a string arrives quoted: `rule 'my_rule' not found`.
 - `{exc}` — the text of a wrapped, lower-level exception. The sentence before the colon is
   Nautilus; the sentence after it is the driver, the OS, or a parser.
+- `{install_extra_hint(extra)}` — the shared remedy clause every "missing optional dependency"
+  message ends with (`nautilus/extras.py:31-36`). For `extra='postgres'` it expands to:
+
+  ```
+  host: pip install 'nautilus-rkm[postgres]'; image: docker build --build-arg EXTRAS="--extra postgres" . (the published image installs --extra otel only, and has no shell or pip to add to it)
+  ```
+
+  Two routes because Nautilus has two runtimes and they take opposite remedies. On a host
+  install, run the `host:` half. In the published container image, you cannot: its runtime
+  stage is distroless — no shell, no `pip` — so the `image:` half, a rebuild, is the only
+  one that works. Which extras that image already carries is
+  [a table in the deployment guide](../../how-to/deploying.md#extras-and-what-the-published-image-carries),
+  held against the `Dockerfile` and against a built image by
+  `tests/defects/test_wave_ops14_image_extras.py`.
 
 ## A scratch broker
 
@@ -152,9 +166,10 @@ curl -s "$NAUTILUS/readyz"; echo
 | `session database {self._path} now carries schema version {found}; …` |
 | `session_store.backend: redis has no implementation. …` |
 | `session_store.backend=postgres requires 'dsn' or TEST_PG_DSN env var` |
+| `session_store.backend=postgres needs the 'postgres' extra, whose driver asyncpg is not installed -- {install_extra_hint('postgres')}. Or set session_store.backend to sqlite (durable, single-node) or memory, neither of which needs a driver.` |
 | `ERROR: pass exactly one of --sqlite-path or --dsn` |
 | `ERROR: no such file: {path}` |
-| `ERROR: asyncpg is not installed` |
+| `ERROR: asyncpg is not installed -- {install_extra_hint('postgres')}` |
 | `ERROR: could not connect: {exc}` |
 | `ERROR: could not read nautilus_schema_version: {exc}` |
 | `ERROR: nautilus_schema_version holds no row` |
@@ -199,7 +214,7 @@ curl -s "$NAUTILUS/readyz"; echo
 | `sources.{i}.id: String should match pattern '^[A-Za-z0-9][A-Za-z0-9._-]*$' [type=string_pattern_mismatch]` |
 | `source '{self.id}' has type '{self.type}' but no '{required}'. …` |
 | `source '{self.id}' has type '{self.type}' but no 'connection'. …` |
-| `source id='{source.id}' has type '{source.type}', whose driver is not installed: pip install 'nautilus-rkm[{extra}]' …` |
+| `source id='{source.id}' has type '{source.type}', whose driver is not installed -- {install_extra_hint(extra)} (import failed: {…})` |
 | `adapters[{i}]: module_path does not exist or is not a file: {module_path}` |
 | `adapters[{i}]: cannot import module from {module_path}` |
 | `adapters[{i}]: error executing {module_path}: {exc}` |
@@ -242,8 +257,8 @@ curl -s "$NAUTILUS/readyz"; echo
 | `NoopEmbedder(strict=True) cannot produce embeddings. …` |
 | `context['embedding'] must be list[float], got {type(override).__name__}` |
 | `sn-invalid-field: {field!r}`, `sn-injection-rejected`, `sn-unsupported-operator: {op!r}` |
-| `source type '{source_type}' needs its driver: pip install 'nautilus-rkm[{extra}]'` |
-| `anthropic extra not installed; install nautilus[llm-anthropic]` |
+| `source type '{source_type}' needs its driver -- {install_extra_hint(extra)}` |
+| `the 'llm-anthropic' extra is not installed -- {install_extra_hint('llm-anthropic')}` |
 | `AnthropicProvider: env var {self.api_key_env!r} is unset or empty` |
 | `PostgresAdapter requires 'table' on source '{config.id}' (Phase 1 shortcut)` |
 | `PostgresAdapter missing 'table' for source '{self._config.id}'` |

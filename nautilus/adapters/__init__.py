@@ -31,6 +31,7 @@ from nautilus.adapters.servicenow import ServiceNowAdapter
 from nautilus.adapters.static import StaticAdapter
 from nautilus.config.models import SourceConfig
 from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
+from nautilus.extras import install_extra_hint
 
 
 def missing_driver_adapter(source_type: str, extra: str, exc: BaseException) -> type[Adapter]:
@@ -45,12 +46,13 @@ def missing_driver_adapter(source_type: str, extra: str, exc: BaseException) -> 
     ``ConfigError`` naming the extra; the ``connect`` below is the backstop for
     anything that builds an adapter directly.
     """
-    hint = f"source type '{source_type}' needs its driver: pip install 'nautilus-rkm[{extra}]'"
+    hint = f"source type '{source_type}' needs its driver -- {install_extra_hint(extra)}"
 
     class _MissingDriverAdapter:
         source_type: ClassVar[str] = ""
         missing_extra: ClassVar[str] = extra
         import_error: ClassVar[str] = str(exc)
+        install_hint: ClassVar[str] = install_extra_hint(extra)
 
         async def connect(self, config: SourceConfig) -> None:
             raise AdapterError(f"{hint} (import failed: {exc})")

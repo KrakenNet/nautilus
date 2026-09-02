@@ -27,58 +27,58 @@
    }
   },
   {
-   "citation": "anthropic_provider.py:128",
+   "citation": "anthropic_provider.py:130",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/analysis/llm/anthropic_provider.py",
    "sha": "abda9b57cce620f6",
    "lines": {
-    "128": "raise LLMProviderError(f\"anthropic SDK call failed: {exc}\") from exc"
+    "130": "raise LLMProviderError(f\"anthropic SDK call failed: {exc}\") from exc"
    }
   },
   {
-   "citation": "anthropic_provider.py:152",
+   "citation": "anthropic_provider.py:154",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/analysis/llm/anthropic_provider.py",
    "sha": "d1493ba467812f9d",
    "lines": {
-    "152": "raise LLMProviderError("
+    "154": "raise LLMProviderError("
    }
   },
   {
-   "citation": "anthropic_provider.py:155",
+   "citation": "anthropic_provider.py:157",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/analysis/llm/anthropic_provider.py",
    "sha": "470d3c5c4377997f",
    "lines": {
-    "155": "raise LLMProviderError(\"anthropic response contained no tool_use block\")"
+    "157": "raise LLMProviderError(\"anthropic response contained no tool_use block\")"
    }
   },
   {
-   "citation": "anthropic_provider.py:77",
+   "citation": "anthropic_provider.py:78",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/analysis/llm/anthropic_provider.py",
    "sha": "d1493ba467812f9d",
    "lines": {
-    "77": "raise LLMProviderError("
+    "78": "raise LLMProviderError("
    }
   },
   {
-   "citation": "anthropic_provider.py:95",
+   "citation": "anthropic_provider.py:97",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/analysis/llm/anthropic_provider.py",
    "sha": "d1493ba467812f9d",
    "lines": {
-    "95": "raise LLMProviderError("
+    "97": "raise LLMProviderError("
    }
   },
   {
@@ -411,26 +411,37 @@
    }
   },
   {
-   "citation": "local_provider.py:71",
+   "citation": "local_provider.py:53",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/analysis/llm/local_provider.py",
    "sha": "d1493ba467812f9d",
    "lines": {
-    "71": "raise LLMProviderError("
+    "53": "raise LLMProviderError("
    }
   },
   {
-   "citation": "nautilus/adapters/__init__.py:49,64",
+   "citation": "local_provider.py:78",
+   "cited_in": [
+    "docs/reference/errors/adapters.md"
+   ],
+   "file": "nautilus/analysis/llm/local_provider.py",
+   "sha": "d1493ba467812f9d",
+   "lines": {
+    "78": "raise LLMProviderError("
+   }
+  },
+  {
+   "citation": "nautilus/adapters/__init__.py:49,66",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/__init__.py",
-   "sha": "046476a30eefbe3b",
+   "sha": "110f48fc822d9a44",
    "lines": {
-    "49": "",
-    "64": "raise AdapterError(hint)"
+    "49": "hint = f\"source type '{source_type}' needs its driver -- {install_extra_hint(extra)}\"",
+    "66": "raise AdapterError(hint)"
    }
   },
   {
@@ -1385,25 +1396,25 @@
    }
   },
   {
-   "citation": "nautilus/analysis/llm/anthropic_provider.py:115",
+   "citation": "nautilus/analysis/llm/anthropic_provider.py:117",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/analysis/llm/anthropic_provider.py",
    "sha": "4a437af49e0c6283",
    "lines": {
-    "115": "api_key=os.getenv(self.api_key_env),"
+    "117": "api_key=os.getenv(self.api_key_env),"
    }
   },
   {
-   "citation": "nautilus/analysis/llm/anthropic_provider.py:93",
+   "citation": "nautilus/analysis/llm/anthropic_provider.py:95",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/analysis/llm/anthropic_provider.py",
    "sha": "53ac3299a5c7f9cd",
    "lines": {
-    "93": "key = os.getenv(self.api_key_env)"
+    "95": "key = os.getenv(self.api_key_env)"
    }
   },
   {
@@ -1418,47 +1429,47 @@
    }
   },
   {
-   "citation": "nautilus/analysis/llm/local_provider.py:70",
+   "citation": "nautilus/analysis/llm/local_provider.py:77",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/analysis/llm/local_provider.py",
    "sha": "7ec9fa7ca33a667d",
    "lines": {
-    "70": "if not os.getenv(self.api_key_env):"
+    "77": "if not os.getenv(self.api_key_env):"
    }
   },
   {
-   "citation": "nautilus/analysis/llm/local_provider.py:81",
+   "citation": "nautilus/analysis/llm/local_provider.py:88",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/analysis/llm/local_provider.py",
    "sha": "588ec5eb5c61e03b",
    "lines": {
-    "81": "api_key = os.getenv(self.api_key_env) or self._api_key_literal"
+    "88": "api_key = os.getenv(self.api_key_env) or self._api_key_literal"
    }
   },
   {
-   "citation": "nautilus/analysis/llm/openai_provider.py:107",
+   "citation": "nautilus/analysis/llm/openai_provider.py:108",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/analysis/llm/openai_provider.py",
    "sha": "4a437af49e0c6283",
    "lines": {
-    "107": "api_key=os.getenv(self.api_key_env),"
+    "108": "api_key=os.getenv(self.api_key_env),"
    }
   },
   {
-   "citation": "nautilus/analysis/llm/openai_provider.py:92",
+   "citation": "nautilus/analysis/llm/openai_provider.py:93",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/analysis/llm/openai_provider.py",
    "sha": "53ac3299a5c7f9cd",
    "lines": {
-    "92": "key = os.getenv(self.api_key_env)"
+    "93": "key = os.getenv(self.api_key_env)"
    }
   },
   {
@@ -3479,12 +3490,12 @@
     "docs/reference/errors/config.md"
    ],
    "file": "nautilus/core/broker.py",
-   "sha": "041cea7b9cf8a229",
+   "sha": "d953f947df906bab",
    "lines": {
     "1625": "if extra is not None:",
     "1626": "raise ConfigError(",
     "1627": "f\"source id='{source.id}' has type '{source.type}', whose driver is not \"",
-    "1628": "f\"installed: pip install 'nautilus-rkm[{extra}]' \"",
+    "1628": "f\"installed -- {getattr(adapter_cls, 'install_hint', extra)} \"",
     "1629": "f\"(import failed: {getattr(adapter_cls, 'import_error', '?')})\"",
     "1630": ")"
    }
@@ -4236,118 +4247,135 @@
    }
   },
   {
-   "citation": "nautilus/core/session_pg.py:269-273",
+   "citation": "nautilus/core/session_pg.py:173-179",
+   "cited_in": [
+    "docs/reference/errors/sessions.md"
+   ],
+   "file": "nautilus/core/session_pg.py",
+   "sha": "94fd916a218c71cd",
+   "lines": {
+    "173": "if importlib.util.find_spec(\"asyncpg\") is None:",
+    "174": "raise ConfigError(",
+    "175": "f\"session_store.backend=postgres needs the 'postgres' extra, whose \"",
+    "176": "f\"driver asyncpg is not installed -- {install_extra_hint('postgres')}. \"",
+    "177": "f\"Or set session_store.backend to sqlite (durable, single-node) or \"",
+    "178": "f\"memory, neither of which needs a driver.\"",
+    "179": ")"
+   }
+  },
+  {
+   "citation": "nautilus/core/session_pg.py:288-292",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/session_pg.py",
    "sha": "cfc44f9ae1b0903c",
    "lines": {
-    "269": ")",
-    "270": "elif int(row[\"version\"]) != _SCHEMA_VERSION:",
-    "271": "raise SessionSchemaError(",
-    "272": "f\"session database carries schema version \"",
-    "273": "f\"{int(row['version'])}; this build understands version \""
+    "288": ")",
+    "289": "elif int(row[\"version\"]) != _SCHEMA_VERSION:",
+    "290": "raise SessionSchemaError(",
+    "291": "f\"session database carries schema version \"",
+    "292": "f\"{int(row['version'])}; this build understands version \""
    }
   },
   {
-   "citation": "nautilus/core/session_pg.py:295-298",
+   "citation": "nautilus/core/session_pg.py:314-317",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/session_pg.py",
    "sha": "570809b397109430",
    "lines": {
-    "295": "\"\"\"Apply ``on_failure`` policy to a connect/DDL failure.\"\"\"",
-    "296": "if self._on_failure == \"fail_closed\":",
-    "297": "raise self._unavailable(",
-    "298": "f\"PostgresSessionStore unavailable (dsn={self._sanitized_dsn()}): {exc}\""
+    "314": "\"\"\"Apply ``on_failure`` policy to a connect/DDL failure.\"\"\"",
+    "315": "if self._on_failure == \"fail_closed\":",
+    "316": "raise self._unavailable(",
+    "317": "f\"PostgresSessionStore unavailable (dsn={self._sanitized_dsn()}): {exc}\""
    }
   },
   {
-   "citation": "nautilus/core/session_pg.py:306-310",
+   "citation": "nautilus/core/session_pg.py:325-329",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/session_pg.py",
    "sha": "fd42ec01abc97bb8",
    "lines": {
-    "306": "await sqlite_store.setup()",
-    "307": "except Exception as sqlite_exc:  # noqa: BLE001 — any sqlite3/OS error",
-    "308": "raise self._unavailable(",
-    "309": "f\"PostgresSessionStore unavailable (dsn={self._sanitized_dsn()}: {exc}) \"",
-    "310": "f\"and sqlite fallback at {self._sqlite_path} failed: {sqlite_exc}\""
+    "325": "await sqlite_store.setup()",
+    "326": "except Exception as sqlite_exc:  # noqa: BLE001 — any sqlite3/OS error",
+    "327": "raise self._unavailable(",
+    "328": "f\"PostgresSessionStore unavailable (dsn={self._sanitized_dsn()}: {exc}) \"",
+    "329": "f\"and sqlite fallback at {self._sqlite_path} failed: {sqlite_exc}\""
    }
   },
   {
-   "citation": "nautilus/core/session_pg.py:359-361",
+   "citation": "nautilus/core/session_pg.py:378-380",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/session_pg.py",
    "sha": "a610f4ad50877d42",
    "lines": {
-    "359": "return self._degraded_memory.get(session_id)",
-    "360": "if self._pool is None:",
-    "361": "raise self._unavailable(\"PostgresSessionStore.aget() called before setup() succeeded\")"
+    "378": "return self._degraded_memory.get(session_id)",
+    "379": "if self._pool is None:",
+    "380": "raise self._unavailable(\"PostgresSessionStore.aget() called before setup() succeeded\")"
    }
   },
   {
-   "citation": "nautilus/core/session_pg.py:395-399",
+   "citation": "nautilus/core/session_pg.py:414-418",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/session_pg.py",
    "sha": "31bdf515f5594c18",
    "lines": {
-    "395": "row = await conn.fetchrow(\"SELECT version FROM nautilus_schema_version\")",
-    "396": "if row is not None and int(row[\"version\"]) != _SCHEMA_VERSION:",
-    "397": "raise SessionSchemaError(",
-    "398": "f\"session store at {self._sanitized_dsn()} now carries schema \"",
-    "399": "f\"version {int(row['version'])}; this build understands version \""
+    "414": "row = await conn.fetchrow(\"SELECT version FROM nautilus_schema_version\")",
+    "415": "if row is not None and int(row[\"version\"]) != _SCHEMA_VERSION:",
+    "416": "raise SessionSchemaError(",
+    "417": "f\"session store at {self._sanitized_dsn()} now carries schema \"",
+    "418": "f\"version {int(row['version'])}; this build understands version \""
    }
   },
   {
-   "citation": "nautilus/core/session_pg.py:460-465",
+   "citation": "nautilus/core/session_pg.py:479-484",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/session_pg.py",
    "sha": "9bbcfdae6fbfc273",
    "lines": {
-    "460": "conn = await self._pool.acquire(timeout=self._acquire_timeout_s)",
-    "461": "except TimeoutError as exc:",
-    "462": "raise self._unavailable(",
-    "463": "f\"session-store pool exhausted: no connection became free within \"",
-    "464": "f\"{self._acquire_timeout_s}s (pool max_size={self._pool_max_size}). \"",
-    "465": "f\"Raise session_store.pool_max_size to at least your peak concurrency.\""
+    "479": "conn = await self._pool.acquire(timeout=self._acquire_timeout_s)",
+    "480": "except TimeoutError as exc:",
+    "481": "raise self._unavailable(",
+    "482": "f\"session-store pool exhausted: no connection became free within \"",
+    "483": "f\"{self._acquire_timeout_s}s (pool max_size={self._pool_max_size}). \"",
+    "484": "f\"Raise session_store.pool_max_size to at least your peak concurrency.\""
    }
   },
   {
-   "citation": "nautilus/core/session_pg.py:534-539",
+   "citation": "nautilus/core/session_pg.py:553-558",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/session_pg.py",
    "sha": "7b5c144d5429244c",
    "lines": {
-    "534": "conn = await self._lock_pool.acquire(timeout=self._acquire_timeout_s)",
-    "535": "except TimeoutError as exc:",
-    "536": "raise self._unavailable(",
-    "537": "f\"session-store lock pool exhausted: no connection became free within \"",
-    "538": "f\"{self._acquire_timeout_s}s (lock pool max_size={self._lock_pool_max_size}). \"",
-    "539": "f\"One is held per in-flight request, so raise \""
+    "553": "conn = await self._lock_pool.acquire(timeout=self._acquire_timeout_s)",
+    "554": "except TimeoutError as exc:",
+    "555": "raise self._unavailable(",
+    "556": "f\"session-store lock pool exhausted: no connection became free within \"",
+    "557": "f\"{self._acquire_timeout_s}s (lock pool max_size={self._lock_pool_max_size}). \"",
+    "558": "f\"One is held per in-flight request, so raise \""
    }
   },
   {
-   "citation": "nautilus/core/session_pg.py:72",
+   "citation": "nautilus/core/session_pg.py:75",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/core/session_pg.py",
    "sha": "94869f4b6fc3f3aa",
    "lines": {
-    "72": "class SessionSchemaError(Exception):"
+    "75": "class SessionSchemaError(Exception):"
    }
   },
   {
@@ -4392,6 +4420,22 @@
     "157": "",
     "158": "raise SessionStoreUnavailableError(",
     "159": "f\"SqliteSessionStore({self._path}) used before setup() succeeded\""
+   }
+  },
+  {
+   "citation": "nautilus/extras.py:31-36",
+   "cited_in": [
+    "docs/reference/errors/index.md"
+   ],
+   "file": "nautilus/extras.py",
+   "sha": "4ef7ea2eac55c5d7",
+   "lines": {
+    "31": "return (",
+    "32": "f\"host: pip install 'nautilus-rkm[{extra}]'; \"",
+    "33": "f'image: docker build --build-arg EXTRAS=\"--extra {extra}\" . '",
+    "34": "\"(the published image installs --extra otel only, and has no shell or pip \"",
+    "35": "\"to add to it)\"",
+    "36": ")"
    }
   },
   {
@@ -5626,47 +5670,47 @@
    }
   },
   {
-   "citation": "openai_provider.py:130",
+   "citation": "openai_provider.py:131",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/analysis/llm/openai_provider.py",
    "sha": "5a3fde88ff91f9e1",
    "lines": {
-    "130": "raise LLMProviderError(f\"openai SDK call failed: {exc}\") from exc"
+    "131": "raise LLMProviderError(f\"openai SDK call failed: {exc}\") from exc"
    }
   },
   {
-   "citation": "openai_provider.py:134",
+   "citation": "openai_provider.py:135",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/analysis/llm/openai_provider.py",
    "sha": "249cf23c2bafabbc",
    "lines": {
-    "134": "raise LLMProviderError(\"openai responses.parse returned no output_parsed payload\")"
+    "135": "raise LLMProviderError(\"openai responses.parse returned no output_parsed payload\")"
    }
   },
   {
-   "citation": "openai_provider.py:77",
+   "citation": "openai_provider.py:78",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/analysis/llm/openai_provider.py",
    "sha": "d1493ba467812f9d",
    "lines": {
-    "77": "raise LLMProviderError("
+    "78": "raise LLMProviderError("
    }
   },
   {
-   "citation": "openai_provider.py:94",
+   "citation": "openai_provider.py:95",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/analysis/llm/openai_provider.py",
    "sha": "d1493ba467812f9d",
    "lines": {
-    "94": "raise LLMProviderError("
+    "95": "raise LLMProviderError("
    }
   },
   {

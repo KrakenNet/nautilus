@@ -22,7 +22,16 @@ uv add "nautilus-rkm[all]"        # every built-in adapter
 ```
 
 A configured source whose driver is not installed fails at startup, naming the
-extra — it never fails later, mid-request.
+extra — it never fails later, mid-request. So does
+`session_store.backend: postgres`, and `analysis.provider`.
+
+Running the container image instead? Extras are chosen when the image is
+**built**, because the runtime stage is distroless: no shell, no `pip`, nothing
+to install into. The published image carries `--extra otel` and no drivers, so
+anything on the list above is `docker build --build-arg EXTRAS="--extra
+postgres"` rather than a config change. The full per-extra table is in
+[Deploying › Extras](how-to/deploying.md#extras-and-what-the-published-image-carries),
+and every one of those startup failures prints the `--build-arg` line it wants.
 
 ## First run
 

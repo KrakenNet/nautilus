@@ -195,12 +195,19 @@ in the `adapters:` list, so `adapters[0]:` is the first entry.
 | `adapters[{i}]: '{cfg.class_name}' in {module_path} does not implement the Adapter protocol (missing: {gaps})` | `{gaps}` names the missing members — `connect`, `execute`, `close`. |
 | `adapters[{i}]: declared source_type='{cfg.source_type}' does not match {cfg.class_name}.source_type={actual_type!r} in {module_path}` | The `source_type` in config disagrees with the class attribute. Two names for one adapter is a routing bug waiting to happen. |
 
-### `source id='{source.id}' has type '{source.type}', whose driver is not installed: pip install 'nautilus-rkm[{extra}]' (import failed: {…})`
+### `source id='{source.id}' has type '{source.type}', whose driver is not installed -- {install_extra_hint(extra)} (import failed: {…})`
 
 **`ConfigError`**, `nautilus/core/broker.py:1625-1630`. The source type is built in, but its
-optional driver is not installed, so `nautilus.adapters` registered a stand-in. `{extra}` is the
-extra to install; the parenthesised text is the original `ImportError`. Install the extra, or
-remove the source.
+optional driver is not installed, so `nautilus.adapters` registered a stand-in. The parenthesised
+text is the original `ImportError`. `{install_extra_hint(extra)}` names both ways to obtain the
+extra ([index.md](index.md#reading-a-quoted-message)); on the published container image only the
+`image:` half applies, because there is no `pip` in it. In full, for a `postgres` source:
+
+```
+ERROR: invalid config: source id='rows' has type 'postgres', whose driver is not installed -- host: pip install 'nautilus-rkm[postgres]'; image: docker build --build-arg EXTRAS="--extra postgres" . (the published image installs --extra otel only, and has no shell or pip to add to it) (import failed: No module named 'asyncpg')
+```
+
+Install the extra, rebuild the image with it, or remove the source.
 
 ## Escalation packs
 

@@ -456,7 +456,7 @@ ERROR: could not connect: [Errno 111] Connect call failed ('127.0.0.1', 1)
 |---------|------|------------|
 | `ERROR: pass exactly one of --sqlite-path or --dsn` | `2` | Pass one target, not zero and not both. |
 | `ERROR: no such file: <path>` | `1` | The sqlite path does not exist (the message prints the path normalised, without a leading `./`). Check `session.sqlite_path` in your config. |
-| `ERROR: asyncpg is not installed` | `1` | `pip install asyncpg`, or use `--sqlite-path`. |
+| `ERROR: asyncpg is not installed -- host: pip install 'nautilus-rkm[postgres]'; image: docker build --build-arg EXTRAS="--extra postgres" . (the published image installs --extra otel only, and has no shell or pip to add to it)` | `1` | Take whichever half matches your runtime, or use `--sqlite-path`. `docker run … nautilus session version --dsn …` on the published image always lands here: it carries no driver. |
 | `ERROR: could not connect: <err>` | `1` | The DSN is wrong or the server is unreachable. |
 | `ERROR: could not read nautilus_schema_version: <err>` | `1` | The table is missing — this DSN points at a database that is not a Nautilus session store, or one the broker has never initialised. |
 | `ERROR: nautilus_schema_version holds no row` | `1` | The table exists but is empty. Let a broker start against it once, or point at a fresh store. |

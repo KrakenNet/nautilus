@@ -62,11 +62,40 @@ does not, treat it as a store outage (below).
 ## The Postgres session store
 
 All of these are `SessionStoreUnavailableError` or `SessionSchemaError`
-(`nautilus/core/session_pg.py:72`, `:105`).
+(`nautilus/core/session_pg.py:75`, `:108`) — except the first, which is a
+`ConfigError` raised before the store object exists.
+
+### `session_store.backend=postgres needs the 'postgres' extra, whose driver asyncpg is not installed -- {install_extra_hint('postgres')}. Or set session_store.backend to sqlite (durable, single-node) or memory, neither of which needs a driver.`
+
+**`ConfigError`**, `nautilus/core/session_pg.py:173-179`, from
+`PostgresSessionStore.__init__`. `asyncpg` is an optional extra, and the published container
+image installs none of the driver extras
+([the table](../../how-to/deploying.md#extras-and-what-the-published-image-carries)), so a
+ConfigMap that asks for this backend on that image lands here. In full:
+
+```
+ERROR: invalid config: session_store.backend=postgres needs the 'postgres' extra, whose driver asyncpg is not installed -- host: pip install 'nautilus-rkm[postgres]'; image: docker build --build-arg EXTRAS="--extra postgres" . (the published image installs --extra otel only, and has no shell or pip to add to it). Or set session_store.backend to sqlite (durable, single-node) or memory, neither of which needs a driver.
+```
+
+**Where it fires.** At construction, inside `Broker.from_config`, so `nautilus serve` prints it
+as `ERROR: invalid config: …` and exits **2** before binding a port. It is checked here rather
+than at first use because the import that needs it is deferred into `setup()`, which runs inside
+the ASGI lifespan hook: unguarded, the operator got `ModuleNotFoundError: No module named
+'asyncpg'` under a Starlette traceback, naming neither the extra nor a remedy.
+
+**Why `on_failure` does not apply.** That policy degrades a store that is *unreachable*. A
+driver that is not installed never becomes reachable, so `fallback_memory` would run the
+exposure ledger in process memory for the life of the pod — the exact silent per-replica ledger
+`session_store.backend: postgres` was chosen to avoid. Same reasoning as `SessionSchemaError`
+below.
+
+**Fix.** Rebuild the image with `--build-arg EXTRAS="--extra postgres"`, install the extra on a
+host install, or set `session_store.backend` to `sqlite` (durable, single node) or `memory`
+(single process, lost on restart), neither of which needs a driver.
 
 ### `PostgresSessionStore unavailable (dsn={self._sanitized_dsn()}): {exc}`
 
-`nautilus/core/session_pg.py:295-298`. The pool could not be created. `{exc}` is the asyncpg
+`nautilus/core/session_pg.py:314-317`. The pool could not be created. `{exc}` is the asyncpg
 failure. `{self._sanitized_dsn()}` is **not** the DSN: it is the `scheme://host[:port]` that
 `redact_connection` (`nautilus/config/models.py:797-827`) copies out by allowlist, so the
 message names the host and nothing else — no password, and equally no database name, no path
@@ -80,14 +109,14 @@ inferred from this line.
 
 ### `PostgresSessionStore unavailable (dsn={…}: {exc}) and sqlite fallback at {self._sqlite_path} failed: {sqlite_exc}`
 
-`nautilus/core/session_pg.py:306-310`. Postgres was unreachable *and* the configured
+`nautilus/core/session_pg.py:325-329`. Postgres was unreachable *and* the configured
 `session_store.sqlite_path` fallback could not be opened either — usually a read-only or missing
 directory. Fix the directory, or fix Postgres.
 
 ### `PostgresSessionStore.aget() called before setup() succeeded`
 
-`nautilus/core/session_pg.py:359-361`. Also `PostgresSessionStore.aupdate() called before
-setup() succeeded` (`:420`) and `SqliteSessionStore({self._path}) used before setup()
+`nautilus/core/session_pg.py:378-380`. Also `PostgresSessionStore.aupdate() called before
+setup() succeeded` (`:439`) and `SqliteSessionStore({self._path}) used before setup()
 succeeded` (`nautilus/core/session_sqlite.py:156-159`).
 
 **Means.** The store object exists but `setup()` never completed, so there is no pool and no
@@ -96,11 +125,11 @@ embedding Nautilus, it means the store was constructed and used without awaiting
 
 ### `session-store pool exhausted: no connection became free within {self._acquire_timeout_s}s (pool max_size={self._pool_max_size}). Raise session_store.pool_max_size to at least your peak concurrency.`
 
-`nautilus/core/session_pg.py:460-465`.
+`nautilus/core/session_pg.py:479-484`.
 
 ### `session-store lock pool exhausted: no connection became free within {self._acquire_timeout_s}s (lock pool max_size={self._lock_pool_max_size}). One is held per in-flight request, so raise session_store.lock_pool_max_size to at least your peak concurrency.`
 
-`nautilus/core/session_pg.py:534-539`. The second pool is separate because a connection is held
+`nautilus/core/session_pg.py:553-558`. The second pool is separate because a connection is held
 for the whole lifetime of a request holding the advisory lock. Size it to peak in-flight
 requests, not to average load — the first pool being adequate says nothing about this one.
 
@@ -111,11 +140,11 @@ read-modify-writing rows whose shape it is guessing at.
 
 ### `session database carries schema version {…}; this build understands version {_SCHEMA_VERSION}. Finish or roll back the rollout — do not run both builds against one store.`
 
-`nautilus/core/session_pg.py:269-273`, at boot.
+`nautilus/core/session_pg.py:288-292`, at boot.
 
 ### `session store at {…} now carries schema version {…}; this build understands version {_SCHEMA_VERSION}. Another Nautilus migrated the store while this one was running.`
 
-`nautilus/core/session_pg.py:395-399`. Re-checked by `/readyz`, so the running pod drains itself
+`nautilus/core/session_pg.py:414-418`. Re-checked by `/readyz`, so the running pod drains itself
 mid-rollout instead of writing rows it does not understand.
 
 ### `session database {self._path} carries schema version {found}; this build understands version {_SCHEMA_VERSION}. It was written by a different Nautilus — point session_store.sqlite_path at a fresh file, or run the matching build.`
@@ -167,13 +196,13 @@ read exits **1**.
 
 | Message | Line | Meaning |
 | --- | --- | --- |
-| `ERROR: pass exactly one of --sqlite-path or --dsn` | `:55` | Both or neither were given. Exit 2. |
-| `ERROR: no such file: {path}` | `:74` | The sqlite file does not exist — check `session_store.sqlite_path`. |
-| `ERROR: asyncpg is not installed` | `:88` | Install the extra: `pip install 'nautilus-rkm[postgres]'`. |
-| `ERROR: could not connect: {exc}` | `:93` | `{exc}` is the asyncpg error; the DSN never reached a server. |
-| `ERROR: could not read nautilus_schema_version: {exc}` | `:98` | Connected, but the stamp table is unreadable — wrong database, or a store this build never set up. |
-| `ERROR: nautilus_schema_version holds no row` | `:103` | The table exists and is empty: `setup()` never finished against it. |
-| `ERROR: unknown session subcommand {args.session_command!r}` | `:52` | Exit 2. |
+| `ERROR: pass exactly one of --sqlite-path or --dsn` | `:56` | Both or neither were given. Exit 2. |
+| `ERROR: no such file: {path}` | `:75` | The sqlite file does not exist — check `session_store.sqlite_path`. |
+| `ERROR: asyncpg is not installed -- {install_extra_hint('postgres')}` | `:90` | The remedy clause names both routes ([index.md](index.md#reading-a-quoted-message)); on the container image only the `docker build --build-arg EXTRAS="--extra postgres"` half is runnable. Or read a SQLite store with `--sqlite-path`, which needs no driver. |
+| `ERROR: could not connect: {exc}` | `:97` | `{exc}` is the asyncpg error; the DSN never reached a server. |
+| `ERROR: could not read nautilus_schema_version: {exc}` | `:102` | Connected, but the stamp table is unreadable — wrong database, or a store this build never set up. |
+| `ERROR: nautilus_schema_version holds no row` | `:107` | The table exists and is empty: `setup()` never finished against it. |
+| `ERROR: unknown session subcommand {args.session_command!r}` | `:53` | Exit 2. |
 
 ```bash
 nautilus session version 2>&1; echo "exit=$?"

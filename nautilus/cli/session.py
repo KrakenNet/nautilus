@@ -21,6 +21,7 @@ import sys
 from pathlib import Path
 
 from nautilus.core.session_pg import _SCHEMA_VERSION
+from nautilus.extras import install_extra_hint
 
 
 def register(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -85,7 +86,10 @@ def _pg_version(dsn: str) -> int | None:
         try:
             import asyncpg
         except ImportError:
-            print("ERROR: asyncpg is not installed", file=sys.stderr)
+            print(
+                f"ERROR: asyncpg is not installed -- {install_extra_hint('postgres')}",
+                file=sys.stderr,
+            )
             return None
         try:
             conn = await asyncpg.connect(dsn=dsn)

@@ -53,7 +53,11 @@ Properties of the `runtime` image you have to design around:
   every 30s, 5s timeout, 10s start period, 3 retries. `nautilus health` GETs
   `http://localhost:8000/readyz` and exits 0 only on HTTP 200.
 - **No database drivers.** The default build installs `--extra otel` and
-  nothing else.
+  nothing else — [the extras table](#extras-and-what-the-published-image-carries)
+  is the full list, and it is held against the `Dockerfile` and against the
+  distributions a built image really has by
+  `tests/defects/test_wave_ops14_image_extras.py`, so it cannot drift from the
+  image the way a sentence can.
 
 ### Build it
 
@@ -90,13 +94,35 @@ discarded. Rebuilding is the only way to give an `unknown` image a revision. The
 same string lands on the image as `org.opencontainers.image.revision`, so
 `docker image inspect` can corroborate what the container says.
 
-`EXTRAS` is passed verbatim to `uv sync`. Available extras (from
-`pyproject.toml`): `postgres`, `pgvector`, `elasticsearch`, `neo4j`,
-`influxdb`, `s3`, `all`. Combine them:
+### Extras, and what the published image carries
+
+`EXTRAS` is passed verbatim to `uv sync`, so any row below can be asked for at
+build time, and rows combine:
 `--build-arg EXTRAS="--extra postgres --extra s3"`.
 
+| Extra | In the published image | Distributions it installs | What needs it |
+| --- | --- | --- | --- |
+| `otel` | **yes** | `opentelemetry-sdk`, `opentelemetry-api`, `opentelemetry-instrumentation-fastapi`, `opentelemetry-exporter-otlp-proto-http`, `opentelemetry-exporter-prometheus`, `prometheus-client` | `GET /metrics`, OTLP export |
+| `postgres` | no | `asyncpg` | `type: postgres` sources; `session_store.backend: postgres` |
+| `pgvector` | no | `asyncpg`, `pgvector` | `type: pgvector` sources |
+| `elasticsearch` | no | `elasticsearch` | `type: elasticsearch` sources |
+| `neo4j` | no | `neo4j` | `type: neo4j` sources |
+| `influxdb` | no | `influxdb-client` | `type: influxdb` sources |
+| `s3` | no | `aiobotocore` | `type: s3` sources |
+| `llm-openai` | no | `openai` | `analysis.provider.type: openai`, and `type: local` — the local-inference provider speaks the OpenAI wire protocol through that SDK |
+| `llm-anthropic` | no | `anthropic` | `analysis.provider.type: anthropic` |
+| `all` | no | `asyncpg`, `pgvector`, `elasticsearch`, `neo4j`, `influxdb-client`, `aiobotocore` | every source driver at once — note it does **not** pull `otel` or either LLM SDK |
+
+So the published image runs `type: static`, `type: rest`, `type: servicenow`
+and `type: llm` sources, a `memory` or `sqlite` session store, and
+`analysis.mode: pattern`. Everything else in that table is a rebuild, not a
+configuration change — there is no shell and no `pip` in the runtime stage, so
+nothing can be added to an image after it is built.
+
 Skipping this is the single most common first failure — see
-[the driver error](#the-pod-crashloops-immediately) below.
+[the driver error](#the-pod-crashloops-immediately) below. Every one of those
+failures names the extra it wants and prints the `docker build --build-arg`
+line that supplies it.
 
 Verify what you built:
 
@@ -752,7 +778,9 @@ line of `logs --previous`. All of these are exit code 2:
 
 | Log line | Cause | Fix |
 |---|---|---|
-| `ERROR: invalid config: source id='orders' has type 'postgres', whose driver is not installed: pip install 'nautilus-rkm[postgres]' (import failed: No module named 'asyncpg')` | you built the default image; the ConfigMap uses a `postgres` source | rebuild: `docker build --build-arg EXTRAS="--extra postgres" …`. You cannot `pip install` into the distroless image — that message is generic advice, not a step you can run here |
+| `ERROR: invalid config: source id='orders' has type 'postgres', whose driver is not installed -- host: pip install 'nautilus-rkm[postgres]'; image: docker build --build-arg EXTRAS="--extra postgres" . (the published image installs --extra otel only, and has no shell or pip to add to it) (import failed: No module named 'asyncpg')` | you built the default image; the ConfigMap uses a `postgres` source | run the `image:` half of the message. The `host:` half is for a `pip`/`uv` install, not for this container — there is no `pip` in it |
+| `ERROR: invalid config: session_store.backend=postgres needs the 'postgres' extra, whose driver asyncpg is not installed -- host: … ; image: docker build --build-arg EXTRAS="--extra postgres" . … Or set session_store.backend to sqlite (durable, single-node) or memory, neither of which needs a driver.` | same image, and `session_store.backend: postgres` in the ConfigMap. The session store is a *second* reason to need `asyncpg`, independent of your sources | rebuild with `--extra postgres`, or switch the backend as the message offers. This is refused rather than degraded even under `on_failure: fallback_memory`: a driver that is absent never becomes present, so degrading would run the exposure ledger in memory permanently |
+| `ERROR: broker construction failed: the 'llm-openai' extra is not installed -- …` (or `analysis.provider.type=local talks to the local server over the OpenAI wire protocol …`) | `analysis.provider.type` is `openai` or `local` and the image has no `openai` SDK | rebuild with `--build-arg EXTRAS="--extra llm-openai"`, or use `analysis.mode: pattern`, which needs no SDK |
 | `ERROR: invalid config: Missing env var 'ORDERS_DSN' referenced by source id='orders'` | the key is absent from Secret `nautilus-secrets` | `kubectl -n nautilus get secret nautilus-secrets -o jsonpath='{.data}' \| tr ',' '\n'` and add the missing key |
 | `ERROR: config path does not exist or is not a file: /config/nautilus.yaml` | ConfigMap key is not `nautilus.yaml`, or the `config` volume did not mount | `kubectl -n nautilus get cm nautilus-config -o jsonpath='{.data}' \| head -c 200` |
 | `ERROR: invalid config: session_store.backend=postgres requires 'dsn' or TEST_PG_DSN env var` | `session_store.dsn` was deleted from the ConfigMap | restore `dsn: ${SESSION_DSN}` |

@@ -159,12 +159,21 @@ Read the failing entry's `endpoint` for the address that timed out.
 one the process actually read. `{exc}` is the `ssl` failure: a missing file, an encrypted key
 with no passphrase, or a cert/key pair that does not match.
 
-### `source type '{source_type}' needs its driver: pip install 'nautilus-rkm[{extra}]'`
+### `source type '{source_type}' needs its driver -- {install_extra_hint(extra)}`
 
-`nautilus/adapters/__init__.py:49,64`, from the stand-in adapter registered when an optional
+`nautilus/adapters/__init__.py:49,66`, from the stand-in adapter registered when an optional
 driver is unimportable. `connect()` adds the original cause:
-`{hint} (import failed: {exc})` (`:56`). Configured sources normally hit the startup
+`{hint} (import failed: {exc})` (`:58`). Configured sources normally hit the startup
 `ConfigError` instead — see [config.md](config.md).
+
+`{install_extra_hint(extra)}` is the shared two-route remedy clause described in
+[index.md](index.md#reading-a-quoted-message); for `extra='s3'` the whole message reads:
+
+```
+source type 's3' needs its driver -- host: pip install 'nautilus-rkm[s3]'; image: docker build --build-arg EXTRAS="--extra s3" . (the published image installs --extra otel only, and has no shell or pip to add to it)
+```
+
+Run the `image:` half if you are on the container image: there is no `pip` inside it.
 
 ## Size ceilings
 
@@ -1940,20 +1949,26 @@ configured. These are about the *intent analyser*, not about a data source.
 
 | Message | Line |
 | --- | --- |
-| `anthropic extra not installed; install nautilus[llm-anthropic]` | `anthropic_provider.py:77` |
-| `openai extra not installed; install nautilus[llm-openai]` | `openai_provider.py:77` |
-| `AnthropicProvider: env var {self.api_key_env!r} is unset or empty` | `anthropic_provider.py:95` |
-| `OpenAIProvider: env var {self.api_key_env!r} is unset or empty` | `openai_provider.py:94` |
-| `LocalInferenceProvider: env var {self.api_key_env!r} is unset or empty` | `local_provider.py:71` |
-| `anthropic SDK call failed: {exc}` | `anthropic_provider.py:128` |
-| `openai SDK call failed: {exc}` | `openai_provider.py:130` |
-| `anthropic response contained no tool_use block` | `anthropic_provider.py:155` |
-| `anthropic tool_use block carried non-dict input: {type(payload)!r}` | `anthropic_provider.py:152` |
-| `openai responses.parse returned no output_parsed payload` | `openai_provider.py:134` |
+| `the 'llm-anthropic' extra is not installed -- {install_extra_hint('llm-anthropic')}` | `anthropic_provider.py:78` |
+| `the 'llm-openai' extra is not installed -- {install_extra_hint('llm-openai')}` | `openai_provider.py:78` |
+| `analysis.provider.type=local talks to the local server over the OpenAI wire protocol, through the openai SDK, so it needs the 'llm-openai' extra -- {install_extra_hint('llm-openai')}` | `local_provider.py:53` |
+| `AnthropicProvider: env var {self.api_key_env!r} is unset or empty` | `anthropic_provider.py:97` |
+| `OpenAIProvider: env var {self.api_key_env!r} is unset or empty` | `openai_provider.py:95` |
+| `LocalInferenceProvider: env var {self.api_key_env!r} is unset or empty` | `local_provider.py:78` |
+| `anthropic SDK call failed: {exc}` | `anthropic_provider.py:130` |
+| `openai SDK call failed: {exc}` | `openai_provider.py:131` |
+| `anthropic response contained no tool_use block` | `anthropic_provider.py:157` |
+| `anthropic tool_use block carried non-dict input: {type(payload)!r}` | `anthropic_provider.py:154` |
+| `openai responses.parse returned no output_parsed payload` | `openai_provider.py:135` |
 
-The two `extra not installed` messages say `nautilus[…]` while the distribution on PyPI is
-`nautilus-rkm` — install `pip install 'nautilus-rkm[llm-anthropic]'` or
-`pip install 'nautilus-rkm[llm-openai]'`. The env-var messages name the variable the provider
-was configured to read (`api_key_env`), not a fixed name — set that variable, or change `api_key_env`. The last three mean the model returned
+The first three fire from the constructor, so they stop `Broker.from_config` rather than a
+request: `ERROR: broker construction failed: …`, exit 2. `{install_extra_hint(...)}` expands to
+both remedies ([index.md](index.md#reading-a-quoted-message)) — the published image carries
+neither SDK, so on that image the answer is a rebuild with
+`--build-arg EXTRAS="--extra llm-openai"`, not a `pip install`. `analysis.mode: pattern` needs
+no SDK at all. The third exists because `type: local` names no vendor: the local-inference
+provider drives an OpenAI-compatible server through the `openai` SDK, so an OpenAI extra is
+the answer even for a model running on your own hardware. The env-var messages name the
+variable the provider was configured to read (`api_key_env`), not a fixed name — set that variable, or change `api_key_env`. The last three mean the model returned
 a shape the structured-output contract does not accept; retry, or fall back to
 `analysis.mode: pattern`.

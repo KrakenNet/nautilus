@@ -26,24 +26,27 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import importlib.util
 import json
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, cast
 
+from nautilus.config.loader import ConfigError
 from nautilus.config.models import redact_connection
 from nautilus.core.session import InMemorySessionStore
 from nautilus.core.session_sqlite import SqliteSessionStore
+from nautilus.extras import install_extra_hint
 
 # Fallback database location when ``fallback_sqlite`` is selected without an
 # explicit ``sqlite_path`` (mirrors the ``.nautilus/`` convention used by keys).
 _DEFAULT_SQLITE_PATH: Path = Path(".nautilus/sessions.db")
 
-# ``asyncpg`` is a Phase-2 runtime dep (pyproject) but imports are deferred
-# into ``setup`` / ``aget`` / ``aupdate`` to keep ``from nautilus.core.session_pg
-# import ...`` cheap (the Task 1.8 Verify smoke imports the module without
-# touching asyncpg) and to tolerate environments where asyncpg is unavailable.
+# ``asyncpg`` is an optional extra and its imports are deferred into ``setup`` /
+# ``aget`` / ``aupdate`` so this module stays importable, and cheap, where the
+# extra is absent. ``__init__`` checks the extra is *installed* without importing
+# it, so an absent driver is a named refusal, not a lifespan ModuleNotFoundError.
 
 
 # Idempotent DDL — design §3.2, mirrors ``PostgresFactStore._ensure_schema``
@@ -158,6 +161,22 @@ class PostgresSessionStore:
         lock_pool_max_size: int = 32,
         acquire_timeout_s: float = 10.0,
     ) -> None:
+        # Presence-check the driver here, at construction, rather than letting
+        # ``setup``'s deferred import raise ``ModuleNotFoundError`` out of the
+        # ASGI lifespan hook. The published image installs no drivers, so a
+        # config that asks for this store is the single most likely way to meet
+        # one -- and the bare import error named neither the extra nor a remedy
+        # a distroless operator could carry out. ``on_failure`` deliberately
+        # does not apply: it degrades a store that is *unreachable*, and a
+        # driver that is not installed never becomes reachable, so degrading
+        # would run the exposure ledger in memory forever without saying so.
+        if importlib.util.find_spec("asyncpg") is None:
+            raise ConfigError(
+                f"session_store.backend=postgres needs the 'postgres' extra, whose "
+                f"driver asyncpg is not installed -- {install_extra_hint('postgres')}. "
+                f"Or set session_store.backend to sqlite (durable, single-node) or "
+                f"memory, neither of which needs a driver."
+            )
         self._dsn: str = dsn
         self._on_failure: FailureMode = on_failure
         self._ttl_seconds: int = ttl_seconds

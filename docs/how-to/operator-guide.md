@@ -20,11 +20,28 @@ nautilus version
 ```
 
 Install the extras for the source types you configure — the base package
-carries no database drivers:
+carries no database drivers, and neither does the published container image:
 
 ```bash
 pip install "nautilus-rkm[postgres,s3]"   # or [all]
 ```
+
+**That command is for a host install only.** If you are running the container
+image, there is no shell and no `pip` inside it to run it with; the extras are
+chosen when the image is built:
+
+```bash
+docker build --build-arg EXTRAS="--extra postgres --extra s3" -t nautilus:local .
+```
+
+The published image installs `--extra otel` and nothing else, so
+`session_store.backend: postgres` ([below](#choose-a-session-store-backend)),
+`analysis.provider`, and every source type other than `static`, `rest`,
+`servicenow` and `llm` need a rebuild rather than a config change.
+[Deploying › Extras](deploying.md#extras-and-what-the-published-image-carries)
+is the per-extra table, checked against the image rather than written down.
+Configure one of them without the extra and the broker refuses to start,
+naming the extra and printing the `docker build` line that supplies it.
 
 ## 2. Configure `nautilus.yaml`
 
@@ -169,7 +186,15 @@ session_store:
 
 - `memory` — single process, lost on restart. Fine for dev.
 - `sqlite` — durable single-node deployments with no Postgres.
-- `postgres` — multi-node or existing PG infrastructure.
+- `postgres` — multi-node or existing PG infrastructure. **Needs the `postgres`
+  extra (`asyncpg`), which the published image does not carry** — see
+  [§1](#1-install). Configured without it, the broker refuses to start with
+  `ERROR: invalid config: session_store.backend=postgres needs the 'postgres'
+  extra …`, which prints both the `pip install` and the
+  `docker build --build-arg EXTRAS="--extra postgres"` form. It is refused, not
+  degraded, whatever `on_failure` says: that policy is for a store that is
+  unreachable, and a driver that is absent never becomes present. `memory` and
+  `sqlite` need no extra.
 - `on_failure: fallback_sqlite` degrades to SQLite if Postgres is
   unreachable at startup; sessions survive a broker restart and the
   audit trail records `session_store_mode: degraded_sqlite`.

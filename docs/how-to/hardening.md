@@ -2867,7 +2867,20 @@ fraction of a caller's history, so a combination that should escalate never
 does. `postgres` is the shared store; `sqlite` is a durable single-node one.
 
 **Costs** — `postgres`: a database in the request path and the pool settings
-below. `sqlite`: durability without sharing, so still single-node.
+below, plus the `postgres` extra (`asyncpg`), which is **not** in the published
+image — see [Deploying §1](deploying.md#extras-and-what-the-published-image-carries).
+`sqlite`: durability without sharing, so still single-node, and no extra.
+
+**Fails with**, for `postgres` on a runtime that has no `asyncpg`:
+
+```
+ERROR: invalid config: session_store.backend=postgres needs the 'postgres' extra, whose driver asyncpg is not installed -- host: pip install 'nautilus-rkm[postgres]'; image: docker build --build-arg EXTRAS="--extra postgres" . (the published image installs --extra otel only, and has no shell or pip to add to it). Or set session_store.backend to sqlite (durable, single-node) or memory, neither of which needs a driver.
+```
+
+At construction, before the server binds — not from the ASGI lifespan hook, and
+not as a degradation. `on_failure` covers a store that is *unreachable*; a
+driver that is absent never becomes reachable, so falling back would serve the
+exposure ledger out of memory for the life of the pod without saying so.
 
 **Fails with**, for `redis` (which used to load and silently serve from memory):
 
@@ -4306,12 +4319,12 @@ nautilus/build.py:91:    return os.environ.get(BUILD_REV_ENV, "").strip() or UNK
 nautilus/build.py:104:    supplied = os.environ.get(BUILD_REV_ENV, "").strip()
 nautilus/cli/_common.py:34:    reviewer = os.environ.get("NAUTILUS_REVIEWER", "").strip()
 nautilus/cli/_common.py:247:    return os.environ.get(API_KEY_ENV, "").strip() or None
-nautilus/analysis/llm/local_provider.py:70:        if not os.getenv(self.api_key_env):
-nautilus/analysis/llm/local_provider.py:81:            api_key = os.getenv(self.api_key_env) or self._api_key_literal
-nautilus/analysis/llm/anthropic_provider.py:93:        key = os.getenv(self.api_key_env)
-nautilus/analysis/llm/anthropic_provider.py:115:            api_key=os.getenv(self.api_key_env),
-nautilus/analysis/llm/openai_provider.py:92:        key = os.getenv(self.api_key_env)
-nautilus/analysis/llm/openai_provider.py:107:            api_key=os.getenv(self.api_key_env),
+nautilus/analysis/llm/local_provider.py:77:        if not os.getenv(self.api_key_env):
+nautilus/analysis/llm/local_provider.py:88:            api_key = os.getenv(self.api_key_env) or self._api_key_literal
+nautilus/analysis/llm/anthropic_provider.py:95:        key = os.getenv(self.api_key_env)
+nautilus/analysis/llm/anthropic_provider.py:117:            api_key=os.getenv(self.api_key_env),
+nautilus/analysis/llm/openai_provider.py:93:        key = os.getenv(self.api_key_env)
+nautilus/analysis/llm/openai_provider.py:108:            api_key=os.getenv(self.api_key_env),
 nautilus/config/loader.py:68:        self._env = env if env is not None else dict(os.environ)
 nautilus/core/broker.py:1491:                dsn = os.environ.get("TEST_PG_DSN")
 nautilus/adapters/influxdb.py:224:            token = _auth_token(config) or os.environ.get("INFLUXDB_V2_TOKEN")
