@@ -619,8 +619,8 @@ it binds — the path check, the `--air-gapped` pre-pass, and
 `Broker.from_config` — and report what came out, without serving it. The
 broker is built and immediately closed; nothing binds a socket.
 
-`SIGHUP` reloads `sources`, `rules` and the two live `session_store` limits in
-a running broker ([Which keys reload, and which need a
+`SIGHUP` reloads `sources`, `rules`, `api.keys` and the two live
+`session_store` limits in a running broker ([Which keys reload, and which need a
 restart](../how-to/operator-guide.md#which-keys-reload-and-which-need-a-restart));
 every other key is only ever adopted by a process start. Either way the
 validator is this one — the reload calls the same `broker_for_serve` — so a

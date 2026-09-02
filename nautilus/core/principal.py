@@ -34,6 +34,35 @@ import hashlib
 _SEP = "\x1f"
 
 
+def ledger_identity(entry: object) -> str:
+    """What a configured ``api.keys`` entry authenticates its holder as.
+
+    ``api.keys[].principal`` when the entry names one, prefixed ``key`` and
+    separated by :data:`_SEP` so a configured name cannot collide with a
+    bare-string key's raw value or with a ``proxy_trust`` subject and share that
+    caller's ledger. The separator is a control character on purpose: both of
+    those arrive in an HTTP header value, which cannot carry one, so no
+    credential a caller can present reaches this shape. Otherwise the secret
+    itself -- the pre-1.0 derivation, kept because changing it for every entry
+    would orphan every ledger a running deployment holds.
+
+    A secret makes a poor identity for one reason only, and it is not the
+    caller: the operator can replace it. Under the secret, the same caller
+    before and after a rotation is two principals, so the replacement credential
+    starts on a clean cumulative-exposure budget and is a stranger to the
+    sessions its predecessor opened. ``principal`` is the part of a credential a
+    rotation does not change.
+
+    Duck-typed rather than typed against ``ApiKeyEntry``: this is core, the
+    bare-string form has no attributes at all, and the transport passes whatever
+    the operator wrote.
+    """
+    named = getattr(entry, "principal", None)
+    if named:
+        return f"key{_SEP}{named}"
+    return entry if isinstance(entry, str) else str(getattr(entry, "key", ""))
+
+
 def derive_principal_id(
     agent_id: str,
     *,
@@ -56,4 +85,4 @@ def derive_principal_id(
     return f"principal:{digest[:32]}"
 
 
-__all__ = ["derive_principal_id"]
+__all__ = ["derive_principal_id", "ledger_identity"]

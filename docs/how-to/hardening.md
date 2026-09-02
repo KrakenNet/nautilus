@@ -104,10 +104,11 @@ per-key reasons are in
 |---|---|---|---|---|
 | `api.host` | `str` | `"127.0.0.1"` | restart | [`api.host`](#apihost) |
 | `api.port` | `int` | `8000` | restart | [`api.port`](#apiport) |
-| `api.keys` | `list[str \| ApiKeyEntry]` | `[]` | restart | [`api.keys`](#apikeys) |
-| `api.keys[].key` | `str` | required | restart | [`api.keys[].key`](#apikeyskey) |
-| `api.keys[].agent_id` | `str \| None` | `None` | restart | [`api.keys[].agent_id`](#apikeysagent_id) |
-| `api.keys[].capabilities` | `list[str]` | `["query"]` | restart | [`api.keys[].capabilities`](#apikeyscapabilities) |
+| `api.keys` | `list[str \| ApiKeyEntry]` | `[]` | live | [`api.keys`](#apikeys) |
+| `api.keys[].key` | `str` | required | live | [`api.keys[].key`](#apikeyskey) |
+| `api.keys[].agent_id` | `str \| None` | `None` | live | [`api.keys[].agent_id`](#apikeysagent_id) |
+| `api.keys[].principal` | `str \| None` | `None` | live | [`api.keys[].principal`](#apikeysprincipal) |
+| `api.keys[].capabilities` | `list[str]` | `["query"]` | live | [`api.keys[].capabilities`](#apikeyscapabilities) |
 | `api.auth.mode` | `"api_key" \| "proxy_trust"` | `"api_key"` | restart | [`api.auth.mode`](#apiauthmode) |
 | `api.auth.trusted_proxies` | `list[str]` | `[]` | restart | [`api.auth.trusted_proxies`](#apiauthtrusted_proxies) |
 | `api.max_request_bytes` | `int \| None` | `1048576` | restart | [`api.max_request_bytes`](#apimax_request_bytes) |
@@ -369,6 +370,11 @@ response timing.
 open. Every data and governance route answers 401, and only `/healthz`,
 `/readyz` and `/metrics` stay reachable.
 
+The list is the one part of `api` a running broker adopts on `SIGHUP` — the
+guard resolves it per request, so a rotation takes effect on the next one. What
+that costs the exposure ledger is [`api.keys[].principal`](#apikeysprincipal);
+the runbook is [The API keys](#the-api-keys).
+
 **Fails with**, when the list is empty, this WARN at startup and a 401 on every
 subsequent call:
 
@@ -407,9 +413,11 @@ api:
 never write the literal into YAML — use `${VAR}` so the value lives in the
 process environment and not in the file your config-management system copies.
 
-**Costs** you one environment variable per caller, and a restart to add or
-remove one: the list is read once during lifespan startup into
-`app.state.api_keys`.
+**Costs** you one environment variable per caller. Adding or removing one is a
+`SIGHUP`, not a restart: the guard resolves `app.state.api_keys` per request,
+and an adopted reload replaces it. Changing this value is what "rotating a
+credential" means, and by itself it also changes who the broker thinks is
+asking — see [`api.keys[].principal`](#apikeysprincipal).
 
 **Fails with**, if you write the structured form and omit `key`:
 
@@ -471,6 +479,68 @@ api:
   keys:
     - key: "${NAUTILUS_KEY_REPORTING}"
       agent_id: reporting
+```
+
+### `api.keys[].principal`
+
+`str | None` · default `None` · read in `nautilus/transport/auth.py:caller_identity`
+
+**Defends** the cumulative-exposure ledger across a rotation. Exposure —
+`sources_visited`, `data_types_seen`, `pii_sources_accessed_list` — accumulates
+under an internal `principal:<hash>` derived from the caller's authenticated
+identity, and a session belongs to the principal that opened it. With no
+`principal` set, that identity *is* the secret in
+[`api.keys[].key`](#apikeyskey): replace the secret and the same caller is a
+different principal, so it resumes on an empty escalation budget and its own
+live sessions answer `403 session_not_yours`. Naming a principal makes the
+identity the thing that did not change. Rotating `key` under a fixed
+`principal` carries the ledger and the sessions across the rotation.
+
+Two entries may share one `principal` — that is what makes a rotation overlap
+window work: old and new credential, one caller, one ledger, both accepted
+until you drop the old entry.
+
+It is not a second `agent_id`. `agent_id` says which agent the credential may
+ask as and is enforced against the request body; `principal` says which
+*caller* the broker is accumulating against and is never seen by the caller at
+all. Two keys bound to the same agent are still two callers unless they also
+share a `principal`.
+
+**Costs** you a name in the config, and a decision you have to make before your
+first rotation rather than during it: an entry that names no principal keeps
+the old derivation, so its ledger does not survive a key change and never will.
+Nothing migrates an existing ledger onto a newly-added `principal` — the ledger
+keyed by the old secret stays where it is and ages out under
+[`session_store.ttl_seconds`](#session_storettl_seconds); the credential starts
+accumulating under the new key from the next request. Add `principal` when the
+ledger is cold if that matters to you.
+
+**Fails with**, when it is present and empty:
+
+```
+Config validation failed:
+  api.keys.0.function-after[_known_capabilities(), ApiKeyEntry].principal: String should have at least 1 character [type=string_too_short]
+```
+
+Any reload that leaves a ledger with no surviving entry to accumulate under is
+called out by position, because clearing an exposure budget is not something a
+routine operation should do quietly. That covers rotating a key that named no
+principal — and equally adding a principal to an entry that had none, which is
+step 0 of [the procedure](#the-api-keys):
+
+```text
+WARNING:nautilus.core.broker:Reload left 1 credential(s) with no surviving api.keys[].principal to accumulate under: api.keys[0] (principal=None, agent_id='reporting'). Their cumulative exposure (sources_visited, data_types_seen, pii_sources_accessed_list) does NOT carry -- each caller resumes on an empty escalation budget, and requests naming a session it opened are refused session_not_yours. Rotate the key value under a stable api.keys[].principal to keep the ledger; nothing migrates one onto a principal added later.
+```
+
+**Example**
+
+```yaml
+api:
+  keys:
+    - key: "${NAUTILUS_KEY_REPORTING}"      # rotate this value
+      principal: reporting-service          # not this one
+      agent_id: reporting
+      capabilities: [query]
 ```
 
 ### `api.keys[].capabilities`
@@ -901,8 +971,11 @@ agents:
 `str` · required · unique across the file · `^[A-Za-z0-9][A-Za-z0-9._-]*$`
 
 **Defends** the integrity of every rule and every audit record: rules select by
-`source_id`, denial records name it, and the exposure ledger accumulates by it.
-Two sources with one id would silently merge policy.
+`source_id`, denial records name it, and the exposure ledger records visits
+under it — `sources_visited` is a list of these ids. (What the ledger is
+*keyed* by is the caller, not the source; see
+[`api.keys[].principal`](#apikeysprincipal).) Two sources with one id would
+silently merge policy.
 
 The pattern defends the places the id is *reproduced*. It is interpolated into
 application log lines, it becomes the OpenTelemetry span name `adapter.<id>`,
@@ -3439,7 +3512,7 @@ signing_key_revoked ['reviewer=ops@example.com', 'kid=fb240484-af2b-416a-8d5d-92
 
 Revoking the ring does **not** revoke the API key, and rotating the API key does
 not end the session tokens minted under it. A full credential change is both:
-the [two-restart key procedure](#the-api-keys), then `rotate` + `revoke` here.
+the [API-key procedure](#the-api-keys), then `rotate` + `revoke` here.
 
 ### Listing the sessions a broker is holding
 
@@ -3471,8 +3544,11 @@ The same query against Postgres is `SELECT session_id, updated_at, state FROM
 nautilus_session_state ORDER BY updated_at DESC;`. Three things to know before
 you read the output as a session list:
 
-- Rows keyed `principal:<hash>` are the per-credential exposure ledgers, not
-  sessions. Filter them out with `WHERE session_id NOT LIKE 'principal:%'`.
+- Rows keyed `principal:<hash>` are the per-*caller* exposure ledgers, not
+  sessions. Filter them out with `WHERE session_id NOT LIKE 'principal:%'`. The
+  hash covers `agent_id` plus the authenticated identity — the credential's
+  [`api.keys[].principal`](#apikeysprincipal), or the secret itself when the
+  entry names none, which is why a rotation without one starts a new row.
 - A token minted by `POST /v1/sessions` has no row until its first request; the
   mint writes a signature, not state.
 - `session_store.backend: memory` (the default) has nothing to query at all. The
@@ -6665,26 +6741,56 @@ After revocation, tokens signed by the old `kid` fail with
 
 ### The API keys
 
-Two restarts, no outage:
+Two reloads, no restart and no outage. `api.keys` is the one part of `api` a
+running broker adopts on `SIGHUP`, and the auth guard resolves the list per
+request, so the second reload retires the old credential on the very next call.
+
+**Give the entry a `principal` first.** The exposure ledger and session
+ownership are keyed by the caller's authenticated identity, and with no
+`principal` set that identity is the secret — so the rotation below would hand
+the caller a clean cumulative-exposure budget and lock it out of the sessions it
+already opened. See [`api.keys[].principal`](#apikeysprincipal). Adding one is
+itself a reload; do it while the ledger is cold, because nothing carries the old
+ledger onto the new name.
 
 ```bash
-# 1. Mint the replacement.
-export NAUTILUS_KEY_REPORTING_NEW="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
-# 2. Add it alongside the old one and restart — both are now valid.
+# 0. Once, before your first rotation: name the caller, so a key change is a
+#    key change and not a new principal.
 #    api:
 #      keys:
-#        - {key: "${NAUTILUS_KEY_REPORTING}",     agent_id: reporting, capabilities: [query]}
-#        - {key: "${NAUTILUS_KEY_REPORTING_NEW}", agent_id: reporting, capabilities: [query]}
-sudo systemctl restart nautilus
+#        - {key: "${NAUTILUS_KEY_REPORTING}", principal: reporting-service,
+#           agent_id: reporting, capabilities: [query]}
+sudo systemctl reload nautilus
+
+# 1. Mint the replacement.
+export NAUTILUS_KEY_REPORTING_NEW="$(python -c 'import secrets; print(secrets.token_urlsafe(32))')"
+# 2. Add it alongside the old one, under the SAME principal, and reload —
+#    both are now valid and both accumulate into one ledger.
+#    api:
+#      keys:
+#        - {key: "${NAUTILUS_KEY_REPORTING}",     principal: reporting-service, agent_id: reporting, capabilities: [query]}
+#        - {key: "${NAUTILUS_KEY_REPORTING_NEW}", principal: reporting-service, agent_id: reporting, capabilities: [query]}
+sudo systemctl reload nautilus
 # 3. Move callers to the new value, confirm the old one is unused in your logs.
-# 4. Remove the old entry and restart again.
-sudo systemctl restart nautilus
-# 5. Confirm the old key is dead.
+# 4. Remove the old entry and reload again.
+sudo systemctl reload nautilus
+# 5. Confirm the old key is dead — on the running process, with no restart.
 curl -s -o /dev/null -w '%{http_code}\n' -X POST https://nautilus.example.com/v1/request \
   -H "X-API-Key: $NAUTILUS_KEY_REPORTING" -H 'Content-Type: application/json' \
   -d '{"agent_id":"reporting","intent":"list customers","context":{}}'
 # expect: 401
 ```
+
+`systemctl reload` needs `ExecReload=/bin/kill -HUP $MAINPID` in the unit — see
+[Start it](#start-it). A refused reload changes nothing and says why; the
+credential in force is the one from before the signal, never a half-applied
+list. Under `--transport both` the MCP port re-reads the same list on the same
+signal, so a retired key is retired on both doors at once.
+
+**An emergency revocation is step 4 alone.** Drop the compromised entry, reload,
+and it is refused on the next request. Under a stable `principal` the ledger
+that credential built up stays with the caller, which is what you want when the
+question is what the compromised key had already reached.
 
 ### The attestation key
 
@@ -7512,8 +7618,10 @@ one line each:
 - **No secret manager integration.** `${VAR}` reads the process environment.
   Vault, KMS and CSI drivers all work — as long as they land the value in the
   environment before the broker starts.
-- **No key expiry for API keys.** `api.keys` entries never expire; rotation is
-  the two-restart procedure above.
+- **No key expiry for API keys.** `api.keys` entries never expire. Nothing
+  ages one out, warns that one is old, or tells you when one was last used;
+  rotation is an operator action on a schedule you keep, run through
+  [the procedure above](#the-api-keys).
 - **No `Secure` cookie over plain HTTP.** The console cookie carries `Secure`
   only when the login arrived over TLS, directly or via `X-Forwarded-Proto:
   https`; over plain HTTP the attribute is omitted on purpose, because a browser
@@ -7526,10 +7634,10 @@ one line each:
 - **No inactivity timeout on a credential.** `session_store.ttl_seconds` idles
   out the exposure ledger, not the token; the token's only bound is the
   `expires_at` written at mint time.
-- **No config hot-reload for anything on this page.** `SIGHUP` reloads exactly
-  `sources`, `rules`, `session_store.lock_timeout_s` and
-  `session_store.purpose_ttl_seconds`; every *security* key here —
-  `api.keys`, `api.auth.*`, `api.max_request_bytes`,
+- **No config hot-reload for anything on this page except the credentials.**
+  `SIGHUP` reloads exactly `sources`, `rules`, `api.keys`,
+  `session_store.lock_timeout_s` and `session_store.purpose_ttl_seconds`. Every
+  other *security* key here — `api.auth.*`, `api.max_request_bytes`,
   `api.max_concurrent_requests`, `attestation.*`, `audit.*`,
   `session_tokens.*`, the rest of `session_store.*`, `agents`, `ui.*` — is read
   at startup and changing one means a restart. That is a property, not a gap:

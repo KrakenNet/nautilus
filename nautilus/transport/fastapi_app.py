@@ -514,12 +514,27 @@ def create_app(
             broker = Broker.from_config(config_path)
         await broker.setup()
         app.state.broker = broker
-        mode, keys, trusted_proxies = _resolve_auth_config(broker)
-        app.state.auth_mode = mode
-        app.state.api_keys = keys
-        app.state.trusted_proxies = trusted_proxies
-        app.state.agent_subjects = _resolve_agent_subjects(broker)
-        _warn_about_unbound_keys(keys, mode)
+
+        def _adopt_auth_config() -> None:
+            """Copy the broker's credential registry onto ``app.state``.
+
+            Registered as a reload listener as well as run at startup: the auth
+            guard resolves ``app.state.api_keys`` per request, so this is the
+            step that turns an adopted ``api.keys`` into a live rotation. A
+            reload installs a new config object rather than mutating the old
+            one, so nothing here can be a reference held from startup.
+            """
+            mode, keys, trusted_proxies = _resolve_auth_config(broker)
+            app.state.auth_mode = mode
+            app.state.api_keys = keys
+            app.state.trusted_proxies = trusted_proxies
+            app.state.agent_subjects = _resolve_agent_subjects(broker)
+            _warn_about_unbound_keys(keys, mode)
+
+        _adopt_auth_config()
+        on_reload = getattr(broker, "on_reload", None)
+        if callable(on_reload):
+            on_reload(_adopt_auth_config)
         # Key ring for session-token endpoints (AC-18.a–g). Reuse the
         # broker's ring when session tokens are enabled — the ring is
         # in-memory, so a separate transport-level instance could never

@@ -460,6 +460,14 @@ class ApiKeyEntry(_Strict):
     # behaviour: the caller names its own agent and the registry hands that
     # name its clearance.
     agent_id: str | None = None
+    # The stable caller this credential speaks for. Cumulative exposure and
+    # session ownership key on it, so rotating ``key`` while ``principal``
+    # stays put carries the caller's accumulated exposure across the rotation
+    # instead of handing it a fresh budget. Two entries may share one during
+    # the overlap window, which is what makes a rotation zero-downtime.
+    # ``None`` keys on the secret itself -- the pre-1.0 behaviour, and what
+    # every ledger a running deployment already holds is keyed by.
+    principal: str | None = Field(default=None, min_length=1)
     capabilities: list[str] = Field(default_factory=lambda: ["query"])
 
     @model_validator(mode="after")

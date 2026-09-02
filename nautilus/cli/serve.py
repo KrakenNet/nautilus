@@ -236,8 +236,8 @@ def _install_reload_handler(broker: Broker, config_path: Path, *, air_gapped: bo
         _log.debug("SIGHUP reload is unavailable on this platform/loop", exc_info=True)
         return
     _log.info(
-        "SIGHUP reloads sources, rules and the live session_store limits from %s; "
-        "every other key needs a restart",
+        "SIGHUP reloads sources, rules, api.keys and the live session_store limits "
+        "from %s; every other key needs a restart",
         config_path,
     )
 
@@ -297,7 +297,9 @@ async def _run_mcp(
 
     from nautilus.transport.mcp_server import _mcp_settings, http_app
 
-    app = http_app(mcp, api_keys=_mcp_settings(broker)[2])
+    # A callable, not a snapshot: SIGHUP adopting ``api.keys`` must retire the
+    # old credential on this port at the same moment it retires it on REST.
+    app = http_app(mcp, api_keys=lambda: _mcp_settings(broker)[2])
     await _serve_or_raise(
         uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level=log_level))
     )

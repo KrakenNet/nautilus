@@ -232,6 +232,17 @@ under `proxy_trust`) — and a new session id inherits that principal's
 exposure. Different callers stay isolated from each other, and
 `ttl_seconds` still ages a ledger out.
 
+**Rotating a credential does not have to be a new caller — but by default it
+is.** The authenticated principal that hash is taken over is the API key value
+itself, unless the entry names an `api.keys[].principal`. Without one, replacing
+the secret makes the same caller a different principal: a fresh exposure budget,
+and `403 session_not_yours` on the sessions it opened moments earlier. Name a
+principal on every credential you intend to rotate and rotate the `key` value
+under it; see
+[`api.keys[].principal`](hardening.md#apikeysprincipal) and
+[The API keys](hardening.md#the-api-keys). Existing ledgers are untouched by
+the upgrade — an entry with no `principal` keys exactly as it did before.
+
 **A session belongs to a principal.** The first principal to use a
 `session_id` owns it; another principal that names the same id gets `403
 session_not_yours`. Without that, a session id was only a string, so any
@@ -1422,9 +1433,10 @@ history.
 ### The config
 
 **A running broker re-reads `nautilus.yaml` on `SIGHUP`, and adopts two stanzas
-out of thirteen.** `sources` and `rules` — plus `session_store.lock_timeout_s`
-and `session_store.purpose_ttl_seconds`, the only two limits the request path
-looks up per request. Everything else is read once, at startup, and a file that
+out of thirteen.** `sources` and `rules` — plus `api.keys`, which is how a
+credential is rotated without a restart, and `session_store.lock_timeout_s` and
+`session_store.purpose_ttl_seconds`, the only two limits the request path looks
+up per request. Everything else is read once, at startup, and a file that
 changes one of them is **refused whole**: not half-applied, not silently
 ignored. Which key, and why, is [the table below](#which-keys-reload-and-which-need-a-restart).
 
@@ -1537,20 +1549,21 @@ exit=2
 
 #### Which keys reload, and which need a restart
 
-Three stanzas swap. The other eleven do not, and each has a reason that is
-about this product being **single-writer**, not about effort.
+Three stanzas swap, plus one key inside a fourth. The rest do not, and each has
+a reason that is about this product being **single-writer**, not about effort.
 
 | Key | On `SIGHUP` | Why |
 |---|---|---|
 | `sources` | **reloads** | The registry and its adapters are rebuilt. A source whose entry is byte-identical keeps the adapter object it already connected — its pool, its connect cooldown, its `connected` state. A source that changed or vanished has its adapter closed, but only after every request still using it has finished. |
 | `rules` | **reloads** | The whole Fathom router is rebuilt, so an edit *inside* a `user_rules_dirs` directory arrives even though the stanza itself did not change. `ruleset_hash` moves with it, and the `nautilus_ruleset_info` metric relabels. |
+| `api.keys` | **reloads** | The credential allow-list, and everything on an entry: `key`, `principal`, `agent_id`, `capabilities`. The auth guard resolves `app.state.api_keys` per request, and an adopted reload replaces it — on the REST surface, the admin console and the MCP port at once. This is live credential rotation; the runbook and what it costs the exposure ledger are in [Hardening](hardening.md#the-api-keys). |
 | `session_store.lock_timeout_s` | **reloads** | Read per request, out of the config object. Nothing holds a copy. |
 | `session_store.purpose_ttl_seconds` | **reloads** | Same. |
 | `audit.*` | restart | The sink is open, and with `audit.chained: true` it holds an exclusive `flock` on `<path>.lock`. Re-pointing it live would mean two chain heads on one file, which is the corruption `verify_chain` cannot distinguish from tampering. |
 | `attestation.*` | restart | Same lock, on the attestation sink, plus a signing key the chain's genesis record is pinned to. |
 | `session_tokens.*` | restart | The key ring is in memory and already minting tokens. Swapping it invalidates every token in flight; changing `broker_instance_id` rejects them all by name. |
 | `session_store.*` (the rest) | restart | `backend`, `dsn`, `sqlite_path`, `ttl_seconds` and the pool sizes are constructor arguments to a store object that is already dialled. Adopting them would publish a config describing a store the broker is not running. |
-| `api.*` | restart | `max_request_bytes` and `max_concurrent_requests` are middleware *objects* installed when the ASGI app is built — the concurrency limit is a semaphore sized once, not a value anything looks up again. `api.keys`, `api.auth` and the agent subjects are copied to `app.state` at lifespan startup. `host`/`port` are a socket that is already bound. |
+| `api.*` (the rest) | restart | `max_request_bytes` and `max_concurrent_requests` are middleware *objects* installed when the ASGI app is built — the concurrency limit is a semaphore sized once, not a value anything looks up again. `api.auth.mode` picks the dependency each route was built with. `host`/`port` are a socket that is already bound. |
 | `mcp.*` | restart | Read once into the tool closures when the MCP server is created. |
 | `ui.*` | restart | `ui.enabled` decides whether the admin router is mounted, at app construction. |
 | `agents` | restart | The broker would take the new registry, but the transport's `app.state.agent_subjects` — what maps a credential to an agent — would not, and the two disagreeing is worse than neither moving. |

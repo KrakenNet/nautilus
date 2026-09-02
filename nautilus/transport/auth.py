@@ -41,6 +41,7 @@ from fastapi.security import APIKeyHeader
 from starlette.requests import Request
 
 from nautilus.config.models import CAPABILITIES
+from nautilus.core.principal import ledger_identity
 
 log = logging.getLogger(__name__)
 
@@ -105,10 +106,20 @@ def caller_identity(
 
     Four fields:
 
-    - ``auth`` — the authenticated principal: the API key the request presented
-      or, under ``proxy_trust``, the upstream's ``X-Forwarded-User``. This keys
-      the cumulative-exposure ledger, so it must carry nothing the caller's own
-      payload can set.
+    - ``auth`` — the authenticated principal: the credential's configured
+      ``api.keys[].principal`` (namespaced, see
+      :func:`~nautilus.core.principal.ledger_identity`), the API key value itself
+      when the entry names none, or, under ``proxy_trust``, the upstream's
+      ``X-Forwarded-User``. This keys the cumulative-exposure ledger and
+      session ownership, so it must carry nothing the caller's own payload can
+      set — and, because a rotation is not a new caller, nothing the operator
+      changes on a rotation either. A secret makes a poor identity for the
+      second reason: keying on it, the same caller before and after a rotation
+      is two principals, so the replacement credential starts on a clean
+      exposure budget and answers ``403 session_not_yours`` on the sessions its
+      predecessor opened. ``principal`` is the identity said out loud; an entry
+      without one keeps the old derivation, because changing it for every key
+      would orphan every ledger a running deployment holds.
     - ``peer`` — the socket address, recorded for provenance and used as the
       ledger key's fallback only when the deployment authenticates nobody.
     - ``agent_id`` — the *only* agent this credential may speak for, or ``None``
@@ -144,6 +155,9 @@ def caller_identity(
         if entry is not None:
             agent_id = getattr(entry, "agent_id", None)
             capabilities = _capabilities_of(entry)
+            # Not the presented secret: a rotation is not a new caller. See
+            # :func:`~nautilus.core.principal.ledger_identity`.
+            auth = ledger_identity(entry)
     peer = request.client.host if request.client else ""
     return {"auth": auth, "peer": peer, "agent_id": agent_id, "capabilities": capabilities}
 

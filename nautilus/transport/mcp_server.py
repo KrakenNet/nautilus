@@ -231,7 +231,7 @@ def _agent_subjects(broker: Broker | None) -> dict[str, str]:
     return subjects
 
 
-def wrap_http_with_api_key(app: Starlette, keys: list[Any]) -> ASGIApp:
+def wrap_http_with_api_key(app: Starlette, keys: list[Any] | Callable[[], list[Any]]) -> ASGIApp:
     """Wrap the FastMCP streamable-HTTP sub-app with the shared API-key gate.
 
     The official MCP Python SDK exposes :meth:`FastMCP.streamable_http_app`
@@ -241,6 +241,11 @@ def wrap_http_with_api_key(app: Starlette, keys: list[Any]) -> ASGIApp:
     delegating to ``app``. On auth failure the wrapper responds with a
     minimal ``401`` JSON body so the MCP client sees a clean HTTP error
     rather than a protocol-level decode failure.
+
+    ``keys`` may be a callable, and ``serve`` passes one: a live credential
+    rotation replaces the broker's config object, so a list captured here at
+    construction would keep admitting the retired key on the MCP port after
+    REST had stopped admitting it anywhere.
     """
 
     async def middleware(scope: Scope, receive: Receive, send: Send) -> None:
@@ -265,7 +270,7 @@ def wrap_http_with_api_key(app: Starlette, keys: list[Any]) -> ASGIApp:
         raw_value = headers.get(_API_KEY_HEADER.encode("latin-1"), b"")
         header_value = raw_value.decode("latin-1") if raw_value else ""
         try:
-            verify_api_key(header_value, keys)
+            verify_api_key(header_value, list(keys()) if callable(keys) else keys)
         except Exception:  # noqa: BLE001 — translate 401 to ASGI response
             await send(
                 {
@@ -334,10 +339,14 @@ def create_server(
         json_response=True,
     )
 
-    expose_handoff, auth_mode, api_keys, max_response_bytes = _mcp_settings(broker)
+    expose_handoff, _, _, max_response_bytes = _mcp_settings(broker)
     agent_subjects = _agent_subjects(broker)
 
     def _resolve_caller(ctx: Context[Any, Any, Any] | None) -> dict[str, Any] | None:
+        # Re-resolved per call rather than captured at construction: a rotation
+        # adopted by ``SIGHUP`` has to reach this door too, or the retired key
+        # keeps naming a caller here after it stopped opening the front one.
+        _, auth_mode, api_keys, _ = _mcp_settings(broker)
         return _caller(ctx, auth_mode, api_keys, agent_subjects)
 
     def _refuse_without_capability(caller: dict[str, Any] | None, capability: str) -> None:
@@ -532,7 +541,7 @@ def create_server(
 def http_app(
     mcp: FastMCP[Any],
     *,
-    api_keys: list[Any] | None = None,
+    api_keys: list[Any] | Callable[[], list[Any]] | None = None,
 ) -> ASGIApp:
     """Return the streamable-HTTP sub-app wrapped with the shared API-key gate.
 
@@ -543,8 +552,9 @@ def http_app(
     deployments cannot accidentally expose an unauthenticated tool.
     """
     starlette_app = mcp.streamable_http_app()
-    keys = list(api_keys) if api_keys else []
-    return wrap_http_with_api_key(starlette_app, keys)
+    if callable(api_keys):
+        return wrap_http_with_api_key(starlette_app, api_keys)
+    return wrap_http_with_api_key(starlette_app, list(api_keys) if api_keys else [])
 
 
 # Re-exports for static-import smoke tests and downstream callers.

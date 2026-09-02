@@ -30,7 +30,7 @@ import sys
 import threading
 import time
 import uuid
-from collections.abc import AsyncIterator, Coroutine, Iterable, Iterator, Mapping
+from collections.abc import AsyncIterator, Callable, Coroutine, Iterable, Iterator, Mapping
 from contextlib import AbstractAsyncContextManager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
@@ -113,7 +113,7 @@ from nautilus.core.models import (
     SkipRecord,
     SourceInfo,
 )
-from nautilus.core.principal import derive_principal_id
+from nautilus.core.principal import derive_principal_id, ledger_identity
 from nautilus.core.session import AsyncSessionStore, InMemorySessionStore, SessionStore
 from nautilus.core.session_pg import PostgresSessionStore
 from nautilus.core.session_sqlite import SqliteSessionStore
@@ -691,6 +691,26 @@ constructor arguments to a store a reload does not replace -- so adopting them
 would publish a config that describes a store the broker is not running.
 """
 
+RELOADABLE_API_KEYS: tuple[str, ...] = ("keys",)
+"""The one ``api`` key a running transport re-reads: the credential allow-list.
+
+The auth guard resolves ``app.state.api_keys`` per request on purpose, so a
+rotation takes effect on the next one -- which is the whole of "rotate without
+a restart", and was unreachable while the ``api`` stanza was refused whole.
+Everything else under ``api`` stays restart-only. ``max_concurrent_requests``
+and ``max_request_bytes`` are values inside middleware objects installed when
+the app is built, and ``host``/``port`` are a bound socket. ``auth.mode`` and
+``auth.trusted_proxies`` change *how* a caller is authenticated rather than
+*which* credential is, which is a different decision from rotating a secret and
+not one a reload takes.
+"""
+
+_RELOADABLE_SUBKEYS: dict[str, tuple[str, ...]] = {
+    "session_store": RELOADABLE_SESSION_STORE_KEYS,
+    "api": RELOADABLE_API_KEYS,
+}
+"""Stanzas where a reload adopts some sub-keys and refuses the rest."""
+
 
 class ConfigNotReloadableError(Exception):
     """A new config file changes a key that is only read at startup.
@@ -734,13 +754,55 @@ def _adopted_changes(old: NautilusConfig, new: NautilusConfig) -> list[str]:
     before = old.model_dump()
     after = new.model_dump()
     changed = [key for key in RELOADABLE_TOP_LEVEL_KEYS if before.get(key) != after.get(key)]
-    changed.extend(
-        f"session_store.{sub}"
-        for sub in RELOADABLE_SESSION_STORE_KEYS
-        if cast("dict[str, Any]", before["session_store"]).get(sub)
-        != cast("dict[str, Any]", after["session_store"]).get(sub)
-    )
+    for stanza, subs in _RELOADABLE_SUBKEYS.items():
+        changed.extend(
+            f"{stanza}.{sub}"
+            for sub in subs
+            if cast("dict[str, Any]", before[stanza]).get(sub)
+            != cast("dict[str, Any]", after[stanza]).get(sub)
+        )
     return changed
+
+
+def _warn_about_orphaned_ledgers(old: NautilusConfig, new: NautilusConfig) -> None:
+    """Name the credentials whose cumulative exposure this reload left behind.
+
+    An ``api.keys`` entry accumulates exposure under the identity
+    :func:`~nautilus.core.principal.ledger_identity` gives it, and a ledger is
+    orphaned the moment no surviving entry claims that identity -- by rotating
+    a ``key`` that named no ``principal``, and equally by *adding* a
+    ``principal`` to an entry that had none, which is the first step of the
+    documented rotation procedure. Either way a caller resumes on an empty
+    escalation budget and is refused ``session_not_yours`` on the sessions it
+    opened. That is a security control cleared by routine hygiene, and a reload
+    must not do it quietly.
+
+    Positions, principals and agent bindings only: a log line is not a place
+    for a secret, and for an unnamed entry the identity *is* the secret.
+    """
+    surviving = {ledger_identity(entry) for entry in new.api.keys}
+    orphaned = [
+        (index, getattr(entry, "principal", None), getattr(entry, "agent_id", None))
+        for index, entry in enumerate(old.api.keys)
+        if ledger_identity(entry) not in surviving
+    ]
+    if not orphaned:
+        return
+    named = ", ".join(
+        f"api.keys[{index}] (principal={principal!r}, agent_id={agent!r})"
+        for index, principal, agent in orphaned
+    )
+    log.warning(
+        "Reload left %d credential(s) with no surviving api.keys[].principal to "
+        "accumulate under: %s. Their cumulative exposure (sources_visited, "
+        "data_types_seen, pii_sources_accessed_list) does NOT carry -- each caller "
+        "resumes on an empty escalation budget, and requests naming a session it "
+        "opened are refused session_not_yours. Rotate the key value under a stable "
+        "api.keys[].principal to keep the ledger; nothing migrates one onto a "
+        "principal added later.",
+        len(orphaned),
+        named,
+    )
 
 
 _PINNED_GENERATION: ContextVar[tuple[Broker, _ConfigGeneration] | None] = ContextVar(
@@ -767,10 +829,12 @@ def _restart_only_changes(old: NautilusConfig, new: NautilusConfig) -> list[str]
     is not running: ``audit`` and ``attestation`` name a sink whose writer lock
     this process already holds, ``session_tokens`` names a key ring already
     minting tokens, ``session_store`` names a backend already dialled, and
-    ``api``/``mcp``/``ui`` are read once when the ASGI app is constructed --
-    ``api.max_concurrent_requests`` is a semaphore inside an installed
-    middleware object, not a value anything looks up again. Half-applying them
-    is worse than refusing, so the reload refuses and names them.
+    ``mcp``/``ui`` and the rest of ``api`` are read once when the ASGI app is
+    constructed -- ``api.max_concurrent_requests`` is a semaphore inside an
+    installed middleware object, not a value anything looks up again.
+    Half-applying them is worse than refusing, so the reload refuses and names
+    them. ``api.keys`` is the exception the transports re-read per request; see
+    :data:`RELOADABLE_API_KEYS`.
     """
     before = old.model_dump()
     after = new.model_dump()
@@ -778,13 +842,13 @@ def _restart_only_changes(old: NautilusConfig, new: NautilusConfig) -> list[str]
     for key in sorted(set(before) | set(after)):
         if before.get(key) == after.get(key) or key in RELOADABLE_TOP_LEVEL_KEYS:
             continue
-        if key == "session_store":
+        if key in _RELOADABLE_SUBKEYS:
             live_before = cast("dict[str, Any]", before[key])
             live_after = cast("dict[str, Any]", after[key])
             changed.extend(
-                f"session_store.{sub}"
+                f"{key}.{sub}"
                 for sub in sorted(set(live_before) | set(live_after))
-                if sub not in RELOADABLE_SESSION_STORE_KEYS
+                if sub not in _RELOADABLE_SUBKEYS[key]
                 and live_before.get(sub) != live_after.get(sub)
             )
             continue
@@ -835,6 +899,11 @@ class Broker:
         # generation, so a second SIGHUP waits for the swap and not for the
         # drain.
         self._reload_lock = asyncio.Lock()
+        # Called after a reload installs a new generation. The auth guard reads
+        # a credential list the ASGI app copied out of the config at startup,
+        # and ``reload`` replaces the config object rather than mutating it, so
+        # a rotation the broker adopted would otherwise never reach the door.
+        self._reload_listeners: list[Callable[[], None]] = []
         # How long a reload waits in silence for the previous generation to
         # drain before saying so in the log. It bounds the log line, never the
         # wait -- see :meth:`_retire`. Tune it to the slowest source's
@@ -3771,8 +3840,19 @@ class Broker:
     # Reload (SIGHUP) — see nautilus/cli/serve.py for the signal wiring
     # ------------------------------------------------------------------
 
+    def on_reload(self, listener: Callable[[], None]) -> None:
+        """Call ``listener`` after every adopted reload, on the reload's task.
+
+        For state derived from the config and held outside the broker -- the
+        credential allow-list a transport copies onto ``app.state`` at startup
+        and re-reads per request. The reload has already installed the new
+        generation when this runs, so a listener reads :attr:`config` and gets
+        what was just adopted.
+        """
+        self._reload_listeners.append(listener)
+
     async def reload(self, candidate: Broker) -> list[str]:
-        """Adopt ``candidate``'s sources, rules and live limits; retire the rest.
+        """Adopt ``candidate``'s sources, rules, credentials and live limits.
 
         ``candidate`` is a broker built from the new file by the *same*
         function ``nautilus serve`` and ``nautilus config check`` use
@@ -3786,11 +3866,18 @@ class Broker:
         edit inside a ``user_rules_dirs`` directory arrives too), the intent
         analyzer -- its keyword map is generated from ``sources`` (#24), so a
         source change that did not rebuild it would route on a stale
-        vocabulary -- and the two ``session_store`` limits the request path
-        reads per request.
+        vocabulary -- ``api.keys``, which is how a credential is rotated
+        without a restart, and the two ``session_store`` limits the request
+        path reads per request.
 
-        What is not: everything :data:`RELOADABLE_TOP_LEVEL_KEYS` and
-        :data:`RELOADABLE_SESSION_STORE_KEYS` leave out. A file that changes
+        A transport holds the credential list on its own ``app.state`` and
+        re-reads it per request, so it is handed the new one through
+        :meth:`on_reload` rather than by reaching into the ASGI app from
+        here.
+
+        What is not: everything :data:`RELOADABLE_TOP_LEVEL_KEYS`,
+        :data:`RELOADABLE_API_KEYS` and :data:`RELOADABLE_SESSION_STORE_KEYS`
+        leave out. A file that changes
         one of those is refused whole rather than half-applied; see
         :func:`_restart_only_changes`.
 
@@ -3834,6 +3921,11 @@ class Broker:
                 intent_analyzer=incoming.intent_analyzer,
             )
             adopted = _adopted_changes(outgoing.config, incoming.config)
+
+        if "api.keys" in adopted:
+            _warn_about_orphaned_ledgers(outgoing.config, incoming.config)
+        for listener in self._reload_listeners:
+            listener()
 
         # The candidate is now a shell around exactly what this reload retired:
         # the outgoing router, the adapters no longer in service, and its own
