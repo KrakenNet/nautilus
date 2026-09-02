@@ -54,7 +54,7 @@ means library code passed `""`.
 
 #### `session_token must be a string`
 
-`nautilus/core/broker.py:3559-3560`. `context["session_token"]` was present but not a `str`
+`nautilus/core/broker.py:3609-3610`. `context["session_token"]` was present but not a `str`
 (commonly `None`, or a dict left over from a JSON round-trip). Send the compact JWT string.
 
 ### `bad_signature`
@@ -146,7 +146,7 @@ PY
 
 #### `session token was minted for agent {claims.agent_id!r}, presented by {agent_id!r}`
 
-`nautilus/core/broker.py:3567-3572`. The token is valid, but the request's `agent_id` is not the
+`nautilus/core/broker.py:3617-3622`. The token is valid, but the request's `agent_id` is not the
 one it was minted for. This is the property the token exists to enforce: presenting another
 agent's token would inherit that session's cumulative-exposure ledger.
 
@@ -159,7 +159,7 @@ between agents, declare a handoff instead — see `Broker.declare_handoff` and t
 ### `session tokens are disabled (session_tokens.enabled: false)`
 
 **`RuntimeError`** from `Broker.issue_session_token`, `.verify_session_token`, `.rotate_signing_key` and
-`.revoke_signing_key` (`nautilus/core/broker.py:1826`, `:1864`, `:1905`, `:1939`).
+`.revoke_signing_key` (`nautilus/core/broker.py:1870`, `:1864`, `:1905`, `:1939`).
 
 **Fix.** Set `session_tokens.enabled: true`. Note the key-management routes fail the same way,
 so `/v1/keys/rotate` on a broker with tokens off surfaces this text.
@@ -167,7 +167,7 @@ so `/v1/keys/rotate` on a broker with tokens off surfaces this text.
 ### `purpose {purpose!r} is not one of the purposes agent {agent_id!r} may claim ({sorted(record.allowed_purposes)})`
 
 **`PurposeNotPermittedError`** (`nautilus/core/__init__.py:23`), raised while minting at
-`nautilus/core/broker.py:1832-1835`. The requested `purpose` is not in that agent's
+`nautilus/core/broker.py:1876-1879`. The requested `purpose` is not in that agent's
 `allowed_purposes`. Add it to the agent's registry entry, or mint with a purpose it holds.
 
 ### `Unknown agent id='{agent_id}'`
@@ -179,6 +179,6 @@ under `agents:` in the config. Add one, or correct the id.
 
 These appear inside `BrokerResponse.denial_records` rather than as an exception:
 
-- `handoff requires the originating agent's session token` — `nautilus/core/broker.py:2410-2414`.
-- `session token rejected: {exc.reason_code}` — `nautilus/core/broker.py:2433-2437`, using the same
+- `handoff requires the originating agent's session token` — `nautilus/core/broker.py:2454-2458`.
+- `session token rejected: {exc.reason_code}` — `nautilus/core/broker.py:2477-2481`, using the same
   reason codes listed above.

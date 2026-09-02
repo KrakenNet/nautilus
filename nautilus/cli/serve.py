@@ -128,7 +128,17 @@ def _load_config_for_serve(config_path: Path, *, air_gapped: bool) -> Path:
     except OSError as exc:
         raise RuntimeError(f"Unable to read config '{config_path}': {exc}") from exc
 
-    loaded: Any = yaml.safe_load(raw_text)
+    try:
+        loaded: Any = yaml.safe_load(raw_text)
+    except yaml.YAMLError:
+        # Same answer as the non-dict case below, for the same reason: this
+        # function neutralizes egress fields, it does not validate. Letting the
+        # parse error out instead made ``--air-gapped`` the only path where a
+        # malformed file escaped ``broker_for_serve``'s refusal wrapper -- so
+        # under SIGHUP it reached the reload task raw, with no refusal log line
+        # and no ``config_reload_refused`` receipt. Hand it on; from_config
+        # raises the ConfigError the operator already knows how to read.
+        return config_path
     if not isinstance(loaded, dict):
         # Let Broker.from_config surface the normal validation error.
         return config_path

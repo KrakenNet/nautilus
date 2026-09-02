@@ -71,11 +71,21 @@ def _stamped() -> str | None:
     image built without ``--build-arg BUILD_REV`` has *declared* that it has no
     revision, which is not the same as a wheel that was never in a position to
     declare anything.
+
+    A stamp that is *present and unreadable* is the second state, not the
+    third. Reading every ``OSError`` as "unstamped" let a mode-000 or
+    otherwise-unopenable stamp fall through to :data:`BUILD_REV_ENV`, which
+    anyone who can set this process's environment controls -- so damaging the
+    file was enough to choose what the artifact claims it was built from. An
+    artifact that carries a stamp answers from the stamp or answers
+    ``unknown``; it never answers from the environment.
     """
     try:
         return STAMP_PATH.read_text(encoding="utf-8").strip()
-    except OSError:
+    except FileNotFoundError:
         return None
+    except OSError:
+        return ""
 
 
 def build_rev() -> str:

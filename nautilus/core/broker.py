@@ -200,24 +200,41 @@ _TLS_SCHEMES = frozenset({"https", "bolt+s", "bolt+ssc", "neo4j+s", "neo4j+ssc"}
 # never drains. Measured -- that is the exact shape of the failure this probe
 # exists to report, so the probe waits for a reply.
 #
-# Both hellos are pre-authentication and carry no credential:
+# All three hellos are pre-authentication and carry no credential:
 # - HTTP/1.0 ``HEAD /`` asks for no body; any status line is an answer.
 # - libpq's 8-byte SSLRequest is what a Postgres server answers with a single
 #   ``S`` or ``N`` before it has asked who you are.
+# - Bolt's four magic bytes plus four 4-byte version proposals; the server
+#   answers with the version it chose, or four zeros to say it shares none.
 #
-# A scheme with no entry and no TLS is checked at the transport layer only.
+# Every scheme in ``_DEFAULT_PORTS`` needs an entry here. TLS is not a
+# substitute: ``bolt+s`` reached this table through neither, so a graph
+# listener that accepted and never answered was reported reachable -- the
+# precise failure the paragraph above says this probe exists to report.
+# ``tests/defects/test_wave_16_probe_and_provenance`` holds the two tables to
+# the same key set.
+_BOLT_HELLO = b"\x60\x60\xb0\x17" + b"\x00\x00\x00\x05" + b"\x00" * 12
+
 _PROBE_HELLO: dict[str, bytes] = {
     "http": b"HEAD / HTTP/1.0\r\n\r\n",
     "https": b"HEAD / HTTP/1.0\r\n\r\n",
     "postgres": b"\x00\x00\x00\x08\x04\xd2\x16\x2f",
     "postgresql": b"\x00\x00\x00\x08\x04\xd2\x16\x2f",
+    "bolt": _BOLT_HELLO,
+    "bolt+s": _BOLT_HELLO,
+    "bolt+ssc": _BOLT_HELLO,
+    "neo4j": _BOLT_HELLO,
+    "neo4j+s": _BOLT_HELLO,
+    "neo4j+ssc": _BOLT_HELLO,
 }
 
 
-async def _dial(host: str, port: int, scheme: str) -> None:
+async def _dial(host: str, port: int, scheme: str) -> str | None:
     """Open ``host:port``, send the scheme's hello, and require a reply.
 
-    Raises whatever the dial raised. The caller owns the deadline.
+    Returns a note qualifying an answered dial, or ``None`` when the dial
+    answered with nothing to qualify. Raises whatever the dial raised; the
+    caller owns the deadline.
     """
     tls = scheme in _TLS_SCHEMES
     try:
@@ -231,12 +248,15 @@ async def _dial(host: str, port: int, scheme: str) -> None:
         reader, writer = await asyncio.open_connection(
             host, port, ssl=ssl.create_default_context() if tls else None
         )
-    except ssl.SSLError:
-        return
+    except ssl.SSLError as exc:
+        # Reachable, and unusable by this process. Reporting the first half
+        # and dropping the second gave an operator an unqualified green for a
+        # source no query will ever reach, which is the harder outage to find.
+        return f"answered, but this process refused its certificate: {exc}"
     try:
         hello = _PROBE_HELLO.get(scheme)
-        if hello is None:
-            return
+        if hello is None:  # pragma: no cover - every _DEFAULT_PORTS scheme has one
+            return "connected; no hello is defined for this scheme, so nothing was asked"
         writer.write(hello)
         await writer.drain()
         if not await reader.read(1):
@@ -245,6 +265,7 @@ async def _dial(host: str, port: int, scheme: str) -> None:
         writer.close()
         with contextlib.suppress(OSError, asyncio.CancelledError):
             await writer.wait_closed()
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -886,6 +907,12 @@ def _warn_about_orphaned_ledgers(old: NautilusConfig, new: NautilusConfig) -> in
     Positions, principals and agent bindings only: a log line is not a place
     for a secret, and for an unnamed entry the identity *is* the secret.
 
+    The positions enumerate the config being *replaced*, not the file the
+    operator just edited -- an orphaned entry is by definition one the new file
+    no longer has, so it has no position there. The message says which file it
+    is counting in, because ``api.keys[3]`` read as the new one sends the
+    operator to an entry that is fine.
+
     Returns:
         How many ledgers were orphaned, so the count reaches the audit entry as
         well as the process log. A warning is for the operator who was
@@ -900,12 +927,13 @@ def _warn_about_orphaned_ledgers(old: NautilusConfig, new: NautilusConfig) -> in
     if not orphaned:
         return 0
     named = ", ".join(
-        f"api.keys[{index}] (principal={principal!r}, agent_id={agent!r})"
+        f"old api.keys[{index}] (principal={principal!r}, agent_id={agent!r})"
         for index, principal, agent in orphaned
     )
     log.warning(
         "Reload left %d credential(s) with no surviving api.keys[].principal to "
-        "accumulate under: %s. Their cumulative exposure (sources_visited, "
+        "accumulate under (positions index the config it replaced, not the file "
+        "you just edited): %s. Their cumulative exposure (sources_visited, "
         "data_types_seen, pii_sources_accessed_list) does NOT carry -- each caller "
         "resumes on an empty escalation budget, and requests naming a session it "
         "opened are refused session_not_yours. Rotate the key value under a stable "
@@ -1301,7 +1329,23 @@ class Broker:
             )
 
         audit_path = cls._resolve(base_dir, config.audit.path)
-        audit_path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            audit_path.parent.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            # In the hardened image this is where a missing ``audit``
+            # volumeMount lands: ``/var/log`` exists and UID 65532 cannot write
+            # it, so the broker refuses before it binds. Measured, that read as
+            # a bare ``[Errno 13] Permission denied: '/var/log/nautilus'`` --
+            # an operator following the deployment guide went looking at
+            # ``/readyz``, which nothing was listening on. Name the directory's
+            # job and the two ways it goes wrong.
+            raise OSError(
+                f"cannot open the audit log directory {audit_path.parent}: {exc}. "
+                f"Nautilus records one line per decision and will not serve "
+                f"unrecorded requests, so this refuses startup rather than "
+                f"degrading. Either the volume for it is not mounted, or it is "
+                f"not writable by the UID this process runs as."
+            ) from exc
         audit_logger = AuditLogger(sink=build_audit_sink(config, audit_path, attestation))
 
         session_store = cls._build_session_store(config, base_dir=base_dir)
@@ -3271,14 +3315,20 @@ class Broker:
             budget = None
         timeout_s = min(budget or _PROBE_TIMEOUT_CEILING_S, _PROBE_TIMEOUT_CEILING_S)
         try:
-            await asyncio.wait_for(_dial(host, port, parts.scheme), timeout_s)
+            note = await asyncio.wait_for(_dial(host, port, parts.scheme), timeout_s)
         except TimeoutError:
             return SourceProbe(
                 endpoint, False, f"no answer from {endpoint} within {timeout_s:.1f}s"
             )
-        except OSError as exc:
+        # ``UnicodeError`` is not an ``OSError``: a host the resolver cannot
+        # even encode -- an over-long label, a surrogate that survived a config
+        # round-trip -- raises ``UnicodeEncodeError`` straight past a bare
+        # ``except OSError``. This is the whole of one source's probe, and
+        # ``GET /v1/adapters?probe=true`` gathers every source's, so one
+        # unencodable host answered 500 and discarded every healthy sibling.
+        except (OSError, UnicodeError) as exc:
             return SourceProbe(endpoint, False, f"{type(exc).__name__}: {exc}")
-        return SourceProbe(endpoint, True, None)
+        return SourceProbe(endpoint, True, note)
 
     def _session_store_endpoint(self) -> str | None:
         """What the session store dials, as ``scheme://host[:port]``, or ``None``.

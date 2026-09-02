@@ -452,7 +452,7 @@ The 503 bodies, verbatim, and what each means:
 | Body | Cause | Fix |
 |---|---|---|
 | `{"status":"not_ready","reason":"startup_incomplete"}` | the ASGI lifespan has not finished — normal for the first seconds, permanent means startup is stuck | `kubectl logs` for the last line before it stopped |
-| `{"status":"not_ready","reason":"audit log directory /var/log/nautilus does not exist"}` | the `audit` volumeMount is missing | re-apply `deployment.yaml` |
+| `{"status":"not_ready","reason":"audit log directory /var/log/nautilus does not exist"}` | the audit directory was there at startup and is gone now — a volume detached under a running pod | re-apply `deployment.yaml`. A volumeMount that was **never** there does not reach this probe: startup refuses first, exit 2, with `ERROR: broker construction failed: cannot open the audit log directory /var/log/nautilus` and no port bound, so there is no `/readyz` to ask ([§11.5](#115-when-the-audit-volume-is-missing)) |
 | `{"status":"not_ready","reason":"audit log directory /var/log/nautilus is not writable"}` | the volume is not writable by UID 65532 | `fsGroup: 65532` in the pod securityContext; on the docker path, `sudo chown -R 65532:65532 /srv/nautilus/audit` **on the host** ([§2.1](#21-lay-out-the-host-directories)) — there is no `chown` inside the container, and no capability that would give you one ([§11.4](#114-what-you-cannot-do-from-inside)) |
 | `{"status":"not_ready","reason":"audit log /var/log/nautilus/audit.jsonl is not writable"}` | the file exists with wrong mode or wrong ownership — usually a volume first written by a root-run container | if UID 65532 owns it, `os.chmod` from inside fixes it in place; if it does not, rename it aside and let the broker create a new one. Both, measured, in [§11.3](#113-writing-renaming-and-fixing-permissions) |
 | `{"status":"not_ready","reason":"session_store_timeout"}` | the store did not answer within 2.0s | Postgres is overloaded or the network path is broken; check `pool_max_size` (default 10) against your in-flight request count |
@@ -1155,6 +1155,28 @@ colon is what the filter matches. Do not use `--tail 1` here — a readiness
 probe lands between the signal and the read often enough to show you an access
 log instead — and the `until` loop is what waits for the reload to finish
 rather than for the log to be read.
+
+### 11.5 When the audit volume is missing
+
+A missing `audit` volumeMount is not a readiness failure. It is a startup
+refusal, and it happens before anything binds — so there is no `/readyz` to
+ask and no pod to `kubectl exec` into. What you get is a `CrashLoopBackOff` and
+these two lines, verbatim, from `kubectl logs` or `docker logs`:
+
+```console
+$ docker run --rm -v ./nautilus.yaml:/etc/nautilus/n.yaml:ro \
+    nautilus:1.0 serve --config /etc/nautilus/n.yaml --bind 0.0.0.0:8080 2>&1 | tail -1
+ERROR: broker construction failed: cannot open the audit log directory /var/log/nautilus: [Errno 13] Permission denied: '/var/log/nautilus'. Nautilus records one line per decision and will not serve unrecorded requests, so this refuses startup rather than degrading. Either the volume for it is not mounted, or it is not writable by the UID this process runs as.
+```
+
+`nautilus config check` refuses with the same sentence and the same exit code,
+which is why it is worth running in the same image and with the same mounts the
+rollout will use — it catches this before a pod ever schedules.
+
+Two causes, one message, because the container cannot tell them apart: `/var/log`
+exists in the image and UID 65532 cannot write it, so "no mount" and "a mount
+UID 65532 cannot write" both arrive as `Errno 13` on the same path. Check the
+mount first (`kubectl describe pod` → **Mounts**), then `fsGroup: 65532`.
 
 ### Getting a real shell next to the container
 

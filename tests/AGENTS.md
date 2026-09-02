@@ -10,8 +10,12 @@ red until its fix lands.
 - `tests/journeys/` — one test per user-facing promise, end to end against a
   live backend. Green. A journey going red means a shipped promise broke.
 - `tests/defects/` — one test per confirmed defect in the 1.0 audit
-  (`REPORT.md`), the re-audit (`REAUDIT.md`) and the 1.0 readiness review.
-  Red on purpose. Each fix flips a named test to green.
+  (`REPORT.md`), the re-audit (`REAUDIT.md`), the 1.0 readiness review, the
+  sealed `ops12` operator trials and the adversarial verification passes over
+  the fix waves. Red on purpose. Each fix flips a named test to green.
+  A finding is not a defect until it is reproduced here first-hand: two of the
+  verification pass's own findings did not survive that, and one of them cited
+  evidence that `git grep` disproved.
 - `tests/unit/`, `tests/integration/` — pure-function and in-process tests for
   logic with no backend: scope-field validation, CLIPS encoding, hierarchy
   math, validators, config loading, replay sufficiency.
@@ -57,6 +61,18 @@ red until its fix lands.
   A failure names the citation, the pages that carry it, the text it was locked
   against and the text now at that line; fix the number in the doc first,
   regenerate second.
+- **Relocate a drifted citation by content, never by arithmetic.** Take the
+  text the lock recorded for each line and find where that text lives now; a
+  `difflib` map is only trustworthy over its `equal` opcodes, because a line
+  inside a `replace` span has no honest new home. Two attempts to renumber by
+  span arithmetic turned 29 problems into 56. After `--write`, diff the old and
+  new lockfiles: retired and added counts should match the number you moved,
+  and `lines` must not have changed for any citation you kept.
+- **Some docs publish a script *and its output*, and the output quotes line
+  numbers.** `docs/how-to/hardening.md` embeds `logscan.py` and the rows it
+  printed. Hand-editing those numbers makes the transcript a lie. Extract the
+  script, run it, and paste what it actually printed — that also double-checks
+  the relocation, from a source that never saw the lockfile.
 - **The lock does not see the bare `:NNN` continuation form.** `CITATION_RE`
   matches `path.py:NNN`, so a page that names the path once and continues
   "`session_pg.py:72`, `:104`" has only its first reference locked. A sweep of

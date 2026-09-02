@@ -182,7 +182,7 @@ pod drains itself; it recovers without a restart once writes succeed.
 
 ### `context['scope_constraints'] entry is not a scope constraint: {reasons}`
 
-**HTTP 400.** `nautilus/core/broker.py:2702-2711`, surfaced by
+**HTTP 400.** `nautilus/core/broker.py:2746-2755`, surfaced by
 `nautilus/transport/fastapi_app.py:751-759`. Rendered example:
 
 ```text
