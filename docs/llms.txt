@@ -15,6 +15,7 @@ Nautilus brokers every data access behind a single request: it plans the query, 
 
 ## How-to
 - [Operator Guide](https://krakennet.github.io/nautilus/latest/how-to/operator-guide/): Deploy and run the broker.
+- [Deploying](https://krakennet.github.io/nautilus/latest/how-to/deploying/): Run the broker in a container, on docker or Kubernetes, including reload and recovery in an image with no shell.
 - [Write a Routing Rule](https://krakennet.github.io/nautilus/latest/how-to/write-a-routing-rule/): Author policy that routes and scopes access.
 - [Configure Attestation](https://krakennet.github.io/nautilus/latest/how-to/configure-attestation/): Sign and verify access tokens.
 - [Add a Postgres Source](https://krakennet.github.io/nautilus/latest/how-to/add-a-postgres-source/): Connect a data source through an adapter.

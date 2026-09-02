@@ -6,6 +6,9 @@ Task-oriented guides for common Nautilus operations.
 
 - [Operator Guide](operator-guide.md) — deploy end to end: install,
   configure, serve, monitor, rotate keys, back up audit.
+- [Deploying](deploying.md) — run the broker in a container: the image, the
+  host layout, the Kubernetes manifests, environment, volumes, probes, upgrade
+  and rollback, and every procedure that has to work in an image with no shell.
 - [Authoring Rules](authoring-rules.md) — the rule DSL, salience, the
   denial-record invariant, and the validate → test → ship workflow.
 - [Developing Adapters](developing-adapters.md) — scaffold a package,

@@ -45,6 +45,13 @@ red until its fix lands.
   `.git/info/exclude` and is absent from a clean clone, so a test over it
   skips at module level rather than failing CI over files that never shipped.
   The citation lock enumerates docs through `git ls-files` for the same reason.
+- **A document the docs cite has to be a page the site publishes.**
+  `tests/defects/test_wave_ops14_cited_pages_are_published.py` holds every
+  reference a published page makes to another document — Markdown link, section
+  link, or a repo-relative path named in prose — against the nav mkdocs builds,
+  the anchors the target mints, and the `§N` the sentence claims. `mkdocs build
+  --strict` checks none of the three: it validates link targets, not fragments,
+  and a path written in a sentence is not a link.
 - **Never regenerate the citation lock to make the suite green.** Its whole job
   is to stop a code change from silently invalidating a line number a doc cites.
   A failure names the citation, the pages that carry it, the text it was locked

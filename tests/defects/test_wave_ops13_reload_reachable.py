@@ -1,8 +1,8 @@
 """WAVE ops13 — the reload existed and no documented path reached it.
 
 WAVE ops12 shipped ``SIGHUP`` config reload. An operator configuring only from
-``docs/`` and ``deploy/`` could not use it, for one reason: the command
-``deploy/README.md`` gave for sending the signal on Kubernetes was
+``docs/`` could not use it, for one reason: the command the deployment guide
+(``docs/how-to/deploying.md``) gave for sending the signal on Kubernetes was
 
 .. code-block:: text
 
@@ -28,7 +28,7 @@ wave's verification alone."
 
 **What separates a procedure from a transcript.** A ``bash`` block is an
 instruction — every command in it has to run. A ``console`` block is a pasted
-recording, and §11 of ``deploy/README.md`` deliberately records ``sh``, ``ls``,
+recording, and §11 of the deployment guide deliberately records ``sh``, ``ls``,
 ``curl`` and ``pip`` *failing*, because enumerating what is absent is the point
 of that section. So the check reads ``bash`` blocks and leaves ``console``
 blocks alone.
@@ -45,6 +45,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+_GUIDE = REPO_ROOT / "docs" / "how-to" / "deploying.md"
 _IMAGE_TAG = "nautilus:test"  # same tag and argv as tests/integration/test_docker_image.py
 _DOCKER = shutil.which("docker")
 
@@ -129,7 +130,7 @@ def _bash_blocks(text: str) -> Iterator[str]:
 
 def _documented_pages() -> list[Path]:
     """Every operator-facing markdown page that can name a container command."""
-    return [REPO_ROOT / "deploy" / "README.md", *sorted((REPO_ROOT / "docs").rglob("*.md"))]
+    return sorted((REPO_ROOT / "docs").rglob("*.md"))
 
 
 def _in_container_commands() -> list[tuple[Path, str]]:
@@ -156,14 +157,14 @@ def test_every_documented_in_container_command_exists_in_the_image(
 ) -> None:
     """A procedure block may only name an executable the image actually has.
 
-    This is the check that was missing. ``pkill`` sat in ``deploy/README.md``
+    This is the check that was missing. ``pkill`` sat in the deployment guide
     for a whole wave as the one documented way to reach the reload on
     Kubernetes, and nothing anywhere went red.
     """
     commands = _in_container_commands()
     assert commands, (
-        "found no `kubectl exec`/`docker exec` procedure in deploy/README.md or "
-        "docs/**.md — the parser stopped matching, so this check is vacuous"
+        "found no `kubectl exec`/`docker exec` procedure in docs/**.md — the "
+        "parser stopped matching, so this check is vacuous"
     )
     missing = [
         (page.relative_to(REPO_ROOT).as_posix(), exe)
@@ -179,22 +180,22 @@ def test_every_documented_in_container_command_exists_in_the_image(
 
 
 def test_the_reload_procedure_names_a_signal_sender_that_ships() -> None:
-    """``deploy/README.md`` must give a Kubernetes operator a way to signal.
+    """The deployment guide must give a Kubernetes operator a way to signal.
 
     Text-only, so it holds on a machine with no Docker: the reload section has
     to send ``SIGHUP`` through the interpreter, because that is the only
     executable in the image that can send a signal at all.
     """
-    readme = (REPO_ROOT / "deploy" / "README.md").read_text(encoding="utf-8")
+    guide = _GUIDE.read_text(encoding="utf-8")
     # Fold continuations: the command is wrapped across two lines on the page.
-    folded = readme.replace("\\\n", " ")
+    folded = guide.replace("\\\n", " ")
     signallers = [
         line
         for line in folded.splitlines()
         if "kubectl" in line and "exec" in line and "signal.SIGHUP" in line
     ]
     assert signallers, (
-        "deploy/README.md gives a Kubernetes operator no way to send SIGHUP. "
+        "docs/how-to/deploying.md gives a Kubernetes operator no way to send SIGHUP. "
         "`docker kill -s HUP` runs on the host and has no cluster equivalent, and "
         "the image has no pkill, no kill and no shell — so without a "
         "`kubectl exec … -- /app/.venv/bin/python -c 'os.kill(1, signal.SIGHUP)'` "
@@ -211,12 +212,12 @@ def test_the_container_runtime_path_mounts_the_config_directory() -> None:
     re-reads bytes that have not changed. Mounting the directory — which is
     what the ConfigMap volume in ``deployment.yaml`` does — carries both.
     """
-    readme = (REPO_ROOT / "deploy" / "README.md").read_text(encoding="utf-8")
-    assert "-v /srv/nautilus/config/nautilus.yaml:/config/nautilus.yaml:ro" not in readme, (
-        "deploy/README.md bind-mounts the config file; a rename on the host "
+    guide = _GUIDE.read_text(encoding="utf-8")
+    assert "-v /srv/nautilus/config/nautilus.yaml:/config/nautilus.yaml:ro" not in guide, (
+        "docs/how-to/deploying.md bind-mounts the config file; a rename on the host "
         "never reaches the container through it"
     )
-    assert "-v /srv/nautilus/config:/config:ro" in readme, (
-        "deploy/README.md should mount the config directory, matching the "
+    assert "-v /srv/nautilus/config:/config:ro" in guide, (
+        "docs/how-to/deploying.md should mount the config directory, matching the "
         "ConfigMap volume in deployment.yaml"
     )

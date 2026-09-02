@@ -551,7 +551,7 @@ def test_e11_the_pod_still_declares_cpu_and_memory(tmp_path: Path) -> None:
 
 
 def _deploy_readme() -> str:
-    return (_REPO_ROOT / "deploy" / "README.md").read_text(encoding="utf-8")
+    return (_REPO_ROOT / "docs" / "how-to" / "deploying.md").read_text(encoding="utf-8")
 
 
 def _quickstart_curl() -> str:
@@ -572,7 +572,7 @@ def _quickstart_curl() -> str:
 def test_e11_the_quickstart_curl_declares_its_content_type() -> None:
     """``curl -d '{...}'`` sends form-encoded, which FastAPI answers 422 to.
 
-    This is the first command in the deploy README and the first thing an
+    This is the first command in the deployment guide and the first thing an
     operator runs against a fresh install. It fails.
     """
     assert "content-type" in _quickstart_curl().lower(), (
@@ -587,7 +587,7 @@ def test_e11_the_readme_only_names_commands_that_exist() -> None:
     readme = _deploy_readme()
     for token in ("nautilus key generate", "nautilus key create"):
         assert token not in readme, (
-            f"deploy/README.md tells the operator to run '{token}', which "
+            f"the deployment guide tells the operator to run '{token}', which "
             f"nautilus key does not implement"
         )
 

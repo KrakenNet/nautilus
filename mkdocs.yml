@@ -51,6 +51,7 @@ nav:
   - How-to Guides:
       - Overview: how-to/index.md
       - Operator Guide: how-to/operator-guide.md
+      - Deploying: how-to/deploying.md
       - Authoring Rules: how-to/authoring-rules.md
       - Developing Adapters: how-to/developing-adapters.md
       - Hardening: how-to/hardening.md

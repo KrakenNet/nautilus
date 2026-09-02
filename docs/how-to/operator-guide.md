@@ -443,8 +443,8 @@ a collector before you rely on the trail.
 
 `deploy/` in the repository is a complete manifest set — Deployment, Service,
 ConfigMap and Secrets — with the probes wired to `/healthz` and `/readyz` and
-every credential resolved from a Secret at config load. `deploy/README.md`
-says what to change before applying it.
+every credential resolved from a Secret at config load.
+[Deploying](deploying.md) says what to change before applying it.
 
 ### Air-gapped mode
 
@@ -812,10 +812,11 @@ $ curl -s -w ' HTTP %{http_code}\n' localhost:8000/readyz
 {"status":"ok"} HTTP 200
 ```
 
-Readiness comes back on the next probe, with no restart. `deploy/README.md`
-§11 is the full set: reading, listing, permissions and renaming inside an image
-with no shell, and the two things — `chown` and installing anything — that
-genuinely cannot be done from inside one.
+Readiness comes back on the next probe, with no restart.
+[Deploying §11](deploying.md#11-working-inside-a-distroless-container) is the
+full set: reading, listing, permissions and renaming inside an image with no
+shell, and the two things — `chown` and installing anything — that genuinely
+cannot be done from inside one.
 
 So size the volume before you rely on it — and size it from the line rate
 below, not from the request rate.
@@ -1505,6 +1506,25 @@ this shape. A uvicorn release that renames it would break this step, so the
 string is pinned against the installed uvicorn in
 `tests/defects/test_wave_ops13_documented_log_format.py`.
 
+**In a container there is neither systemd nor a `kill` to run.** The runtime
+image has no shell and its whole `$PATH` is the virtualenv's console scripts, so
+the signal is sent either from outside the container or by the one interpreter
+inside it — and the broker is PID 1 (`Started server process [1]` in its startup
+log):
+
+```bash
+docker kill -s HUP nautilus                    # container runtime, from the host
+
+kubectl -n nautilus exec deploy/nautilus -- \
+    /app/.venv/bin/python -c "import os, signal; os.kill(1, signal.SIGHUP)"
+```
+
+On Kubernetes the ConfigMap the pod reads is a copy the kubelet refreshes on
+its own schedule, so there is a wait before the signal is worth sending, and at
+more than one replica every pod needs its own. Both, with the log line to wait
+for, are in
+[Deploying §9](deploying.md#apply-wait-for-the-pods-copy-then-signal).
+
 The reload validates before it swaps, through the same `broker_for_serve` that
 `serve` runs before it binds and `config check` runs before a deploy, so a
 config those two refuse is refused here **in the same sentence**. On a refusal
@@ -1762,14 +1782,16 @@ systemctl start nautilus
 
 **This runs where the files are, not inside the container.** On the container
 path that is the host directory you bind-mounted (`/srv/nautilus/state` in
-`deploy/README.md` §2.1) with the container stopped — `tar` is not in the
-runtime image and neither is a shell to run it from. On Kubernetes there is no
+[Deploying §2.1](deploying.md#21-lay-out-the-host-directories)) with the
+container stopped — `tar` is not in the runtime image and neither is a shell to
+run it from. On Kubernetes there is no
 host directory: with the shipped `emptyDir` volumes, scaling the Deployment to
 zero **destroys the state you were trying to back up**, so move `state` to a
 PersistentVolumeClaim first and then either mount that PVC into a short-lived
 `busybox` Job that writes the archive, or run a volume snapshot. Streaming the
 files out through `kubectl exec` works for a single file
-(`deploy/README.md` §11.3) but not for a consistent directory archive, and
+([Deploying §11.3](deploying.md#113-writing-renaming-and-fixing-permissions))
+but not for a consistent directory archive, and
 `kubectl cp` fails outright because it needs `tar` in the target container.
 
 The `--exclude='*.lock'` matters. `audit.jsonl.lock` and

@@ -2803,8 +2803,8 @@ none of the others have. On Kubernetes the loop is
 `for pod in $(kubectl get pods -l app=nautilus -o name)` with
 `kubectl exec "$pod" --` in place of `docker exec "$c"` — the argv after it does
 not change. Why it cannot be `curl`, and what else the distroless image does and
-does not let you run, is in
-`deploy/README.md` §11, *Working inside a distroless container*.
+does not let you run, is
+[Deploying §11, *Working inside a distroless container*](deploying.md#11-working-inside-a-distroless-container).
 
 **Example**
 

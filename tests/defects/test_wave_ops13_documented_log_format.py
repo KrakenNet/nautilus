@@ -71,7 +71,7 @@ _LEVELS = logging.getLevelNamesMapping()
 
 def _pages() -> list[Path]:
     """Every operator-facing markdown page."""
-    return [REPO_ROOT / "deploy" / "README.md", *sorted((REPO_ROOT / "docs").rglob("*.md"))]
+    return sorted((REPO_ROOT / "docs").rglob("*.md"))
 
 
 def _blocks(section: str) -> Iterator[tuple[str, str]]:
@@ -200,8 +200,8 @@ def test_every_log_line_a_systemd_procedure_quotes_is_one_that_unit_can_emit() -
     unit_format = _published_unit_log_format()
     sections = _systemd_scoped_sections()
     assert sections, (
-        "found no section running `systemctl ... nautilus` in deploy/README.md "
-        "or docs/**.md — the parser stopped matching, so this check is vacuous"
+        "found no section running `systemctl ... nautilus` in docs/**.md — the "
+        "parser stopped matching, so this check is vacuous"
     )
 
     quoted = 0
@@ -255,8 +255,8 @@ def test_every_json_record_the_docs_quote_is_what_jsonformatter_emits() -> None:
                 }:
                     wrong.append(f"{page.name}: quoted {payload}, formatter emits {rendered}")
     assert checked, (
-        "found no quoted JSON log record in deploy/README.md or docs/**.md — the "
-        "parser stopped matching, so this check is vacuous"
+        "found no quoted JSON log record in docs/**.md — the parser stopped "
+        "matching, so this check is vacuous"
     )
     assert not wrong, f"quoted JSON logs that JsonFormatter does not produce: {wrong}"
 
