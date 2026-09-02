@@ -5063,14 +5063,14 @@
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:652",
+   "citation": "nautilus/transport/fastapi_app.py:645",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
-   "sha": "c5eb34c67c6b9200",
+   "sha": "01e803e1366458c2",
    "lines": {
-    "652": "bound: str | None = caller[\"agent_id\"]"
+    "645": "detail=\"Broker not ready\","
    }
   },
   {

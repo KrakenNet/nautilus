@@ -2804,17 +2804,19 @@ session_store:
 `str | None` · default `None` · post-interpolation; falls back to the `TEST_PG_DSN` env var
 
 **Defends** nothing on its own; it is a credential, so treat it as one and write
-it as `${VAR}`. Errors from the store strip credentials before they are printed
-(`PostgresSessionStore._sanitized_dsn`), so a connection failure does not leak
+it as `${VAR}`. Errors from the store never print the DSN
+(`PostgresSessionStore._sanitized_dsn`): they print the `scheme://host[:port]`
+that `redact_connection` copies out of it, so a connection failure cannot leak
 the password into your logs.
 
 **Costs** you an environment variable and a restart to change it.
 
 **Fails with**, when the store is unreachable and `on_failure: fail_closed`,
-a startup failure and a non-zero exit — the DSN in the message is sanitised:
+a startup failure and a non-zero exit — the `dsn=` in the message is the host
+alone, without the database name, the path or any query parameter:
 
 ```
-PostgresSessionStore unavailable (dsn=postgresql://db.internal:5432/nautilus): [Errno 111] Connection refused
+PostgresSessionStore unavailable (dsn=postgresql://db.internal:5432): [Errno 111] Connection refused
 ```
 
 **Example**
@@ -2847,7 +2849,7 @@ CLI treats a lifespan that never started as a failure:
 $ nautilus serve --config /etc/nautilus/nautilus.yaml
 ERROR:    Traceback (most recent call last):
 ...
-nautilus.core.session_pg.SessionStoreUnavailableError: PostgresSessionStore unavailable (dsn=postgresql://db.internal:5432/nautilus): [Errno 111] Connection refused
+nautilus.core.session_pg.SessionStoreUnavailableError: PostgresSessionStore unavailable (dsn=postgresql://db.internal:5432): [Errno 111] Connection refused
 ERROR:    Application startup failed. Exiting.
 $ echo $?
 1
@@ -2856,7 +2858,7 @@ $ echo $?
 Under `fallback_sqlite`, a failure of *both* still raises:
 
 ```
-PostgresSessionStore unavailable (dsn=postgresql://db.internal:5432/nautilus: [Errno 111] Connection refused) and sqlite fallback at ./.nautilus/sessions.db failed: unable to open database file
+PostgresSessionStore unavailable (dsn=postgresql://db.internal:5432: [Errno 111] Connection refused) and sqlite fallback at ./.nautilus/sessions.db failed: unable to open database file
 ```
 
 **Example**
@@ -2883,7 +2885,7 @@ this file holds session exposure history — protect it like the audit log.
 **Fails with**, when it cannot be created:
 
 ```
-PostgresSessionStore unavailable (dsn=postgresql://db.internal:5432/nautilus: [Errno 111] Connection refused) and sqlite fallback at /var/lib/nautilus/sessions.db failed: unable to open database file
+PostgresSessionStore unavailable (dsn=postgresql://db.internal:5432: [Errno 111] Connection refused) and sqlite fallback at /var/lib/nautilus/sessions.db failed: unable to open database file
 ```
 
 **Example**

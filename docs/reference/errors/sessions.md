@@ -62,13 +62,21 @@ does not, treat it as a store outage (below).
 ## The Postgres session store
 
 All of these are `SessionStoreUnavailableError` or `SessionSchemaError`
-(`nautilus/core/session_pg.py:72`, `:104`).
+(`nautilus/core/session_pg.py:72`, `:105`).
 
 ### `PostgresSessionStore unavailable (dsn={self._sanitized_dsn()}): {exc}`
 
 `nautilus/core/session_pg.py:295-298`. The pool could not be created. `{exc}` is the asyncpg
-failure; the DSN is printed with its password stripped. Check reachability, credentials and
-`sslmode`.
+failure. `{self._sanitized_dsn()}` is **not** the DSN: it is the `scheme://host[:port]` that
+`redact_connection` (`nautilus/config/models.py:782-812`) copies out by allowlist, so the
+message names the host and nothing else — no password, and equally no database name, no path
+and no query parameters. A DSN with no host to copy — the libpq keyword form
+`host=db password=pw` — prints `<no host in session_store.dsn>` instead.
+
+**Fix.** The host in the message is the whole of what the store will tell you: dial it from
+the broker's own network namespace. Everything the message dropped — which database, and
+whether `sslmode` was set — has to be read from `session_store.dsn` in `nautilus.yaml`, not
+inferred from this line.
 
 ### `PostgresSessionStore unavailable (dsn={…}: {exc}) and sqlite fallback at {self._sqlite_path} failed: {sqlite_exc}`
 
@@ -79,7 +87,7 @@ directory. Fix the directory, or fix Postgres.
 ### `PostgresSessionStore.aget() called before setup() succeeded`
 
 `nautilus/core/session_pg.py:359-362`. Also `PostgresSessionStore.aupdate() called before
-setup() succeeded` (`:373`) and `SqliteSessionStore({self._path}) used before setup()
+setup() succeeded` (`:421-422`) and `SqliteSessionStore({self._path}) used before setup()
 succeeded` (`nautilus/core/session_sqlite.py:156-159`).
 
 **Means.** The store object exists but `setup()` never completed, so there is no pool and no

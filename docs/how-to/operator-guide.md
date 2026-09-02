@@ -1552,7 +1552,7 @@ OK: nautilus.yaml — serve would start on this config
 ```
 
 ```text
-nautilus.core.session_pg.SessionStoreUnavailableError: PostgresSessionStore unavailable (dsn=postgresql://127.0.0.1:5599/nautilus): [Errno 111] Connect call failed ('127.0.0.1', 5599)
+nautilus.core.session_pg.SessionStoreUnavailableError: PostgresSessionStore unavailable (dsn=postgresql://127.0.0.1:5599): [Errno 111] Connect call failed ('127.0.0.1', 5599)
 ERROR:    Application startup failed. Exiting.
 ERROR: application startup failed; the server never accepted a connection. The cause is logged above.
 ```

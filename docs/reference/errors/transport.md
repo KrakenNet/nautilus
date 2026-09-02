@@ -10,10 +10,12 @@ lookups — before or around the policy decision. Source: `nautilus/transport/fa
 
 ### `Broker not ready`
 
-**HTTP 503.** Raised on `/v1/request`, `/v1/query`, `/v1/keys/rotate`,
-`/v1/keys/{kid}/revoke`, `/v1/adapters/{name}/schema`, `/v1/rules/{rule_name}/lineage` and
-`/v1/audit` (`nautilus/transport/fastapi_app.py:652`, `:1007`, `:1045`, `:1133`, `:1494`,
-`:1718`).
+**HTTP 503.** Seven guards, one per place the broker is read:
+`nautilus/transport/fastapi_app.py:645` covers `/v1/request` and `/v1/query`, which share
+`_handle_request`; then `:1044` (`/v1/keys/rotate`), `:1082` (`/v1/keys/{kid}/revoke`),
+`:1170` (`/v1/adapters/{name}/schema`), `:1342` (`/v1/rkm/queue`), `:1568` (`/v1/rules`) and
+`:1796`, which is in the `_audit_reader` dependency and so covers both `/v1/audit` and
+`/v1/audit/{request_id}`.
 
 **Means.** `app.state.broker` is unset: the ASGI lifespan has not finished, or it failed.
 
