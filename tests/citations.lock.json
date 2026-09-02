@@ -210,77 +210,77 @@
    }
   },
   {
-   "citation": "fastapi_app.py:1013",
+   "citation": "fastapi_app.py:1023",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "eb20c85537dd2d84",
    "lines": {
-    "1013": "detail=str(exc),"
+    "1023": "detail=str(exc),"
    }
   },
   {
-   "citation": "fastapi_app.py:1052",
+   "citation": "fastapi_app.py:1062",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "a355f9133862ca8d",
    "lines": {
-    "1052": "detail=\"reviewer and reason are required (no control characters)\","
+    "1062": "detail=\"reviewer and reason are required (no control characters)\","
    }
   },
   {
-   "citation": "fastapi_app.py:1059",
+   "citation": "fastapi_app.py:1069",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "eb20c85537dd2d84",
    "lines": {
-    "1059": "detail=str(exc),"
+    "1069": "detail=str(exc),"
    }
   },
   {
-   "citation": "fastapi_app.py:1066-1074",
+   "citation": "fastapi_app.py:1076-1084",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "b5b5de69ecd5c3d2",
    "lines": {
-    "1066": ") from exc",
-    "1067": "except KeyError as exc:",
-    "1068": "raise HTTPException(",
-    "1069": "status_code=status.HTTP_404_NOT_FOUND,",
-    "1070": "detail=f\"kid {kid!r} not found\",",
-    "1071": ") from exc",
-    "1072": "return {\"revoked_kid\": kid, \"reviewer\": reviewer, \"reason\": reason}",
-    "1073": "",
-    "1074": "# ------------------------------------------------------------------"
+    "1076": ") from exc",
+    "1077": "except KeyError as exc:",
+    "1078": "raise HTTPException(",
+    "1079": "status_code=status.HTTP_404_NOT_FOUND,",
+    "1080": "detail=f\"kid {kid!r} not found\",",
+    "1081": ") from exc",
+    "1082": "return {\"revoked_kid\": kid, \"reviewer\": reviewer, \"reason\": reason}",
+    "1083": "",
+    "1084": "# ------------------------------------------------------------------"
    }
   },
   {
-   "citation": "fastapi_app.py:1079",
+   "citation": "fastapi_app.py:1089",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "f50057e60a824c80",
    "lines": {
-    "1079": "\"/v1/adapters\","
+    "1089": "\"/v1/adapters\","
    }
   },
   {
-   "citation": "fastapi_app.py:939",
+   "citation": "fastapi_app.py:949",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "a7f5e09eefd8793b",
    "lines": {
-    "939": "broker: Broker | None = getattr(request.app.state, \"broker\", None)"
+    "949": "broker: Broker | None = getattr(request.app.state, \"broker\", None)"
    }
   },
   {
@@ -4723,508 +4723,508 @@
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1139-1144",
+   "citation": "nautilus/transport/fastapi_app.py:1149-1154",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "d22f6ed0efbc2a57",
    "lines": {
-    "1139": "raise HTTPException(",
-    "1140": "status_code=status.HTTP_501_NOT_IMPLEMENTED,",
-    "1141": "detail=f\"Adapter '{name}' does not support schema introspection\",",
-    "1142": ")",
-    "1143": "try:",
-    "1144": "schema = await adapter.get_schema()"
+    "1149": "raise HTTPException(",
+    "1150": "status_code=status.HTTP_501_NOT_IMPLEMENTED,",
+    "1151": "detail=f\"Adapter '{name}' does not support schema introspection\",",
+    "1152": ")",
+    "1153": "try:",
+    "1154": "schema = await adapter.get_schema()"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1152-1157",
+   "citation": "nautilus/transport/fastapi_app.py:1162-1167",
    "cited_in": [
     "docs/reference/errors/library.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "9caaba2bb9987081",
    "lines": {
-    "1152": "from fastapi import HTTPException",
-    "1153": "",
-    "1154": "raise HTTPException(",
-    "1155": "status_code=status.HTTP_501_NOT_IMPLEMENTED,",
-    "1156": "detail=f\"Adapter '{name}' does not support schema introspection\",",
-    "1157": ") from exc"
+    "1162": "from fastapi import HTTPException",
+    "1163": "",
+    "1164": "raise HTTPException(",
+    "1165": "status_code=status.HTTP_501_NOT_IMPLEMENTED,",
+    "1166": "detail=f\"Adapter '{name}' does not support schema introspection\",",
+    "1167": ") from exc"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1158-1163",
+   "citation": "nautilus/transport/fastapi_app.py:1168-1173",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "9b93e271e7d698c4",
    "lines": {
-    "1158": "except Exception as exc:  # noqa: BLE001",
-    "1159": "from fastapi import HTTPException",
-    "1160": "",
-    "1161": "raise HTTPException(",
-    "1162": "status_code=status.HTTP_503_SERVICE_UNAVAILABLE,",
-    "1163": "detail=f\"Schema fetch failed: {exc}\","
+    "1168": "except Exception as exc:  # noqa: BLE001",
+    "1169": "from fastapi import HTTPException",
+    "1170": "",
+    "1171": "raise HTTPException(",
+    "1172": "status_code=status.HTTP_503_SERVICE_UNAVAILABLE,",
+    "1173": "detail=f\"Schema fetch failed: {exc}\","
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1240-1246",
+   "citation": "nautilus/transport/fastapi_app.py:1250-1256",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "d2a0c20c58cde3e7",
    "lines": {
-    "1240": "",
-    "1241": "bound: str | None = _caller_identity(request)[\"agent_id\"]",
-    "1242": "if bound:",
-    "1243": "return bound",
-    "1244": "reviewer = request.headers.get(\"X-Nautilus-Reviewer\") or request.headers.get(\"X-Reviewer\")",
-    "1245": "if not reviewer:",
-    "1246": "raise HTTPException("
+    "1250": "",
+    "1251": "bound: str | None = _caller_identity(request)[\"agent_id\"]",
+    "1252": "if bound:",
+    "1253": "return bound",
+    "1254": "reviewer = request.headers.get(\"X-Nautilus-Reviewer\") or request.headers.get(\"X-Reviewer\")",
+    "1255": "if not reviewer:",
+    "1256": "raise HTTPException("
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1429-1433",
+   "citation": "nautilus/transport/fastapi_app.py:1439-1443",
    "cited_in": [
     "docs/reference/errors/rules.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "8eafd6401bff9005",
    "lines": {
-    "1429": "except AlreadyDecidedError as exc:",
-    "1430": "raise HTTPException(",
-    "1431": "status_code=status.HTTP_409_CONFLICT,",
-    "1432": "detail={\"error\": \"already_decided\", \"current_status\": exc.current_status},",
-    "1433": ") from exc"
+    "1439": "except AlreadyDecidedError as exc:",
+    "1440": "raise HTTPException(",
+    "1441": "status_code=status.HTTP_409_CONFLICT,",
+    "1442": "detail={\"error\": \"already_decided\", \"current_status\": exc.current_status},",
+    "1443": ") from exc"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:165-170",
+   "citation": "nautilus/transport/fastapi_app.py:166-171",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "f983f81ddbbd212b",
    "lines": {
-    "165": "subjects: dict[str, str] = {}",
-    "166": "for agent_id, record in cast(\"dict[str, object]\", agents).items():",
-    "167": "subject = getattr(record, \"subject\", None)",
-    "168": "if isinstance(subject, str) and subject:",
-    "169": "subjects[subject] = str(agent_id)",
-    "170": "return subjects"
+    "166": "subjects: dict[str, str] = {}",
+    "167": "for agent_id, record in cast(\"dict[str, object]\", agents).items():",
+    "168": "subject = getattr(record, \"subject\", None)",
+    "169": "if isinstance(subject, str) and subject:",
+    "170": "subjects[subject] = str(agent_id)",
+    "171": "return subjects"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:1761-1773",
+   "citation": "nautilus/transport/fastapi_app.py:1771-1783",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "296c6cc1243dfb25",
    "lines": {
-    "1761": "def _parse_audit_dt(value: str | None) -> datetime | None:",
-    "1762": "\"\"\"Parse an ISO-8601 datetime query param, or 400 on bad input.\"\"\"",
-    "1763": "if not value:",
-    "1764": "return None",
-    "1765": "try:",
-    "1766": "return datetime.fromisoformat(value)",
-    "1767": "except ValueError as exc:",
-    "1768": "from fastapi import HTTPException",
-    "1769": "",
-    "1770": "raise HTTPException(",
-    "1771": "status_code=status.HTTP_400_BAD_REQUEST,",
-    "1772": "detail=f\"invalid datetime: {value!r}\",",
-    "1773": ") from exc"
+    "1771": "def _parse_audit_dt(value: str | None) -> datetime | None:",
+    "1772": "\"\"\"Parse an ISO-8601 datetime query param, or 400 on bad input.\"\"\"",
+    "1773": "if not value:",
+    "1774": "return None",
+    "1775": "try:",
+    "1776": "return datetime.fromisoformat(value)",
+    "1777": "except ValueError as exc:",
+    "1778": "from fastapi import HTTPException",
+    "1779": "",
+    "1780": "raise HTTPException(",
+    "1781": "status_code=status.HTTP_400_BAD_REQUEST,",
+    "1782": "detail=f\"invalid datetime: {value!r}\",",
+    "1783": ") from exc"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:184-190",
+   "citation": "nautilus/transport/fastapi_app.py:185-191",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "75e415c36ef02e3c",
    "lines": {
-    "184": "log.warning(",
-    "185": "\"api.keys is empty, so every data and governance route will answer \"",
-    "186": "\"401 Not authenticated. Only /healthz, /readyz and /metrics are \"",
-    "187": "\"reachable. Add a key under 'api: keys:' — 'nautilus init' writes \"",
-    "188": "\"one for you.\"",
-    "189": ")",
-    "190": "return"
+    "185": "log.warning(",
+    "186": "\"api.keys is empty, so every data and governance route will answer \"",
+    "187": "\"401 Not authenticated. Only /healthz, /readyz and /metrics are \"",
+    "188": "\"reachable. Add a key under 'api: keys:' — 'nautilus init' writes \"",
+    "189": "\"one for you.\"",
+    "190": ")",
+    "191": "return"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:193-200",
+   "citation": "nautilus/transport/fastapi_app.py:194-201",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "d3eb595e87a4b133",
    "lines": {
-    "193": "log.warning(",
-    "194": "\"api.keys%s %s a bare string: bound to no agent_id, so it can ask as \"",
-    "195": "\"any agent and call every governance route. Use the \"",
-    "196": "\"{key, agent_id, capabilities} form to scope it.\",",
-    "197": "f\"[{bare[0]}]\" if len(bare) == 1 else str(bare),",
-    "198": "\"is\" if len(bare) == 1 else \"are\",",
-    "199": ")",
-    "200": ""
+    "194": "log.warning(",
+    "195": "\"api.keys%s %s a bare string: bound to no agent_id, so it can ask as \"",
+    "196": "\"any agent and call every governance route. Use the \"",
+    "197": "\"{key, agent_id, capabilities} form to scope it.\",",
+    "198": "f\"[{bare[0]}]\" if len(bare) == 1 else str(bare),",
+    "199": "\"is\" if len(bare) == 1 else \"are\",",
+    "200": ")",
+    "201": ""
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:241",
+   "citation": "nautilus/transport/fastapi_app.py:242",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "e86ed4932c210db0",
    "lines": {
-    "241": "could drive tens of MB/s onto the audit volume. That volume is the"
+    "242": "could drive tens of MB/s onto the audit volume. That volume is the"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:300-320",
+   "citation": "nautilus/transport/fastapi_app.py:301-321",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "155170053b172730",
    "lines": {
-    "300": "await send(",
-    "301": "{",
-    "302": "\"type\": \"http.response.start\",",
-    "303": "\"status\": status.HTTP_413_CONTENT_TOO_LARGE,",
-    "304": "\"headers\": [",
-    "305": "(b\"content-type\", b\"application/json\"),",
-    "306": "(b\"content-length\", str(len(body)).encode(\"ascii\")),",
-    "307": "],",
-    "308": "}",
-    "309": ")",
-    "310": "await send({\"type\": \"http.response.body\", \"body\": body})",
-    "311": "",
+    "301": "await send(",
+    "302": "{",
+    "303": "\"type\": \"http.response.start\",",
+    "304": "\"status\": status.HTTP_413_CONTENT_TOO_LARGE,",
+    "305": "\"headers\": [",
+    "306": "(b\"content-type\", b\"application/json\"),",
+    "307": "(b\"content-length\", str(len(body)).encode(\"ascii\")),",
+    "308": "],",
+    "309": "}",
+    "310": ")",
+    "311": "await send({\"type\": \"http.response.body\", \"body\": body})",
     "312": "",
-    "313": "# Probes and the scrape endpoint are never gated: a full request queue must not",
-    "314": "# take the pod out of rotation, which would turn saturation into a restart loop.",
-    "315": "# How long /readyz waits on the session store before calling it not ready.",
-    "316": "# Kubernetes probes default to a 1s timeout; anything past this is already",
-    "317": "# a failed probe, so the only thing a longer wait buys is a stuck handler.",
-    "318": "_READY_PROBE_TIMEOUT_S: float = 2.0",
-    "319": "",
-    "320": "_UNGATED_PATHS = frozenset({\"/healthz\", \"/readyz\", \"/metrics\"})"
+    "313": "",
+    "314": "# Probes and the scrape endpoint are never gated: a full request queue must not",
+    "315": "# take the pod out of rotation, which would turn saturation into a restart loop.",
+    "316": "# How long /readyz waits on the session store before calling it not ready.",
+    "317": "# Kubernetes probes default to a 1s timeout; anything past this is already",
+    "318": "# a failed probe, so the only thing a longer wait buys is a stuck handler.",
+    "319": "_READY_PROBE_TIMEOUT_S: float = 2.0",
+    "320": "",
+    "321": "_UNGATED_PATHS = frozenset({\"/healthz\", \"/readyz\", \"/metrics\"})"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:360-380",
+   "citation": "nautilus/transport/fastapi_app.py:361-381",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "8444ec4f807517b5",
    "lines": {
-    "360": "}",
-    "361": ").encode(\"utf-8\")",
-    "362": "await send(",
-    "363": "{",
-    "364": "\"type\": \"http.response.start\",",
-    "365": "\"status\": status.HTTP_503_SERVICE_UNAVAILABLE,",
-    "366": "\"headers\": [",
-    "367": "(b\"content-type\", b\"application/json\"),",
-    "368": "(b\"content-length\", str(len(body)).encode(\"ascii\")),",
-    "369": "(b\"retry-after\", b\"1\"),",
-    "370": "],",
-    "371": "}",
-    "372": ")",
-    "373": "await send({\"type\": \"http.response.body\", \"body\": body})",
-    "374": "",
+    "361": "}",
+    "362": ").encode(\"utf-8\")",
+    "363": "await send(",
+    "364": "{",
+    "365": "\"type\": \"http.response.start\",",
+    "366": "\"status\": status.HTTP_503_SERVICE_UNAVAILABLE,",
+    "367": "\"headers\": [",
+    "368": "(b\"content-type\", b\"application/json\"),",
+    "369": "(b\"content-length\", str(len(body)).encode(\"ascii\")),",
+    "370": "(b\"retry-after\", b\"1\"),",
+    "371": "],",
+    "372": "}",
+    "373": ")",
+    "374": "await send({\"type\": \"http.response.body\", \"body\": body})",
     "375": "",
-    "376": "# The console's own assets: htmx, the stylesheet, the favicon. Public bytes with",
-    "377": "# no caller in them, served by Starlette's ``StaticFiles``, which already emits",
-    "378": "# ``etag`` and ``last-modified`` -- so a shared cache stores them and revalidates",
-    "379": "# them correctly on its own. This is the only prefix on the surface where",
-    "380": "# caching is a win, so it is the only exemption."
+    "376": "",
+    "377": "# The console's own assets: htmx, the stylesheet, the favicon. Public bytes with",
+    "378": "# no caller in them, served by Starlette's ``StaticFiles``, which already emits",
+    "379": "# ``etag`` and ``last-modified`` -- so a shared cache stores them and revalidates",
+    "380": "# them correctly on its own. This is the only prefix on the surface where",
+    "381": "# caching is a win, so it is the only exemption."
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:504-508",
+   "citation": "nautilus/transport/fastapi_app.py:505-509",
    "cited_in": [
     "docs/reference/errors/library.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "9d8dbc28ffa64af8",
    "lines": {
-    "504": "@asynccontextmanager",
-    "505": "async def lifespan(app: FastAPI) -> AsyncGenerator[None]:",
-    "506": "\"\"\"ASGI lifespan — build/setup broker on startup, close on shutdown.\"\"\"",
-    "507": "if existing_broker is not None:",
-    "508": "broker = existing_broker"
+    "505": "@asynccontextmanager",
+    "506": "async def lifespan(app: FastAPI) -> AsyncGenerator[None]:",
+    "507": "\"\"\"ASGI lifespan — build/setup broker on startup, close on shutdown.\"\"\"",
+    "508": "if existing_broker is not None:",
+    "509": "broker = existing_broker"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:650",
+   "citation": "nautilus/transport/fastapi_app.py:651",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "c5eb34c67c6b9200",
    "lines": {
-    "650": "bound: str | None = caller[\"agent_id\"]"
+    "651": "bound: str | None = caller[\"agent_id\"]"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:661-668",
+   "citation": "nautilus/transport/fastapi_app.py:662-669",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "127a4bd6d1b2c776",
    "lines": {
-    "661": ")",
-    "662": "context = dict(body.context)",
-    "663": "header_token = request.headers.get(SESSION_TOKEN_HEADER)",
-    "664": "if header_token and \"session_token\" not in context:",
-    "665": "context[\"session_token\"] = header_token",
-    "666": "try:",
-    "667": "return await broker.arequest(",
-    "668": "body.agent_id,"
+    "662": ")",
+    "663": "context = dict(body.context)",
+    "664": "header_token = request.headers.get(SESSION_TOKEN_HEADER)",
+    "665": "if header_token and \"session_token\" not in context:",
+    "666": "context[\"session_token\"] = header_token",
+    "667": "try:",
+    "668": "return await broker.arequest(",
+    "669": "body.agent_id,"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:690-697",
+   "citation": "nautilus/transport/fastapi_app.py:691-698",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "783169764293d7e3",
    "lines": {
-    "690": "# The credential is real; the session it named is not its own.",
-    "691": "from fastapi import HTTPException",
-    "692": "",
-    "693": "raise HTTPException(",
-    "694": "status_code=status.HTTP_403_FORBIDDEN,",
-    "695": "detail=str(exc),",
-    "696": ") from exc",
-    "697": "except SessionTokenError as exc:"
+    "691": "# The credential is real; the session it named is not its own.",
+    "692": "from fastapi import HTTPException",
+    "693": "",
+    "694": "raise HTTPException(",
+    "695": "status_code=status.HTTP_403_FORBIDDEN,",
+    "696": "detail=str(exc),",
+    "697": ") from exc",
+    "698": "except SessionTokenError as exc:"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:699-705",
+   "citation": "nautilus/transport/fastapi_app.py:700-706",
    "cited_in": [
     "docs/reference/errors/sessions.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "6480d6108eb1edfb",
    "lines": {
-    "699": "# ``verify_session_token`` already answers 401 for the header; a",
-    "700": "# caller that put the same token in ``context`` got a 500, so the",
-    "701": "# status reported which field was used rather than what was wrong,",
-    "702": "# and every refused credential looked like a Nautilus fault.",
-    "703": "from fastapi import HTTPException",
-    "704": "",
-    "705": "raise HTTPException("
+    "700": "# ``verify_session_token`` already answers 401 for the header; a",
+    "701": "# caller that put the same token in ``context`` got a 500, so the",
+    "702": "# status reported which field was used rather than what was wrong,",
+    "703": "# and every refused credential looked like a Nautilus fault.",
+    "704": "from fastapi import HTTPException",
+    "705": "",
+    "706": "raise HTTPException("
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:712-718",
+   "citation": "nautilus/transport/fastapi_app.py:713-719",
    "cited_in": [
     "docs/reference/errors/session-tokens.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "9c0cd0c5bd0d2af2",
    "lines": {
-    "712": "# closed is right — an unrecorded decision must not be served — but",
-    "713": "# this is our recorder being down, not a bad request, and the",
-    "714": "# caller's only useful move is to retry once /readyz clears. It",
-    "715": "# already reports the same sink, so the pod drains on its own.",
-    "716": "from fastapi import HTTPException",
-    "717": "",
-    "718": "log.error(\"audit write failed, refusing the request: %s\", exc)"
+    "713": "# closed is right — an unrecorded decision must not be served — but",
+    "714": "# this is our recorder being down, not a bad request, and the",
+    "715": "# caller's only useful move is to retry once /readyz clears. It",
+    "716": "# already reports the same sink, so the pod drains on its own.",
+    "717": "from fastapi import HTTPException",
+    "718": "",
+    "719": "log.error(\"audit write failed, refusing the request: %s\", exc)"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:722-735",
+   "citation": "nautilus/transport/fastapi_app.py:723-736",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "47c05116e8055244",
    "lines": {
-    "722": "f\"Nautilus could not record this request and will not \"",
-    "723": "f\"serve what it cannot account for: {exc}\"",
-    "724": "),",
-    "725": "headers={\"Retry-After\": \"5\"},",
-    "726": ") from exc",
-    "727": "except ValueError as exc:",
-    "728": "# Malformed caller input inside ``context`` — notably",
-    "729": "# ``scope_constraints`` — which used to leave here as a 500.",
-    "730": "from fastapi import HTTPException",
-    "731": "",
-    "732": "raise HTTPException(",
-    "733": "status_code=status.HTTP_400_BAD_REQUEST,",
-    "734": "detail=str(exc),",
-    "735": ") from exc"
+    "723": "f\"Nautilus could not record this request and will not \"",
+    "724": "f\"serve what it cannot account for: {exc}\"",
+    "725": "),",
+    "726": "headers={\"Retry-After\": \"5\"},",
+    "727": ") from exc",
+    "728": "except ValueError as exc:",
+    "729": "# Malformed caller input inside ``context`` — notably",
+    "730": "# ``scope_constraints`` — which used to leave here as a 500.",
+    "731": "from fastapi import HTTPException",
+    "732": "",
+    "733": "raise HTTPException(",
+    "734": "status_code=status.HTTP_400_BAD_REQUEST,",
+    "735": "detail=str(exc),",
+    "736": ") from exc"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:737-744",
+   "citation": "nautilus/transport/fastapi_app.py:738-745",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "a0c40c2042d15ec8",
    "lines": {
-    "737": "# ------------------------------------------------------------------",
-    "738": "# Route registrations",
-    "739": "# ------------------------------------------------------------------",
-    "740": "",
-    "741": "@app.post(",
-    "742": "\"/v1/request\",",
-    "743": "response_model=BrokerResponse,",
-    "744": "dependencies=["
+    "738": "# ------------------------------------------------------------------",
+    "739": "# Route registrations",
+    "740": "# ------------------------------------------------------------------",
+    "741": "",
+    "742": "@app.post(",
+    "743": "\"/v1/request\",",
+    "744": "response_model=BrokerResponse,",
+    "745": "dependencies=["
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:826-873",
+   "citation": "nautilus/transport/fastapi_app.py:836-883",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "54fd04759349b8c4",
    "lines": {
-    "826": "Any exception from the store downgrades to 503 so rolling",
-    "827": "restarts take the pod out of rotation cleanly.",
-    "828": "\"\"\"",
-    "829": "broker: Broker | None = getattr(request.app.state, \"broker\", None)",
-    "830": "ready = bool(getattr(request.app.state, \"ready\", False))",
-    "831": "if broker is None or not ready:",
-    "832": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "833": "return {\"status\": \"not_ready\", \"reason\": \"startup_incomplete\"}",
-    "834": "# The audit sink is checked first: an entry is written before any",
-    "835": "# request answers, so a sink that has stopped accepting writes fails",
-    "836": "# every request, and the probe that exists to drain a pod said ok.",
-    "837": "audit_logger: Any = getattr(broker, \"audit_logger\", None)",
-    "838": "audit_problem = audit_logger.probe() if audit_logger is not None else None",
-    "839": "if audit_problem is not None:",
-    "840": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "841": "return {\"status\": \"not_ready\", \"reason\": audit_problem}",
-    "842": "store: Any = getattr(broker, \"session_store\", None)",
-    "843": "if store is None:",
-    "844": "# Broker without an exposed session_store still counts as ready",
-    "845": "# (the probe is best-effort — AC-12.5).",
-    "846": "return {\"status\": \"ok\"}",
-    "847": "try:",
-    "848": "if hasattr(store, \"aget\"):",
-    "849": "# Bounded, because a store that is *down* answers fast and a",
-    "850": "# store that is reachable but frozen does not answer at all:",
-    "851": "# ``acquire_timeout_s`` covers taking a new pooled connection,",
-    "852": "# and the sentinel read runs on one that is already open. An",
-    "853": "# unbounded probe is a probe the kubelet gives up on, so the pod",
-    "854": "# is never drained and every probe leaves a wedged handler.",
-    "855": "await asyncio.wait_for(store.aget(_READY_PROBE_KEY), _READY_PROBE_TIMEOUT_S)",
-    "856": "elif hasattr(store, \"get\"):",
-    "857": "store.get(_READY_PROBE_KEY)",
-    "858": "# The schema stamp is checked at boot, which covers the replica",
-    "859": "# coming up and misses the one already serving: a rolling upgrade",
-    "860": "# migrates the shared store under every pod that has not been",
-    "861": "# replaced yet. Re-reading it here drains this pod instead of",
-    "862": "# letting it read-modify-write rows it does not understand.",
-    "863": "verify: Any = getattr(store, \"averify_schema\", None)",
-    "864": "if callable(verify):",
-    "865": "probe: Any = verify()",
-    "866": "await asyncio.wait_for(probe, _READY_PROBE_TIMEOUT_S)",
-    "867": "except TimeoutError:",
-    "868": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "869": "return {\"status\": \"not_ready\", \"reason\": \"session_store_timeout\"}",
-    "870": "except Exception as exc:  # noqa: BLE001 — any backend failure → 503.",
-    "871": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "872": "return {\"status\": \"not_ready\", \"reason\": type(exc).__name__}",
-    "873": "return {\"status\": \"ok\"}"
+    "836": "Any exception from the store downgrades to 503 so rolling",
+    "837": "restarts take the pod out of rotation cleanly.",
+    "838": "\"\"\"",
+    "839": "broker: Broker | None = getattr(request.app.state, \"broker\", None)",
+    "840": "ready = bool(getattr(request.app.state, \"ready\", False))",
+    "841": "if broker is None or not ready:",
+    "842": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "843": "return {\"status\": \"not_ready\", \"reason\": \"startup_incomplete\"}",
+    "844": "# The audit sink is checked first: an entry is written before any",
+    "845": "# request answers, so a sink that has stopped accepting writes fails",
+    "846": "# every request, and the probe that exists to drain a pod said ok.",
+    "847": "audit_logger: Any = getattr(broker, \"audit_logger\", None)",
+    "848": "audit_problem = audit_logger.probe() if audit_logger is not None else None",
+    "849": "if audit_problem is not None:",
+    "850": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "851": "return {\"status\": \"not_ready\", \"reason\": audit_problem}",
+    "852": "store: Any = getattr(broker, \"session_store\", None)",
+    "853": "if store is None:",
+    "854": "# Broker without an exposed session_store still counts as ready",
+    "855": "# (the probe is best-effort — AC-12.5).",
+    "856": "return {\"status\": \"ok\"}",
+    "857": "try:",
+    "858": "if hasattr(store, \"aget\"):",
+    "859": "# Bounded, because a store that is *down* answers fast and a",
+    "860": "# store that is reachable but frozen does not answer at all:",
+    "861": "# ``acquire_timeout_s`` covers taking a new pooled connection,",
+    "862": "# and the sentinel read runs on one that is already open. An",
+    "863": "# unbounded probe is a probe the kubelet gives up on, so the pod",
+    "864": "# is never drained and every probe leaves a wedged handler.",
+    "865": "await asyncio.wait_for(store.aget(_READY_PROBE_KEY), _READY_PROBE_TIMEOUT_S)",
+    "866": "elif hasattr(store, \"get\"):",
+    "867": "store.get(_READY_PROBE_KEY)",
+    "868": "# The schema stamp is checked at boot, which covers the replica",
+    "869": "# coming up and misses the one already serving: a rolling upgrade",
+    "870": "# migrates the shared store under every pod that has not been",
+    "871": "# replaced yet. Re-reading it here drains this pod instead of",
+    "872": "# letting it read-modify-write rows it does not understand.",
+    "873": "verify: Any = getattr(store, \"averify_schema\", None)",
+    "874": "if callable(verify):",
+    "875": "probe: Any = verify()",
+    "876": "await asyncio.wait_for(probe, _READY_PROBE_TIMEOUT_S)",
+    "877": "except TimeoutError:",
+    "878": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "879": "return {\"status\": \"not_ready\", \"reason\": \"session_store_timeout\"}",
+    "880": "except Exception as exc:  # noqa: BLE001 — any backend failure → 503.",
+    "881": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "882": "return {\"status\": \"not_ready\", \"reason\": type(exc).__name__}",
+    "883": "return {\"status\": \"ok\"}"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:830-833",
+   "citation": "nautilus/transport/fastapi_app.py:840-843",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "25e4b09c790c734b",
    "lines": {
-    "830": "ready = bool(getattr(request.app.state, \"ready\", False))",
-    "831": "if broker is None or not ready:",
-    "832": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "833": "return {\"status\": \"not_ready\", \"reason\": \"startup_incomplete\"}"
+    "840": "ready = bool(getattr(request.app.state, \"ready\", False))",
+    "841": "if broker is None or not ready:",
+    "842": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "843": "return {\"status\": \"not_ready\", \"reason\": \"startup_incomplete\"}"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:839-841",
+   "citation": "nautilus/transport/fastapi_app.py:849-851",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "cdbe48b063fabab7",
    "lines": {
-    "839": "if audit_problem is not None:",
-    "840": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "841": "return {\"status\": \"not_ready\", \"reason\": audit_problem}"
+    "849": "if audit_problem is not None:",
+    "850": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "851": "return {\"status\": \"not_ready\", \"reason\": audit_problem}"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:867-869",
+   "citation": "nautilus/transport/fastapi_app.py:877-879",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "4f672192194eef55",
    "lines": {
-    "867": "except TimeoutError:",
-    "868": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "869": "return {\"status\": \"not_ready\", \"reason\": \"session_store_timeout\"}"
+    "877": "except TimeoutError:",
+    "878": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "879": "return {\"status\": \"not_ready\", \"reason\": \"session_store_timeout\"}"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:870-872",
+   "citation": "nautilus/transport/fastapi_app.py:880-882",
    "cited_in": [
     "docs/reference/errors/transport.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "862c81a1c8a8608c",
    "lines": {
-    "870": "except Exception as exc:  # noqa: BLE001 — any backend failure → 503.",
-    "871": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
-    "872": "return {\"status\": \"not_ready\", \"reason\": type(exc).__name__}"
+    "880": "except Exception as exc:  # noqa: BLE001 — any backend failure → 503.",
+    "881": "response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE",
+    "882": "return {\"status\": \"not_ready\", \"reason\": type(exc).__name__}"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:895",
+   "citation": "nautilus/transport/fastapi_app.py:905",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "77e419c46ccc8ab6",
    "lines": {
-    "895": "body: dict[str, Any],"
+    "905": "body: dict[str, Any],"
    }
   },
   {
-   "citation": "nautilus/transport/fastapi_app.py:925-932",
+   "citation": "nautilus/transport/fastapi_app.py:935-942",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/transport/fastapi_app.py",
    "sha": "78b5b4a72afab153",
    "lines": {
-    "925": ")",
-    "926": "key_ring: KeyRing | None = getattr(request.app.state, \"key_ring\", None)",
-    "927": "if key_ring is None:",
-    "928": "from fastapi import HTTPException",
-    "929": "",
-    "930": "raise HTTPException(",
-    "931": "status_code=status.HTTP_503_SERVICE_UNAVAILABLE,",
-    "932": "detail=\"Key ring not ready\","
+    "935": ")",
+    "936": "key_ring: KeyRing | None = getattr(request.app.state, \"key_ring\", None)",
+    "937": "if key_ring is None:",
+    "938": "from fastapi import HTTPException",
+    "939": "",
+    "940": "raise HTTPException(",
+    "941": "status_code=status.HTTP_503_SERVICE_UNAVAILABLE,",
+    "942": "detail=\"Key ring not ready\","
    }
   },
   {

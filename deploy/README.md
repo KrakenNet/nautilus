@@ -57,13 +57,25 @@ cd /path/to/nautilus                      # repository root, where Dockerfile li
 
 # Default image — no adapter drivers. Enough for `type: static` and
 # `type: rest` sources and a sqlite/memory session store.
-docker build -t nautilus:0.2.2 .
+docker build -t nautilus:0.2.6.dev0 .
 
 # What the manifests in this directory need: configmap.yaml declares a
 # `postgres` source and `session_store.backend: postgres`, and asyncpg is an
 # optional extra.
-docker build --build-arg EXTRAS="--extra postgres" -t nautilus:0.2.2-postgres .
+docker build \
+  --build-arg EXTRAS="--extra postgres" \
+  --build-arg BUILD_REV="$(git rev-parse HEAD)$(git diff --quiet || echo -dirty)" \
+  -t nautilus:0.2.6.dev0-postgres .
 ```
+
+`BUILD_REV` is what a running container answers `GET /healthz` with, and it is
+the only thing that separates two images built from the same release line —
+`0.2.6.dev0` is shared by every commit between two releases, by design.
+`.dockerignore` excludes `.git/`, so no layer can work the revision out for
+itself and it has to be passed in. **Omit it and the image answers
+`"build": "unknown"`** — deliberately, rather than repeating the version and
+looking like a real answer. The build is not refused: an sdist has no revision
+to give.
 
 `EXTRAS` is passed verbatim to `uv sync`. Available extras (from
 `pyproject.toml`): `postgres`, `pgvector`, `elasticsearch`, `neo4j`,
@@ -76,9 +88,14 @@ Skipping this is the single most common first failure — see
 Verify what you built:
 
 ```bash
-docker run --rm nautilus:0.2.2-postgres version
-# 0.2.2
+docker run --rm nautilus:0.2.6.dev0-postgres version
+# 0.2.6.dev0
+# build: 6b2879595e642133a8a04ba184659a8a8389d336-dirty
 ```
+
+Line 1 is the release line, line 2 the revision, so `… version | head -1` still
+gives the bare version. On the distroless runtime image this is the only way to
+ask which build you are holding without starting it: there is no shell in it.
 
 ---
 
@@ -149,7 +166,7 @@ docker run -d \
   -v /srv/nautilus/keys/attestation.pem:/etc/nautilus/keys/attestation.pem:ro \
   -v /srv/nautilus/state:/var/lib/nautilus \
   -v /srv/nautilus/audit:/var/log/nautilus \
-  nautilus:0.2.2-postgres \
+  nautilus:0.2.6.dev0-postgres \
   serve --config /config/nautilus.yaml --bind 0.0.0.0:8000 --log-format json
 ```
 
@@ -177,7 +194,7 @@ docker ps --filter name=nautilus --format '{{.Names}}\t{{.Status}}'
 
 ```bash
 curl -fsS localhost:8000/healthz;  echo
-# {"status":"ok"}
+# {"status":"ok","version":"0.2.6.dev0","build":"6b2879595e642133a8a04ba184659a8a8389d336-dirty"}
 
 curl -fsS localhost:8000/readyz;   echo
 # {"status":"ok"}
@@ -203,14 +220,14 @@ registry prefix, so the tag has to already exist on the node. Pick one:
 
 ```bash
 # kind
-kind load docker-image nautilus:0.2.2-postgres --name <cluster>
+kind load docker-image nautilus:0.2.6.dev0-postgres --name <cluster>
 
 # minikube
-minikube image load nautilus:0.2.2-postgres
+minikube image load nautilus:0.2.6.dev0-postgres
 
 # a real cluster: push, then edit deployment.yaml's `image:` to match
-docker tag nautilus:0.2.2-postgres registry.example.com/nautilus:0.2.2-postgres
-docker push registry.example.com/nautilus:0.2.2-postgres
+docker tag nautilus:0.2.6.dev0-postgres registry.example.com/nautilus:0.2.6.dev0-postgres
+docker push registry.example.com/nautilus:0.2.6.dev0-postgres
 ```
 
 ### 3.2 Fill in the Secrets
@@ -357,7 +374,7 @@ evicts the neighbours too.
 | | Liveness | Readiness |
 |---|---|---|
 | Endpoint | `GET /healthz` | `GET /readyz` |
-| Healthy | `200 {"status":"ok"}` | `200 {"status":"ok"}` |
+| Healthy | `200 {"status":"ok","version":"…","build":"…"}` — see [`GET /healthz`](../docs/reference/rest-api.md#get-healthz) for what the two identifiers mean | `200 {"status":"ok"}` |
 | Checks | nothing — the process answers, therefore it is alive | startup completed, **and** the audit sink is writable, **and** the session store answers a sentinel read on `_ready_probe_`, **and** the store's schema stamp still matches this build |
 | `initialDelaySeconds` | 5 | 5 |
 | `periodSeconds` | 30 | 10 |
@@ -502,10 +519,10 @@ deployment, with its own namespace, Secret and database
 ### Kubernetes
 
 ```bash
-docker build --build-arg EXTRAS="--extra postgres" -t nautilus:0.2.3-postgres .
-kind load docker-image nautilus:0.2.3-postgres --name <cluster>   # or push to your registry
+docker build --build-arg EXTRAS="--extra postgres" -t nautilus:0.2.6-postgres .
+kind load docker-image nautilus:0.2.6-postgres --name <cluster>   # or push to your registry
 
-kubectl -n nautilus set image deployment/nautilus nautilus=nautilus:0.2.3-postgres
+kubectl -n nautilus set image deployment/nautilus nautilus=nautilus:0.2.6-postgres
 kubectl -n nautilus rollout status deployment/nautilus --timeout=180s
 # deployment "nautilus" successfully rolled out
 ```
@@ -555,11 +572,11 @@ kubectl -n nautilus exec deploy/nautilus -- \
 
 ```bash
 docker stop nautilus && docker rm nautilus
-docker run -d --name nautilus … nautilus:0.2.3-postgres serve …   # §2.3, new tag
+docker run -d --name nautilus … nautilus:0.2.6-postgres serve …   # §2.3, new tag
 ```
 
 Rollback is the same two commands with the previous tag — which is why §1 tags
-`0.2.2` (the version in `pyproject.toml`) rather than reusing `latest`. `latest` plus
+`0.2.6.dev0` (the version in `pyproject.toml`) rather than reusing `latest`. `latest` plus
 `imagePullPolicy: IfNotPresent` is the classic silent no-op: the node already
 has *a* `latest` and never fetches yours.
 
@@ -600,7 +617,7 @@ line of `logs --previous`. All of these are exit code 2:
 
 | `describe pod` line | Cause | Fix |
 |---|---|---|
-| `Failed to pull image "nautilus:0.2.2-postgres": … not found`, `STATUS ErrImagePull` / `ImagePullBackOff` | the tag exists on your laptop, not on the node | §3.1 — `kind load` / `minikube image load` / push and re-tag |
+| `Failed to pull image "nautilus:0.2.6.dev0-postgres": … not found`, `STATUS ErrImagePull` / `ImagePullBackOff` | the tag exists on your laptop, not on the node | §3.1 — `kind load` / `minikube image load` / push and re-tag |
 | `Error: secret "nautilus-secrets" not found`, `STATUS CreateContainerConfigError` | Secret missing or in the wrong namespace | §3.2, and check `-n` |
 | `Error: configmap "nautilus-config" not found` | same, for the ConfigMap | `kubectl -n nautilus apply -f deploy/configmap.yaml` |
 | `0/3 nodes are available: 3 Insufficient cpu.`, `STATUS Pending` | `requests.cpu: "1"` does not fit | free capacity, or lower the request knowing the broker's per-request work is CPU-bound on one event loop |

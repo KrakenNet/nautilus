@@ -48,11 +48,15 @@ spec:
           # with the extras those sources need or the pod CrashLoopBackOffs on
           # "whose driver is not installed":
           #   docker build --build-arg EXTRAS="--extra postgres" \
-          #     -t nautilus:0.2.2-postgres .
+          #     --build-arg BUILD_REV="$(git rev-parse HEAD)" \
+          #     -t nautilus:0.2.6.dev0-postgres .
+          # BUILD_REV is what GET /healthz reports as `build`; without it the
+          # image answers "unknown" and two rollouts of the same release line
+          # are indistinguishable over the network.
           # The image is distroless: it has no shell and no pip, so an extra
           # cannot be added to a built image. Pin a tag; `latest` with
           # imagePullPolicy: IfNotPresent silently keeps the old layer.
-          image: nautilus:0.2.2-postgres
+          image: nautilus:0.2.6.dev0-postgres
           imagePullPolicy: IfNotPresent
           args: ["serve", "--config", "/config/nautilus.yaml", "--bind", "0.0.0.0:8000", "--log-format", "json"]
           ports:

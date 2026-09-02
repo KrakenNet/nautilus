@@ -234,3 +234,100 @@ def test_the_default_build_target_is_the_distroless_runtime() -> None:
         "The debug stage is declared last and wins the default, so the "
         "documented build command ships the operator-only image."
     )
+
+
+# ---------------------------------------------------------------------------
+# WAVE ops12 — the identifier the image reports has to move with the image.
+# ---------------------------------------------------------------------------
+
+
+def _run_version(image: str) -> tuple[int, list[str]]:
+    """Return ``(exit code, stdout lines)`` of ``docker run --rm <image> version``."""
+    result = subprocess.run(  # noqa: S603 — trusted binary
+        [_DOCKER or "docker", "run", "--rm", image, "version"],
+        check=False,
+        capture_output=True,
+        timeout=120,
+    )
+    return result.returncode, result.stdout.decode("utf-8", errors="replace").splitlines()
+
+
+def test_version_subcommand_reports_the_packaged_version_and_an_honest_build(
+    built_image: str,
+) -> None:
+    """The only way to ask a distroless image what it is without starting it.
+
+    The fixture builds with no ``--build-arg BUILD_REV``, which is the case that
+    has to be got right: the image says ``unknown``. It does **not** repeat the
+    version — that fallback is what let 76 commits of images all answer with one
+    well-formed string and look healthy doing it.
+    """
+    import tomllib
+
+    packaged = tomllib.loads((_repo_root() / "pyproject.toml").read_text(encoding="utf-8"))
+    code, lines = _run_version(built_image)
+    assert code == 0, f"`docker run --rm {built_image} version` exited {code}"
+    assert lines[0] == packaged["project"]["version"], (
+        f"line 1 must be the packaged version alone; got {lines[0]!r}"
+    )
+    assert lines[1] == "build: unknown", (
+        "an image built without --build-arg BUILD_REV must say so, not fall "
+        f"back to the version; got {lines[1]!r}"
+    )
+
+
+def test_the_build_arg_is_what_two_images_of_one_release_line_differ_by() -> None:
+    """Two builds of the same source, two revisions, two answers.
+
+    Everything above the stamp is byte-identical between these two builds, so
+    this is also the check that the ``ARG``/``ENV`` pair sits late enough to be
+    cheap: the second build re-uses every layer.
+    """
+    root = _repo_root()
+    # Two arbitrary distinct 40-hex values: this asserts the *wiring* — that
+    # what --build-arg receives is what the container reports — so what matters
+    # is that they differ, not that they name commits. Real shas would need
+    # HEAD~1, which does not exist in CI's depth-1 clone.
+    tags = {
+        "nautilus:test-rev-a": "1111111111111111111111111111111111111111",
+        "nautilus:test-rev-b": "2222222222222222222222222222222222222222",
+    }
+    answers: dict[str, str] = {}
+    try:
+        for tag, rev in tags.items():
+            build = subprocess.run(  # noqa: S603 — trusted binary
+                [
+                    _DOCKER or "docker",
+                    "build",
+                    "--target",
+                    "runtime",
+                    "--build-arg",
+                    f"BUILD_REV={rev}",
+                    "-t",
+                    tag,
+                    ".",
+                ],
+                check=False,
+                capture_output=True,
+                cwd=str(root),
+                timeout=900,
+            )
+            assert build.returncode == 0, (
+                f"build of {tag} failed:\n{build.stderr.decode('utf-8', errors='replace')}"
+            )
+            code, lines = _run_version(tag)
+            assert code == 0, f"`docker run --rm {tag} version` exited {code}"
+            answers[tag] = lines[1]
+            assert answers[tag] == f"build: {rev}", (
+                f"{tag} was built with BUILD_REV={rev} and reports {answers[tag]!r}; "
+                "the --build-arg does not reach the runtime image"
+            )
+        a, b = answers.values()
+        assert a != b, "two images built from different revisions report the same build"
+    finally:
+        subprocess.run(  # noqa: S603 — trusted binary
+            [_DOCKER or "docker", "image", "rm", "-f", *tags],
+            check=False,
+            capture_output=True,
+            timeout=120,
+        )

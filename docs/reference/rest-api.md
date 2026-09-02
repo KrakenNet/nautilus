@@ -1195,14 +1195,46 @@ curl -sS "$NAUTILUS/healthz"
 ```
 
 ```json
-{"status": "ok", "version": "0.2.2"}
+{"status": "ok", "version": "0.2.6.dev0", "build": "6b2879595e642133a8a04ba184659a8a8389d336-dirty"}
 ```
+
+Two fields, because they answer two different questions.
 
 `version` is read from the installed distribution's metadata — the same string
 `nautilus version` prints and the same one `GET /openapi.json` reports in
 `info.version`. It is a property of the wheel, not of the process: restarting,
 reconfiguring or reloading rules never changes it, and two replicas answering
-different strings means the rollout is half done.
+different strings means the rollout is half done. It is also shared by every
+commit between two releases, which is what makes the second field necessary.
+
+`build` is the revision the image was built from. It cannot be derived inside
+the image — `.dockerignore` excludes `.git/`, so no layer can run
+`git describe` — so it is handed to the build and carried as an environment
+variable:
+
+```bash
+docker build --target runtime \
+  --build-arg BUILD_REV="$(git rev-parse HEAD)$(git diff --quiet || echo -dirty)" \
+  -t nautilus:0.2.6.dev0 .
+```
+
+The `-dirty` suffix is why the sample above ends in one: that image was built
+from a working tree with uncommitted changes, and a bare commit sha would have
+named a commit whose contents are not what is in the image. A release image,
+built by CI from a clean checkout, carries the sha alone.
+
+**An image built without that argument answers `"build": "unknown"`.** It does
+not fall back to `version`, and that is deliberate: for 76 commits every image
+answered with a well-formed `0.2.2`, so two builds that differed by an entire
+release's worth of behaviour looked identical over the network. `unknown` is
+not a build identifier, does not compare equal to one, and makes a rollout that
+lost its provenance say so. The build is not refused without the argument —
+an sdist or a source tarball has no revision to supply, and inventing one is
+worse than admitting there is none.
+
+The pair is what a rollout check needs: `version` separates release lines,
+`build` separates two images on one release line, and two replicas of the same
+image agree on both.
 
 **It is the only credential-free surface that carries it.** `/metrics` was the
 other candidate and is the wrong one: `target_info` comes from the OpenTelemetry
@@ -1215,13 +1247,28 @@ from the exposition entirely. A build stamp that disappears when observability
 is off is not an answer at 3 a.m. `/healthz` has no optional dependency, no
 off-switch and no auth.
 
-**On releases up to and including 0.2.5 this field does not exist** — `/healthz`
-answers `{"status": "ok"}` and nothing on the network names the build. Against
-one of those, ask the image or the pod instead:
+**On releases up to and including 0.2.5 neither field exists** — `/healthz`
+answers `{"status": "ok"}` and nothing on the network names the build. **And
+the CLI is no fallback there.** On those releases `nautilus version` looks the
+distribution up under the *import* name:
+
+```python
+ver = metadata.version("nautilus")     # v0.2.5, nautilus/cli/version.py
+```
+
+The distribution is `nautilus-rkm`, so that raises `PackageNotFoundError` on
+every real install and the command prints
+`nautilus (version unknown — package metadata missing)` to stderr and exits
+`1`. It is not a packaging problem and no build flag fixes it. Against a
+release at or below 0.2.5, the only identifier left is the one the node
+recorded — `docker inspect --format '{{.Image}}' <container>`, or
+`kubectl get pod <pod> -o jsonpath='{.status.containerStatuses[0].imageID}'`.
+
+From this build on, both work:
 
 <!-- not-executed: needs an image tag / pod name this page does not have -->
 ```bash
-docker run --rm <image> version           # the `nautilus version` subcommand
+docker run --rm <image> version           # line 1 version, line 2 build
 kubectl exec <pod> -- nautilus version
 ```
 
@@ -1313,8 +1360,9 @@ None of that is an authentication difference: `/admin` requires a credential on
 every build, and making it stop would be a downgrade, not a fix. What changed is
 that the redirect became conditional and grew a fallback body, because on a
 default config the redirect had nowhere real to land. To read the build off a
-released instance, use `nautilus version` inside the container — see
-[`GET /healthz`](#get-healthz).
+released instance at or below 0.2.5, neither this route nor `nautilus version`
+inside the container will tell you — see [`GET /healthz`](#get-healthz) for what
+does.
 
 The scratch broker on this page sets `ui.enabled: true`, so it takes the first
 branch — a `302` with an empty body. Ask for the head, not the body:
@@ -1339,7 +1387,7 @@ With `ui.enabled: false` — the default, and what a fresh deployment has —
 ```json
 {
   "service": "nautilus",
-  "version": "0.2.2",
+  "version": "0.2.6.dev0",
   "admin_console": "disabled (set ui.enabled: true to serve /admin)",
   "routes": {
     "openapi": "/docs",
@@ -1384,7 +1432,7 @@ curl -sS "$NAUTILUS/openapi.json" | jq '{title: .info.title, version: .info.vers
 ```
 
 ```json
-{"title": "Nautilus", "version": "0.2.2", "paths": 30}
+{"title": "Nautilus", "version": "0.2.6.dev0", "paths": 30}
 ```
 
 `info.version` is the build, taken from the installed distribution's metadata —

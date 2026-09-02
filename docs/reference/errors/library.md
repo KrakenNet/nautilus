@@ -243,7 +243,7 @@ PolicyEngineError: Broker.declare_handoff() failed for source='analyst' receivin
 
 ### `create_app requires either config_path or existing_broker`
 
-**`ValueError`**, `nautilus/transport/fastapi_app.py:504-508`. No interpolation. Both
+**`ValueError`**, `nautilus/transport/fastapi_app.py:505-509`. No interpolation. Both
 `config_path` (positional) and `existing_broker` were `None`.
 
 **Means.** `create_app` builds the ASGI app around a broker. With neither argument there is nothing
@@ -293,7 +293,7 @@ schema, which is deliberate: an adapter is usable for queries before it can desc
 
 **Status.** `GET /v1/adapters/{name}/schema` answers **501** with
 `{"detail": "Adapter '<name>' does not support schema introspection"}`
-(`nautilus/transport/fastapi_app.py:1152-1157`) — a permanent refusal, not a retryable one, which
+(`nautilus/transport/fastapi_app.py:1162-1167`) — a permanent refusal, not a retryable one, which
 is why it is not the 503 the other schema failures get. Inside a request the drift gate treats a
 raising `get_schema` as "cannot check" and the request still answers **200**.
 

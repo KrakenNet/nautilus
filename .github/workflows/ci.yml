@@ -27,6 +27,12 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Depth stays 1; tags do not come with it, and the version-rot check
+          # in tests/defects/test_wave_ops12_build_identity.py compares the
+          # packaged version against every released tag. Without this it fails
+          # on every run for a reason that is not the version.
+          fetch-tags: true
 
       - name: Install uv
         uses: astral-sh/setup-uv@v7

@@ -10,7 +10,7 @@ serialised per caller, and it lives in the session store — so most failures he
 
 **`SessionNotOwnedError`** (`nautilus/core/__init__.py:32`), raised at
 `nautilus/core/broker.py:2408-2413`. **HTTP 403** via
-`nautilus/transport/fastapi_app.py:699-705`.
+`nautilus/transport/fastapi_app.py:700-706`.
 
 **Interpolates.** `{state.session_id!r}` — the session named in the request.
 `{agent_id!r}` — the caller that tried to use it.
@@ -32,7 +32,7 @@ data_classifications=[…])` (`nautilus/core/broker.py:1688`, keyword-only and a
 
 **`BrokerBusyError`** (`nautilus/core/__init__.py:46`), built by `_busy_message`
 (`nautilus/core/broker.py:343-374`) and raised at `:2089` and `:2093`. **HTTP 503** with
-`Retry-After: 1` (`nautilus/transport/fastapi_app.py:690-697`).
+`Retry-After: 1` (`nautilus/transport/fastapi_app.py:691-698`).
 
 **Interpolates.** `{budget}` — `session_store.lock_timeout_s`. `{what!r}` — which ledger was
 being taken (the session key or the principal key). `{endpoint}` — the session store as

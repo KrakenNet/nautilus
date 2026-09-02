@@ -3776,7 +3776,7 @@ routes that do exist:
 $ curl -s http://127.0.0.1:8000/ | python -m json.tool
 {
     "service": "nautilus",
-    "version": "0.2.2",
+    "version": "0.2.6.dev0",
     "admin_console": "disabled (set ui.enabled: true to serve /admin)",
     "routes": {
         "openapi": "/docs",
@@ -7111,7 +7111,7 @@ issuers:
   no per-proxy subject allowlist, so front the broker with two proxies and
   either one can assert the other's identities.
 - `agents.<id>.subject` — a `dict[subject → agent_id]` built by
-  `nautilus/transport/fastapi_app.py:165-170`. The key is the raw header value.
+  `nautilus/transport/fastapi_app.py:166-171`. The key is the raw header value.
 
 Both properties are visible from one host. Two agents bound to two subjects that
 differ only in their namespace, and a single peer asserting each in turn:
@@ -7376,7 +7376,7 @@ base table, and a rule change or a routing surprise is enough to lose it.
 The transcript below needs
 [`session_tokens.enabled: true`](#session_tokensenabled); on a default config
 the route answers `409 session tokens are disabled`.
-`POST /v1/sessions` takes an untyped body (`nautilus/transport/fastapi_app.py:895`),
+`POST /v1/sessions` takes an untyped body (`nautilus/transport/fastapi_app.py:905`),
 and `clearance` in that body would be an authorization assertion signed by
 Nautilus and verifiable by anyone against the public JWKS. It is not a parameter
 of `Broker.issue_session_token` at all (`nautilus/core/broker.py:1368-1374`) —

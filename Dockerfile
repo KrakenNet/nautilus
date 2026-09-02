@@ -17,6 +17,18 @@
 # Debug target is opt-in:
 #     docker build --target debug -t nautilus:debug .
 
+# The commit this image is built from. ``.dockerignore`` excludes ``.git/``, so
+# no layer here can derive it -- it has to be handed in:
+#     docker build --build-arg BUILD_REV=$(git rev-parse HEAD) -t nautilus:dev .
+# Absent, the image reports ``unknown`` from ``GET /healthz`` and ``nautilus
+# version`` rather than falling back to the wheel version. That fallback is what
+# hid the defect: every build between two releases answered with the same
+# well-formed version string, so two different images looked identical over the
+# network. The build is NOT refused without the arg, because an sdist or a
+# tarball has no revision to supply and inventing one is worse than admitting
+# there is none.
+ARG BUILD_REV=""
+
 ############################
 # Stage 1 — builder        #
 ############################
@@ -86,6 +98,11 @@ RUN apt-get update \
 
 COPY --from=builder /app /app
 
+# Redeclared to pull the global ARG into this stage's scope, and set last so a
+# new revision invalidates only this layer.
+ARG BUILD_REV=""
+ENV NAUTILUS_BUILD_REV=${BUILD_REV}
+
 ENTRYPOINT ["/app/.venv/bin/python", "-m", "nautilus"]
 CMD ["serve", "--config", "/config/nautilus.yaml", "--bind", "0.0.0.0:8000"]
 
@@ -138,6 +155,12 @@ ENV PYTHONPATH=/app \
     PATH=/app/.venv/bin:$PATH \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
+
+# The build stamp, set as late as possible: every layer above is identical
+# between two builds of the same source, so changing the revision re-uses the
+# whole image and rewrites one metadata entry.
+ARG BUILD_REV=""
+ENV NAUTILUS_BUILD_REV=${BUILD_REV}
 
 # Drop root (distroless ships a `nonroot` user at UID/GID 65532).
 USER 65532:65532

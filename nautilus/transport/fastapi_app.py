@@ -67,6 +67,7 @@ from nautilus import __version__
 from nautilus.attestation.jwks import export_jwks
 from nautilus.attestation.key_ring import KeyRing
 from nautilus.attestation.session_token import SessionTokenError, SessionTokenService
+from nautilus.build import build_rev
 from nautilus.core import BrokerBusyError, PurposeNotPermittedError, SessionNotOwnedError
 from nautilus.core.broker import Broker
 from nautilus.core.metrics import register_rkm_queue, register_ruleset
@@ -811,8 +812,17 @@ def create_app(
 
     @app.get("/healthz", tags=["probes"])
     async def healthz() -> dict[str, str]:  # pyright: ignore[reportUnusedFunction]
-        """Liveness — AC-12.4 (no broker dependency) — and which build answered."""
-        return {"status": "ok", "version": __version__}
+        """Liveness — AC-12.4 (no broker dependency) — and which build answered.
+
+        Two fields, because they answer different questions. ``version`` is the
+        release line and is a property of the wheel, so every build between two
+        releases shares it. ``build`` is the commit, handed to ``docker build``
+        as ``--build-arg BUILD_REV`` (``.git/`` is not in the build context), and
+        it is what tells two images of the same release line apart during a
+        rollout. An image built without the arg answers ``"unknown"`` here rather
+        than repeating ``version`` — see :mod:`nautilus.build`.
+        """
+        return {"status": "ok", "version": __version__, "build": build_rev()}
 
     @app.get("/readyz", tags=["probes"])
     async def readyz(  # pyright: ignore[reportUnusedFunction]

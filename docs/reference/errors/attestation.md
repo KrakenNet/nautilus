@@ -12,10 +12,10 @@ Both routes need the `keys` capability. `curl` examples assume the
 
 | Message | Status | Line | Meaning |
 | --- | --- | --- | --- |
-| `reviewer is required (no control characters)` | 400 | `fastapi_app.py:1013` | `POST /v1/keys/rotate` needs `reviewer` in the body. Control characters are stripped, so a value made only of them reads as absent. |
-| `reviewer and reason are required (no control characters)` | 400 | `fastapi_app.py:1059` | `POST /v1/keys/{kid}/revoke` needs both. |
-| `kid must be a UUID` | 400 | `fastapi_app.py:1052` | The `{kid}` path segment is not a UUID. Take it from `/v1/keys/jwks.json`. |
-| `kid {kid!r} not found` | 404 | `fastapi_app.py:1079` | No key with that id in the ring. |
+| `reviewer is required (no control characters)` | 400 | `fastapi_app.py:1023` | `POST /v1/keys/rotate` needs `reviewer` in the body. Control characters are stripped, so a value made only of them reads as absent. |
+| `reviewer and reason are required (no control characters)` | 400 | `fastapi_app.py:1069` | `POST /v1/keys/{kid}/revoke` needs both. |
+| `kid must be a UUID` | 400 | `fastapi_app.py:1062` | The `{kid}` path segment is not a UUID. Take it from `/v1/keys/jwks.json`. |
+| `kid {kid!r} not found` | 404 | `fastapi_app.py:1089` | No key with that id in the ring. |
 
 ```bash
 curl -s -X POST "$NAUTILUS/v1/keys/rotate" \
@@ -26,14 +26,14 @@ curl -s -X POST "$NAUTILUS/v1/keys/not-a-uuid/revoke" \
 ```
 
 Rotation and revocation are also refused with **HTTP 409** carrying the underlying `ValueError`
-text (`fastapi_app.py:1066-1074`) — most often:
+text (`fastapi_app.py:1076-1084`) — most often:
 
 ### `kid {kid!r} is the current primary; rotate first, then revoke`
 
 `nautilus/core/broker.py:1553`. Revoking the primary would leave nothing to sign with. Call
 `POST /v1/keys/rotate` first, then revoke the now-superseded kid.
 
-Both routes answer **503 `Key ring not ready`** (`fastapi_app.py:939`) when
+Both routes answer **503 `Key ring not ready`** (`fastapi_app.py:949`) when
 `app.state.key_ring` is unset, and raise
 `session tokens are disabled (session_tokens.enabled: false)` when tokens are off — see
 [session-tokens.md](session-tokens.md).

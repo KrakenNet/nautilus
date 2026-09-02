@@ -31,6 +31,7 @@ import yaml
 from fastapi.testclient import TestClient
 
 from nautilus import __version__
+from nautilus.build import build_rev
 from nautilus.transport.fastapi_app import create_app
 
 if TYPE_CHECKING:
@@ -67,11 +68,16 @@ def test_version_has_exactly_one_source() -> None:
 
 
 def test_healthz_names_the_build_without_a_credential(tmp_path: Path) -> None:
-    """The pin. No API key, no otel extra, no config — still an answer."""
+    """The pin. No API key, no otel extra, no config — still an answer.
+
+    ``build`` joined ``version`` here later: a version is shared by every commit
+    between two releases, so it cannot tell two builds of one release line
+    apart. See ``test_wave_ops12_build_identity.py`` for that half.
+    """
     with TestClient(create_app(_config(tmp_path))) as client:
         response = client.get("/healthz")  # note: no X-API-Key
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "version": __version__}
+    assert response.json() == {"status": "ok", "version": __version__, "build": build_rev()}
 
 
 def test_openapi_info_version_is_the_build_not_fastapis_default(tmp_path: Path) -> None:

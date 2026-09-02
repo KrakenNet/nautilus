@@ -786,7 +786,7 @@ indistinguishable from major drift and would quarantine a source that is merely 
 
 **Status.** Two callers, two answers. `GET /v1/adapters/{name}/schema` answers **503** with
 `{"detail": "Schema fetch failed: neo4j: get_schema failed for source 'cases': ..."}`
-(`nautilus/transport/fastapi_app.py:1158-1163`). Inside a request, the broker's drift gate treats a
+(`nautilus/transport/fastapi_app.py:1168-1173`). Inside a request, the broker's drift gate treats a
 raising `get_schema` as "cannot check" and proceeds, so the request itself still answers **200**.
 
 **Fix.** Read `{exc}`: it is the driver's diagnosis, not ours. Restore the database, or fix the
@@ -1004,7 +1004,7 @@ returning `unknown()`, so an outage is not mistaken for schema drift.
 
 **Status.** `GET /v1/adapters/{name}/schema` answers **503** with
 `{"detail": "Schema fetch failed: influxdb: get_schema failed for source 'metrics': ..."}`
-(`nautilus/transport/fastapi_app.py:1158-1163`); inside a request the drift gate skips the check
+(`nautilus/transport/fastapi_app.py:1168-1173`); inside a request the drift gate skips the check
 and the request still answers **200**.
 
 **Fix.** Grant the token read access to the bucket, or fix the bucket name (`table:`, falling back

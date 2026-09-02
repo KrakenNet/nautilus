@@ -313,16 +313,30 @@ exit codes, and its failure strings.
 
 ## `nautilus version`
 
-Print the version recorded in the installed distribution's metadata. Takes no
-arguments.
+Print the version recorded in the installed distribution's metadata, and the
+revision the artifact was built from. Takes no arguments.
 
 ```bash
 nautilus version
 ```
 
 ```text
-0.2.2
+0.2.6.dev0
+build: 6b2879595e642133a8a04ba184659a8a8389d336-dirty
 ```
+
+Line 1 is the release line and is shared by every commit between two releases,
+so `nautilus version | head -1` is still the bare version string. Line 2 is the
+build: it comes from `NAUTILUS_BUILD_REV`, which the image sets from
+`docker build --build-arg BUILD_REV=…`. Outside a container — running from a
+checkout or a plain `pip install` — nothing sets it and the line reads
+`build: unknown`, which is the honest answer: a wheel carries no record of the
+tree it was built from. It is never filled in with the version, because two
+images that differ only in revision would then look identical.
+
+On the distroless runtime image this is the only way to ask which build you are
+holding without starting it as a server; `GET /healthz` reports the same two
+strings once it is running.
 
 **Exit codes** — returns `0` or `1`. Never returns `2` (except from argparse,
 for an unrecognised flag) and never returns `3`.

@@ -526,11 +526,19 @@ warning above as one object:
 ## 4. Monitor
 
 - `GET /healthz` — liveness, and the build: it answers
-  `{"status": "ok", "version": "0.2.2"}`, taking the version from the installed
-  distribution's metadata. No credential, so a synthetic check or a runbook
-  `curl` can read it; two replicas answering different strings means the
-  rollout is half done. Releases up to 0.2.5 answer `{"status": "ok"}` with no
-  version — there, run `nautilus version` inside the container instead.
+  `{"status": "ok", "version": "0.2.6.dev0", "build": "6b28795…-dirty"}`. The
+  version comes from the installed distribution's metadata; the build is the
+  revision passed to `docker build --build-arg BUILD_REV=…`, and is `unknown`
+  on an image built without it. No credential, so a synthetic check or a
+  runbook `curl` can read both; two replicas disagreeing on either means the
+  rollout is half done, and two replicas agreeing on `version` while
+  disagreeing on `build` is the case the version alone could never show you.
+  Releases up to 0.2.5 answer `{"status": "ok"}` with no version, and
+  `nautilus version` is no fallback there: those builds look the distribution
+  up as `metadata.version("nautilus")` when it is installed as `nautilus-rkm`,
+  so the command prints `nautilus (version unknown — package metadata missing)`
+  and exits 1 on every install. On those releases nothing the container can be
+  asked names the build — identify it by the image digest the node recorded.
 - `GET /readyz` — readiness (verifies the audit
   sink is writable and the session store responds; the `reason` field on a
   503 names which one failed). Every request writes an audit entry before it

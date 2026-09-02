@@ -97,18 +97,36 @@ a module, not in a README, not in a doc page. The one we used to keep in
 `nautilus/__init__.py` drifted from `pyproject.toml` in 0.1.4 and needed a
 follow-up commit to re-sync; there is now no second side to drift.
 
-**A branch reports its own lineage, not the newest tag, and that is a hazard.**
-The version in the tree is whatever the last release commit *on this branch* set.
-A long-lived branch cut before a release and never brought up to date builds
-artifacts stamped with its fork point: at the time of writing, this branch is 70
-commits past `v0.2.2` and does not contain `v0.2.3`, `v0.2.4` or `v0.2.5`, so
-everything it builds calls itself `0.2.2` — the same string as a released wheel
-from months earlier. Nothing in the code can fix that, because an installed
-wheel genuinely cannot know it was built from an unreleased tree; do not try to
-paper over it with a git-describe scheme, which only moves the lie into builds
-that have no tag. Merge `main` before you cut a release branch, and treat two
-artifacts answering `/healthz` with the same version but different behaviour as
-a release-process bug, not a runtime one.
+**A branch reports its own lineage, not the newest tag, and that used to rot
+silently.** The version in the tree is whatever the last release commit *on this
+branch* set. A long-lived branch cut before a release and never brought up to
+date builds artifacts stamped with its fork point: this branch sat 76 commits
+past `v0.2.2` while `v0.2.3`, `v0.2.4` and `v0.2.5` were tagged and on PyPI, so
+everything it built called itself `0.2.2` — the same string as a released wheel
+from months earlier. Two things now stop that:
+
+- `tests/defects/test_wave_ops12_build_identity.py` goes red when the packaged
+  version is not strictly ahead of **every** tag in the repository (or, on a
+  commit that is itself tagged, is not equal to that tag). It is deliberately
+  not a reachability rule: `v0.2.3`–`v0.2.5` are not ancestors of this branch,
+  and a rule that only looked at reachable tags would have called `0.2.2`
+  correct on the exact tree where it was colliding with a published wheel. On
+  an unreleased tree the honest string is a `.devN` of the next version — the
+  tree is `0.2.6.dev0` now. The check skips outside a git checkout (a wheel has
+  no tags to compare against) and **fails, rather than skipping, in a checkout
+  with no tags**, because `actions/checkout` fetches none by default and a
+  skip there is how this rots again; `ci.yml` sets `fetch-tags: true`.
+- A version cannot separate two builds of one release line, and is not asked
+  to. The revision does: `docker build --build-arg BUILD_REV=…` sets
+  `NAUTILUS_BUILD_REV` in the image, and `GET /healthz` and `nautilus version`
+  report it. `.dockerignore` excludes `.git/`, so nothing inside the build can
+  derive it; an image built without the argument reports `unknown` and never
+  falls back to the version string.
+
+Still merge `main` before you cut a release branch. Two artifacts answering
+`/healthz` with the same `version` *and* the same `build` but different
+behaviour is a release-process bug; the same `version` and different `build` is
+just a rollout in progress, which is what the field is for.
 
 ## Reporting Issues
 

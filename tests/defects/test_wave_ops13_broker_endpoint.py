@@ -172,9 +172,7 @@ def test_ops13_a_wedged_session_store_is_named_in_the_audit_record(
         f"{_STORE_ENDPOINT!r}. An operator paged by this 503 has to open "
         f"nautilus.yaml to learn which host the session store is."
     )
-    assert _STORE_ENDPOINT in response.text, (
-        f"the 503 body names no address:\n{response.text}"
-    )
+    assert _STORE_ENDPOINT in response.text, f"the 503 body names no address:\n{response.text}"
     warnings = [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING]
     assert any(_STORE_ENDPOINT in message for message in warnings), (
         f"a source that dies leaves a WARNING naming its endpoint; a broker-level "
