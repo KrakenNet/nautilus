@@ -1429,12 +1429,47 @@ changes one of them is **refused whole**: not half-applied, not silently
 ignored. Which key, and why, is [the table below](#which-keys-reload-and-which-need-a-restart).
 
 ```bash
-kill -HUP "$(pgrep -f 'nautilus serve')"          # or: systemctl reload nautilus
+systemctl reload nautilus
 ```
 
 ```text
 INFO:nautilus.cli.serve:SIGHUP: reloaded /etc/nautilus/nautilus.yaml (adopted sources)
 ```
+
+**`systemctl reload` is the host mechanism, and it is the only one that reaches
+exactly this broker.** It works because the unit carries
+`ExecReload=/bin/kill -HUP $MAINPID` — see [the unit file](hardening.md#start-it) —
+and systemd knows its own service's main PID, so the signal lands on that
+process and on no other. A unit without that line refuses the command outright,
+exit `3`, having signalled nothing:
+
+```text
+Failed to reload nautilus.service: Job type reload is not applicable for unit nautilus.service.
+```
+
+**Do not find the process by name.** `kill -HUP "$(pgrep -f 'nautilus serve')"`
+looks equivalent and is not. The runtime image's own command line is
+`/app/.venv/bin/python -m nautilus serve --config /config/nautilus.yaml …`, and a
+container process is an ordinary host process, so on a host running a container
+*and* this unit — the two deployments this documentation describes — `pgrep`
+returns both. `-f` also matches any command line that merely mentions the
+string, related or not: an editor, a `grep`, and the shell running the command
+itself every time it arrives as `ssh host '…'`, `sudo bash -c '…'` or an
+Ansible `shell:` task. The quoting then hides the damage instead of containing
+it — two matches become one argument and `kill` gives up, so the host that most
+needs the reload gets nothing:
+
+```text
+bash: line 1: kill: 2875069
+2875071: arguments must be process or job IDs
+```
+
+Zero matches are no safer: `kill -HUP ""` fails with `not a pid or valid job
+spec`. It is an error, not a no-op.
+
+Outside systemd, take the PID from the broker's own startup line rather than
+from a pattern — `serve` is one process with no workers, and uvicorn names it:
+`INFO:     Started server process [2894748]`.
 
 The reload validates before it swaps, through the same `broker_for_serve` that
 `serve` runs before it binds and `config check` runs before a deploy, so a
@@ -1458,7 +1493,7 @@ finding that out from the config file is cheaper than finding it out from the
 log:
 
 ```bash
-nautilus config check /etc/nautilus/nautilus.yaml && kill -HUP "$(pgrep -f 'nautilus serve')"
+nautilus config check /etc/nautilus/nautilus.yaml && systemctl reload nautilus
 ```
 
 For a key that needs a restart, it is still the two-step operation it always

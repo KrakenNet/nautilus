@@ -6856,6 +6856,12 @@ ExecStart=/usr/local/bin/nautilus serve \
   --config /etc/nautilus/nautilus.yaml \
   --bind 127.0.0.1:8000 \
   --log-format json
+# The config reload. systemd expands $MAINPID to this service's own main
+# process, which is the only way to reach it exactly: a host that also runs the
+# container image has a second process whose command line contains
+# `nautilus serve`. Without this line `systemctl reload nautilus` fails with
+# "Job type reload is not applicable for unit nautilus.service".
+ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 NoNewPrivileges=true
 PrivateTmp=true
