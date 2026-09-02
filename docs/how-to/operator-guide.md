@@ -470,6 +470,13 @@ OTel `trace_id`/`span_id` are attached when a span is active. The broker's
 *decision* record is the audit log (below) — application logs are for the
 surrounding operational events.
 
+**It reformats the `nautilus.*` loggers, not the whole stream.** Uvicorn
+attaches its own handlers to its own loggers and does not propagate to the root,
+so the lines it owns — `Started server process`, `Application startup complete`,
+the per-request access line — stay in uvicorn's text shape under either value of
+the flag. `msg` carries the Nautilus message verbatim, so a `grep` for the
+message text — not for the whole `LEVEL:logger:` line — matches under either.
+
 ### Log verbosity
 
 `--log-level` sets one threshold for both halves of the stream: the root
@@ -1442,6 +1449,17 @@ ignored. Which key, and why, is [the table below](#which-keys-reload-and-which-n
 
 ```bash
 systemctl reload nautilus
+journalctl -u nautilus --since '1 min ago' --no-pager | grep 'SIGHUP:'
+```
+
+**Grep the message, not the line.** The unit this documentation publishes
+([Start it](hardening.md#start-it)) runs `--log-format json`, so under it
+`journalctl` returns the first of these two; a broker started without the flag
+returns the second. The `msg` field is the text form's message verbatim, which
+is why one `grep` finds the record either way:
+
+```json
+{"ts": "2026-09-01T11:26:16.482913+00:00", "level": "INFO", "logger": "nautilus.cli.serve", "module": "serve", "msg": "SIGHUP: reloaded /etc/nautilus/nautilus.yaml (adopted sources)"}
 ```
 
 ```text
@@ -1479,9 +1497,13 @@ bash: line 1: kill: 2875069
 Zero matches are no safer: `kill -HUP ""` fails with `not a pid or valid job
 spec`. It is an error, not a no-op.
 
-Outside systemd, take the PID from the broker's own startup line rather than
-from a pattern — `serve` is one process with no workers, and uvicorn names it:
-`INFO:     Started server process [2894748]`.
+Outside systemd, take the PID from the startup line rather than from a pattern —
+`serve` runs uvicorn in this process and asks for no workers, so there is exactly
+one and uvicorn names it: `INFO:     Started server process [2894748]`. That line
+is uvicorn's, not Nautilus's, which is also why `--log-format json` leaves it in
+this shape. A uvicorn release that renames it would break this step, so the
+string is pinned against the installed uvicorn in
+`tests/defects/test_wave_ops13_documented_log_format.py`.
 
 The reload validates before it swaps, through the same `broker_for_serve` that
 `serve` runs before it binds and `config check` runs before a deploy, so a
@@ -1489,6 +1511,12 @@ config those two refuse is refused here **in the same sentence**. On a refusal
 nothing moves: the running config keeps answering, the process does not exit,
 and the refusal is on the audit log as a `config_reload_refused` entry whose
 `raw_intent` is that sentence.
+
+Same record, same two formats — `grep 'SIGHUP:'` finds either:
+
+```json
+{"ts": "2026-09-01T11:26:41.905774+00:00", "level": "ERROR", "logger": "nautilus.cli.serve", "module": "serve", "msg": "SIGHUP: refused; the running config is unchanged. Reason: invalid config: classification labels are not levels of the 'classification' hierarchy (unclassified, cui, confidential, secret, top-secret): sources['tickets'].classification='internal'"}
+```
 
 ```text
 ERROR:nautilus.cli.serve:SIGHUP: refused; the running config is unchanged. Reason: invalid config: classification labels are not levels of the 'classification' hierarchy (unclassified, cui, confidential, secret, top-secret): sources['tickets'].classification='internal'
