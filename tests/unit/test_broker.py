@@ -336,11 +336,43 @@ async def test_adapters_run_concurrently() -> None:
 
 
 @pytest.mark.unit
-def test_no_public_reload_api() -> None:
-    """AC-1.5: ``Broker.reload`` is deferred beyond Phase 1."""
+def test_reload_adopts_a_subset_and_nothing_else() -> None:
+    """AC-1.5's deferral of ``Broker.reload`` is over; its *scope* is the contract.
+
+    The method exists now (SIGHUP, ``nautilus/cli/serve.py``). What has to stay
+    true is that it is not a general "re-read the file" button: the audit sink,
+    the key ring and the session store are what make this broker single-writer,
+    and a reload that adopted them would leave one process describing a sink
+    another process owns.
+    """
+    from nautilus.config.models import NautilusConfig
+    from nautilus.core.broker import (
+        RELOADABLE_SESSION_STORE_KEYS,
+        RELOADABLE_TOP_LEVEL_KEYS,
+    )
+
     broker = Broker.from_config(FIXTURE_PATH)
     try:
-        assert not hasattr(broker, "reload")
+        assert hasattr(broker, "reload")
+        assert set(RELOADABLE_TOP_LEVEL_KEYS) == {"sources", "rules"}
+        # Every other top-level stanza is startup-only, by omission and on
+        # purpose -- this fails the day one is added without a decision.
+        startup_only = set(NautilusConfig.model_fields) - set(RELOADABLE_TOP_LEVEL_KEYS)
+        assert startup_only == {
+            "adapters",
+            "agents",
+            "analysis",
+            "api",
+            "attestation",
+            "audit",
+            "mcp",
+            "rkm",
+            "session_store",
+            "session_tokens",
+            "state_dir",
+            "ui",
+        }
+        assert set(RELOADABLE_SESSION_STORE_KEYS) == {"lock_timeout_s", "purpose_ttl_seconds"}
     finally:
         broker.close()
 

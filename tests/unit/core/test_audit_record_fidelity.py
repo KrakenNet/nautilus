@@ -154,7 +154,7 @@ class TestErrorRecordCorrelation:
     async def test_an_adapter_error_carries_the_request_id(self, tmp_path: Path) -> None:
         broker = _broker(tmp_path)
         broker._adapters = {  # type: ignore[attr-defined]  # noqa: SLF001
-            "nvd_db": _FakeAdapter("nvd_db", AdapterError("pg down"))
+            "nvd_db": _FakeAdapter("nvd_db", AdapterError("pg down"))  # pyright: ignore[reportAttributeAccessIssue]
         }
         response = await broker.arequest(
             agent_id="a1", intent="find vulnerabilities", context=dict(CTX)
@@ -167,7 +167,7 @@ class TestErrorRecordCorrelation:
     async def test_a_scope_error_carries_the_request_id(self, tmp_path: Path) -> None:
         broker = _broker(tmp_path)
         broker._adapters = {  # type: ignore[attr-defined]  # noqa: SLF001
-            "nvd_db": _FakeAdapter("nvd_db", ScopeEnforcementError("unsupported operator"))
+            "nvd_db": _FakeAdapter("nvd_db", ScopeEnforcementError("unsupported operator"))  # pyright: ignore[reportAttributeAccessIssue]
         }
         response = await broker.arequest(
             agent_id="a1", intent="find vulnerabilities", context=dict(CTX)
@@ -194,7 +194,7 @@ class TestErrorRecordCorrelation:
     async def test_the_audit_entry_is_correlated_too(self, tmp_path: Path) -> None:
         broker = _broker(tmp_path)
         broker._adapters = {  # type: ignore[attr-defined]  # noqa: SLF001
-            "nvd_db": _FakeAdapter("nvd_db", AdapterError("pg down"))
+            "nvd_db": _FakeAdapter("nvd_db", AdapterError("pg down"))  # pyright: ignore[reportAttributeAccessIssue]
         }
         await broker.arequest(agent_id="a1", intent="find vulnerabilities", context=dict(CTX))
         entry = next(e for e in _audit_entries(tmp_path) if e.get("event_type") == "request")

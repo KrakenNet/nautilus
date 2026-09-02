@@ -28,6 +28,7 @@ import sys
 import urllib  # noqa: F401  # pyright: ignore[reportUnusedImport] - re-exported for test monkeypatching
 import urllib.request  # noqa: F401  # pyright: ignore[reportUnusedImport] - re-exported for test monkeypatching
 from importlib import metadata
+from typing import TYPE_CHECKING, Any
 
 from nautilus.cli.health import (
     _DEFAULT_HEALTH_URL,  # pyright: ignore[reportPrivateUsage]
@@ -37,6 +38,7 @@ from nautilus.cli.serve import (
     _DEFAULT_BIND,  # pyright: ignore[reportPrivateUsage]
     ConfigRefusedError,
     _enforce_air_gap,  # pyright: ignore[reportPrivateUsage]
+    _install_reload_handler,  # pyright: ignore[reportPrivateUsage]
     _load_config_for_serve,  # pyright: ignore[reportPrivateUsage]
     _run_both,  # pyright: ignore[reportPrivateUsage]
     _run_mcp,  # pyright: ignore[reportPrivateUsage]
@@ -45,6 +47,9 @@ from nautilus.cli.serve import (
     broker_for_serve,
 )
 from nautilus.cli.version import _cmd_version  # pyright: ignore[reportPrivateUsage]
+
+if TYPE_CHECKING:
+    from collections.abc import Coroutine
 
 __all__ = [
     "ConfigRefusedError",
@@ -57,6 +62,7 @@ __all__ = [
     "_load_config_for_serve",
     "_run_both",
     "_run_mcp",
+    "_install_reload_handler",
     "_run_rest",
     "_split_bind",
     "broker_for_serve",
@@ -267,13 +273,23 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     transport = args.transport
     mcp_mode = args.mcp_mode
 
+    async def _serve(runner: Coroutine[Any, Any, None]) -> None:
+        """Wire SIGHUP on the loop that is about to run ``runner``, then run it.
+
+        Here rather than inside each ``_run_*`` because ``--transport both``
+        runs two of them: one handler for the process, installed once, whatever
+        is listening.
+        """
+        _install_reload_handler(broker, _Path(args.config), air_gapped=bool(args.air_gapped))
+        await runner
+
     try:
         if transport == "rest":
-            asyncio.run(_cli_module._run_rest(broker, host, port, log_level))  # pyright: ignore[reportPrivateUsage]
+            asyncio.run(_serve(_cli_module._run_rest(broker, host, port, log_level)))  # pyright: ignore[reportPrivateUsage]
         elif transport == "mcp":
-            asyncio.run(_cli_module._run_mcp(broker, mcp_mode, host, port, log_level))  # pyright: ignore[reportPrivateUsage]
+            asyncio.run(_serve(_cli_module._run_mcp(broker, mcp_mode, host, port, log_level)))  # pyright: ignore[reportPrivateUsage]
         else:
-            asyncio.run(_cli_module._run_both(broker, host, port, mcp_mode, log_level))  # pyright: ignore[reportPrivateUsage]
+            asyncio.run(_serve(_cli_module._run_both(broker, host, port, mcp_mode, log_level)))  # pyright: ignore[reportPrivateUsage]
     except KeyboardInterrupt:
         pass
     except RuntimeError as exc:

@@ -107,40 +107,40 @@ exit=2
 
 ## `nautilus serve`
 
-`nautilus/cli/__init__.py:218-293` and `nautilus/cli/serve.py`. All of these exit **2**.
+`nautilus/cli/__init__.py:224-309` and `nautilus/cli/serve.py`. All of these exit **2**.
 
 The three config messages are raised as `ConfigRefusedError` by
-`broker_for_serve` (`nautilus/cli/serve.py:243-284`) and printed by whichever
-command called it — `serve` at `__init__.py:250`, `config check` in
+`broker_for_serve` (`nautilus/cli/serve.py:335-376`) and printed by whichever
+command called it — `serve` at `__init__.py:256`, `config check` in
 `nautilus/cli/config.py`. That is why the two commands refuse a config in
 identical words.
 
 | Message | Line |
 | --- | --- |
-| `ERROR: config path does not exist or is not a file: {config_path}` | `nautilus/cli/serve.py:266` |
-| `ERROR: invalid config: {exc}` | `nautilus/cli/serve.py:282` |
-| `ERROR: broker construction failed: {exc}` | `nautilus/cli/serve.py:284` |
-| `ERROR: {exc}` (bind parsing, air-gapped load, serve failure) | `__init__.py:240,250,284` |
+| `ERROR: config path does not exist or is not a file: {config_path}` | `nautilus/cli/serve.py:358` |
+| `ERROR: invalid config: {exc}` | `nautilus/cli/serve.py:374` |
+| `ERROR: broker construction failed: {exc}` | `nautilus/cli/serve.py:376` |
+| `ERROR: {exc}` (bind parsing, air-gapped load, serve failure) | `__init__.py:246,256,300` |
 
 The wrapped `{exc}` texts:
 
 ### `--bind must be HOST:PORT, got {bind!r}`
 
-**`ValueError`**, `nautilus/cli/serve.py:20-26`, printed as `ERROR: --bind must be HOST:PORT,
+**`ValueError`**, `nautilus/cli/serve.py:24-30`, printed as `ERROR: --bind must be HOST:PORT,
 got 'badbind'`. Raised when the value has no `:` or an empty half.
 
 ### `--bind port must be an integer, got {port_s!r}`
 
-`nautilus/cli/serve.py:27-29`.
+`nautilus/cli/serve.py:31-33`.
 
 ### `Unable to read config '{config_path}': {exc}`
 
-**`RuntimeError`**, `nautilus/cli/serve.py:123-125`, from the `--air-gapped` pre-pass that reads
+**`RuntimeError`**, `nautilus/cli/serve.py:127-129`, from the `--air-gapped` pre-pass that reads
 the YAML before the broker does.
 
 ### `application startup failed; the server never accepted a connection. The cause is logged above.`
 
-**`RuntimeError`**, `nautilus/cli/serve.py:162-166`. uvicorn returns from `serve()` rather than
+**`RuntimeError`**, `nautilus/cli/serve.py:254-258`. uvicorn returns from `serve()` rather than
 raising when a lifespan fails, so without this the process exited **0** after never serving a
 request. The real cause — a `ConfigError`, an unreachable session store — is in the log lines
 directly above.
@@ -152,7 +152,7 @@ nautilus serve --config /nonexistent/nautilus.yaml; echo "exit=$?"
 ### `--air-gapped` warnings
 
 `--air-gapped` strips anything that would leave the host. Each removal is announced on stderr
-(`nautilus/cli/serve.py:60-105`); none is fatal.
+(`nautilus/cli/serve.py:64-109`); none is fatal.
 
 | Message |
 | --- |
@@ -383,7 +383,7 @@ nautilus attestation; echo "exit=$?"
 
 ### `ERROR: events: no subcommand given (try: list)`
 
-`nautilus/cli/events.py:66`. Exit **2**. No interpolation.
+`nautilus/cli/events.py:68`. Exit **2**. No interpolation.
 
 ```bash
 nautilus events; echo "exit=$?"

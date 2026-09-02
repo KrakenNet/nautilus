@@ -30,8 +30,9 @@ import sys
 import threading
 import time
 import uuid
-from collections.abc import AsyncIterator, Coroutine, Iterable, Mapping
+from collections.abc import AsyncIterator, Coroutine, Iterable, Iterator, Mapping
 from contextlib import AbstractAsyncContextManager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -106,6 +107,7 @@ from nautilus.core.models import (
     ErrorRecord,
     HandoffDecision,
     IntentAnalysis,
+    ReloadEventType,
     RoutingDecision,
     ScopeConstraint,
     SkipRecord,
@@ -143,6 +145,7 @@ def prime_metrics() -> None:
     exist reads as healthy.
     """
     _metrics.prime()
+
 
 _T = TypeVar("_T")
 
@@ -673,6 +676,122 @@ def _build_audit_entry(
     )
 
 
+# Keys a running broker re-reads on SIGHUP. Everything else in
+# ``nautilus.yaml`` is startup-only; see ``_restart_only_changes`` for what
+# happens when one of them changes under a running process.
+RELOADABLE_TOP_LEVEL_KEYS: tuple[str, ...] = ("sources", "rules")
+"""Top-level ``nautilus.yaml`` stanzas :meth:`Broker.reload` adopts in full."""
+
+RELOADABLE_SESSION_STORE_KEYS: tuple[str, ...] = ("lock_timeout_s", "purpose_ttl_seconds")
+"""The two ``session_store`` keys the request path reads per request.
+
+Every other key in the stanza is consumed when the store object is built --
+``backend``, ``dsn``, ``sqlite_path``, ``ttl_seconds`` and the pool sizes are
+constructor arguments to a store a reload does not replace -- so adopting them
+would publish a config that describes a store the broker is not running.
+"""
+
+
+class ConfigNotReloadableError(Exception):
+    """A new config file changes a key that is only read at startup.
+
+    Carries the dotted names of every such key, so an operator who sent
+    ``SIGHUP`` is told what to restart for rather than left wondering why the
+    file on disk and the process disagree.
+    """
+
+
+@dataclass
+class _ConfigGeneration:
+    """One atomically-installable set of what a request reads from the config.
+
+    A reload builds a whole new one and installs it with a single attribute
+    assignment on the broker. Requests already running keep reading the object
+    they pinned at entry, which is why the outgoing generation's router and
+    retired adapters are closed after it drains and not at the swap.
+    """
+
+    config: NautilusConfig
+    registry: SourceRegistry
+    router: FathomRouter
+    adapters: dict[str, Adapter]
+    intent_analyzer: IntentAnalyzer | FallbackIntentAnalyzer
+    #: Requests currently reading this generation.
+    inflight: int = 0
+    #: Set once ``inflight`` reaches zero *after* this generation was retired.
+    #: ``None`` while the generation is the live one -- nothing is waiting.
+    drained: asyncio.Event | None = None
+
+
+def _adopted_changes(old: NautilusConfig, new: NautilusConfig) -> list[str]:
+    """Dotted names of the reloadable keys that actually differ.
+
+    What a reload *did*, for the audit entry and the process log. A file
+    rewritten with no semantic change adopts nothing and says so, which is how
+    an operator tells "SIGHUP worked" from "SIGHUP read the file I meant to
+    edit and it was identical".
+    """
+    before = old.model_dump()
+    after = new.model_dump()
+    changed = [key for key in RELOADABLE_TOP_LEVEL_KEYS if before.get(key) != after.get(key)]
+    changed.extend(
+        f"session_store.{sub}"
+        for sub in RELOADABLE_SESSION_STORE_KEYS
+        if cast("dict[str, Any]", before["session_store"]).get(sub)
+        != cast("dict[str, Any]", after["session_store"]).get(sub)
+    )
+    return changed
+
+
+_PINNED_GENERATION: ContextVar[tuple[Broker, _ConfigGeneration] | None] = ContextVar(
+    "nautilus_pinned_generation", default=None
+)
+"""The (broker, generation) the current request is running on.
+
+A ``ContextVar`` rather than an argument because the generation is read from
+about thirty places spread across the request pipeline, and threading a
+parameter through all of them is a larger and more fragile change than pinning
+it once at the entry point. ``asyncio.gather`` copies the context into each
+child task, so the adapter fan-out inherits the pin.
+
+The broker is stored alongside the generation because one process can run more
+than one: a broker whose own pin is not on top of the stack falls back to its
+live generation rather than reading a stranger's sources.
+"""
+
+
+def _restart_only_changes(old: NautilusConfig, new: NautilusConfig) -> list[str]:
+    """Dotted names of keys that differ and are not reloadable.
+
+    A reload that adopted these would leave the broker describing something it
+    is not running: ``audit`` and ``attestation`` name a sink whose writer lock
+    this process already holds, ``session_tokens`` names a key ring already
+    minting tokens, ``session_store`` names a backend already dialled, and
+    ``api``/``mcp``/``ui`` are read once when the ASGI app is constructed --
+    ``api.max_concurrent_requests`` is a semaphore inside an installed
+    middleware object, not a value anything looks up again. Half-applying them
+    is worse than refusing, so the reload refuses and names them.
+    """
+    before = old.model_dump()
+    after = new.model_dump()
+    changed: list[str] = []
+    for key in sorted(set(before) | set(after)):
+        if before.get(key) == after.get(key) or key in RELOADABLE_TOP_LEVEL_KEYS:
+            continue
+        if key == "session_store":
+            live_before = cast("dict[str, Any]", before[key])
+            live_after = cast("dict[str, Any]", after[key])
+            changed.extend(
+                f"session_store.{sub}"
+                for sub in sorted(set(live_before) | set(live_after))
+                if sub not in RELOADABLE_SESSION_STORE_KEYS
+                and live_before.get(sub) != live_after.get(sub)
+            )
+            continue
+        changed.append(key)
+    return changed
+
+
 class Broker:
     """Public Nautilus facade — the sole entry point per design §3.1.
 
@@ -699,11 +818,28 @@ class Broker:
         broker_instance_id: str | None = None,
         base_dir: Path | None = None,
     ) -> None:
-        self._config = config
-        self._registry = registry
-        self._intent_analyzer = intent_analyzer
-        self._router = router
-        self._adapters = adapters
+        # Everything a request reads out of the config file, in one object so
+        # a reload can install a new one with a single assignment. A request
+        # pins the generation it started on (``_pinned_generation``) and reads
+        # every field through it, so a SIGHUP landing mid-request cannot move
+        # the sources, the rules or the per-request limits out from under it.
+        self._generation = _ConfigGeneration(
+            config=config,
+            registry=registry,
+            router=router,
+            adapters=adapters,
+            intent_analyzer=intent_analyzer,
+        )
+        # Serialises reload swaps against each other. Held on the event loop
+        # only, and never across the adapter/router teardown of the outgoing
+        # generation, so a second SIGHUP waits for the swap and not for the
+        # drain.
+        self._reload_lock = asyncio.Lock()
+        # How long a reload waits in silence for the previous generation to
+        # drain before saying so in the log. It bounds the log line, never the
+        # wait -- see :meth:`_retire`. Tune it to the slowest source's
+        # ``timeout_s`` if reloads routinely go quiet.
+        self.reload_drain_timeout_s: float = 60.0
         self._synthesizer = synthesizer
         self._audit_logger = audit_logger
         self._attestation = attestation
@@ -789,6 +925,85 @@ class Broker:
             if key_ring is not None
             else None
         )
+
+    # ------------------------------------------------------------------
+    # The reloadable generation — read through, never assigned directly
+    # ------------------------------------------------------------------
+
+    @property
+    def _live(self) -> _ConfigGeneration:
+        """The generation this call must read: the pinned one, or the current one.
+
+        A request pins at entry and every read inside it resolves here, so a
+        reload that lands halfway through cannot change the sources it is
+        querying or the rules it was routed by. Calls outside a request --
+        ``GET /v1/sources``, the metrics ruleset label, the CLI's read-only
+        surfaces -- see the current generation, which is what they are for.
+        """
+        pinned = _PINNED_GENERATION.get()
+        if pinned is not None and pinned[0] is self:
+            return pinned[1]
+        return self._generation
+
+    # Each of the five reads through :attr:`_live` and writes through to the
+    # *current* generation. The setters exist because unit tests wire fakes in
+    # by assignment and did so before there was a generation to hold them; they
+    # write to the live generation, never to a pinned one, so a fake installed
+    # mid-request would be seen by the next request and not by that one.
+
+    @property
+    def _config(self) -> NautilusConfig:
+        return self._live.config
+
+    @_config.setter
+    def _config(self, value: NautilusConfig) -> None:
+        self._generation.config = value
+
+    @property
+    def _registry(self) -> SourceRegistry:
+        return self._live.registry
+
+    @_registry.setter
+    def _registry(self, value: SourceRegistry) -> None:
+        self._generation.registry = value
+
+    @property
+    def _router(self) -> FathomRouter:
+        return self._live.router
+
+    @_router.setter
+    def _router(self, value: FathomRouter) -> None:
+        self._generation.router = value
+
+    @property
+    def _adapters(self) -> dict[str, Adapter]:
+        return self._live.adapters
+
+    @_adapters.setter
+    def _adapters(self, value: dict[str, Adapter]) -> None:
+        self._generation.adapters = value
+
+    @property
+    def _intent_analyzer(self) -> IntentAnalyzer | FallbackIntentAnalyzer:
+        return self._live.intent_analyzer
+
+    @_intent_analyzer.setter
+    def _intent_analyzer(self, value: IntentAnalyzer | FallbackIntentAnalyzer) -> None:
+        self._generation.intent_analyzer = value
+
+    @contextlib.contextmanager
+    def _pinned_generation(self) -> Iterator[None]:
+        """Hold this call to the generation that was live when it started."""
+        gen = self._generation
+        gen.inflight += 1
+        token = _PINNED_GENERATION.set((self, gen))
+        try:
+            yield
+        finally:
+            _PINNED_GENERATION.reset(token)
+            gen.inflight -= 1
+            if gen.inflight == 0 and gen.drained is not None:
+                gen.drained.set()
 
     # ------------------------------------------------------------------
     # Construction
@@ -1629,6 +1844,25 @@ class Broker:
         """
         self._refuse_if_closed("arequest")
         await self._ensure_setup()
+        with self._pinned_generation():
+            return await self._arequest_pinned(agent_id, intent, context, fact_set_hash, caller)
+
+    async def _arequest_pinned(
+        self,
+        agent_id: str,
+        intent: str,
+        context: dict[str, Any] | None,
+        fact_set_hash: str | None,
+        caller: dict[str, str] | None,
+    ) -> BrokerResponse:
+        """:meth:`arequest`'s body, running on a pinned config generation.
+
+        Split out so the pin is one ``with`` at the entry point rather than an
+        indentation change over a hundred lines: everything below reads
+        ``self._registry`` / ``self._router`` / ``self._adapters`` /
+        ``self._config`` through :attr:`_live`, which resolves to the
+        generation pinned here even if a SIGHUP installs a new one mid-request.
+        """
         context = dict(context) if context else {}
         state = _new_request_state(context, intent)
         state.fact_set_hash = fact_set_hash
@@ -1724,6 +1958,29 @@ class Broker:
         """
         self._refuse_if_closed("declare_handoff")
         await self._ensure_setup()
+        with self._pinned_generation():
+            return await self._declare_handoff_pinned(
+                source_agent_id=source_agent_id,
+                receiving_agent_id=receiving_agent_id,
+                session_id=session_id,
+                data_classifications=data_classifications,
+                rule_trace_refs=rule_trace_refs,
+                data_compartments=data_compartments,
+                session_token=session_token,
+            )
+
+    async def _declare_handoff_pinned(
+        self,
+        *,
+        source_agent_id: str,
+        receiving_agent_id: str,
+        session_id: str,
+        data_classifications: list[str],
+        rule_trace_refs: list[str] | None,
+        data_compartments: list[str] | None,
+        session_token: str | None,
+    ) -> HandoffDecision:
+        """:meth:`declare_handoff`'s body, on a pinned config generation."""
         del rule_trace_refs, data_compartments  # Phase-3 / forensic forward-compat.
         started = time.perf_counter()
         handoff_id = str(uuid.uuid4())
@@ -3511,6 +3768,188 @@ class Broker:
         self._quarantined_adapters.add(source_id)
         return True
 
+    # ------------------------------------------------------------------
+    # Reload (SIGHUP) — see nautilus/cli/serve.py for the signal wiring
+    # ------------------------------------------------------------------
+
+    async def reload(self, candidate: Broker) -> list[str]:
+        """Adopt ``candidate``'s sources, rules and live limits; retire the rest.
+
+        ``candidate`` is a broker built from the new file by the *same*
+        function ``nautilus serve`` and ``nautilus config check`` use
+        (:func:`nautilus.cli.serve.broker_for_serve`), so a config this
+        process would refuse to start on has already raised before this is
+        called and in the same words. Nothing here re-validates: a second
+        validator is a validator that drifts.
+
+        What is adopted: the source registry and its adapters, the Fathom
+        router (rule files are re-read, not just the ``rules:`` stanza, so an
+        edit inside a ``user_rules_dirs`` directory arrives too), the intent
+        analyzer -- its keyword map is generated from ``sources`` (#24), so a
+        source change that did not rebuild it would route on a stale
+        vocabulary -- and the two ``session_store`` limits the request path
+        reads per request.
+
+        What is not: everything :data:`RELOADABLE_TOP_LEVEL_KEYS` and
+        :data:`RELOADABLE_SESSION_STORE_KEYS` leave out. A file that changes
+        one of those is refused whole rather than half-applied; see
+        :func:`_restart_only_changes`.
+
+        Adapter identity is preserved for every source whose spec is
+        byte-identical: the live adapter object keeps its pool, its connect
+        cooldown and its ``_connected_adapters`` entry, and the candidate's
+        unused twin is closed. A source that changed or vanished has its
+        adapter retired and its connect bookkeeping dropped so the replacement
+        dials on next use. Schema-drift baselines and quarantines are keyed by
+        source id and survive a reload untouched: re-pointing a source at
+        another table must not be a way to clear a quarantine
+        ``nautilus adapters schema-ack`` is the way to clear.
+
+        Returns:
+            The dotted names of the keys actually adopted, in file order.
+            Empty when the new file is equivalent to the running one.
+
+        Raises:
+            ConfigNotReloadableError: When the new file changes a key that is
+                only read at startup. ``candidate`` is closed first.
+        """
+        self._refuse_if_closed("reload")
+        incoming = candidate._generation  # noqa: SLF001 - transplanting into self
+        async with self._reload_lock:
+            outgoing = self._generation
+            blocked = _restart_only_changes(outgoing.config, incoming.config)
+            if blocked:
+                await candidate.aclose()
+                raise ConfigNotReloadableError(
+                    "these keys are read once at startup and cannot be reloaded: "
+                    + ", ".join(blocked)
+                    + ". Restart the process to adopt them."
+                )
+
+            adapters, retired = self._reconcile_adapters(outgoing, incoming)
+            self._generation = _ConfigGeneration(
+                config=incoming.config,
+                registry=incoming.registry,
+                router=incoming.router,
+                adapters=adapters,
+                intent_analyzer=incoming.intent_analyzer,
+            )
+            adopted = _adopted_changes(outgoing.config, incoming.config)
+
+        # The candidate is now a shell around exactly what this reload retired:
+        # the outgoing router, the adapters no longer in service, and its own
+        # never-used audit sink, attestation sink and session store. One
+        # ``aclose`` disposes of all of it, in the order ``aclose`` documents.
+        candidate._generation = _ConfigGeneration(  # noqa: SLF001 - retiring it
+            config=incoming.config,
+            registry=incoming.registry,
+            router=outgoing.router,
+            adapters={str(i): adapter for i, adapter in enumerate(retired)},
+            intent_analyzer=incoming.intent_analyzer,
+        )
+        await self._retire(outgoing, candidate)
+        return adopted
+
+    def _reconcile_adapters(
+        self, outgoing: _ConfigGeneration, incoming: _ConfigGeneration
+    ) -> tuple[dict[str, Adapter], list[Adapter]]:
+        """Split the two generations' adapters into "keep serving" and "retire".
+
+        An unchanged source keeps the object that is already connected --
+        replacing it would drop a live pool and re-dial on the next request
+        while ``_connected_adapters`` still claimed it was up.
+        """
+        before = {source.id: source for source in outgoing.registry}
+        after = {source.id: source for source in incoming.registry}
+        adapters: dict[str, Adapter] = {}
+        retired: list[Adapter] = []
+        for source_id, spec in after.items():
+            if before.get(source_id) == spec and source_id in outgoing.adapters:
+                adapters[source_id] = outgoing.adapters[source_id]
+                retired.append(incoming.adapters[source_id])
+                continue
+            adapters[source_id] = incoming.adapters[source_id]
+            if source_id in outgoing.adapters:
+                retired.append(outgoing.adapters[source_id])
+            self._forget_connect_state(source_id)
+        for source_id, adapter in outgoing.adapters.items():
+            if source_id not in after:
+                retired.append(adapter)
+                self._forget_connect_state(source_id)
+        return adapters, retired
+
+    def _forget_connect_state(self, source_id: str) -> None:
+        """Drop the connect bookkeeping for a source whose adapter is being replaced.
+
+        Not the quarantine set and not the schema baseline: both are the record
+        of a drift an operator has to acknowledge, and a config edit is not an
+        acknowledgement.
+        """
+        self._connected_adapters.discard(source_id)
+        self._connect_failures.pop(source_id, None)
+        self._connect_locks.pop(source_id, None)
+
+    async def _retire(self, outgoing: _ConfigGeneration, shell: Broker) -> None:
+        """Close ``shell`` once nothing is still reading ``outgoing``.
+
+        The wait is what makes "in-flight requests finish on the config they
+        started with" true rather than merely likely: the swap is atomic, but
+        the adapters and the CLIPS environment the previous generation is
+        still using are real objects, and closing them under a running request
+        would fail it. The timeout only decides when to say so out loud -- it
+        never shortens the wait, because a request holding the old generation
+        is a request whose adapter must stay open.
+        """
+        outgoing.drained = asyncio.Event()
+        if outgoing.inflight == 0:
+            outgoing.drained.set()
+        waiter = asyncio.ensure_future(outgoing.drained.wait())
+        try:
+            await asyncio.wait_for(asyncio.shield(waiter), self.reload_drain_timeout_s)
+        except TimeoutError:
+            log.warning(
+                "reload: %d request(s) still running on the previous config after "
+                "%.0fs; its adapters and rule engine stay open until they finish",
+                outgoing.inflight,
+                self.reload_drain_timeout_s,
+            )
+            await waiter
+        await shell.aclose()
+
+    def emit_reload_event(self, event_type: ReloadEventType, detail: str) -> None:
+        """Write one config-reload entry to the audit log.
+
+        A reload changes which sources exist and which rules decide, so the
+        log that has to explain a decision has to record when that changed and
+        when a change was refused. ``detail`` is the operator-facing sentence:
+        the adopted keys, or the reason for the refusal -- the same words
+        ``serve`` prints, when the refusal came from the config validator.
+        """
+        self._audit_logger.emit(
+            AuditEntry(
+                timestamp=AuditLogger.utcnow(),
+                request_id=str(uuid.uuid4()),
+                agent_id="<broker>",
+                session_id=None,
+                raw_intent=detail,
+                intent_analysis=IntentAnalysis(raw_intent="", data_types_needed=[], entities=[]),
+                facts_asserted_summary={},
+                routing_decisions=[],
+                scope_constraints=[],
+                denial_records=[],
+                error_records=[],
+                rule_trace=[],
+                ruleset_hash=self.ruleset_hash,
+                sources_queried=[],
+                sources_denied=[],
+                sources_skipped=[],
+                sources_errored=[],
+                attestation_token=None,
+                duration_ms=0,
+                event_type=event_type,
+            )
+        )
+
     def emit_adapter_event(self, event_type: AdapterEventType, adapter_id: str) -> None:
         """Write one adapter-lifecycle entry to the audit log.
 
@@ -3683,4 +4122,4 @@ class Broker:
         return hashlib.sha256("\n".join(buf).encode()).hexdigest()
 
 
-__all__ = ["Broker", "BrokerResponse"]
+__all__ = ["Broker", "BrokerResponse", "ConfigNotReloadableError"]

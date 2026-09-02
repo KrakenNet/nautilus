@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import signal
 import sys
 import tempfile
 from pathlib import Path
@@ -14,6 +16,8 @@ if TYPE_CHECKING:
     from nautilus.core.broker import Broker
 
 _DEFAULT_BIND = "127.0.0.1:8000"
+
+_log = logging.getLogger(__name__)
 
 
 def _split_bind(bind: str) -> tuple[str, int]:
@@ -148,6 +152,94 @@ def _load_config_for_serve(config_path: Path, *, air_gapped: bool) -> Path:
     finally:
         tmp.close()
     return Path(tmp.name)
+
+
+async def reload_config(broker: Broker, config_path: Path, *, air_gapped: bool) -> bool:
+    """Re-read ``config_path`` and hand the safe subset to ``broker``.
+
+    Validation is :func:`broker_for_serve` -- the same call ``serve`` makes
+    before it binds and ``nautilus config check`` makes before a deploy. A
+    config ``serve`` would exit 2 on is refused here in byte-identical words,
+    because it is refused by the same line of code. It runs on a worker thread
+    for the same reason :meth:`Broker.afrom_config` does: reading the YAML and
+    compiling the rule tree into a CLIPS environment is blocking, and the
+    process is still serving requests while it happens.
+
+    Refusal is total and quiet on the serving side: an audit entry is written,
+    a line is logged, and the running config keeps answering untouched. The
+    process does not exit -- a bad edit to a mounted ConfigMap must not be a
+    way to take a broker down.
+
+    Returns:
+        ``True`` when the new file was adopted (including when it was
+        equivalent to the running one), ``False`` when it was refused.
+    """
+    try:
+        candidate = await asyncio.to_thread(broker_for_serve, config_path, air_gapped=air_gapped)
+    except ConfigRefusedError as exc:
+        _refuse_reload(broker, str(exc))
+        return False
+
+    from nautilus.core.broker import ConfigNotReloadableError
+
+    try:
+        adopted = await broker.reload(candidate)
+    except ConfigNotReloadableError as exc:
+        _refuse_reload(broker, str(exc))
+        return False
+
+    detail = "adopted " + ", ".join(adopted) if adopted else "no reloadable key changed"
+    _log.info("SIGHUP: reloaded %s (%s)", config_path, detail)
+    broker.emit_reload_event("config_reloaded", detail)
+    return True
+
+
+def _refuse_reload(broker: Broker, reason: str) -> None:
+    """Log and audit a refused reload. The running config is not touched."""
+    _log.error("SIGHUP: refused; the running config is unchanged. Reason: %s", reason)
+    broker.emit_reload_event("config_reload_refused", reason)
+
+
+def _install_reload_handler(broker: Broker, config_path: Path, *, air_gapped: bool) -> None:
+    """Wire ``SIGHUP`` on the running loop to :func:`reload_config`.
+
+    A no-op where the platform has no ``SIGHUP`` or the loop refuses signal
+    handlers (Windows, and any loop that is not the main thread's) -- the
+    broker serves exactly as it did before, which is the pre-reload behaviour
+    and not a failure.
+
+    One reload at a time: a second ``SIGHUP`` arriving while one is in flight
+    is dropped rather than queued, because both would read the same file and
+    the second would only re-validate what the first already adopted.
+    """
+    handler = getattr(signal, "SIGHUP", None)
+    if handler is None:
+        return
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:  # pragma: no cover - only reachable off the loop
+        return
+
+    in_flight: set[asyncio.Task[bool]] = set()
+
+    def _on_sighup() -> None:
+        if in_flight:
+            _log.warning("SIGHUP: a reload is already running; ignoring this one")
+            return
+        task = asyncio.ensure_future(reload_config(broker, config_path, air_gapped=air_gapped))
+        in_flight.add(task)
+        task.add_done_callback(in_flight.discard)
+
+    try:
+        loop.add_signal_handler(handler, _on_sighup)
+    except (NotImplementedError, RuntimeError, ValueError):
+        _log.debug("SIGHUP reload is unavailable on this platform/loop", exc_info=True)
+        return
+    _log.info(
+        "SIGHUP reloads sources, rules and the live session_store limits from %s; "
+        "every other key needs a restart",
+        config_path,
+    )
 
 
 async def _serve_or_raise(server: Any) -> None:
@@ -286,6 +378,7 @@ def broker_for_serve(config_path: Path, *, air_gapped: bool) -> Broker:
 
 __all__ = [
     "ConfigRefusedError",
+    "_install_reload_handler",
     "_DEFAULT_BIND",
     "_enforce_air_gap",
     "_load_config_for_serve",
@@ -294,4 +387,5 @@ __all__ = [
     "_run_rest",
     "_split_bind",
     "broker_for_serve",
+    "reload_config",
 ]

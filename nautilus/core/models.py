@@ -360,6 +360,16 @@ fails if one is added here without being added there.
 """
 
 
+ReloadEventType = Literal["config_reloaded", "config_reload_refused"]
+"""Audit events about the config file rather than about a request.
+
+A subset of :attr:`AuditEntry.event_type`; ``tests/unit/test_event_type_drift.py``
+fails if one is added here without being added there. ``raw_intent`` on these
+entries carries the operator-facing sentence -- the keys adopted, or the
+refusal in the words ``nautilus serve`` would have printed.
+"""
+
+
 class AuditEntry(BaseModel):
     """Flat, loss-less audit record for one request (design §4.9).
 
@@ -449,6 +459,8 @@ class AuditEntry(BaseModel):
             "adapter_unquarantined",
             "schema_drift_detected",
             "schema_drift_severity_overridden",
+            "config_reloaded",
+            "config_reload_refused",
         ]
         | None
     ) = None

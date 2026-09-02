@@ -45,6 +45,8 @@ def list_event_types() -> list[str]:
         "adapter_unquarantined",
         "schema_drift_detected",
         "schema_drift_severity_overridden",
+        "config_reloaded",
+        "config_reload_refused",
     ]
 
 

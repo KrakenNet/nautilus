@@ -1402,15 +1402,48 @@ history.
 
 ### The config
 
-**A running broker never re-reads `nautilus.yaml`.** There is no hot reload
-([hardening](hardening.md#what-this-does-not-give-you)) and no reload signal:
-`SIGHUP` is not handled, and a broker that is serving keeps serving the config
-it started with no matter what you write to the file. A config change is
-adopted by starting a process, and only by starting a process — which is also
-why a bad one cannot corrupt a broker that is already up.
+**A running broker re-reads `nautilus.yaml` on `SIGHUP`, and adopts two stanzas
+out of thirteen.** `sources` and `rules` — plus `session_store.lock_timeout_s`
+and `session_store.purpose_ttl_seconds`, the only two limits the request path
+looks up per request. Everything else is read once, at startup, and a file that
+changes one of them is **refused whole**: not half-applied, not silently
+ignored. Which key, and why, is [the table below](#which-keys-reload-and-which-need-a-restart).
 
-That makes the config change a two-step operation. Check the file, then roll
-the deployment:
+```bash
+kill -HUP "$(pgrep -f 'nautilus serve')"          # or: systemctl reload nautilus
+```
+
+```text
+INFO:nautilus.cli.serve:SIGHUP: reloaded /etc/nautilus/nautilus.yaml (adopted sources)
+```
+
+The reload validates before it swaps, through the same `broker_for_serve` that
+`serve` runs before it binds and `config check` runs before a deploy, so a
+config those two refuse is refused here **in the same sentence**. On a refusal
+nothing moves: the running config keeps answering, the process does not exit,
+and the refusal is on the audit log as a `config_reload_refused` entry whose
+`raw_intent` is that sentence.
+
+```text
+ERROR:nautilus.cli.serve:SIGHUP: refused; the running config is unchanged. Reason: invalid config: classification labels are not levels of the 'classification' hierarchy (unclassified, cui, confidential, secret, top-secret): sources['tickets'].classification='internal'
+```
+
+A request already in flight finishes on the config it started with. It pins the
+sources, the rules and the limits it began under, and the adapters and rule
+engine it retires are closed only once nothing is still reading them — so a
+`SIGHUP` landing between a caller's routing decision and its adapter fan-out
+cannot change either.
+
+Still check the file first — a refused reload is a reload you did not get, and
+finding that out from the config file is cheaper than finding it out from the
+log:
+
+```bash
+nautilus config check /etc/nautilus/nautilus.yaml && kill -HUP "$(pgrep -f 'nautilus serve')"
+```
+
+For a key that needs a restart, it is still the two-step operation it always
+was:
 
 ```bash
 nautilus config check /etc/nautilus/nautilus.yaml && systemctl restart nautilus
@@ -1447,6 +1480,38 @@ nautilus config check /etc/nautilus/nautilus.yaml; echo "exit=$?"
 ERROR: invalid config: classification labels are not levels of the 'classification' hierarchy (unclassified, cui, confidential, secret, top-secret): sources['tickets'].classification='internal'
 exit=2
 ```
+
+#### Which keys reload, and which need a restart
+
+Three stanzas swap. The other eleven do not, and each has a reason that is
+about this product being **single-writer**, not about effort.
+
+| Key | On `SIGHUP` | Why |
+|---|---|---|
+| `sources` | **reloads** | The registry and its adapters are rebuilt. A source whose entry is byte-identical keeps the adapter object it already connected — its pool, its connect cooldown, its `connected` state. A source that changed or vanished has its adapter closed, but only after every request still using it has finished. |
+| `rules` | **reloads** | The whole Fathom router is rebuilt, so an edit *inside* a `user_rules_dirs` directory arrives even though the stanza itself did not change. `ruleset_hash` moves with it, and the `nautilus_ruleset_info` metric relabels. |
+| `session_store.lock_timeout_s` | **reloads** | Read per request, out of the config object. Nothing holds a copy. |
+| `session_store.purpose_ttl_seconds` | **reloads** | Same. |
+| `audit.*` | restart | The sink is open, and with `audit.chained: true` it holds an exclusive `flock` on `<path>.lock`. Re-pointing it live would mean two chain heads on one file, which is the corruption `verify_chain` cannot distinguish from tampering. |
+| `attestation.*` | restart | Same lock, on the attestation sink, plus a signing key the chain's genesis record is pinned to. |
+| `session_tokens.*` | restart | The key ring is in memory and already minting tokens. Swapping it invalidates every token in flight; changing `broker_instance_id` rejects them all by name. |
+| `session_store.*` (the rest) | restart | `backend`, `dsn`, `sqlite_path`, `ttl_seconds` and the pool sizes are constructor arguments to a store object that is already dialled. Adopting them would publish a config describing a store the broker is not running. |
+| `api.*` | restart | `max_request_bytes` and `max_concurrent_requests` are middleware *objects* installed when the ASGI app is built — the concurrency limit is a semaphore sized once, not a value anything looks up again. `api.keys`, `api.auth` and the agent subjects are copied to `app.state` at lifespan startup. `host`/`port` are a socket that is already bound. |
+| `mcp.*` | restart | Read once into the tool closures when the MCP server is created. |
+| `ui.*` | restart | `ui.enabled` decides whether the admin router is mounted, at app construction. |
+| `agents` | restart | The broker would take the new registry, but the transport's `app.state.agent_subjects` — what maps a credential to an agent — would not, and the two disagreeing is worse than neither moving. |
+| `analysis` | restart | Adopted implicitly *only* as far as the keyword map, which is generated from `sources`. The stanza itself is held to its startup value because `analysis.provider` reads a credential out of the process environment, and rotating the broker's outbound identity with no process boundary is the same class of change as rotating the key ring. |
+| `adapters` | restart | Local adapter code is imported from disk into this process; a reload cannot un-import the old module. |
+| `state_dir`, `rkm` | restart | The schema-fingerprint store and the RKM queue are built against them at startup. |
+
+Two things a reload deliberately does **not** clear: the schema-drift
+quarantine and the fingerprint baselines. Both are keyed by source id and both
+are the record of a drift an operator has to acknowledge — re-pointing a source
+at another table must not be a way around `nautilus adapters schema-ack`.
+
+Validating a candidate config has the same side effects `nautilus config check`
+has, because it is the same call: a new `audit.path` is created if it does not
+exist, even when the reload is then refused.
 
 Same message, same exit code, no restart — that is the whole point of the
 command, and it is why the check calls `serve`'s loader instead of

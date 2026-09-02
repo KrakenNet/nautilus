@@ -86,110 +86,122 @@ The one exception is deliberate: top-level keys beginning `x-` or `_` are
 dropped before validation (`NautilusConfig._drop_anchor_blocks`) so YAML anchor
 blocks work.
 
+The **`SIGHUP`** column in every index below says whether a running broker can
+adopt that key without a restart, because the two are different security
+properties. **`live`** means the value can change under a serving process, so
+the posture it sets is only as durable as write access to the config file and
+the ability to signal the process — but also that tightening it costs no
+downtime. **`restart`** means the value is captured in an object built at
+startup (a sink holding an exclusive `flock`, an already-minting key ring, an
+ASGI middleware, a bound socket), so it cannot drift under a running process at
+all, and a file that changes one is refused whole rather than half-applied. The
+per-key reasons are in
+[Which keys reload, and which need a restart](operator-guide.md#which-keys-reload-and-which-need-a-restart).
+
 ### Index — `api`
 
-| Key | Type | Default | Documented in |
-|---|---|---|---|
-| `api.host` | `str` | `"127.0.0.1"` | [`api.host`](#apihost) |
-| `api.port` | `int` | `8000` | [`api.port`](#apiport) |
-| `api.keys` | `list[str \| ApiKeyEntry]` | `[]` | [`api.keys`](#apikeys) |
-| `api.keys[].key` | `str` | required | [`api.keys[].key`](#apikeyskey) |
-| `api.keys[].agent_id` | `str \| None` | `None` | [`api.keys[].agent_id`](#apikeysagent_id) |
-| `api.keys[].capabilities` | `list[str]` | `["query"]` | [`api.keys[].capabilities`](#apikeyscapabilities) |
-| `api.auth.mode` | `"api_key" \| "proxy_trust"` | `"api_key"` | [`api.auth.mode`](#apiauthmode) |
-| `api.auth.trusted_proxies` | `list[str]` | `[]` | [`api.auth.trusted_proxies`](#apiauthtrusted_proxies) |
-| `api.max_request_bytes` | `int \| None` | `1048576` | [`api.max_request_bytes`](#apimax_request_bytes) |
-| `api.max_concurrent_requests` | `int \| None` | `64` | [`api.max_concurrent_requests`](#apimax_concurrent_requests) |
+| Key | Type | Default | `SIGHUP` | Documented in |
+|---|---|---|---|---|
+| `api.host` | `str` | `"127.0.0.1"` | restart | [`api.host`](#apihost) |
+| `api.port` | `int` | `8000` | restart | [`api.port`](#apiport) |
+| `api.keys` | `list[str \| ApiKeyEntry]` | `[]` | restart | [`api.keys`](#apikeys) |
+| `api.keys[].key` | `str` | required | restart | [`api.keys[].key`](#apikeyskey) |
+| `api.keys[].agent_id` | `str \| None` | `None` | restart | [`api.keys[].agent_id`](#apikeysagent_id) |
+| `api.keys[].capabilities` | `list[str]` | `["query"]` | restart | [`api.keys[].capabilities`](#apikeyscapabilities) |
+| `api.auth.mode` | `"api_key" \| "proxy_trust"` | `"api_key"` | restart | [`api.auth.mode`](#apiauthmode) |
+| `api.auth.trusted_proxies` | `list[str]` | `[]` | restart | [`api.auth.trusted_proxies`](#apiauthtrusted_proxies) |
+| `api.max_request_bytes` | `int \| None` | `1048576` | restart | [`api.max_request_bytes`](#apimax_request_bytes) |
+| `api.max_concurrent_requests` | `int \| None` | `64` | restart | [`api.max_concurrent_requests`](#apimax_concurrent_requests) |
 
 ### Index — `agents`
 
-| Key | Type | Default | Documented in |
-|---|---|---|---|
-| `agents.<id>.id` | `str` | required | [`agents.<id>.id`](#agentsidid) |
-| `agents.<id>.clearance` | `str` | required | [`agents.<id>.clearance`](#agentsidclearance) |
-| `agents.<id>.compartments` | `list[str]` | `[]` | [`agents.<id>.compartments`](#agentsidcompartments) |
-| `agents.<id>.subject` | `str \| None` | `None` | [`agents.<id>.subject`](#agentsidsubject) |
-| `agents.<id>.default_purpose` | `str \| None` | `None` | [`agents.<id>.default_purpose`](#agentsiddefault_purpose) |
-| `agents.<id>.allowed_purposes` | `list[str]` | `[]` | [`agents.<id>.allowed_purposes`](#agentsidallowed_purposes) |
+| Key | Type | Default | `SIGHUP` | Documented in |
+|---|---|---|---|---|
+| `agents.<id>.id` | `str` | required | restart | [`agents.<id>.id`](#agentsidid) |
+| `agents.<id>.clearance` | `str` | required | restart | [`agents.<id>.clearance`](#agentsidclearance) |
+| `agents.<id>.compartments` | `list[str]` | `[]` | restart | [`agents.<id>.compartments`](#agentsidcompartments) |
+| `agents.<id>.subject` | `str \| None` | `None` | restart | [`agents.<id>.subject`](#agentsidsubject) |
+| `agents.<id>.default_purpose` | `str \| None` | `None` | restart | [`agents.<id>.default_purpose`](#agentsiddefault_purpose) |
+| `agents.<id>.allowed_purposes` | `list[str]` | `[]` | restart | [`agents.<id>.allowed_purposes`](#agentsidallowed_purposes) |
 
 ### Index — `sources`
 
-| Key | Type | Default | Documented in |
-|---|---|---|---|
-| `sources[].id` | `str`, `^[A-Za-z0-9][A-Za-z0-9._-]*$` | required | [`sources[].id`](#sourcesid) |
-| `sources[].type` | `str` | required | [`sources[].type`](#sourcestype) |
-| `sources[].classification` | `str` | required | [`sources[].classification`](#sourcesclassification) |
-| `sources[].compartments` | `str` | `""` | [`sources[].compartments`](#sourcescompartments) |
-| `sources[].data_types` | `list[str]` | required | [`sources[].data_types`](#sourcesdata_types) |
-| `sources[].allowed_purposes` | `list[str] \| None` | `None` | [`sources[].allowed_purposes`](#sourcesallowed_purposes) |
-| `sources[].purpose_field` | `str` | `""` | [`sources[].purpose_field`](#sourcespurpose_field) |
-| `sources[].connection` | `str` | `""` | [`sources[].connection`](#sourcesconnection) |
-| `sources[].auth.type` | `"bearer" \| "basic" \| "mtls" \| "none"` | discriminator | [`sources[].auth.type`](#sourcesauthtype) |
-| `sources[].auth.token` | `str` | required for `bearer` | [`sources[].auth.token`](#sourcesauthtoken) |
-| `sources[].auth.username` | `str` | required for `basic` | [`sources[].auth.username`](#sourcesauthusername-sourcesauthpassword) |
-| `sources[].auth.password` | `str` | required for `basic` | [`sources[].auth.password`](#sourcesauthusername-sourcesauthpassword) |
-| `sources[].auth.cert_path` | `str` | required for `mtls` | [`sources[].auth.cert_path`](#sourcesauthcert_path-sourcesauthkey_path-sourcesauthca_path) |
-| `sources[].auth.key_path` | `str` | required for `mtls` | [`sources[].auth.key_path`](#sourcesauthcert_path-sourcesauthkey_path-sourcesauthca_path) |
-| `sources[].auth.ca_path` | `str \| None` | `None` | [`sources[].auth.ca_path`](#sourcesauthcert_path-sourcesauthkey_path-sourcesauthca_path) |
-| `sources[].timeout_s` | `float \| None` | `15.0` | [`sources[].timeout_s`](#sourcestimeout_s) |
-| `sources[].max_response_bytes` | `int \| None` | `8388608` | [`sources[].max_response_bytes`](#sourcesmax_response_bytes) |
-| `sources[].description` | `str` | `""` | [`sources[].description`](#sourcesdescription) |
-| `sources[].label` | `str \| None` | `None` | [`sources[].label`](#sourceslabel) |
-| `sources[].sub_category` | `str` | `""` | [`sources[].sub_category`](#sourcessub_category) |
-| `sources[].table` | `str \| None` | `None` | [`sources[].table`](#sourcestable) |
-| `sources[].index` | `str \| None` | `None` | [`sources[].index`](#sourcesindex) |
-| `sources[].model` | `str \| None` | `None` | [`sources[].model`](#sourcesmodel) |
-| `sources[].rows` | `list[dict[str, Any]]` | `[]` | [`sources[].rows`](#sourcesrows) |
-| `sources[].top_k` | `int` | `10` | [`sources[].top_k`](#sourcestop_k) |
-| `sources[].embedder` | `"default" \| None` | `None` | [`sources[].embedder`](#sourcesembedder) |
-| `sources[].embedding_column` | `str \| None` | `None` | [`sources[].embedding_column`](#sourcesembedding_column) |
-| `sources[].metadata_column` | `str \| None` | `None` | [`sources[].metadata_column`](#sourcesmetadata_column) |
-| `sources[].distance_operator` | `"<=>" \| "<->" \| "<#>" \| None` | `"<=>"` | [`sources[].distance_operator`](#sourcesdistance_operator) |
-| `sources[].like_style` | `"starts_with" \| "regex"` | `"starts_with"` | [`sources[].like_style`](#sourceslike_style) |
-| `sources[].endpoints[].path` | `str` | required | [`sources[].endpoints[].path`](#sourcesendpointspath) |
-| `sources[].endpoints[].method` | `"GET" \| "POST" \| "PUT" \| "PATCH" \| "DELETE"` | `"GET"` | [`sources[].endpoints[].method`](#sourcesendpointsmethod) |
-| `sources[].endpoints[].path_params` | `list[str]` | `[]` | [`sources[].endpoints[].path_params`](#sourcesendpointspath_params) |
-| `sources[].endpoints[].query_params` | `list[str]` | `[]` | [`sources[].endpoints[].query_params`](#sourcesendpointsquery_params) |
-| `sources[].endpoints[].operator_templates` | `dict[str, str]` | `{}` | [`sources[].endpoints[].operator_templates`](#sourcesendpointsoperator_templates) |
+| Key | Type | Default | `SIGHUP` | Documented in |
+|---|---|---|---|---|
+| `sources[].id` | `str`, `^[A-Za-z0-9][A-Za-z0-9._-]*$` | required | live | [`sources[].id`](#sourcesid) |
+| `sources[].type` | `str` | required | live | [`sources[].type`](#sourcestype) |
+| `sources[].classification` | `str` | required | live | [`sources[].classification`](#sourcesclassification) |
+| `sources[].compartments` | `str` | `""` | live | [`sources[].compartments`](#sourcescompartments) |
+| `sources[].data_types` | `list[str]` | required | live | [`sources[].data_types`](#sourcesdata_types) |
+| `sources[].allowed_purposes` | `list[str] \| None` | `None` | live | [`sources[].allowed_purposes`](#sourcesallowed_purposes) |
+| `sources[].purpose_field` | `str` | `""` | live | [`sources[].purpose_field`](#sourcespurpose_field) |
+| `sources[].connection` | `str` | `""` | live | [`sources[].connection`](#sourcesconnection) |
+| `sources[].auth.type` | `"bearer" \| "basic" \| "mtls" \| "none"` | discriminator | live | [`sources[].auth.type`](#sourcesauthtype) |
+| `sources[].auth.token` | `str` | required for `bearer` | live | [`sources[].auth.token`](#sourcesauthtoken) |
+| `sources[].auth.username` | `str` | required for `basic` | live | [`sources[].auth.username`](#sourcesauthusername-sourcesauthpassword) |
+| `sources[].auth.password` | `str` | required for `basic` | live | [`sources[].auth.password`](#sourcesauthusername-sourcesauthpassword) |
+| `sources[].auth.cert_path` | `str` | required for `mtls` | live | [`sources[].auth.cert_path`](#sourcesauthcert_path-sourcesauthkey_path-sourcesauthca_path) |
+| `sources[].auth.key_path` | `str` | required for `mtls` | live | [`sources[].auth.key_path`](#sourcesauthcert_path-sourcesauthkey_path-sourcesauthca_path) |
+| `sources[].auth.ca_path` | `str \| None` | `None` | live | [`sources[].auth.ca_path`](#sourcesauthcert_path-sourcesauthkey_path-sourcesauthca_path) |
+| `sources[].timeout_s` | `float \| None` | `15.0` | live | [`sources[].timeout_s`](#sourcestimeout_s) |
+| `sources[].max_response_bytes` | `int \| None` | `8388608` | live | [`sources[].max_response_bytes`](#sourcesmax_response_bytes) |
+| `sources[].description` | `str` | `""` | live | [`sources[].description`](#sourcesdescription) |
+| `sources[].label` | `str \| None` | `None` | live | [`sources[].label`](#sourceslabel) |
+| `sources[].sub_category` | `str` | `""` | live | [`sources[].sub_category`](#sourcessub_category) |
+| `sources[].table` | `str \| None` | `None` | live | [`sources[].table`](#sourcestable) |
+| `sources[].index` | `str \| None` | `None` | live | [`sources[].index`](#sourcesindex) |
+| `sources[].model` | `str \| None` | `None` | live | [`sources[].model`](#sourcesmodel) |
+| `sources[].rows` | `list[dict[str, Any]]` | `[]` | live | [`sources[].rows`](#sourcesrows) |
+| `sources[].top_k` | `int` | `10` | live | [`sources[].top_k`](#sourcestop_k) |
+| `sources[].embedder` | `"default" \| None` | `None` | live | [`sources[].embedder`](#sourcesembedder) |
+| `sources[].embedding_column` | `str \| None` | `None` | live | [`sources[].embedding_column`](#sourcesembedding_column) |
+| `sources[].metadata_column` | `str \| None` | `None` | live | [`sources[].metadata_column`](#sourcesmetadata_column) |
+| `sources[].distance_operator` | `"<=>" \| "<->" \| "<#>" \| None` | `"<=>"` | live | [`sources[].distance_operator`](#sourcesdistance_operator) |
+| `sources[].like_style` | `"starts_with" \| "regex"` | `"starts_with"` | live | [`sources[].like_style`](#sourceslike_style) |
+| `sources[].endpoints[].path` | `str` | required | live | [`sources[].endpoints[].path`](#sourcesendpointspath) |
+| `sources[].endpoints[].method` | `"GET" \| "POST" \| "PUT" \| "PATCH" \| "DELETE"` | `"GET"` | live | [`sources[].endpoints[].method`](#sourcesendpointsmethod) |
+| `sources[].endpoints[].path_params` | `list[str]` | `[]` | live | [`sources[].endpoints[].path_params`](#sourcesendpointspath_params) |
+| `sources[].endpoints[].query_params` | `list[str]` | `[]` | live | [`sources[].endpoints[].query_params`](#sourcesendpointsquery_params) |
+| `sources[].endpoints[].operator_templates` | `dict[str, str]` | `{}` | live | [`sources[].endpoints[].operator_templates`](#sourcesendpointsoperator_templates) |
 
 ### Index — `attestation` and `audit`
 
-| Key | Type | Default | Documented in |
-|---|---|---|---|
-| `attestation.enabled` | `bool` | `true` | [`attestation.enabled`](#attestationenabled) |
-| `attestation.private_key_path` | `str \| None` | `None` | [`attestation.private_key_path`](#attestationprivate_key_path) |
-| `attestation.sink.type` | `"null" \| "file" \| "http"` | `"null"` | [`attestation.sink.type`](#attestationsinktype) |
-| `attestation.sink.path` | `str` | required for `file` | [`attestation.sink.path`](#attestationsinkpath) |
-| `attestation.sink.chained` | `bool` | `false` | [`attestation.sink.chained`](#attestationsinkchained) |
-| `attestation.sink.checkpoint_interval` | `int` | `0` | [`attestation.sink.checkpoint_interval`](#attestationsinkcheckpoint_interval) |
-| `attestation.sink.url` | `str` | required for `http` | [`attestation.sink.url`](#attestationsinkurl) |
-| `attestation.sink.dead_letter_path` | `str \| None` | `None` | [`attestation.sink.dead_letter_path`](#attestationsinkdead_letter_path) |
-| `attestation.sink.retry_policy.max_retries` | `int` | `3` | [`attestation.sink.retry_policy`](#attestationsinkretry_policy) |
-| `attestation.sink.retry_policy.initial_backoff_s` | `float` | `0.1` | [`attestation.sink.retry_policy`](#attestationsinkretry_policy) |
-| `attestation.sink.retry_policy.max_backoff_s` | `float` | `5.0` | [`attestation.sink.retry_policy`](#attestationsinkretry_policy) |
-| `audit.path` | `str` | `"./audit.jsonl"` | [`audit.path`](#auditpath) |
-| `audit.chained` | `bool` | `false` | [`audit.chained`](#auditchained) |
-| `audit.checkpoint_interval` | `int` | `0` | [`audit.checkpoint_interval`](#auditcheckpoint_interval) |
+| Key | Type | Default | `SIGHUP` | Documented in |
+|---|---|---|---|---|
+| `attestation.enabled` | `bool` | `true` | restart | [`attestation.enabled`](#attestationenabled) |
+| `attestation.private_key_path` | `str \| None` | `None` | restart | [`attestation.private_key_path`](#attestationprivate_key_path) |
+| `attestation.sink.type` | `"null" \| "file" \| "http"` | `"null"` | restart | [`attestation.sink.type`](#attestationsinktype) |
+| `attestation.sink.path` | `str` | required for `file` | restart | [`attestation.sink.path`](#attestationsinkpath) |
+| `attestation.sink.chained` | `bool` | `false` | restart | [`attestation.sink.chained`](#attestationsinkchained) |
+| `attestation.sink.checkpoint_interval` | `int` | `0` | restart | [`attestation.sink.checkpoint_interval`](#attestationsinkcheckpoint_interval) |
+| `attestation.sink.url` | `str` | required for `http` | restart | [`attestation.sink.url`](#attestationsinkurl) |
+| `attestation.sink.dead_letter_path` | `str \| None` | `None` | restart | [`attestation.sink.dead_letter_path`](#attestationsinkdead_letter_path) |
+| `attestation.sink.retry_policy.max_retries` | `int` | `3` | restart | [`attestation.sink.retry_policy`](#attestationsinkretry_policy) |
+| `attestation.sink.retry_policy.initial_backoff_s` | `float` | `0.1` | restart | [`attestation.sink.retry_policy`](#attestationsinkretry_policy) |
+| `attestation.sink.retry_policy.max_backoff_s` | `float` | `5.0` | restart | [`attestation.sink.retry_policy`](#attestationsinkretry_policy) |
+| `audit.path` | `str` | `"./audit.jsonl"` | restart | [`audit.path`](#auditpath) |
+| `audit.chained` | `bool` | `false` | restart | [`audit.chained`](#auditchained) |
+| `audit.checkpoint_interval` | `int` | `0` | restart | [`audit.checkpoint_interval`](#auditcheckpoint_interval) |
 
 ### Index — sessions
 
-| Key | Type | Default | Documented in |
-|---|---|---|---|
-| `session_tokens.enabled` | `bool` | `false` | [`session_tokens.enabled`](#session_tokensenabled) |
-| `session_tokens.ttl_seconds` | `int` | `3600` | [`session_tokens.ttl_seconds`](#session_tokensttl_seconds) |
-| `session_tokens.key_ring_path` | `str \| None` | `None` | [`session_tokens.key_ring_path`](#session_tokenskey_ring_path) |
-| `session_tokens.broker_instance_id` | `str \| None` | `None` | [`session_tokens.broker_instance_id`](#session_tokensbroker_instance_id) |
-| `session_store.backend` | `"memory" \| "postgres" \| "sqlite"` | `"memory"` | [`session_store.backend`](#session_storebackend) |
-| `session_store.dsn` | `str \| None` | `None` | [`session_store.dsn`](#session_storedsn) |
-| `session_store.on_failure` | `"fail_closed" \| "fallback_memory" \| "fallback_sqlite"` | `"fail_closed"` | [`session_store.on_failure`](#session_storeon_failure) |
-| `session_store.sqlite_path` | `str` | `"./.nautilus/sessions.db"` | [`session_store.sqlite_path`](#session_storesqlite_path) |
-| `session_store.ttl_seconds` | `int` | `3600` | [`session_store.ttl_seconds`](#session_storettl_seconds) |
-| `session_store.purpose_ttl_seconds` | `int` | `0` | [`session_store.purpose_ttl_seconds`](#session_storepurpose_ttl_seconds) |
-| `session_store.lock_timeout_s` | `float \| None` | `30.0` | [`session_store.lock_timeout_s`](#session_storelock_timeout_s) |
-| `session_store.acquire_timeout_s` | `float` | `10.0` | [`session_store.acquire_timeout_s`](#session_storeacquire_timeout_s) |
-| `session_store.pool_min_size` | `int` | `1` | [`session_store` pool sizes](#session_storepool_min_size-pool_max_size-lock_pool_max_size) |
-| `session_store.pool_max_size` | `int` | `10` | [`session_store` pool sizes](#session_storepool_min_size-pool_max_size-lock_pool_max_size) |
-| `session_store.lock_pool_max_size` | `int` | `32` | [`session_store` pool sizes](#session_storepool_min_size-pool_max_size-lock_pool_max_size) |
+| Key | Type | Default | `SIGHUP` | Documented in |
+|---|---|---|---|---|
+| `session_tokens.enabled` | `bool` | `false` | restart | [`session_tokens.enabled`](#session_tokensenabled) |
+| `session_tokens.ttl_seconds` | `int` | `3600` | restart | [`session_tokens.ttl_seconds`](#session_tokensttl_seconds) |
+| `session_tokens.key_ring_path` | `str \| None` | `None` | restart | [`session_tokens.key_ring_path`](#session_tokenskey_ring_path) |
+| `session_tokens.broker_instance_id` | `str \| None` | `None` | restart | [`session_tokens.broker_instance_id`](#session_tokensbroker_instance_id) |
+| `session_store.backend` | `"memory" \| "postgres" \| "sqlite"` | `"memory"` | restart | [`session_store.backend`](#session_storebackend) |
+| `session_store.dsn` | `str \| None` | `None` | restart | [`session_store.dsn`](#session_storedsn) |
+| `session_store.on_failure` | `"fail_closed" \| "fallback_memory" \| "fallback_sqlite"` | `"fail_closed"` | restart | [`session_store.on_failure`](#session_storeon_failure) |
+| `session_store.sqlite_path` | `str` | `"./.nautilus/sessions.db"` | restart | [`session_store.sqlite_path`](#session_storesqlite_path) |
+| `session_store.ttl_seconds` | `int` | `3600` | restart | [`session_store.ttl_seconds`](#session_storettl_seconds) |
+| `session_store.purpose_ttl_seconds` | `int` | `0` | live | [`session_store.purpose_ttl_seconds`](#session_storepurpose_ttl_seconds) |
+| `session_store.lock_timeout_s` | `float \| None` | `30.0` | live | [`session_store.lock_timeout_s`](#session_storelock_timeout_s) |
+| `session_store.acquire_timeout_s` | `float` | `10.0` | restart | [`session_store.acquire_timeout_s`](#session_storeacquire_timeout_s) |
+| `session_store.pool_min_size` | `int` | `1` | restart | [`session_store` pool sizes](#session_storepool_min_size-pool_max_size-lock_pool_max_size) |
+| `session_store.pool_max_size` | `int` | `10` | restart | [`session_store` pool sizes](#session_storepool_min_size-pool_max_size-lock_pool_max_size) |
+| `session_store.lock_pool_max_size` | `int` | `32` | restart | [`session_store` pool sizes](#session_storepool_min_size-pool_max_size-lock_pool_max_size) |
 
 The two `ttl_seconds` above measure different clocks and must be ordered against
 each other; that, the absent session limit, and the absent termination endpoint
@@ -197,28 +209,28 @@ are in [Sessions](#sessions-lifetime-parallelism-and-termination).
 
 ### Index — governance, transports and analysis
 
-| Key | Type | Default | Documented in |
-|---|---|---|---|
-| `rules.user_rules_dirs` | `list[str]` | `[]` | [`rules.user_rules_dirs`](#rulesuser_rules_dirs) |
-| `rules.packs` | `list[str]` | `[]` | [`rules.packs`](#rulespacks) |
-| `rules.consistency_checks` | `bool` | `true` | [`rules.consistency_checks`](#rulesconsistency_checks) |
-| `rkm.auto_promote.enabled` | `bool` | `false` | [`rkm.auto_promote.enabled`](#rkmauto_promoteenabled) |
-| `rkm.sandbox.min_entries` | `int` | `100` | [`rkm.sandbox.min_entries`](#rkmsandboxmin_entries) |
-| `ui.enabled` | `bool` | `false` | [`ui.enabled`](#uienabled) |
-| `mcp.expose_declare_handoff` | `bool` | `false` | [`mcp.expose_declare_handoff`](#mcpexpose_declare_handoff) |
-| `mcp.max_response_bytes` | `int \| None` | `262144` | [`mcp.max_response_bytes`](#mcpmax_response_bytes) |
-| `analysis.mode` | `"pattern" \| "llm-first" \| "llm-only"` | `"pattern"` | [`analysis.mode`](#analysismode) |
-| `analysis.timeout_s` | `float` | `2.0` | [`analysis.timeout_s`](#analysistimeout_s) |
-| `analysis.keyword_map` | `dict[str, list[str]]` | `{}` | [`analysis.keyword_map`](#analysiskeyword_map) |
-| `analysis.provider.type` | `"anthropic" \| "openai" \| "local"` | discriminator | [`analysis.provider.type`](#analysisprovidertype) |
-| `analysis.provider.api_key_env` | `str` (`str \| None` for `local`) | required / `None` | [`analysis.provider.api_key_env`](#analysisproviderapi_key_env) |
-| `analysis.provider.base_url` | `str` | required for `local` | [`analysis.provider.base_url`](#analysisproviderbase_url) |
-| `analysis.provider.model` | `str` | `"claude-sonnet-4-5"` / `"gpt-4o-mini"` / required | [`analysis.provider.model`](#analysisprovidermodel) |
-| `analysis.provider.timeout_s` | `float` | `2.0` | [`analysis.provider.timeout_s`](#analysisprovidertimeout_s) |
-| `adapters[].module_path` | `str` | required | [`adapters[]`](#adaptersmodule_path-class-source_type) |
-| `adapters[].class` | `str` | required | [`adapters[]`](#adaptersmodule_path-class-source_type) |
-| `adapters[].source_type` | `str` | required | [`adapters[]`](#adaptersmodule_path-class-source_type) |
-| `state_dir` | `str \| None` | `None` | [`state_dir`](#state_dir) |
+| Key | Type | Default | `SIGHUP` | Documented in |
+|---|---|---|---|---|
+| `rules.user_rules_dirs` | `list[str]` | `[]` | live | [`rules.user_rules_dirs`](#rulesuser_rules_dirs) |
+| `rules.packs` | `list[str]` | `[]` | live | [`rules.packs`](#rulespacks) |
+| `rules.consistency_checks` | `bool` | `true` | live | [`rules.consistency_checks`](#rulesconsistency_checks) |
+| `rkm.auto_promote.enabled` | `bool` | `false` | restart | [`rkm.auto_promote.enabled`](#rkmauto_promoteenabled) |
+| `rkm.sandbox.min_entries` | `int` | `100` | restart | [`rkm.sandbox.min_entries`](#rkmsandboxmin_entries) |
+| `ui.enabled` | `bool` | `false` | restart | [`ui.enabled`](#uienabled) |
+| `mcp.expose_declare_handoff` | `bool` | `false` | restart | [`mcp.expose_declare_handoff`](#mcpexpose_declare_handoff) |
+| `mcp.max_response_bytes` | `int \| None` | `262144` | restart | [`mcp.max_response_bytes`](#mcpmax_response_bytes) |
+| `analysis.mode` | `"pattern" \| "llm-first" \| "llm-only"` | `"pattern"` | restart | [`analysis.mode`](#analysismode) |
+| `analysis.timeout_s` | `float` | `2.0` | restart | [`analysis.timeout_s`](#analysistimeout_s) |
+| `analysis.keyword_map` | `dict[str, list[str]]` | `{}` | restart | [`analysis.keyword_map`](#analysiskeyword_map) |
+| `analysis.provider.type` | `"anthropic" \| "openai" \| "local"` | discriminator | restart | [`analysis.provider.type`](#analysisprovidertype) |
+| `analysis.provider.api_key_env` | `str` (`str \| None` for `local`) | required / `None` | restart | [`analysis.provider.api_key_env`](#analysisproviderapi_key_env) |
+| `analysis.provider.base_url` | `str` | required for `local` | restart | [`analysis.provider.base_url`](#analysisproviderbase_url) |
+| `analysis.provider.model` | `str` | `"claude-sonnet-4-5"` / `"gpt-4o-mini"` / required | restart | [`analysis.provider.model`](#analysisprovidermodel) |
+| `analysis.provider.timeout_s` | `float` | `2.0` | restart | [`analysis.provider.timeout_s`](#analysisprovidertimeout_s) |
+| `adapters[].module_path` | `str` | required | restart | [`adapters[]`](#adaptersmodule_path-class-source_type) |
+| `adapters[].class` | `str` | required | restart | [`adapters[]`](#adaptersmodule_path-class-source_type) |
+| `adapters[].source_type` | `str` | required | restart | [`adapters[]`](#adaptersmodule_path-class-source_type) |
+| `state_dir` | `str \| None` | `None` | restart | [`state_dir`](#state_dir) |
 
 ## Read this first: Nautilus does not terminate TLS
 
@@ -4193,7 +4205,7 @@ nautilus/analysis/llm/anthropic_provider.py:115:            api_key=os.getenv(se
 nautilus/analysis/llm/openai_provider.py:92:        key = os.getenv(self.api_key_env)
 nautilus/analysis/llm/openai_provider.py:107:            api_key=os.getenv(self.api_key_env),
 nautilus/config/loader.py:68:        self._env = env if env is not None else dict(os.environ)
-nautilus/core/broker.py:1094:                dsn = os.environ.get("TEST_PG_DSN")
+nautilus/core/broker.py:1309:                dsn = os.environ.get("TEST_PG_DSN")
 nautilus/adapters/influxdb.py:224:            token = _auth_token(config) or os.environ.get("INFLUXDB_V2_TOKEN")
 nautilus/adapters/influxdb.py:225:            org = os.environ.get("INFLUXDB_V2_ORG")
 nautilus/observability/__init__.py:16:    if os.environ.get("OTEL_SDK_DISABLED", "").lower() == "true":
@@ -6419,7 +6431,7 @@ by `log.exception` is still a readable multi-line traceback — it is generated
 from the interpreter's own frames, not from anybody's input.
 
 Here is the product doing it, from its own startup path, with nothing staged.
-`nautilus/core/broker.py:841` logs the config path when no `agents:` block is
+`nautilus/core/broker.py:1056` logs the config path when no `agents:` block is
 declared, and a path is a filename, and a filename may contain a newline:
 
 ```console
@@ -6538,28 +6550,28 @@ sys.exit(1 if bad else 0)
 
 ```console
 $ python logscan.py
-ok     nautilus/core/broker.py:598 %r on request_id
-ok     nautilus/core/broker.py:2385 %r on state.request_id
-ok     nautilus/core/broker.py:2385 %r on state.intent_analysis.raw_intent
-ok     nautilus/core/broker.py:2385 %r on state.intent_analysis.data_types_needed
-ok     nautilus/core/broker.py:2854 %r on record.source_id
-ok     nautilus/core/broker.py:2951 %r on source_id
-ok     nautilus/core/broker.py:3176 %r on agent_id
-ok     nautilus/core/broker.py:3176 %r on state.session_id
-ok     nautilus/core/broker.py:3176 %r on purpose
-ok     nautilus/core/broker.py:3503 %r on source_id
-ok     nautilus/core/broker.py:3569 %r on source_id
-ok     nautilus/core/broker.py:2400 %r on state.request_id
-ok     nautilus/core/broker.py:2400 %r on source_id
-ok     nautilus/core/broker.py:3164 %r on agent_id
-ok     nautilus/core/broker.py:3164 %r on purpose
-ok     nautilus/core/broker.py:1898 %r on receiving_agent_id
-ok     nautilus/core/broker.py:1898 %r on session_id
-ok     nautilus/core/broker.py:2732 %r on state.request_id
-ok     nautilus/core/broker.py:2732 %r on source_id
-ok     nautilus/core/broker.py:2755 %r on state.request_id
-ok     nautilus/core/broker.py:2755 %r on source_id
-ok     nautilus/core/broker.py:3483 %r on source_id
+ok     nautilus/core/broker.py:601 %r on request_id
+ok     nautilus/core/broker.py:2642 %r on state.request_id
+ok     nautilus/core/broker.py:2642 %r on state.intent_analysis.raw_intent
+ok     nautilus/core/broker.py:2642 %r on state.intent_analysis.data_types_needed
+ok     nautilus/core/broker.py:3111 %r on record.source_id
+ok     nautilus/core/broker.py:3208 %r on source_id
+ok     nautilus/core/broker.py:3433 %r on agent_id
+ok     nautilus/core/broker.py:3433 %r on state.session_id
+ok     nautilus/core/broker.py:3433 %r on purpose
+ok     nautilus/core/broker.py:3760 %r on source_id
+ok     nautilus/core/broker.py:4008 %r on source_id
+ok     nautilus/core/broker.py:2657 %r on state.request_id
+ok     nautilus/core/broker.py:2657 %r on source_id
+ok     nautilus/core/broker.py:3421 %r on agent_id
+ok     nautilus/core/broker.py:3421 %r on purpose
+ok     nautilus/core/broker.py:2155 %r on receiving_agent_id
+ok     nautilus/core/broker.py:2155 %r on session_id
+ok     nautilus/core/broker.py:2989 %r on state.request_id
+ok     nautilus/core/broker.py:2989 %r on source_id
+ok     nautilus/core/broker.py:3012 %r on state.request_id
+ok     nautilus/core/broker.py:3012 %r on source_id
+ok     nautilus/core/broker.py:3740 %r on source_id
 ok     nautilus/transport/auth.py:287 %r on user
 
 0 unescaped interpolations
@@ -6570,13 +6582,13 @@ $ echo $?
 Run it from the repository root; the paths are relative to it. Twenty-three
 rows, every one of them `%r`, `0 unescaped interpolations`, exit `0`.
 `auth.py:287` logs the `X-Forwarded-User` header a proxy sent;
-`broker.py:3164` logs the `agent_id` and `purpose` out of a request body; `broker.py:1898` logs a handoff's `agent_id` and `session_id`,
+`broker.py:3421` logs the `agent_id` and `purpose` out of a request body; `broker.py:2155` logs a handoff's `agent_id` and `session_id`,
 also from the body; the `broker.py` `source_id` rows are the per-source
 failure, schema-fetch, drift, quarantine-lift and truncation sites plus the
-`--log-level debug` routing and dial records; `broker.py:3176` is the
+`--log-level debug` routing and dial records; `broker.py:3433` is the
 `debug`-level session-token mint line.
 
-`broker.py:598` is the broker-level failure record. Its `request_id` is the
+`broker.py:601` is the broker-level failure record. Its `request_id` is the
 `uuid4()` minted in `_new_request_state`, so no caller can put a byte in it —
 and it is `%r` anyway, because the scan matches on argument *names* and a rule
 that has to be argued with at one call site is a rule that gets lost at the
@@ -7414,7 +7426,7 @@ the route answers `409 session tokens are disabled`.
 `POST /v1/sessions` takes an untyped body (`nautilus/transport/fastapi_app.py:939`),
 and `clearance` in that body would be an authorization assertion signed by
 Nautilus and verifiable by anyone against the public JWKS. It is not a parameter
-of `Broker.issue_session_token` at all (`nautilus/core/broker.py:1396-1402`) —
+of `Broker.issue_session_token` at all (`nautilus/core/broker.py:1611-1617`) —
 the value comes from the agent registry, so the body cannot reach it:
 
 ```console
@@ -7498,8 +7510,20 @@ one line each:
 - **No inactivity timeout on a credential.** `session_store.ttl_seconds` idles
   out the exposure ledger, not the token; the token's only bound is the
   `expires_at` written at mint time.
-- **No config hot-reload.** Every key on this page is read at startup. Changing
-  one means a restart.
+- **No config hot-reload for anything on this page.** `SIGHUP` reloads exactly
+  `sources`, `rules`, `session_store.lock_timeout_s` and
+  `session_store.purpose_ttl_seconds`; every *security* key here —
+  `api.keys`, `api.auth.*`, `api.max_request_bytes`,
+  `api.max_concurrent_requests`, `attestation.*`, `audit.*`,
+  `session_tokens.*`, the rest of `session_store.*`, `agents`, `ui.*` — is read
+  at startup and changing one means a restart. That is a property, not a gap:
+  the audit sink and the attestation sink hold an exclusive `flock`, the key
+  ring is already minting tokens, and the two ASGI limits are middleware
+  objects rather than values anything re-reads. A reload that adopted them
+  would leave one process describing a sink another process owns. The reload
+  refuses such a file **whole** and names the key, so a half-applied security
+  posture is not a state this broker can be in. See
+  [Which keys reload, and which need a restart](operator-guide.md#which-keys-reload-and-which-need-a-restart).
 - **No authentication on `/metrics` or `/v1/keys/jwks.json`.** Both are
   deliberate; scope `/metrics` at the proxy and leave JWKS public.
 - **No response security headers other than `Cache-Control`.** Nautilus sends

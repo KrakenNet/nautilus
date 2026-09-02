@@ -619,10 +619,14 @@ it binds — the path check, the `--air-gapped` pre-pass, and
 `Broker.from_config` — and report what came out, without serving it. The
 broker is built and immediately closed; nothing binds a socket.
 
-There is no config hot reload ([Hardening: what this does not give
-you](../how-to/hardening.md#what-this-does-not-give-you)), so a config is only
-ever adopted by a process start. This is how you find out
-whether one will succeed without restarting the broker to see.
+`SIGHUP` reloads `sources`, `rules` and the two live `session_store` limits in
+a running broker ([Which keys reload, and which need a
+restart](../how-to/operator-guide.md#which-keys-reload-and-which-need-a-restart));
+every other key is only ever adopted by a process start. Either way the
+validator is this one — the reload calls the same `broker_for_serve` — so a
+config `config check` blesses is a config `SIGHUP` adopts and `serve` starts
+on, and a config it refuses is refused by all three in the same words. This is
+how you find out which, without restarting or signalling the broker to see.
 
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|

@@ -310,9 +310,9 @@ and the message arrives as one entry in `sources_errored[]`:
 `error_type` is the exception class name (`ScopeEnforcementError`, `AdapterError`,
 `SSRFBlockedError`, `EmbeddingUnavailableError`), and the failed source contributes no rows —
 partial answers are labelled, never silently merged. Anything raised from `connect()` is prefixed
-`connect() failed: ` by `nautilus/core/broker.py:2749`, and that source is not retried for
+`connect() failed: ` by `nautilus/core/broker.py:3006`, and that source is not retried for
 `connect_cooldown_s`. Anything raised from `execute()` arrives unprefixed
-(`nautilus/core/broker.py:3284-3309`). The per-entry **Status** lines below say which of the two
+(`nautilus/core/broker.py:3541-3566`). The per-entry **Status** lines below say which of the two
 it is.
 
 ### `endpoint` — which backend this was
@@ -347,7 +347,7 @@ an `ErrorRecord` it returns and the broker leaves it alone — strip credentials
 
 ### The matching log line
 
-`nautilus/core/broker.py:2852-2862`. Every per-source failure — unknown source, connect cooldown,
+`nautilus/core/broker.py:3109-3119`. Every per-source failure — unknown source, connect cooldown,
 connect error, schema quarantine, wall-clock timeout, adapter contract violation, and the typed
 record an adapter returns — emits exactly one `WARNING` on the `nautilus.core.broker` logger
 before it reaches the response:
@@ -363,7 +363,7 @@ WARNING:nautilus.core.broker:source 'ledger' failed (endpoint=postgresql://127.0
 
 ### `exceeded the source's timeout_s budget of {timeout_s}s`
 
-`nautilus/core/broker.py:2815-2818`, with `error_type: "TimeoutError"`. The broker wraps each
+`nautilus/core/broker.py:3072-3075`, with `error_type: "TimeoutError"`. The broker wraps each
 source's `connect()` + `execute()` in one wall-clock deadline
 (`SourceConfig.timeout_s`, default `15.0`); this is what the entry says when the deadline fired
 before the source answered. Rendered example:
@@ -1842,7 +1842,7 @@ is *not* in this message — correlate with `source_id` on the `sources_errored[
 hits the source's `timeout_s` budget first and reports
 `exceeded the source's timeout_s budget of {timeout_s}s` instead — see
 [that entry](#exceeded-the-sources-timeout_s-budget-of-timeout_ss)
-(`nautilus/core/broker.py:2815-2818`).
+(`nautilus/core/broker.py:3072-3075`).
 
 **Fix.** Read `{exc}`. A `401`/`403` is the token; `Name or service not known` is the `connection:`
 host; a timeout usually means `timeout_s` is too tight for the model.

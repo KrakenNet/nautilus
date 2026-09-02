@@ -532,8 +532,35 @@ starts: expect a gap of a few seconds to a minute where the Service has no
 endpoints and callers get connection refused. Drain callers first if that
 matters.
 
-Config-only changes are the same shape, but a ConfigMap edit does **not**
-restart anything on its own:
+Config-only changes cost a rollout **only when they touch a startup-only key**.
+A ConfigMap edit never restarts anything on its own; what it does is change the
+file under `/config`, and what happens next depends on the key.
+
+`sources`, `rules` and the two live `session_store` limits reload in place on
+`SIGHUP` — no rollout, no gap in service, which matters here because
+`strategy: Recreate` at `replicas: 1` means a rollout *is* a gap:
+
+```bash
+kubectl -n nautilus apply -f deploy/configmap.yaml
+# the kubelet syncs a mounted ConfigMap within ~1 minute by default
+kubectl -n nautilus exec deployment/nautilus -- pkill -HUP -f 'nautilus serve'
+kubectl -n nautilus logs deployment/nautilus | tail -1
+# INFO:nautilus.cli.serve:SIGHUP: reloaded /config/nautilus.yaml (adopted sources, rules)
+```
+
+A refused reload leaves the running config serving and says so, so this is safe
+to run against a bad edit — but it is not a substitute for checking first, and
+the pod keeps serving the *old* file until you notice:
+
+```text
+ERROR:nautilus.cli.serve:SIGHUP: refused; the running config is unchanged. Reason: these keys are read once at startup and cannot be reloaded: audit. Restart the process to adopt them.
+```
+
+Everything else — `audit`, `attestation`, `session_tokens`, the rest of
+`session_store`, `api`, `mcp`, `ui`, `agents`, `analysis`, `adapters`,
+`state_dir`, `rkm` — is the rollout it always was, and the reload refuses it by
+name rather than half-applying it
+([which keys, and why](../docs/how-to/operator-guide.md#which-keys-reload-and-which-need-a-restart)):
 
 ```bash
 kubectl -n nautilus apply -f deploy/configmap.yaml
