@@ -358,7 +358,7 @@ persisted still: 4096
 
 ### `AuditRecord has no {NAUTILUS_METADATA_KEY!r} metadata`
 
-**`KeyError`**, `nautilus/audit/logger.py:383`. A record was read that carries no Nautilus
+**`KeyError`**, `nautilus/audit/logger.py:385`. A record was read that carries no Nautilus
 metadata block. It came from a different writer, or the log mixes sources. Check that
 `audit.path` is not shared with another tool.
 

@@ -318,10 +318,16 @@ def test_e11_the_private_fathom_surface_is_still_there() -> None:
     validator reaches past it into ``fathom.compiler``, which carries no
     compatibility promise: a minor release may move or rename any of this and
     the only symptom would be ``nautilus rule validate`` failing in the field.
+
+    ``CompilationError`` is imported from ``fathom.errors``, its home module,
+    because ``fathom.compiler`` only re-exports it -- the same import
+    ``nautilus/rkm/validator/static.py`` makes, so this guard fails the way
+    the shipped code would.
     """
     import inspect
 
-    from fathom.compiler import CompilationError, Compiler
+    from fathom.compiler import Compiler
+    from fathom.errors import CompilationError
     from fathom.models import RuleDefinition, TemplateDefinition
 
     assert issubclass(CompilationError, Exception)

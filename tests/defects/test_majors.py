@@ -307,7 +307,7 @@ def s3_seeded(minio_endpoint: tuple[str, str, str]) -> tuple[str, str, str, str]
 
     async def _seed() -> None:
         session = AioSession()
-        async with session.create_client(
+        async with session.create_client(  # pyright: ignore[reportUnknownMemberType]
             "s3",
             endpoint_url=endpoint,
             aws_access_key_id=access,

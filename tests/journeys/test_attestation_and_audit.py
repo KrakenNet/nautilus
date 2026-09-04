@@ -90,7 +90,7 @@ def test_the_attestation_token_verifies_against_the_broker_public_key(
 
     config, _ = deployment
 
-    async def _token_and_key() -> tuple[str, Any]:
+    async def _token_and_key() -> tuple[str | None, Any]:
         # One broker: a fresh Broker mints a fresh key ring, so the token and
         # the key that verifies it have to come from the same instance.
         broker = Broker.from_config(config)
@@ -99,7 +99,9 @@ def test_the_attestation_token_verifies_against_the_broker_public_key(
                 "analyst", "patient records", {"purpose": "care", "session_id": "attest"}
             )
             # Same accessor the shipped verifier uses (``ui/router.py:560``).
-            return response.attestation_token, broker._attestation.public_key  # noqa: SLF001
+            attestation = broker._attestation  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+            assert attestation is not None, "attestation is disabled on this deployment"
+            return response.attestation_token, attestation.public_key
         finally:
             await broker.aclose()
 

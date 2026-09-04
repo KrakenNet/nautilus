@@ -110,16 +110,16 @@ exit=2
 `nautilus/cli/__init__.py:224-309` and `nautilus/cli/serve.py`. All of these exit **2**.
 
 The three config messages are raised as `ConfigRefusedError` by
-`broker_for_serve` (`nautilus/cli/serve.py:355-404`) and printed by whichever
+`broker_for_serve` (`nautilus/cli/serve.py:358-407`) and printed by whichever
 command called it — `serve` at `__init__.py:256`, `config check` in
 `nautilus/cli/config.py`. That is why the two commands refuse a config in
 identical words.
 
 | Message | Line |
 | --- | --- |
-| `ERROR: config path does not exist or is not a file: {config_path}` | `nautilus/cli/serve.py:378` |
-| `ERROR: invalid config: {exc}` | `nautilus/cli/serve.py:402` |
-| `ERROR: broker construction failed: {exc}` | `nautilus/cli/serve.py:404` |
+| `ERROR: config path does not exist or is not a file: {config_path}` | `nautilus/cli/serve.py:381` |
+| `ERROR: invalid config: {exc}` | `nautilus/cli/serve.py:405` |
+| `ERROR: broker construction failed: {exc}` | `nautilus/cli/serve.py:407` |
 | `ERROR: {exc}` (bind parsing, air-gapped load, serve failure) | `__init__.py:246,256,300` |
 
 The wrapped `{exc}` texts:
@@ -226,7 +226,7 @@ cd /tmp/nautilus-errors && nautilus rules test --file rule.yaml --audit-log /nop
 
 ### `ERROR: cannot read rules config from {path}: {exc}`
 
-`nautilus/cli/rules.py:421`. Exit **1**, raised as `SystemExit(1)` rather than returned.
+`nautilus/cli/rules.py:423`. Exit **1**, raised as `SystemExit(1)` rather than returned.
 `{path}` is the `--config` value; `{exc}` is the loader failure — look it up in
 [config.md](config.md). The CLI needs `rules.packs` and `rules.user_rules_dirs` from that config
 to know which rules the candidate is being compiled alongside.
@@ -240,7 +240,7 @@ nautilus rules test --file rule-packs/cve-rem-cmdb-substrate/rules/library-allow
 
 ### `ERROR: score {min_total} below threshold {threshold}: {file_path}`
 
-`nautilus/cli/rules.py:400`. Exit **2** — a policy failure, not a usage error. Both numbers are
+`nautilus/cli/rules.py:402`. Exit **2** — a policy failure, not a usage error. Both numbers are
 formatted to two decimals (`{min_total:.2f}`, `{threshold:.2f}`), so the rendered line reads
 `ERROR: score 0.42 below threshold 0.70: my_rule.yaml`. `{min_total}` is the **lowest** score
 across every rule in the file, so one weak rule fails the file. `{threshold}` is `--threshold`.
@@ -260,14 +260,14 @@ nautilus rules test --file rule-packs/cve-rem-cmdb-substrate/rules/library-allow
 
 ### `WARN: rule '{name}': shadow finding {relation} (existing rule '{existing_rule}')`
 
-`nautilus/cli/rules.py:372-375`. **Exit 0**. `{name}` is the candidate rule; `{relation}` is how
+`nautilus/cli/rules.py:374-377`. **Exit 0**. `{name}` is the candidate rule; `{relation}` is how
 it overlaps an installed rule (for example `subsumes`, `subsumed_by`, `conflicts`);
 `{existing_rule}` is that installed rule's name. The candidate is not wrong, but one of the two is
 redundant or contradictory once both are in force.
 
 ### `WARN: rule '{name}': insufficient audit history (replayed {replayed_n_actual} entries)`
 
-`nautilus/cli/rules.py:377-380`. **Exit 0**. `{replayed_n_actual}` is how many audit entries
+`nautilus/cli/rules.py:379-382`. **Exit 0**. `{replayed_n_actual}` is how many audit entries
 actually replayed, against the `--min-entries` floor. The score is still printed, but its
 regression evidence is thin — a rule that denies nothing in ten replays has not been tested.
 
@@ -275,7 +275,7 @@ regression evidence is thin — a rule that denies nothing in ten replays has no
 
 ### `WARN: rule '{name}': {skipped_drifted} audit entries could not be replayed -- the current rules no longer reproduce what they recorded`
 
-`nautilus/cli/rules.py:381-385`. **Exit 0**. Note the ASCII double hyphen `--`, not an em dash.
+`nautilus/cli/rules.py:383-387`. **Exit 0**. Note the ASCII double hyphen `--`, not an em dash.
 `{skipped_drifted}` is the count of entries dropped from the replay.
 
 **Means.** Those entries were recorded under a rule set that no longer exists, so replaying them
@@ -284,13 +284,13 @@ rather than counted as regressions.
 
 ### `WARN: rule '{name}': {skipped_no_input_facts} audit entries carry no engine input and were not replayed`
 
-`nautilus/cli/rules.py:386-390`. **Exit 0**. `{skipped_no_input_facts}` is the count of entries
+`nautilus/cli/rules.py:388-392`. **Exit 0**. `{skipped_no_input_facts}` is the count of entries
 with no recorded engine input — entries written before input capture, or by a path that does not
 record it. There is nothing to feed the candidate rule.
 
 ### `WARN: no rules found in {file_path}`
 
-`nautilus/cli/rules.py:297`. **Exit 0**. The file parsed but declared no rules — usually a YAML
+`nautilus/cli/rules.py:299`. **Exit 0**. The file parsed but declared no rules — usually a YAML
 list that is empty, or keys at the wrong nesting depth. Nothing was scored.
 
 ### `WARN: could not read audit path from {config_path!r} ({exc}); using {path}`
@@ -366,7 +366,7 @@ nautilus adapters; echo "exit=$?"
 
 ### `ERROR: key: no subcommand given (try: list, rotate, revoke)`
 
-`nautilus/cli/key.py:73`. Exit **2**. No interpolation.
+`nautilus/cli/key.py:74`. Exit **2**. No interpolation.
 
 ```bash
 nautilus key; echo "exit=$?"
@@ -427,7 +427,7 @@ touches a config file. The `keys` capability is required on the key you pass to 
 
 ### `FAIL: key {command}: --url is required. Rotation and revocation are audited events the broker emits against the ring it is serving with, so there is nothing for the CLI to act on locally — point --url at the running broker (e.g. --url http://localhost:8000).`
 
-`nautilus/cli/key.py:82-87` (`_require_url`). Exit **2**, and it is a `FAIL: ` line, not
+`nautilus/cli/key.py:83-88` (`_require_url`). Exit **2**, and it is a `FAIL: ` line, not
 `ERROR: `, because the missing piece is a network endpoint. `{command}` is the literal
 subcommand name: `list`, `rotate` or `revoke`.
 
@@ -443,7 +443,7 @@ nautilus key rotate --yes --url "$NAUTILUS" --api-key govern-key; echo "exit=$?"
 
 ### `ERROR: rotate requires --yes to confirm.`
 
-`nautilus/cli/key.py:152`. Exit **1**. No interpolation. Checked **before** `--url` and before
+`nautilus/cli/key.py:162`. Exit **1**. No interpolation. Checked **before** `--url` and before
 `NAUTILUS_REVIEWER`, so this is the first thing a bare `nautilus key rotate` says.
 
 **Means.** Rotation changes which key signs new session tokens. Old tokens keep verifying — only
@@ -455,7 +455,7 @@ nautilus key rotate; echo "exit=$?"
 
 ### `ERROR: revoke requires --yes to confirm.`
 
-`nautilus/cli/key.py:177`. Exit **1**. No interpolation.
+`nautilus/cli/key.py:187`. Exit **1**. No interpolation.
 
 **Means.** Revocation *is* retroactive: every session token already minted under that `kid` stops
 verifying with reason code `unknown_kid` (see
@@ -467,7 +467,7 @@ nautilus key revoke 00000000-0000-4000-8000-000000000000 --reason leaked; echo "
 
 ### `FAIL: key {command}: cannot reach {endpoint}: {exc}`
 
-`nautilus/cli/key.py:125`. Exit **2**. `{command}` is `list`, `rotate` or `revoke`; `{endpoint}`
+`nautilus/cli/key.py:126`. Exit **2**. `{command}` is `list`, `rotate` or `revoke`; `{endpoint}`
 is the full URL the CLI built (`{--url}/v1/keys`, `/v1/keys/rotate`, `/v1/keys/{kid}/revoke`);
 `{exc}` is the `httpx.HTTPError` — connection refused, DNS failure, TLS error, timeout.
 
@@ -477,7 +477,7 @@ nautilus key list --url http://127.0.0.1:1; echo "exit=$?"
 
 ### `ERROR: key {command}: server returned {status_code}: {text}`
 
-`nautilus/cli/key.py:128`. Exit **2**. The broker answered, and answered something other than
+`nautilus/cli/key.py:129`. Exit **2**. The broker answered, and answered something other than
 200. `{status_code}` is the HTTP status; `{text}` is the raw response body, normally
 `{"detail": "..."}` — look that sentence up in [auth.md](auth.md) (401/403) or
 [attestation.md](attestation.md) (400/404/409). The commonest cause is a key without the `keys`

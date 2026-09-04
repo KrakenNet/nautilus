@@ -160,25 +160,25 @@
    }
   },
   {
-   "citation": "elasticsearch.py:371",
+   "citation": "elasticsearch.py:374",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/elasticsearch.py",
    "sha": "ba3dba5736e8b826",
    "lines": {
-    "371": "raise ScopeEnforcementError(f\"operator not allowed: {op}\")"
+    "374": "raise ScopeEnforcementError(f\"operator not allowed: {op}\")"
    }
   },
   {
-   "citation": "elasticsearch.py:410",
+   "citation": "elasticsearch.py:413",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/elasticsearch.py",
    "sha": "40b1ab2a9c1ae01a",
    "lines": {
-    "410": "raise AdapterError(\"ElasticsearchAdapter.execute called before connect()\")"
+    "413": "raise AdapterError(\"ElasticsearchAdapter.execute called before connect()\")"
    }
   },
   {
@@ -552,18 +552,18 @@
    }
   },
   {
-   "citation": "nautilus/adapters/base.py:438-442",
+   "citation": "nautilus/adapters/base.py:440-444",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/base.py",
    "sha": "dd4408552ad7ae2e",
    "lines": {
-    "438": "detail = str(exc)",
-    "439": "raise AdapterError(",
-    "440": "f\"{type(self).__name__}: execute failed for source '{source_id}': \"",
-    "441": "f\"{type(exc).__name__}\" + (f\": {detail}\" if detail else \"\")",
-    "442": ") from exc"
+    "440": "detail = str(exc)",
+    "441": "raise AdapterError(",
+    "442": "f\"{type(self).__name__}: execute failed for source '{source_id}': \"",
+    "443": "f\"{type(exc).__name__}\" + (f\": {detail}\" if detail else \"\")",
+    "444": ") from exc"
    }
   },
   {
@@ -600,53 +600,53 @@
    }
   },
   {
-   "citation": "nautilus/adapters/elasticsearch.py:328-333",
+   "citation": "nautilus/adapters/elasticsearch.py:331-336",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/elasticsearch.py",
    "sha": "a64648485dcdbf3e",
    "lines": {
-    "328": "raise ScopeEnforcementError(",
-    "329": "f\"ElasticsearchAdapter: field '{field}' is mapped as analysed 'text' \"",
-    "330": "f\"with no 'keyword' subfield, so it cannot be matched exactly. An \"",
-    "331": "f\"exact-match constraint on it would silently return over-scoped \"",
-    "332": "f\"data. Add a keyword subfield to the mapping, or target one \"",
-    "333": "f\"explicitly as 'field.<subfield>'.\""
+    "331": "raise ScopeEnforcementError(",
+    "332": "f\"ElasticsearchAdapter: field '{field}' is mapped as analysed 'text' \"",
+    "333": "f\"with no 'keyword' subfield, so it cannot be matched exactly. An \"",
+    "334": "f\"exact-match constraint on it would silently return over-scoped \"",
+    "335": "f\"data. Add a keyword subfield to the mapping, or target one \"",
+    "336": "f\"explicitly as 'field.<subfield>'.\""
    }
   },
   {
-   "citation": "nautilus/adapters/elasticsearch.py:350-357",
+   "citation": "nautilus/adapters/elasticsearch.py:353-360",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/elasticsearch.py",
    "sha": "eac689121b8eec5b",
    "lines": {
-    "350": "raise ScopeEnforcementError(",
-    "351": "f\"ElasticsearchAdapter: the only exact subfield for '{field}' is \"",
-    "352": "f\"'{field}.{chosen}', which has ignore_above={limit}, and the \"",
-    "353": "f\"constraint compares a value of length {longest}. Values over the \"",
-    "354": "f\"limit are not indexed, so the comparison would silently return \"",
-    "355": "f\"over-scoped data. Raise ignore_above on the mapping, or target a \"",
-    "356": "f\"subfield without one as 'field.<subfield>'.\"",
-    "357": ")"
+    "353": "raise ScopeEnforcementError(",
+    "354": "f\"ElasticsearchAdapter: the only exact subfield for '{field}' is \"",
+    "355": "f\"'{field}.{chosen}', which has ignore_above={limit}, and the \"",
+    "356": "f\"constraint compares a value of length {longest}. Values over the \"",
+    "357": "f\"limit are not indexed, so the comparison would silently return \"",
+    "358": "f\"over-scoped data. Raise ignore_above on the mapping, or target a \"",
+    "359": "f\"subfield without one as 'field.<subfield>'.\"",
+    "360": ")"
    }
   },
   {
-   "citation": "nautilus/adapters/elasticsearch.py:427-432",
+   "citation": "nautilus/adapters/elasticsearch.py:430-435",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/adapters/elasticsearch.py",
    "sha": "bfd32419af733518",
    "lines": {
-    "427": "",
-    "428": "rows: list[dict[str, Any]] = []",
-    "429": "for hit in response:  # pyright: ignore[reportUnknownVariableType]",
-    "430": "# ``hit.to_dict()`` returns the ``_source`` document; this matches",
-    "431": "# the row shape returned by the postgres adapter (plain dict).",
-    "432": "rows.append(hit.to_dict())  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]"
+    "430": "",
+    "431": "rows: list[dict[str, Any]] = []",
+    "432": "for hit in response:  # pyright: ignore[reportUnknownVariableType]",
+    "433": "# ``hit.to_dict()`` returns the ``_source`` document; this matches",
+    "434": "# the row shape returned by the postgres adapter (plain dict).",
+    "435": "rows.append(hit.to_dict())  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]"
    }
   },
   {
@@ -934,50 +934,50 @@
    }
   },
   {
-   "citation": "nautilus/adapters/pgvector.py:109-112",
+   "citation": "nautilus/adapters/pgvector.py:112-115",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/pgvector.py",
    "sha": "3ad8daf035c6818b",
    "lines": {
-    "109": "if override is not None:",
-    "110": "if not isinstance(override, list):",
-    "111": "raise EmbeddingUnavailableError(",
-    "112": "f\"context['embedding'] must be list[float], got {type(override).__name__}\""
+    "112": "if override is not None:",
+    "113": "if not isinstance(override, list):",
+    "114": "raise EmbeddingUnavailableError(",
+    "115": "f\"context['embedding'] must be list[float], got {type(override).__name__}\""
    }
   },
   {
-   "citation": "nautilus/adapters/pgvector.py:157",
+   "citation": "nautilus/adapters/pgvector.py:160",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/pgvector.py",
    "sha": "5f94623b04c495e4",
    "lines": {
-    "157": "raise AdapterError("
+    "160": "raise AdapterError("
    }
   },
   {
-   "citation": "nautilus/adapters/pgvector.py:216",
+   "citation": "nautilus/adapters/pgvector.py:219",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/pgvector.py",
    "sha": "bd5459b948ba1457",
    "lines": {
-    "216": "raise AdapterError(f\"PgVectorAdapter missing 'table' for source '{config.id}'\")"
+    "219": "raise AdapterError(f\"PgVectorAdapter missing 'table' for source '{config.id}'\")"
    }
   },
   {
-   "citation": "nautilus/adapters/pgvector.py:90",
+   "citation": "nautilus/adapters/pgvector.py:93",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/pgvector.py",
    "sha": "5f063f4b539f7f34",
    "lines": {
-    "90": "raise AdapterError(f\"PgVectorAdapter requires 'table' on source '{config.id}'\")"
+    "93": "raise AdapterError(f\"PgVectorAdapter requires 'table' on source '{config.id}'\")"
    }
   },
   {
@@ -1642,14 +1642,14 @@
    }
   },
   {
-   "citation": "nautilus/audit/logger.py:383",
+   "citation": "nautilus/audit/logger.py:385",
    "cited_in": [
     "docs/reference/errors/attestation.md"
    ],
    "file": "nautilus/audit/logger.py",
    "sha": "ff52af8a9a83bf66",
    "lines": {
-    "383": "raise KeyError(f\"AuditRecord has no {NAUTILUS_METADATA_KEY!r} metadata\")"
+    "385": "raise KeyError(f\"AuditRecord has no {NAUTILUS_METADATA_KEY!r} metadata\")"
    }
   },
   {
@@ -1833,25 +1833,25 @@
    }
   },
   {
-   "citation": "nautilus/cli/_common.py:197",
+   "citation": "nautilus/cli/_common.py:198",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/cli/_common.py",
    "sha": "d6e69ac6972eff2e",
    "lines": {
-    "197": "API_KEY_ENV = \"NAUTILUS_API_KEY\""
+    "198": "API_KEY_ENV = \"NAUTILUS_API_KEY\""
    }
   },
   {
-   "citation": "nautilus/cli/_common.py:247",
+   "citation": "nautilus/cli/_common.py:248",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/cli/_common.py",
    "sha": "33921cd4f0c14e2b",
    "lines": {
-    "247": "return os.environ.get(API_KEY_ENV, \"\").strip() or None"
+    "248": "return os.environ.get(API_KEY_ENV, \"\").strip() or None"
    }
   },
   {
@@ -2247,74 +2247,74 @@
    }
   },
   {
-   "citation": "nautilus/cli/key.py:125",
+   "citation": "nautilus/cli/key.py:126",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/key.py",
    "sha": "faecb299e284fc95",
    "lines": {
-    "125": "fail(f\"key {command}: cannot reach {endpoint}: {exc}\")"
+    "126": "fail(f\"key {command}: cannot reach {endpoint}: {exc}\")"
    }
   },
   {
-   "citation": "nautilus/cli/key.py:128",
+   "citation": "nautilus/cli/key.py:129",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/key.py",
    "sha": "a435e95bab507ddb",
    "lines": {
-    "128": "err(f\"key {command}: server returned {response.status_code}: {response.text}\")"
+    "129": "err(f\"key {command}: server returned {response.status_code}: {response.text}\")"
    }
   },
   {
-   "citation": "nautilus/cli/key.py:152",
+   "citation": "nautilus/cli/key.py:162",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/key.py",
    "sha": "4b6f5e5d164ffa60",
    "lines": {
-    "152": "err(\"rotate requires --yes to confirm.\")"
+    "162": "err(\"rotate requires --yes to confirm.\")"
    }
   },
   {
-   "citation": "nautilus/cli/key.py:177",
+   "citation": "nautilus/cli/key.py:187",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/key.py",
    "sha": "70f1608845d4e8c8",
    "lines": {
-    "177": "err(\"revoke requires --yes to confirm.\")"
+    "187": "err(\"revoke requires --yes to confirm.\")"
    }
   },
   {
-   "citation": "nautilus/cli/key.py:73",
+   "citation": "nautilus/cli/key.py:74",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/key.py",
    "sha": "487ea53c8de85505",
    "lines": {
-    "73": "err(\"key: no subcommand given (try: list, rotate, revoke)\")"
+    "74": "err(\"key: no subcommand given (try: list, rotate, revoke)\")"
    }
   },
   {
-   "citation": "nautilus/cli/key.py:82-87",
+   "citation": "nautilus/cli/key.py:83-88",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/key.py",
    "sha": "ca725fb72990bd5f",
    "lines": {
-    "82": "fail(",
-    "83": "f\"key {command}: --url is required. Rotation and revocation are audited \"",
-    "84": "f\"events the broker emits against the ring it is serving with, so there \"",
-    "85": "f\"is nothing for the CLI to act on locally — point --url at the running \"",
-    "86": "f\"broker (e.g. --url http://localhost:8000).\"",
-    "87": ")"
+    "83": "fail(",
+    "84": "f\"key {command}: --url is required. Rotation and revocation are audited \"",
+    "85": "f\"events the broker emits against the ring it is serving with, so there \"",
+    "86": "f\"is nothing for the CLI to act on locally — point --url at the running \"",
+    "87": "f\"broker (e.g. --url http://localhost:8000).\"",
+    "88": ")"
    }
   },
   {
@@ -2572,94 +2572,94 @@
    }
   },
   {
-   "citation": "nautilus/cli/rules.py:297",
+   "citation": "nautilus/cli/rules.py:299",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/rules.py",
    "sha": "2646d686846510bb",
    "lines": {
-    "297": "warn(f\"no rules found in {file_path}\")"
+    "299": "warn(f\"no rules found in {file_path}\")"
    }
   },
   {
-   "citation": "nautilus/cli/rules.py:372-375",
+   "citation": "nautilus/cli/rules.py:374-377",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/rules.py",
    "sha": "8b1489aa0eaae67f",
    "lines": {
-    "372": "for flag in flags:",
-    "373": "warn(",
-    "374": "f\"rule '{name}': shadow finding {flag.relation}\"",
-    "375": "f\" (existing rule '{flag.existing_rule}')\""
+    "374": "for flag in flags:",
+    "375": "warn(",
+    "376": "f\"rule '{name}': shadow finding {flag.relation}\"",
+    "377": "f\" (existing rule '{flag.existing_rule}')\""
    }
   },
   {
-   "citation": "nautilus/cli/rules.py:377-380",
+   "citation": "nautilus/cli/rules.py:379-382",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/rules.py",
    "sha": "35ad528bca41b9f0",
    "lines": {
-    "377": "if sandbox_result.insufficient_history:",
-    "378": "warn(",
-    "379": "f\"rule '{name}': insufficient audit history\"",
-    "380": "f\" (replayed {sandbox_result.replayed_n_actual} entries)\""
+    "379": "if sandbox_result.insufficient_history:",
+    "380": "warn(",
+    "381": "f\"rule '{name}': insufficient audit history\"",
+    "382": "f\" (replayed {sandbox_result.replayed_n_actual} entries)\""
    }
   },
   {
-   "citation": "nautilus/cli/rules.py:381-385",
+   "citation": "nautilus/cli/rules.py:383-387",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/rules.py",
    "sha": "513c7377072a1382",
    "lines": {
-    "381": ")",
-    "382": "if sandbox_result.skipped_drifted:",
-    "383": "warn(",
-    "384": "f\"rule '{name}': {sandbox_result.skipped_drifted} audit entries could not be\"",
-    "385": "f\" replayed -- the current rules no longer reproduce what they recorded\""
+    "383": ")",
+    "384": "if sandbox_result.skipped_drifted:",
+    "385": "warn(",
+    "386": "f\"rule '{name}': {sandbox_result.skipped_drifted} audit entries could not be\"",
+    "387": "f\" replayed -- the current rules no longer reproduce what they recorded\""
    }
   },
   {
-   "citation": "nautilus/cli/rules.py:386-390",
+   "citation": "nautilus/cli/rules.py:388-392",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/rules.py",
    "sha": "e7c49cc143acdd2d",
    "lines": {
-    "386": ")",
-    "387": "if sandbox_result.skipped_no_input_facts:",
-    "388": "warn(",
-    "389": "f\"rule '{name}': {sandbox_result.skipped_no_input_facts} audit entries carry\"",
-    "390": "f\" no engine input and were not replayed\""
+    "388": ")",
+    "389": "if sandbox_result.skipped_no_input_facts:",
+    "390": "warn(",
+    "391": "f\"rule '{name}': {sandbox_result.skipped_no_input_facts} audit entries carry\"",
+    "392": "f\" no engine input and were not replayed\""
    }
   },
   {
-   "citation": "nautilus/cli/rules.py:400",
+   "citation": "nautilus/cli/rules.py:402",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/rules.py",
    "sha": "b69170d9192bcc3d",
    "lines": {
-    "400": "err(f\"score {min_total:.2f} below threshold {threshold:.2f}: {file_path}\")"
+    "402": "err(f\"score {min_total:.2f} below threshold {threshold:.2f}: {file_path}\")"
    }
   },
   {
-   "citation": "nautilus/cli/rules.py:421",
+   "citation": "nautilus/cli/rules.py:423",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/rules.py",
    "sha": "ee02b6e7c4b651f3",
    "lines": {
-    "421": "err(f\"cannot read rules config from {path}: {exc}\")"
+    "423": "err(f\"cannot read rules config from {path}: {exc}\")"
    }
   },
   {
@@ -2722,7 +2722,7 @@
    }
   },
   {
-   "citation": "nautilus/cli/serve.py:355-404",
+   "citation": "nautilus/cli/serve.py:358-407",
    "cited_in": [
     "docs/reference/errors/cli.md",
     "docs/reference/errors/config.md"
@@ -2730,89 +2730,89 @@
    "file": "nautilus/cli/serve.py",
    "sha": "5221b6d1e86f258b",
    "lines": {
-    "355": "def broker_for_serve(config_path: Path, *, air_gapped: bool) -> Broker:",
-    "356": "\"\"\"Everything ``serve`` does between the path and the socket.",
-    "357": "",
-    "358": "Path check, the ``--air-gapped`` pre-pass, and ``Broker.from_config`` —",
-    "359": "the sequence ``nautilus serve`` runs before uvicorn binds, factored out",
-    "360": "so ``nautilus config check`` runs it rather than a second copy of it. A",
-    "361": "reimplementation would drift, and the failure mode of a drifted validator",
-    "362": "is that it blesses a config ``serve`` then refuses, which is worse than",
-    "363": "having no check at all.",
-    "364": "",
-    "365": "What it deliberately does not reach: ``Broker.setup()``. ``serve`` does",
-    "366": "not call it either until the transport is already up (the FastAPI",
-    "367": "lifespan does), and it is where a durable session store is first dialled",
-    "368": "and adapter schema fingerprints are checked — questions about the",
-    "369": "environment the process lands in, not about the file. Those failures are",
-    "370": "what ``/readyz`` and the rollout's readiness gate are for. Everything the",
-    "371": "file alone decides, including whether ``audit.path`` can be opened for",
-    "372": "writing, is settled here.",
-    "373": "",
-    "374": "Raises:",
-    "375": "ConfigRefusedError: On any config ``serve`` would exit 2 on.",
-    "376": "\"\"\"",
-    "377": "if not config_path.is_file():",
-    "378": "raise ConfigRefusedError(f\"config path does not exist or is not a file: {config_path}\")",
-    "379": "",
-    "380": "try:",
-    "381": "effective_path = _load_config_for_serve(config_path, air_gapped=air_gapped)",
-    "382": "except Exception as exc:  # noqa: BLE001 - the contract is total, see below",
-    "383": "# By contract, not by class. This function's job is to raise",
-    "384": "# ``ConfigRefusedError`` for anything ``serve`` would exit 2 on, and",
-    "385": "# ``reload_config`` catches exactly that to write the",
-    "386": "# ``config_reload_refused`` receipt. Catching ``RuntimeError`` alone",
-    "387": "# left the whole ``--air-gapped`` rewrite -- two ``yaml.safe_dump``",
-    "388": "# calls, ``_enforce_air_gap`` and a ``NamedTemporaryFile`` write --",
-    "389": "# able to reach the SIGHUP task raw: no refusal log line, no receipt,",
-    "390": "# and an operator with nothing to read.",
-    "391": "raise ConfigRefusedError(str(exc)) from exc",
-    "392": "",
-    "393": "# Broker.from_config surfaces ConfigError / validation errors with",
-    "394": "# readable messages; the caller turns these into a non-zero exit before",
-    "395": "# any bind.",
-    "396": "from nautilus.config.loader import ConfigError",
-    "397": "from nautilus.core.broker import Broker",
-    "398": "",
-    "399": "try:",
-    "400": "return Broker.from_config(effective_path)",
-    "401": "except ConfigError as exc:",
-    "402": "raise ConfigRefusedError(f\"invalid config: {exc}\") from exc",
-    "403": "except Exception as exc:  # noqa: BLE001 - surface wiring failures cleanly",
-    "404": "raise ConfigRefusedError(f\"broker construction failed: {exc}\") from exc"
+    "358": "def broker_for_serve(config_path: Path, *, air_gapped: bool) -> Broker:",
+    "359": "\"\"\"Everything ``serve`` does between the path and the socket.",
+    "360": "",
+    "361": "Path check, the ``--air-gapped`` pre-pass, and ``Broker.from_config`` —",
+    "362": "the sequence ``nautilus serve`` runs before uvicorn binds, factored out",
+    "363": "so ``nautilus config check`` runs it rather than a second copy of it. A",
+    "364": "reimplementation would drift, and the failure mode of a drifted validator",
+    "365": "is that it blesses a config ``serve`` then refuses, which is worse than",
+    "366": "having no check at all.",
+    "367": "",
+    "368": "What it deliberately does not reach: ``Broker.setup()``. ``serve`` does",
+    "369": "not call it either until the transport is already up (the FastAPI",
+    "370": "lifespan does), and it is where a durable session store is first dialled",
+    "371": "and adapter schema fingerprints are checked — questions about the",
+    "372": "environment the process lands in, not about the file. Those failures are",
+    "373": "what ``/readyz`` and the rollout's readiness gate are for. Everything the",
+    "374": "file alone decides, including whether ``audit.path`` can be opened for",
+    "375": "writing, is settled here.",
+    "376": "",
+    "377": "Raises:",
+    "378": "ConfigRefusedError: On any config ``serve`` would exit 2 on.",
+    "379": "\"\"\"",
+    "380": "if not config_path.is_file():",
+    "381": "raise ConfigRefusedError(f\"config path does not exist or is not a file: {config_path}\")",
+    "382": "",
+    "383": "try:",
+    "384": "effective_path = _load_config_for_serve(config_path, air_gapped=air_gapped)",
+    "385": "except Exception as exc:  # noqa: BLE001 - the contract is total, see below",
+    "386": "# By contract, not by class. This function's job is to raise",
+    "387": "# ``ConfigRefusedError`` for anything ``serve`` would exit 2 on, and",
+    "388": "# ``reload_config`` catches exactly that to write the",
+    "389": "# ``config_reload_refused`` receipt. Catching ``RuntimeError`` alone",
+    "390": "# left the whole ``--air-gapped`` rewrite -- two ``yaml.safe_dump``",
+    "391": "# calls, ``_enforce_air_gap`` and a ``NamedTemporaryFile`` write --",
+    "392": "# able to reach the SIGHUP task raw: no refusal log line, no receipt,",
+    "393": "# and an operator with nothing to read.",
+    "394": "raise ConfigRefusedError(str(exc)) from exc",
+    "395": "",
+    "396": "# Broker.from_config surfaces ConfigError / validation errors with",
+    "397": "# readable messages; the caller turns these into a non-zero exit before",
+    "398": "# any bind.",
+    "399": "from nautilus.config.loader import ConfigError",
+    "400": "from nautilus.core.broker import Broker",
+    "401": "",
+    "402": "try:",
+    "403": "return Broker.from_config(effective_path)",
+    "404": "except ConfigError as exc:",
+    "405": "raise ConfigRefusedError(f\"invalid config: {exc}\") from exc",
+    "406": "except Exception as exc:  # noqa: BLE001 - surface wiring failures cleanly",
+    "407": "raise ConfigRefusedError(f\"broker construction failed: {exc}\") from exc"
    }
   },
   {
-   "citation": "nautilus/cli/serve.py:378",
+   "citation": "nautilus/cli/serve.py:381",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/serve.py",
    "sha": "e7c361bc687dc575",
    "lines": {
-    "378": "raise ConfigRefusedError(f\"config path does not exist or is not a file: {config_path}\")"
+    "381": "raise ConfigRefusedError(f\"config path does not exist or is not a file: {config_path}\")"
    }
   },
   {
-   "citation": "nautilus/cli/serve.py:402",
+   "citation": "nautilus/cli/serve.py:405",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/serve.py",
    "sha": "e9ece20d76f6b79f",
    "lines": {
-    "402": "raise ConfigRefusedError(f\"invalid config: {exc}\") from exc"
+    "405": "raise ConfigRefusedError(f\"invalid config: {exc}\") from exc"
    }
   },
   {
-   "citation": "nautilus/cli/serve.py:404",
+   "citation": "nautilus/cli/serve.py:407",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/serve.py",
    "sha": "f4d881b5612e32ea",
    "lines": {
-    "404": "raise ConfigRefusedError(f\"broker construction failed: {exc}\") from exc"
+    "407": "raise ConfigRefusedError(f\"broker construction failed: {exc}\") from exc"
    }
   },
   {
@@ -5729,14 +5729,14 @@
    }
   },
   {
-   "citation": "pgvector.py:212",
+   "citation": "pgvector.py:215",
    "cited_in": [
     "docs/reference/errors/adapters.md"
    ],
    "file": "nautilus/adapters/pgvector.py",
    "sha": "206f8cb2b1907606",
    "lines": {
-    "212": "raise AdapterError(\"PgVectorAdapter.execute called before connect()\")"
+    "215": "raise AdapterError(\"PgVectorAdapter.execute called before connect()\")"
    }
   },
   {

@@ -294,8 +294,11 @@ def test_m415_omitting_the_session_token_does_not_reset_the_ledger(
             store: Any = broker.session_store
 
             async def _visited(key: str) -> set[str]:
-                state = await store.aget(key) if hasattr(store, "aget") else store.get(key)
-                return set((state or {}).get("sources_visited", []))
+                state: dict[str, Any] | None = (
+                    await store.aget(key) if hasattr(store, "aget") else store.get(key)
+                )
+                visited: list[str] = (state or {}).get("sources_visited", [])
+                return set(visited)
 
             # Read the *principal* ledger, not the per-session row: the session
             # row records what that session did, and the ledger a caller cannot
@@ -360,7 +363,7 @@ def test_m410_governance_events_are_readable_through_the_audit_api(
     assert audit.read_text().strip(), "the fixture wrote nothing"
 
     page = AuditReader(audit).read_page(event_type=event_type)
-    entries = page.entries if hasattr(page, "entries") else page["entries"]
+    entries = page.entries
     assert entries, (
         f"the audit API returns nothing for event_type={event_type}, though "
         f"the record is on disk under metadata.nautilus_audit_entry: "

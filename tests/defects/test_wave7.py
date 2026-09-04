@@ -106,8 +106,11 @@ def test_w71_parallel_requests_do_not_lose_principal_exposure(
                     await c
             store: Any = broker.session_store
             key = derive_principal_id("analyst")
-            state = await store.aget(key) if hasattr(store, "aget") else store.get(key)
-            return set((state or {}).get("sources_visited", []))
+            state: dict[str, Any] | None = (
+                await store.aget(key) if hasattr(store, "aget") else store.get(key)
+            )
+            visited: list[str] = (state or {}).get("sources_visited", [])
+            return set(visited)
         finally:
             await broker.aclose()
 
@@ -162,8 +165,11 @@ def test_w71_merging_the_principal_ledger_does_not_rewrite_the_session_row(
             store: Any = broker.session_store
 
             async def _visited(sid: str) -> set[str]:
-                state = await store.aget(sid) if hasattr(store, "aget") else store.get(sid)
-                return set((state or {}).get("sources_visited", []))
+                state: dict[str, Any] | None = (
+                    await store.aget(sid) if hasattr(store, "aget") else store.get(sid)
+                )
+                visited: list[str] = (state or {}).get("sources_visited", [])
+                return set(visited)
 
             return await _visited("alpha"), await _visited("beta")
         finally:
@@ -668,7 +674,7 @@ def test_w73_s3_ands_two_constraints_on_the_same_field(
         from aiobotocore.session import AioSession
 
         session = AioSession()
-        async with session.create_client(
+        async with session.create_client(  # pyright: ignore[reportUnknownMemberType]
             "s3",
             endpoint_url=endpoint,
             aws_access_key_id=access,
@@ -1318,8 +1324,11 @@ def test_w79_two_broker_processes_share_one_exposure_ledger(
         await broker.setup()
         try:
             store: Any = broker.session_store
-            state = await store.aget("shared") if hasattr(store, "aget") else store.get("shared")
-            return set((state or {}).get("sources_visited", []))
+            state: dict[str, Any] | None = (
+                await store.aget("shared") if hasattr(store, "aget") else store.get("shared")
+            )
+            visited: list[str] = (state or {}).get("sources_visited", [])
+            return set(visited)
         finally:
             await broker.aclose()
 

@@ -353,15 +353,17 @@ def decode_audit_line(line: str | bytes) -> AuditEntry | None:
     :class:`pydantic.ValidationError` is) only when the line cannot be read:
     invalid JSON, or an envelope whose declared Nautilus entry is broken.
     """
-    payload: Any = json.loads(line)
-    if not isinstance(payload, dict):
-        msg = f"audit line is a {type(payload).__name__}, not an object"
+    decoded: object = json.loads(line)
+    if not isinstance(decoded, dict):
+        msg = f"audit line is a {type(decoded).__name__}, not an object"
         raise ValueError(msg)
+    payload = cast("dict[str, Any]", decoded)
     if _CHAINED_LINE_FIELDS.issubset(payload):
-        payload = payload["record"]
-        if not isinstance(payload, dict):
+        inner: object = payload["record"]
+        if not isinstance(inner, dict):
             return None
-    metadata = cast("dict[str, Any]", payload).get("metadata")
+        payload = cast("dict[str, Any]", inner)
+    metadata = payload.get("metadata")
     if isinstance(metadata, dict):
         nested = cast("dict[str, Any]", metadata).get(NAUTILUS_METADATA_KEY)
         if isinstance(nested, str):

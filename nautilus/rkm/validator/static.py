@@ -20,7 +20,8 @@ from pathlib import Path
 from typing import Any, cast
 
 import yaml
-from fathom.compiler import CompilationError, Compiler
+from fathom.compiler import Compiler
+from fathom.errors import CompilationError
 from fathom.models import RuleDefinition, TemplateDefinition
 
 from nautilus.rkm.curator.isolation import CuratorIsolationViolation, assert_module_isolation

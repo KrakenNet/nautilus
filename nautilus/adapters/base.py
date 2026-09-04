@@ -17,7 +17,7 @@ import logging
 import re
 import socket
 from collections.abc import Awaitable, Callable
-from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol, cast, runtime_checkable
 from urllib.parse import urlsplit
 
 from nautilus.config.models import SourceConfig
@@ -396,12 +396,14 @@ class Adapter(Protocol):
         raise NotImplementedError("AC-21.b: this adapter must implement get_schema() (task-006)")
 
 
-_ExecuteFn = Callable[
-    [Any, IntentAnalysis, list[ScopeConstraint], dict[str, Any]], Awaitable[AdapterResult]
-]
+# Bound to a TypeVar, not spelled out as a ``Callable[...]``: a ``Callable``
+# parameter list is positional-only, so a decorated ``execute`` no longer
+# matched the :class:`Adapter` protocol (which names ``intent`` / ``scope`` /
+# ``context``) and every wrapped adapter dropped out of ``type[Adapter]``.
+type _ExecuteBody = Callable[..., Awaitable["AdapterResult"]]
 
 
-def wrap_execute(fn: _ExecuteFn) -> _ExecuteFn:
+def wrap_execute[F: _ExecuteBody](fn: F) -> F:
     """Re-raise a backend driver's own exceptions from ``execute`` as ``AdapterError``.
 
     :class:`Adapter` documents ``AdapterError`` as the only non-scope failure
@@ -441,7 +443,7 @@ def wrap_execute(fn: _ExecuteFn) -> _ExecuteFn:
                 f"{type(exc).__name__}" + (f": {detail}" if detail else "")
             ) from exc
 
-    return _wrapped
+    return cast("F", _wrapped)
 
 
 __all__ = [

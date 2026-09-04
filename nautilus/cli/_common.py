@@ -127,7 +127,7 @@ def _config_or_none(config_path: str | None) -> NautilusConfig | None:
         return None
 
 
-def _signing_key(config: NautilusConfig, config_path: str) -> AttestationService | None:
+def _signing_key(config: NautilusConfig, config_path: str | None) -> AttestationService | None:
     """The key a chained line is signed with, or ``None`` if there is none.
 
     Unlike the broker, a CLI process must never fall back to generating a
@@ -146,7 +146,8 @@ def _signing_key(config: NautilusConfig, config_path: str) -> AttestationService
 
     resolved = Path(key_path)
     if not resolved.is_absolute():
-        resolved = Path(config_path).parent / resolved
+        base = Path(config_path).parent if config_path else Path()
+        resolved = base / resolved
     return AttestationService.from_private_key_bytes(resolved.read_bytes())
 
 

@@ -73,12 +73,13 @@ def test_sequential_reads_accumulate_in_the_session_ledger(
                     "analyst", kind, {"purpose": "care", "session_id": "cumulative"}
                 )
             store: Any = broker.session_store
-            state = (
+            state: dict[str, Any] | None = (
                 await store.aget("cumulative")
                 if hasattr(store, "aget")
                 else store.get("cumulative")
             )
-            return set((state or {}).get("sources_visited", []))
+            visited: list[str] = (state or {}).get("sources_visited", [])
+            return set(visited)
         finally:
             await broker.aclose()
 
@@ -107,8 +108,11 @@ def test_the_ledger_follows_the_caller_not_the_declared_session(session_config: 
             store: Any = broker.session_store
 
             async def _visited(key: str) -> set[str]:
-                state = await store.aget(key) if hasattr(store, "aget") else store.get(key)
-                return set((state or {}).get("sources_visited", []))
+                state: dict[str, Any] | None = (
+                    await store.aget(key) if hasattr(store, "aget") else store.get(key)
+                )
+                visited: list[str] = (state or {}).get("sources_visited", [])
+                return set(visited)
 
             # ``alpha`` is a session row -- what that one session did. The other
             # two reads are principal ledgers: the accumulation a caller cannot

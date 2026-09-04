@@ -16,7 +16,7 @@ import sys
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -120,7 +120,7 @@ def stub_llm() -> Any:
             self.end_headers()
             self.wfile.write(payload)
 
-        def log_message(self, *args: Any) -> None:
+        def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
             return
 
     server = HTTPServer(("127.0.0.1", 0), Handler)
@@ -655,7 +655,7 @@ def test_m421_shadow_analysis_keeps_the_value_a_rule_constrains(tmp_path: Path) 
     """
     from nautilus.rkm.validator.shadow import shadow_check
 
-    rules = _DISPATCH_RULES["rules"]
+    rules = cast("list[dict[str, Any]]", _DISPATCH_RULES["rules"])
     proposed, existing = rules[-1], rules[:-1]
 
     flags = shadow_check(proposed, existing)
@@ -1139,7 +1139,7 @@ def test_m422_hash_skipped_reaches_the_caller(write_config: Any) -> None:
         capabilities=frozenset({"non_deterministic"})
     )
 
-    token, _, _ = broker._sign(
+    token, _, _ = broker._sign(  # pyright: ignore[reportPrivateUsage]
         request_id="r1",
         agent_id="a",
         sources_queried=["oracle"],
@@ -1155,7 +1155,7 @@ def test_m422_hash_skipped_reaches_the_caller(write_config: Any) -> None:
 
     # Control: a deterministic source must NOT carry the claim.
     broker._adapters["ledger"] = SimpleNamespace(capabilities=frozenset())  # type: ignore[assignment]
-    clean, _, _ = broker._sign(
+    clean, _, _ = broker._sign(  # pyright: ignore[reportPrivateUsage]
         request_id="r2",
         agent_id="a",
         sources_queried=["ledger"],

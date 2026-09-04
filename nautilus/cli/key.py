@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from typing import cast
 
 import httpx
 
@@ -134,15 +135,24 @@ def _cmd_list(args: argparse.Namespace, *, transport: httpx.BaseTransport | None
     code, payload = _call(args, "list", "GET", "/v1/keys/jwks.json", None, transport)
     if payload is None:
         return code
-    keys = payload.get("keys") or []
+    # Narrowed rather than cast: this is a JWKS off the wire, and the shape is
+    # the server's claim, not a fact. A ``keys`` member that is not a list of
+    # objects is a broker answering something other than a JWKS, which is worth
+    # saying plainly instead of raising ``TypeError`` mid-loop.
+    raw_keys: object = payload.get("keys") or []
+    if not isinstance(raw_keys, list):
+        err(f"key list: expected a JWKS 'keys' array, got {type(raw_keys).__name__}")
+        return 2
+    keys: list[dict[str, object]] = [
+        k for k in cast("list[object]", raw_keys) if isinstance(k, dict)
+    ]
     if getattr(args, "json", False):
         print(json.dumps(keys))
         return 0
     if not keys:
         print("no active keys (session tokens are disabled on this broker)")
         return 0
-    for key in keys:
-        entry: dict[str, object] = key  # type: ignore[assignment]
+    for entry in keys:
         print(f"  {entry.get('kid')}  kty={entry.get('kty')}  use={entry.get('use')}")
     return 0
 

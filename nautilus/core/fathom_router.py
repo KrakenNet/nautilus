@@ -315,7 +315,7 @@ class FathomRouter:
         ``unclassified``, which makes an unrecognised label readable by every
         agent -- so callers must reject rather than route.
         """
-        definition = self._engine._hierarchy_registry.get(name)  # noqa: SLF001
+        definition = self._engine._hierarchy_registry.get(name)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
         return tuple(definition.levels) if definition is not None else ()
 
     def route(

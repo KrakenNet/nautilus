@@ -95,7 +95,7 @@ async def _request(config: str, agent: str, intent: str, **context: Any) -> Any:
         # clearance must dominate the source's classification
         ("intern", {"vulns"}, {"classified"}),
         ("analyst", {"vulns"}, {"classified"}),
-        ("chief", {"vulns", "classified"}, set()),
+        ("chief", {"vulns", "classified"}, set[str]()),
     ],
 )
 def test_clearance_decides_which_sources_a_request_reaches(

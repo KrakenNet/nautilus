@@ -221,7 +221,7 @@ Install the extra, rebuild the image with it, or remove the source.
 
 ## What the CLI shows
 
-`nautilus serve` wraps the above (`nautilus/cli/serve.py:355-404`):
+`nautilus serve` wraps the above (`nautilus/cli/serve.py:358-407`):
 
 ```text
 ERROR: config path does not exist or is not a file: {config_path}

@@ -65,7 +65,7 @@ def client(deployment: str) -> Any:
         yield c
 
 
-_BODY = {
+_BODY: dict[str, Any] = {
     "agent_id": "analyst",
     "intent": "patient records",
     "context": {"purpose": "care", "session_id": "rest"},

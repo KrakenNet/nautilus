@@ -58,7 +58,7 @@ def pg_dsn() -> Iterator[str]:
     import asyncio
 
     import asyncpg
-    from testcontainers.postgres import PostgresContainer
+    from testcontainers.postgres import PostgresContainer  # pyright: ignore[reportMissingTypeStubs]
 
     container = PostgresContainer("pgvector/pgvector:pg16", driver=None)
     container.start()
@@ -89,7 +89,9 @@ def es_url() -> Iterator[str]:
     """
     if not _docker_available():
         pytest.skip("needs a running Docker daemon")
-    from testcontainers.elasticsearch import ElasticSearchContainer
+    from testcontainers.elasticsearch import (  # pyright: ignore[reportMissingTypeStubs]
+        ElasticSearchContainer,
+    )
 
     container = ElasticSearchContainer("elasticsearch:8.15.0", mem_limit="2G")
     container.start()
@@ -105,7 +107,7 @@ def neo4j_bolt() -> Iterator[tuple[str, str, str]]:
     """Neo4j 5. Yields ``(bolt_url, user, password)``."""
     if not _docker_available():
         pytest.skip("needs a running Docker daemon")
-    from testcontainers.neo4j import Neo4jContainer
+    from testcontainers.neo4j import Neo4jContainer  # pyright: ignore[reportMissingTypeStubs]
 
     container = Neo4jContainer("neo4j:5")
     container.start()
@@ -140,7 +142,9 @@ def minio_endpoint() -> Iterator[tuple[str, str, str]]:
     """MinIO over the S3 API. Yields ``(endpoint_url, access_key, secret_key)``."""
     if not _docker_available():
         pytest.skip("needs a running Docker daemon")
-    from testcontainers.core.container import DockerContainer
+    from testcontainers.core.container import (  # pyright: ignore[reportMissingTypeStubs]
+        DockerContainer,
+    )
 
     container = (
         DockerContainer("minio/minio")
@@ -165,7 +169,9 @@ def influx() -> Iterator[tuple[str, str, str, str]]:
     """InfluxDB 2. Yields ``(url, org, bucket, token)``."""
     if not _docker_available():
         pytest.skip("needs a running Docker daemon")
-    from testcontainers.core.container import DockerContainer
+    from testcontainers.core.container import (  # pyright: ignore[reportMissingTypeStubs]
+        DockerContainer,
+    )
 
     token = "journey-token"
     container = (

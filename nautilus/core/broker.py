@@ -3112,7 +3112,7 @@ class Broker:
         self,
         state: _RequestState,
         context: dict[str, Any],
-    ) -> tuple[list[asyncio.Task[AdapterResult]], list[str]]:
+    ) -> tuple[list[asyncio.Task[AdapterResult | None]], list[str]]:
         """Lazy-connect + spawn one task per routed source (design §3.1).
 
         Per SOURCE, not per routing decision: two rules can route the same
@@ -3446,7 +3446,7 @@ class Broker:
             if res is None:
                 # _prepare_adapter already recorded why this source is out.
                 continue
-            if not isinstance(res, AdapterResult):
+            if not isinstance(res, AdapterResult):  # pyright: ignore[reportUnnecessaryIsInstance]
                 coerced = _coerce_adapter_result(res)
                 if coerced is None:
                     # B5 -- ``res.error`` below is outside any try block, so

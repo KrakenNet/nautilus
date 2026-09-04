@@ -45,6 +45,17 @@ red until its fix lands.
   before believing a pin; a fixture bug looks identical to a defect in the
   summary line.
 - Container fixtures skip, never fail, when no Docker daemon is reachable.
+- **`pyright` is at zero, not at a baseline.** A `# pyright: ignore[...]` has
+  to name a reason a reader can check: the import ships no stubs
+  (`testcontainers`, the un-installed half of aiobotocore's per-service
+  overloads), or the name is private to another module in this repo. Anything
+  the type system can be told instead — a widened return type, an `object`
+  narrowed by `isinstance`, an annotated local — is told, not suppressed.
+- **`fathom-rules` stays uncapped, so its private surface is guarded by a
+  test.** `tests/defects/test_wave_e11.py` imports exactly what
+  `nautilus/rkm/validator/static.py` imports, from the same modules —
+  `Compiler` from `fathom.compiler`, `CompilationError` from `fathom.errors`.
+  A version pin is not the guard; the test is.
 - The same goes for local-only material. `docs/comps/` is excluded in
   `.git/info/exclude` and is absent from a clean clone, so a test over it
   skips at module level rather than failing CI over files that never shipped.
@@ -95,6 +106,7 @@ red until its fix lands.
 ```bash
 uv run pytest -m "not docker"   # fast lane, no containers (~40s)
 uv run pytest -m docker         # live backends via testcontainers
+uv run pyright                  # zero errors; see the contract above
 
 python tests/citation_lock.py           # report drifted docs/ citations
 python tests/citation_lock.py --write   # re-lock, once the citations are re-read

@@ -4318,7 +4318,7 @@ $ grep -rn 'os\.environ\|os\.getenv' nautilus/ --include='*.py'
 nautilus/build.py:101:    return os.environ.get(BUILD_REV_ENV, "").strip() or UNKNOWN
 nautilus/build.py:114:    supplied = os.environ.get(BUILD_REV_ENV, "").strip()
 nautilus/cli/_common.py:34:    reviewer = os.environ.get("NAUTILUS_REVIEWER", "").strip()
-nautilus/cli/_common.py:247:    return os.environ.get(API_KEY_ENV, "").strip() or None
+nautilus/cli/_common.py:248:    return os.environ.get(API_KEY_ENV, "").strip() or None
 nautilus/analysis/llm/local_provider.py:77:        if not os.getenv(self.api_key_env):
 nautilus/analysis/llm/local_provider.py:88:            api_key = os.getenv(self.api_key_env) or self._api_key_literal
 nautilus/analysis/llm/anthropic_provider.py:95:        key = os.getenv(self.api_key_env)
@@ -4336,7 +4336,7 @@ nautilus/observability/__init__.py:16:    if os.environ.get("OTEL_SDK_DISABLED",
 
 Three classes, and only the first is a fixed name. **Ten fixed names** across
 nine call sites — the two OTLP endpoints share one `if`, and `API_KEY_ENV` is
-the module constant `"NAUTILUS_API_KEY"` (`nautilus/cli/_common.py:197`). **Six
+the module constant `"NAUTILUS_API_KEY"` (`nautilus/cli/_common.py:198`). **Six
 reads of whatever you named** in `analysis.provider.api_key_env`. **One copy of
 the whole environment**, in the loader: that is the `${VAR}` interpolator, and it
 is why a variable can be referenced from the config under any name at all.
@@ -7561,7 +7561,7 @@ The query builders are three lines, and none of them projects:
 |---|---|---|
 | `postgres`, `pgvector` | `SELECT * FROM <table> [WHERE ...] LIMIT $n` | `nautilus/adapters/postgres.py:168` |
 | `neo4j` | `MATCH (n:<label>) [WHERE ...] RETURN n LIMIT $L` | `nautilus/adapters/neo4j.py:303` |
-| `elasticsearch` | the hit's entire `_source` document | `nautilus/adapters/elasticsearch.py:427-432` |
+| `elasticsearch` | the hit's entire `_source` document | `nautilus/adapters/elasticsearch.py:430-435` |
 
 And the caller has no say either: `BrokerRequest` has four fields — `agent_id`,
 `intent`, `context` and `fact_set_hash` (`nautilus/core/models.py:52-61`). None

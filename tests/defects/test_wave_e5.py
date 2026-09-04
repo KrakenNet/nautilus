@@ -103,7 +103,7 @@ def _read_only_config(tmp_path: Path, **overrides: Any) -> Path:
 
 
 @pytest.fixture
-def _not_root() -> None:
+def _not_root() -> None:  # pyright: ignore[reportUnusedFunction]
     if os.geteuid() == 0:
         pytest.skip("root writes through a 0o555 directory; the mount case needs a real user")
 
@@ -116,7 +116,7 @@ _REAL_FINGERPRINT_ROOT = Broker.__dict__["_fingerprint_root"]
 
 
 @pytest.fixture(autouse=True)
-def _use_the_real_baseline_root(monkeypatch: pytest.MonkeyPatch) -> None:
+def _use_the_real_baseline_root(monkeypatch: pytest.MonkeyPatch) -> None:  # pyright: ignore[reportUnusedFunction]
     monkeypatch.setattr(Broker, "_fingerprint_root", _REAL_FINGERPRINT_ROOT)
 
 

@@ -249,7 +249,9 @@ def _cmd_test(args: argparse.Namespace) -> int:
     import yaml
 
     from nautilus.rkm.types import ConfidenceBreakdown
-    from nautilus.rkm.validator.pipeline import _built_in_ruleset
+    from nautilus.rkm.validator.pipeline import (
+        _built_in_ruleset,  # pyright: ignore[reportPrivateUsage]
+    )
     from nautilus.rkm.validator.sandbox import (
         SandboxRegressionError,
         SandboxResult,

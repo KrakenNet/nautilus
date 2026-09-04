@@ -313,7 +313,10 @@ async def _run_mcp(
     # the config.
     import uvicorn
 
-    from nautilus.transport.mcp_server import _mcp_settings, http_app
+    from nautilus.transport.mcp_server import (
+        _mcp_settings,  # pyright: ignore[reportPrivateUsage]
+        http_app,
+    )
 
     # A callable, not a snapshot: SIGHUP adopting ``api.keys`` must retire the
     # old credential on this port at the same moment it retires it on REST.

@@ -72,7 +72,7 @@ exactly two elements (`postgres.py:154`, `elasticsearch.py:170,175`, `neo4j.py:1
 
 ### `operator not allowed: {op}`
 
-`elasticsearch.py:371`, `neo4j.py:254,300`, `rest.py:377`. The final guard in an operator switch:
+`elasticsearch.py:374`, `neo4j.py:254,300`, `rest.py:377`. The final guard in an operator switch:
 the operator passed the shared allowlist but this adapter has no translation for it.
 
 ### `Operator '{op}' unhandled in _build_sql`
@@ -102,11 +102,11 @@ PY
 
 One per adapter, with the class name spelled out:
 `PostgresAdapter.execute called before connect()` (`postgres.py:187`),
-`ElasticsearchAdapter.execute called before connect()` (`elasticsearch.py:410`),
+`ElasticsearchAdapter.execute called before connect()` (`elasticsearch.py:413`),
 `Neo4jAdapter.execute called before connect()` (`neo4j.py:323`),
 `InfluxDBAdapter.execute called before connect()` (`influxdb.py:375`),
 `RestAdapter.execute called before connect()` (`rest.py:429`),
-`PgVectorAdapter.execute called before connect()` (`pgvector.py:212`),
+`PgVectorAdapter.execute called before connect()` (`pgvector.py:215`),
 `S3Adapter.execute called before connect()` (`s3.py:188`),
 `ServiceNowAdapter.execute called before connect()` (`servicenow.py:282`),
 `LLMAdapter.execute() called before connect()` (`llm.py:187`),
@@ -133,7 +133,7 @@ mismatch. Read it first; Nautilus adds only the source id.
 
 ### `{type(self).__name__}: execute failed for source '{source_id}': {type(exc).__name__}[: {exc}]`
 
-`wrap_execute`, `nautilus/adapters/base.py:438-442`. The uniform wrapper around a query that
+`wrap_execute`, `nautilus/adapters/base.py:440-444`. The uniform wrapper around a query that
 raised. Rendered example:
 
 ```text
@@ -282,7 +282,7 @@ similarity query never silently degrades to a zero vector.
 
 ### `context['embedding'] must be list[float], got {type(override).__name__}`
 
-`nautilus/adapters/pgvector.py:109-112`. The override was supplied but is the wrong type — a
+`nautilus/adapters/pgvector.py:112-115`. The override was supplied but is the wrong type — a
 string of JSON rather than a decoded list is the usual cause.
 
 ```bash
@@ -465,7 +465,7 @@ AdapterError: PostgresAdapter missing 'table' for source 'vuln_db'
 
 ### `PgVectorAdapter requires 'table' on source '{config.id}'`
 
-**`AdapterError`**, `nautilus/adapters/pgvector.py:90`, from `connect()`. The pgvector twin of the
+**`AdapterError`**, `nautilus/adapters/pgvector.py:93`, from `connect()`. The pgvector twin of the
 Postgres check, minus the "(Phase 1 shortcut)" suffix — grep for the exact spelling, the two are
 not interchangeable. `{config.id}` is the source id.
 
@@ -497,7 +497,7 @@ AdapterError: PgVectorAdapter requires 'table' on source 'kb'
 
 ### `PgVectorAdapter missing 'table' for source '{config.id}'`
 
-**`AdapterError`**, `nautilus/adapters/pgvector.py:216`, from `execute()`. Same
+**`AdapterError`**, `nautilus/adapters/pgvector.py:219`, from `execute()`. Same
 config-changed-underneath condition as the Postgres `missing 'table'` form. `{config.id}` is the
 id on the config the adapter is holding.
 
@@ -528,7 +528,7 @@ AdapterError: PgVectorAdapter missing 'table' for source 'kb'
 
 ### `distance_operator '{distance_operator}' not in allowlist: {sorted(_ALLOWED_DISTANCE_OPERATORS)}`
 
-**`AdapterError`**, `nautilus/adapters/pgvector.py:157`, from `_build_vector_sql()`.
+**`AdapterError`**, `nautilus/adapters/pgvector.py:160`, from `_build_vector_sql()`.
 `{distance_operator}` is the operator that was about to be spliced into `ORDER BY`;
 the allowlist renders as the sorted literal list `['<#>', '<->', '<=>']`.
 
@@ -660,7 +660,7 @@ constraint from silently over-returning data. Both are `ScopeEnforcementError`, 
 
 ### `ElasticsearchAdapter: field '{field}' is mapped as analysed 'text' with no 'keyword' subfield, so it cannot be matched exactly. An exact-match constraint on it would silently return over-scoped data. Add a keyword subfield to the mapping, or target one explicitly as 'field.<subfield>'.`
 
-`nautilus/adapters/elasticsearch.py:328-333`. `{field}` is the constraint's field name with
+`nautilus/adapters/elasticsearch.py:331-336`. `{field}` is the constraint's field name with
 `str()`, unquoted inside the literal `'` characters: `field 'owner' is mapped as analysed
 'text'`.
 
@@ -678,7 +678,7 @@ curl -s -X PUT 'http://localhost:9200/notes/_mapping' -H 'Content-Type: applicat
 
 ### `ElasticsearchAdapter: the only exact subfield for '{field}' is '{field}.{chosen}', which has ignore_above={limit}, and the constraint compares a value of length {longest}. Values over the limit are not indexed, so the comparison would silently return over-scoped data. Raise ignore_above on the mapping, or target a subfield without one as 'field.<subfield>'.`
 
-`nautilus/adapters/elasticsearch.py:350-357`. `{field}` is the constraint's field;
+`nautilus/adapters/elasticsearch.py:353-360`. `{field}` is the constraint's field;
 `{chosen}` is the subfield with the largest `ignore_above` (ties broken by name);
 `{limit}` is that `ignore_above` as an `int`; `{longest}` is the length of the longest string in
 the constraint's value.

@@ -292,7 +292,9 @@ def test_e25c_the_sandbox_replays_a_chained_audit_log(tmp_path: Path) -> None:
     """
     from fastapi.testclient import TestClient
 
-    from nautilus.rkm.validator.sandbox import _load_entries  # noqa: PLC2701
+    from nautilus.rkm.validator.sandbox import (
+        _load_entries,  # noqa: PLC2701  # pyright: ignore[reportPrivateUsage]
+    )
 
     audit_path = tmp_path / "audit.jsonl"
     with TestClient(_app(_config(tmp_path), tmp_path)) as client:

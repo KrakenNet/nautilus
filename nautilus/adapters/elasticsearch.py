@@ -315,10 +315,13 @@ class ElasticsearchAdapter:
             # permits one dotted segment); respect it.
             return field
         definition = props.get(field)
-        if not isinstance(definition, dict) or definition.get("type") != "text":
+        if not isinstance(definition, dict):
+            return field
+        mapping = cast("dict[str, Any]", definition)
+        if mapping.get("type") != "text":
             # Unmapped, or already an exact type (keyword/long/date/boolean...).
             return field
-        subfields = cast("dict[str, Any]", definition.get("fields") or {})
+        subfields = cast("dict[str, Any]", mapping.get("fields") or {})
         keywords: dict[str, dict[str, Any]] = {
             name: cast("dict[str, Any]", sub)
             for name, sub in subfields.items()
