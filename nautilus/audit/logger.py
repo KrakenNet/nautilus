@@ -29,11 +29,13 @@ from __future__ import annotations
 
 import json
 import os
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, Protocol, cast, get_args, runtime_checkable
 
 from fathom.models import AuditRecord
+from pydantic import ValidationError
 
 from nautilus.core.models import AuditEntry
 
@@ -183,42 +185,193 @@ class AuditLogger:
         self._sink.write(record)
         _flush_sink(self._sink)
 
-    def emit_event(self, entry: Any) -> None:
-        """Emit a sparse audit event dict (OQ1 stage-4 resolution).
+    @property
+    def sink(self) -> AuditSink:
+        """The underlying sink, so the broker can close what holds a lock."""
+        return self._sink
 
-        Accepts a plain ``dict`` produced by :class:`~nautilus.rkm.audit_emitter.AuditEventEmitter`
-        and persists it as a Fathom ``AuditRecord`` in the same JSONL sink.
-        Calls the existing :meth:`emit` path when ``entry`` is an
-        :class:`~nautilus.core.models.AuditEntry`; otherwise writes the dict
-        as-is under ``metadata[NAUTILUS_METADATA_KEY]`` so downstream readers
-        can still round-trip it.
+    @property
+    def path(self) -> Path | None:
+        """File this logger writes to, or ``None`` for a non-file sink."""
+        raw = getattr(self._sink, "path", None) or getattr(self._sink, "_path", None)
+        return Path(raw) if raw is not None else None
+
+    def probe(self) -> str | None:
+        """Why this logger could not write, or ``None`` when it can.
+
+        Every request writes an entry before it answers, so an audit sink that
+        has stopped accepting writes fails every request — the one dependency
+        whose failure is total. ``/readyz`` calls this to take the instance out
+        of rotation instead of reporting ready while 500ing.
+
+        Cheap by construction: a permission check on the file (or, before the
+        first write, on its directory), not a probe append, so the readiness
+        endpoint cannot pollute the log an operator reads.
+        """
+        # A sink that owns something beyond a file — the chained log's exclusive
+        # writer lock — answers for itself first. A permission check cannot see
+        # a lock another process holds.
+        sink_probe = getattr(self._sink, "probe", None)
+        if callable(sink_probe):
+            problem = sink_probe()
+            if problem is not None:
+                return str(problem)
+        path = self.path
+        if path is None:  # non-file sink: nothing local to check.
+            return None
+        if path.exists():
+            if not os.access(path, os.W_OK):
+                return f"audit log {path} is not writable"
+            return None
+        parent = path.parent
+        if not parent.exists():
+            return f"audit log directory {parent} does not exist"
+        if not os.access(parent, os.W_OK):
+            return f"audit log directory {parent} is not writable"
+        return None
+
+    def emit_event(self, entry: Any) -> None:
+        """Emit a governance / meta-rule audit event.
+
+        Accepts a plain ``dict`` produced by
+        :class:`~nautilus.rkm.audit_emitter.AuditEventEmitter` and writes it
+        through the same :meth:`emit` path every other entry takes, so the
+        audit API can read it back.
+
+        This used to write the sparse dict as-is. ``decode_nautilus_entry``
+        and ``AuditReader._parse_line`` both validate a full ``AuditEntry``,
+        so every governance event -- ``proposal_approved``, ``rule_promoted``,
+        all eight of them -- was reported to the operator as a *corrupt* audit
+        line, and "who approved this rule" came back empty from an intact log.
+        ``Broker.emit_adapter_event`` already solved this by filling the
+        request-shaped fields with placeholders; this does the same.
         """
         if isinstance(entry, AuditEntry):
             self.emit(entry)
             return
-        # Sparse dict path — write as raw JSON under the metadata key.
-        import json as _json
-
-        from fathom.models import AuditRecord as _AuditRecord
-
-        ts = entry.get("timestamp") or _iso8601_utc_z(datetime.now(tz=UTC))
-        record = _AuditRecord(
-            timestamp=ts if isinstance(ts, str) else _iso8601_utc_z(ts),
-            session_id=str(entry.get("session_id") or entry.get("trace_id") or ""),
-            modules_traversed=[],
-            rules_fired=[],
-            decision="event",
-            reason=str(entry.get("event_type", "unknown")),
-            duration_us=0,
-            metadata={NAUTILUS_METADATA_KEY: _json.dumps(entry, default=str)},
-        )
-        self._sink.write(record)
-        _flush_sink(self._sink)
+        self.emit(_event_entry(entry))
 
     @classmethod
     def utcnow(cls) -> datetime:
         """UTC timestamp helper so broker callers don't import datetime directly."""
         return datetime.now(tz=UTC)
+
+
+_EVENT_TYPES: frozenset[str] = frozenset(
+    get_args(AuditEntry.model_fields["event_type"].annotation.__args__[0])  # pyright: ignore[reportOptionalMemberAccess]
+)
+
+# Keys the dict shares with ``AuditEntry``; everything else is an event field.
+_EVENT_ENTRY_KEYS: frozenset[str] = frozenset(
+    {
+        "event_type",
+        "timestamp",
+        "session_id",
+        "trace_id",
+        "schema_version",
+        "request_id",
+        "agent_id",
+    }
+)
+
+
+def _event_entry(event: dict[str, Any]) -> AuditEntry:
+    """Build a request-shaped ``AuditEntry`` around a governance event dict."""
+    raw_ts = event.get("timestamp")
+    if isinstance(raw_ts, datetime):
+        timestamp = raw_ts
+    elif isinstance(raw_ts, str):
+        timestamp = datetime.fromisoformat(raw_ts)
+    else:
+        timestamp = datetime.now(tz=UTC)
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=UTC)
+
+    trace_id = event.get("trace_id")
+    event_type = event.get("event_type")
+    fields = {k: v for k, v in event.items() if k not in _EVENT_ENTRY_KEYS}
+    if event_type is not None and event_type not in _EVENT_TYPES:
+        # An unrecognised type would fail validation and lose the whole
+        # record; keep it readable rather than dropping it.
+        fields["unrecognised_event_type"] = event_type
+        event_type = None
+
+    return AuditEntry(
+        timestamp=timestamp,
+        # The event is not a request. ``request_id`` is required and is what
+        # the reader keys on, so the trace id stands in when there is one.
+        request_id=str(event.get("request_id") or trace_id or uuid.uuid4()),
+        agent_id=str(event.get("agent_id") or "<broker>"),
+        session_id=event.get("session_id"),
+        facts_asserted_summary={},
+        denial_records=[],
+        error_records=[],
+        rule_trace=[],
+        sources_queried=[],
+        sources_denied=[],
+        sources_errored=[],
+        duration_ms=0,
+        event_type=event_type,  # pyright: ignore[reportArgumentType]
+        trace_id=trace_id,
+        schema_version=event.get("schema_version"),
+        event_fields=fields or None,
+    )
+
+
+#: Exactly the fields ``fathom.chained_log`` writes on every line of a
+#: hash-chained log. Its own scanner requires this set exactly, so a line
+#: carrying it is a chain envelope and nothing else is.
+_CHAINED_LINE_FIELDS: frozenset[str] = frozenset(
+    {"iat", "jws", "prev_sha256", "record", "seq", "v"}
+)
+
+
+def decode_audit_line(line: str | bytes) -> AuditEntry | None:
+    """One on-disk audit line → :class:`AuditEntry`, or ``None`` if it is not one.
+
+    The audit log holds more than one shape and always has:
+
+    - ``AuditLogger.emit`` writes a fathom :class:`AuditRecord` carrying the
+      Nautilus entry as JSON under ``metadata.nautilus_audit_entry``;
+    - governance and library paths write a bare :class:`AuditEntry`;
+    - under ``audit.chained`` every one of those is wrapped in a signed chain
+      envelope, and the chain's own genesis and checkpoint records share the
+      file with them;
+    - the transports' hot-reload events are plain mappings with no entry in
+      them at all.
+
+    Each reader used to know a different subset — the query API knew only the
+    first, the sandbox only its metadata key, the forensics worker the first
+    two — so switching a deployment to a chained log emptied the audit API,
+    404'd every lookup, and left the replay corpus at zero. One decoder means
+    a shape a writer can produce is a shape every reader accepts.
+
+    Returns ``None`` for a line that is readable but is not a Nautilus audit
+    entry: a chain genesis or checkpoint record, a hot-reload event, a fathom
+    evaluation record from some other producer. That is not corruption and
+    callers should not report it as such. Raises :class:`ValueError` (which
+    :class:`pydantic.ValidationError` is) only when the line cannot be read:
+    invalid JSON, or an envelope whose declared Nautilus entry is broken.
+    """
+    decoded: object = json.loads(line)
+    if not isinstance(decoded, dict):
+        msg = f"audit line is a {type(decoded).__name__}, not an object"
+        raise ValueError(msg)
+    payload = cast("dict[str, Any]", decoded)
+    if _CHAINED_LINE_FIELDS.issubset(payload):
+        inner: object = payload["record"]
+        if not isinstance(inner, dict):
+            return None
+        payload = cast("dict[str, Any]", inner)
+    metadata = payload.get("metadata")
+    if isinstance(metadata, dict):
+        nested = cast("dict[str, Any]", metadata).get(NAUTILUS_METADATA_KEY)
+        if isinstance(nested, str):
+            return AuditEntry.model_validate_json(nested)
+    try:
+        return AuditEntry.model_validate(payload)
+    except ValidationError:
+        return None
 
 
 def decode_nautilus_entry(record: AuditRecord) -> AuditEntry:
@@ -233,4 +386,10 @@ def decode_nautilus_entry(record: AuditRecord) -> AuditEntry:
     return AuditEntry.model_validate(json.loads(raw))
 
 
-__all__ = ["AuditLogger", "AuditSink", "NAUTILUS_METADATA_KEY", "decode_nautilus_entry"]
+__all__ = [
+    "AuditLogger",
+    "AuditSink",
+    "NAUTILUS_METADATA_KEY",
+    "decode_audit_line",
+    "decode_nautilus_entry",
+]

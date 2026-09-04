@@ -2,6 +2,9 @@ name: Add issues to project
 on:
   issues:
     types: [opened, reopened]
+permissions:
+  contents: read
+
 jobs:
   add-to-project:
     runs-on: ubuntu-latest

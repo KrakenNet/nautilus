@@ -1,0 +1,39 @@
+# HIPAA 45 CFR 164.506 — Uses and disclosures for treatment, payment, and health
+# care operations (TPO).
+#
+# PHI may be used or disclosed without individual authorization only for
+# treatment, payment, or health care operations. Any other purpose requires an
+# authorization Nautilus does not model, so it is denied.
+#
+# This is distinct from the built-in `deny-purpose-mismatch`, which checks the
+# purpose against each source's own `allowed_purposes` list. This rule enforces
+# the HIPAA purpose vocabulary itself, independent of how a source is configured.
+module: nautilus-routing
+ruleset: hipaa-phi-access-control
+version: "1.0"
+rules:
+  - name: deny-phi-outside-tpo
+    description: "Deny PHI sources when the purpose is not treatment, payment, or operations."
+    salience: 185
+    when:
+      - template: agent
+        conditions:
+          - slot: purpose
+            bind: ?purpose
+          - test: '(not (member$ ?purpose (create$ "treatment" "payment" "operations")))'
+      - template: source
+        conditions:
+          - slot: id
+            bind: ?sid
+          - slot: data_types
+            bind: ?dts
+          - test: '(python-function overlaps ?dts "phi")'
+    then:
+      action: deny
+      reason: "HIPAA: PHI use outside treatment/payment/operations requires authorization"
+      assert:
+        - template: denial_record
+          slots:
+            source_id: "?sid"
+            reason: "HIPAA: PHI use outside treatment/payment/operations requires authorization"
+            rule_name: "deny-phi-outside-tpo"

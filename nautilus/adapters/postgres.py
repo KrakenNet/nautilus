@@ -18,9 +18,11 @@ import asyncpg  # pyright: ignore[reportMissingTypeStubs]
 from nautilus.adapters.base import (
     AdapterError,
     ScopeEnforcementError,
-    quote_identifier,
+    quote_table,
     render_field,
+    row_bytes,
     validate_operator,
+    wrap_execute,
 )
 from nautilus.adapters.schema import AdapterField, AdapterSchema, AdapterTable
 from nautilus.config.models import SourceConfig
@@ -29,10 +31,12 @@ from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 # Default row cap applied when the intent does not specify a ``LIMIT``.
 _DEFAULT_LIMIT: int = 1000
 
-# Array-cast hints used by the IN / NOT IN templates (design §6.1). ``asyncpg``
-# will coerce to the column's actual type at execution; ``text[]`` is the
-# universal default because scope values arrive as arbitrary Python objects.
-_IN_ARRAY_CAST: str = "text[]"
+# IN / NOT IN render a bare ``= ANY($n)`` (design §6.1). An explicit
+# ``::text[]`` cast does NOT let asyncpg coerce to the column's real type:
+# Postgres resolves the cast before operator lookup, so an integer column
+# raises ``operator does not exist: integer = text``. Without the cast,
+# asyncpg infers the array type from the parameter and both text and
+# non-text columns work.
 
 
 class PostgresAdapter:
@@ -99,10 +103,10 @@ class PostgresAdapter:
 
         Each operator branch renders per the §6.1 template table.
         """
-        # ``table`` is trusted config (validated at config-load time) but
-        # still routed through :func:`quote_identifier` so the regex guard and
-        # double-quoting happen in one vetted helper (NFR-4, Task 2.8).
-        quoted_table = quote_identifier(table.split(".")[-1])
+        # ``table`` is trusted config but still routed through
+        # :func:`quote_table` so the regex guard and double-quoting happen in
+        # one vetted helper (NFR-4, Task 2.8), schema qualifier included.
+        quoted_table = quote_table(table)
 
         where_clauses: list[str] = []
         params: list[Any] = []
@@ -126,7 +130,7 @@ class PostgresAdapter:
                     raise ScopeEnforcementError(
                         f"Operator 'IN' requires a list value, got {type(value).__name__}"
                     )
-                where_clauses.append(f"{field_sql} = ANY(${pidx}::{_IN_ARRAY_CAST})")
+                where_clauses.append(f"{field_sql} = ANY(${pidx})")
                 params.append(value)
                 pidx += 1
             elif op == "NOT IN":
@@ -134,7 +138,7 @@ class PostgresAdapter:
                     raise ScopeEnforcementError(
                         f"Operator 'NOT IN' requires a list value, got {type(value).__name__}"
                     )
-                where_clauses.append(f"{field_sql} <> ALL(${pidx}::{_IN_ARRAY_CAST})")
+                where_clauses.append(f"{field_sql} <> ALL(${pidx})")
                 params.append(value)
                 pidx += 1
             elif op == "LIKE":
@@ -170,6 +174,7 @@ class PostgresAdapter:
     # at the tail of ``_build_sql``. The f-string uses only ``$N`` positional
     # placeholders (hardened in Task 2.8); tag the method line so the guard
     # treats it as a non-call.
+    @wrap_execute
     async def execute(  # sqlgrep: ignore
         self,
         intent: IntentAnalysis,
@@ -186,42 +191,84 @@ class PostgresAdapter:
 
         sql, params = self._build_sql(table, scope, _DEFAULT_LIMIT)
 
+        budget = self._config.max_response_bytes
+
         started = time.perf_counter()
-        async with self._pool.acquire() as conn:
-            records = await conn.fetch(sql, *params)
+        rows: list[dict[str, Any]] = []
+        over_budget = False
+        # A cursor, not ``fetch``: ``fetch`` materialises every matching row
+        # before anything can look at its size, so a byte budget checked
+        # afterwards still pays the memory the pod died of. 1000 rows of wide
+        # text values is 65 MB, and eight of those at once is a SIGKILL under
+        # the shipped 1Gi limit. Stopping the read is the only bound that helps.
+        async with self._pool.acquire() as conn, conn.transaction():
+            used = 0
+            async for record in conn.cursor(sql, *params):
+                row = dict(record)
+                if budget is not None:
+                    used += row_bytes(row)
+                    # ``and rows``: one oversized row still comes back, marked
+                    # truncated, rather than as an empty result the caller
+                    # cannot tell from "nothing matched".
+                    if used > budget and rows:
+                        over_budget = True
+                        break
+                rows.append(row)
         duration_ms = int((time.perf_counter() - started) * 1000)
 
-        rows: list[dict[str, Any]] = [dict(r) for r in records]
         return AdapterResult(
             source_id=self._config.id,
             rows=rows,
             duration_ms=duration_ms,
+            truncated=over_budget or len(rows) >= _DEFAULT_LIMIT,
         )
 
+    def _declared_table(self) -> tuple[str, str]:
+        """Split ``SourceConfig.table`` into ``(schema, table)``.
+
+        An unqualified name means the ``public`` schema, matching
+        :func:`nautilus.adapters.base.quote_table` and what ``execute`` runs.
+        """
+        table = (self._config.table if self._config else None) or ""
+        schema, _, name = table.rpartition(".")
+        return (schema or "public", name)
+
     async def get_schema(self) -> AdapterSchema:
-        """Return schema via ``information_schema`` queries. AC-21, OQ3."""
+        """Return schema via ``information_schema`` queries. AC-21, OQ3.
+
+        Scoped to the single declared ``SourceConfig.table``, which is the only
+        table ``execute`` ever reads. Fingerprinting the whole ``public`` schema
+        meant any co-tenant DDL -- another app's migration, a scratch table --
+        quarantined the source, and two Nautilus sources over one DSN
+        cross-quarantined each other.
+        """
         if self._pool is None or self._config is None:
             return AdapterSchema.unknown(
                 self._config.id if self._config else "postgres",
                 self.source_type,
             )
+        schema_name, table_name = self._declared_table()
         try:
             async with self._pool.acquire() as conn:
                 col_rows = await conn.fetch(
                     """
                     SELECT table_name, column_name, data_type, is_nullable
                     FROM information_schema.columns
-                    WHERE table_schema = 'public'
+                    WHERE table_schema = $1 AND table_name = $2
                     ORDER BY table_name, ordinal_position
-                    """
+                    """,
+                    schema_name,
+                    table_name,
                 )
                 idx_rows = await conn.fetch(
                     """
                     SELECT tablename, indexname
                     FROM pg_indexes
-                    WHERE schemaname = 'public'
+                    WHERE schemaname = $1 AND tablename = $2
                     ORDER BY tablename, indexname
-                    """
+                    """,
+                    schema_name,
+                    table_name,
                 )
                 pk_rows = await conn.fetch(
                     """
@@ -231,9 +278,12 @@ class PostgresAdapter:
                       ON tc.constraint_name = kcu.constraint_name
                      AND tc.table_schema = kcu.table_schema
                     WHERE tc.constraint_type = 'PRIMARY KEY'
-                      AND tc.table_schema = 'public'
+                      AND tc.table_schema = $1
+                      AND tc.table_name = $2
                     ORDER BY tc.table_name, kcu.ordinal_position
-                    """
+                    """,
+                    schema_name,
+                    table_name,
                 )
 
             # Group columns by table.

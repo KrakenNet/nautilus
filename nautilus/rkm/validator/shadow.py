@@ -27,7 +27,7 @@ Key data model (YAML rule dict)::
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 
 @dataclass(frozen=True)
@@ -49,9 +49,47 @@ def _salience(rule: dict[str, Any]) -> int:
 
 
 def _lhs_conditions(rule: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return normalised LHS condition list."""
+    """Return a normalised LHS condition list.
+
+    Product rules are written with ``when:`` — a list of
+    ``{template, conditions: [{slot, bind} | {test}]}``. This module was written
+    against an ``lhs:`` schema with ``{template, slots: {...}}``, which the rule
+    compiler does not accept, so every real rule normalised to an empty LHS and
+    no rule could ever be flagged.
+
+    ``when:`` patterns normalise to ``{slot: value-constraint}`` plus any
+    ``test`` expressions verbatim. The value constraint is the ``expression:``
+    verbatim, or ``""`` for a bare ``bind:`` -- binding a slot to a variable
+    constrains which slots the rule cares about, not which values it accepts,
+    and two rules binding ``?sid`` and ``?id`` to the same slot constrain
+    identically.
+
+    Dropping the expression made every rule constraining a slot look like every
+    other rule constraining that slot, so a dispatch table over disjoint values
+    of one slot reported each rule as shadowing its siblings.
+    """
     lhs: list[dict[str, Any]] = rule.get("lhs") or []
-    return lhs
+    if lhs:
+        return lhs
+
+    normalised: list[dict[str, Any]] = []
+    patterns: list[Any] = rule.get("when") or []
+    for raw_pattern in patterns:
+        if not isinstance(raw_pattern, dict):
+            continue
+        pattern = cast("dict[str, Any]", raw_pattern)
+        slots: dict[str, Any] = {}
+        conditions: list[Any] = pattern.get("conditions") or []
+        for raw_cond in conditions:
+            if not isinstance(raw_cond, dict):
+                continue
+            cond = cast("dict[str, Any]", raw_cond)
+            if cond.get("slot") is not None:
+                slots[str(cond["slot"])] = str(cond.get("expression") or "")
+            elif cond.get("test") is not None:
+                slots[f"test:{cond['test']}"] = ""
+        normalised.append({"template": str(pattern.get("template", "")), "slots": slots})
+    return normalised
 
 
 def _condition_key(cond: dict[str, Any]) -> tuple[str, frozenset[tuple[str, str]]]:
@@ -65,18 +103,22 @@ def _condition_key(cond: dict[str, Any]) -> tuple[str, frozenset[tuple[str, str]
 def _condition_is_more_general(general_cond: dict[str, Any], specific_cond: dict[str, Any]) -> bool:
     """True if ``general_cond`` matches a superset of facts vs ``specific_cond``.
 
-    Same template + general_cond.slots is a subset of specific_cond.slots
-    means the general condition has fewer slot constraints, so it fires on
-    more facts.
+    Same template, general constrains a subset of the slots, and wherever it
+    constrains a *value* that constraint is identical. A general condition that
+    only binds a slot the specific one pins to a value is broader; two
+    conditions pinning the same slot to different values are disjoint, and
+    neither is more general than the other.
     """
     if general_cond.get("template") != specific_cond.get("template"):
         return False
     gen_raw: dict[str, Any] = general_cond.get("slots") or {}
     spec_raw: dict[str, Any] = specific_cond.get("slots") or {}
-    gen_slots = {(k, v) for k, v in gen_raw.items()}
-    spec_slots = {(k, v) for k, v in spec_raw.items()}
-    # general is less or equally constrained: gen_slots is a subset of spec_slots
-    return gen_slots <= spec_slots
+    for slot, constraint in gen_raw.items():
+        if slot not in spec_raw:
+            return False
+        if constraint and constraint != spec_raw[slot]:
+            return False
+    return True
 
 
 def _lhs_subsumes(general_lhs: list[dict[str, Any]], specific_lhs: list[dict[str, Any]]) -> bool:

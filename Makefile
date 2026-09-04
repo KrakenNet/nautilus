@@ -15,9 +15,13 @@ docs-build:
 docs-serve:
 	uv run mkdocs serve
 
-# All-in-one verification
+# All-in-one verification. ``scripts/check_version_sync.py`` used to run here
+# and has not existed since 03abb25 -- so this target has failed on a missing
+# file ever since. What it compared, pyproject.toml against a second version
+# literal in nautilus/__init__.py, no longer has two sides: __version__ is read
+# from the installed distribution's metadata.
 docs-check: docs-build
-	uv run python scripts/check_version_sync.py
+	uv run python tests/citation_lock.py
 
 docs-clean:
 	rm -rf site/

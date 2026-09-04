@@ -3,8 +3,8 @@
 Subcommands:
     rkm queue list [--status STATUS] [--min-confidence FLOAT] [--json]
     rkm queue show <proposal_id> [--json]
-    rkm queue approve <proposal_id> [--note TEXT]
-    rkm queue reject <proposal_id> --reason TEXT
+    rkm queue approve <proposal_id> --url URL [--api-key KEY] [--note TEXT]
+    rkm queue reject <proposal_id> --reason TEXT [--config PATH]
     rkm queue diff <proposal_id>
     rkm lineage <proposal_id|rule_name> [--depth N] [--json]
 
@@ -22,11 +22,21 @@ import argparse
 import dataclasses
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
-from nautilus.cli._common import err, ok, require_reviewer, warn
+from nautilus.cli._common import (
+    API_KEY_HELP,
+    err,
+    ok,
+    open_audit_logger,
+    require_reviewer,
+    resolve_api_key,
+    warn,
+)
 
 if TYPE_CHECKING:
+    import httpx
+
     from nautilus.rkm.queue import ProposalQueue
     from nautilus.rkm.types import Proposal
 
@@ -61,6 +71,19 @@ def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> N
     )
     p_list.add_argument("--json", action="store_true", help="Emit JSON to stdout.")
 
+    # queue submit
+    p_submit = queue_sub.add_parser(
+        "submit",
+        help="Validate a rule file and queue the resulting proposal.",
+    )
+    p_submit.add_argument("--file", required=True, help="Path to the rule YAML to propose.")
+    p_submit.add_argument(
+        "--config",
+        default=None,
+        help="nautilus.yaml naming the audit log the sandbox stage replays.",
+    )
+    p_submit.add_argument("--json", action="store_true", help="Emit JSON to stdout.")
+
     # queue show
     p_show = queue_sub.add_parser("show", help="Show details of a specific proposal.")
     p_show.add_argument("proposal_id", help="Proposal ID (prop_<hex>).")
@@ -71,12 +94,36 @@ def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> N
     p_approve.add_argument("proposal_id", help="Proposal ID.")
     p_approve.add_argument("--note", default=None, help="Optional reviewer note.")
     p_approve.add_argument("--json", action="store_true", help="Emit JSON to stdout.")
+    p_approve.add_argument(
+        "--url",
+        help=(
+            "Base URL of the running broker (e.g. http://localhost:8000). Required: "
+            "approving promotes the rule into the engine that broker is serving with."
+        ),
+    )
+    p_approve.add_argument("--api-key", dest="api_key", help=API_KEY_HELP)
+    p_approve.add_argument(
+        "--config",
+        default=None,
+        help=(
+            "Path to nautilus.yaml; its ``audit.path`` receives the decision "
+            "record (default: ./audit.jsonl)."
+        ),
+    )
 
     # queue reject
     p_reject = queue_sub.add_parser("reject", help="Reject a pending proposal.")
     p_reject.add_argument("proposal_id", help="Proposal ID.")
     p_reject.add_argument("--reason", required=True, help="Rejection reason (required).")
     p_reject.add_argument("--json", action="store_true", help="Emit JSON to stdout.")
+    p_reject.add_argument(
+        "--config",
+        default=None,
+        help=(
+            "Path to nautilus.yaml; its ``audit.path`` receives the decision "
+            "record (default: ./audit.jsonl)."
+        ),
+    )
 
     # queue diff
     # Peer heuristic (DQ6): longest-common-prefix of rule names from derived_from.
@@ -127,6 +174,8 @@ def _dispatch_queue(args: argparse.Namespace) -> int:
     op = getattr(args, "queue_subcommand", None)
     if op == "list":
         return _cmd_queue_list(args)
+    if op == "submit":
+        return _cmd_queue_submit(args)
     if op == "show":
         return _cmd_queue_show(args)
     if op == "approve":
@@ -135,8 +184,92 @@ def _dispatch_queue(args: argparse.Namespace) -> int:
         return _cmd_queue_reject(args)
     if op == "diff":
         return _cmd_queue_diff(args)
-    err("rkm queue: no op given (try: list, show, approve, reject, diff)")
+    err("rkm queue: no op given (try: submit, list, show, approve, reject, diff)")
     return 2
+
+
+def _cmd_queue_submit(args: argparse.Namespace) -> int:
+    """Validate a rule file and append the resulting proposal to the queue.
+
+    The queue had no producer: ``run_pipeline`` was reachable only from tests,
+    so ``rkm queue list`` answered "no proposals" and nothing shipped could
+    change that. A rejected proposal is a verdict, not a failure of the
+    command, so it is queued and reported with exit 1.
+    """
+    from nautilus.cli._common import audit_path_for
+    from nautilus.rkm.validator.pipeline import run_pipeline
+
+    rule_path = Path(args.file)
+    if not rule_path.is_file():
+        err(f"rule file not found: {rule_path}")
+        return 1
+
+    config_path = getattr(args, "config", None)
+    settings = _sandbox_settings(config_path)
+    proposal = run_pipeline(
+        rule_path,
+        queue=_open_queue(),
+        audit_log=audit_path_for(config_path),
+        audit_logger=open_audit_logger(config_path),
+        **settings,
+    )
+    confidence = proposal.validation.get("confidence", 0.0)
+    if getattr(args, "json", False):
+        print(
+            json.dumps(
+                {
+                    "proposal_id": proposal.proposal_id,
+                    "status": proposal.status,
+                    "confidence": confidence,
+                    "static_ok": proposal.validation.get("static_ok"),
+                    "static_errors": proposal.validation.get("static_errors", []),
+                    "shadow_flags": list(proposal.shadow_flags),
+                }
+            )
+        )
+    else:
+        # ``OK:`` is the CLI's success prefix, and this printed it on the path
+        # that returns 1 -- so a rejected proposal read as
+        # ``OK: proposal p-1 queued rejected`` while the exit code said failure.
+        # A script grepping the prefix and a script checking ``$?`` disagreed
+        # about the same run.
+        summary = (
+            f"proposal {proposal.proposal_id} queued {proposal.status} "
+            f"(confidence {confidence:.2f})"
+        )
+        if proposal.status == "rejected":
+            err(summary)
+        else:
+            ok(summary)
+        for message in proposal.validation.get("static_errors", []):
+            warn(message)
+    return 1 if proposal.status == "rejected" else 0
+
+
+def _sandbox_settings(config_path: str | None) -> dict[str, Any]:
+    """``rkm.sandbox`` and ``rules`` settings the sandbox stage needs.
+
+    ``rkm.sandbox.min_entries`` had no production reader at all; the only code
+    touching ``config.rkm`` was a test asserting the default.
+    """
+    if not config_path:
+        return {}
+    from nautilus.config.loader import load_config
+
+    try:
+        config = load_config(config_path)
+    except Exception as exc:  # noqa: BLE001 -- the proposal is still worth queueing
+        warn(f"could not read rkm settings from {config_path!r} ({exc}); using defaults")
+        return {}
+    base = Path(config_path).parent
+    return {
+        "min_entries": config.rkm.sandbox.min_entries,
+        "rule_packs": list(config.rules.packs),
+        "user_rules_dirs": [
+            d if (d := Path(raw)).is_absolute() else base / d
+            for raw in config.rules.user_rules_dirs
+        ],
+    }
 
 
 def _open_queue() -> ProposalQueue:
@@ -164,7 +297,7 @@ def _cmd_queue_list(args: argparse.Namespace) -> int:
         ok("no proposals")
         return 0
     for p in proposals:
-        conf = p.validation.get("confidence", "?")
+        conf = p.validation.get("confidence", "?")  # written by run_pipeline
         print(f"  {p.proposal_id}  status={p.status}  confidence={conf}")
     return 0
 
@@ -184,60 +317,98 @@ def _cmd_queue_show(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_queue_approve(args: argparse.Namespace) -> int:
-    reviewer = require_reviewer()  # exits 1 if not set (DQ4)
-    queue = _open_queue()
-    proposal = queue.get(args.proposal_id)
-    if proposal is None:
-        err(f"proposal {args.proposal_id} not found")
-        return 1
-
-    # Idempotency: already approved/promoted → treat as success
-    if proposal.status in ("approved", "promoted"):
-        msg = f"proposal {args.proposal_id} already_approved (status={proposal.status})"
-        if getattr(args, "json", False):
-            print(json.dumps({"status": "already_approved", "proposal_id": args.proposal_id}))
-        else:
-            ok(msg)
-        return 0
-
-    from nautilus.rkm.lineage import LineageStore
-    from nautilus.rkm.review import AlreadyDecidedError, approve_proposal
-
-    lineage = LineageStore(_DEFAULT_LINEAGE_DIR)
+def _current_status(response: httpx.Response) -> str:
+    """The standing decision named in a 409 body, or ``"unknown"``."""
     try:
-        result = approve_proposal(
-            args.proposal_id,
-            reviewer,
-            queue=queue,
-            lineage=lineage,
-            router=None,
-            audit_logger=None,
+        body: object = json.loads(response.text)
+    except ValueError:
+        return "unknown"
+    if not isinstance(body, dict):
+        return "unknown"
+    detail: object = cast("dict[str, object]", body).get("detail")
+    if not isinstance(detail, dict):
+        return "unknown"
+    return str(cast("dict[str, object]", detail).get("current_status") or "unknown")
+
+
+def _cmd_queue_approve(args: argparse.Namespace) -> int:
+    """Approve a proposal on a running broker.
+
+    Approval is not a bookkeeping change: it promotes the rule into the CLIPS
+    environment the broker is serving with. This used to call
+    ``approve_proposal(..., router=None)`` against the on-disk queue, so it
+    marked the proposal ``promoted`` and loaded the rule nowhere — while
+    ``rkm-lifecycle.md`` claimed the CLI and REST paths were equivalent.
+    ``nautilus key rotate`` already answers this shape: require ``--url`` and
+    refuse to act locally on state that lives inside a broker.
+    """
+    import httpx
+
+    reviewer = require_reviewer()  # exits 1 if not set (DQ4)
+    url = getattr(args, "url", None)
+    if not url:
+        err(
+            "rkm queue approve: --url is required. Approving promotes the rule into "
+            "the engine of a running broker, so there is nothing for the CLI to "
+            "approve locally — point --url at the broker (e.g. --url http://localhost:8000)."
         )
-    except AlreadyDecidedError as exc:
-        msg = f"proposal {args.proposal_id} already_approved (status={exc.current_status})"
+        return 2
+
+    endpoint = f"{str(url).rstrip('/')}/v1/rkm/queue/{args.proposal_id}/approve"
+    headers = {"X-Nautilus-Reviewer": reviewer}
+    api_key = resolve_api_key(args)
+    if api_key:
+        headers["X-API-Key"] = api_key
+    body: dict[str, Any] = {}
+    if getattr(args, "note", None):
+        body["note"] = args.note
+
+    try:
+        with httpx.Client(timeout=10.0) as client:
+            response = client.post(endpoint, json=body, headers=headers)
+    except httpx.HTTPError as exc:
+        err(f"rkm queue approve: cannot reach {endpoint}: {exc}")
+        return 2
+
+    if response.status_code == 409:
+        # Approve answered every 409 with ``already_approved`` and exit 0, even
+        # when the standing decision was a *rejection* -- so "approve this" and
+        # "it is rejected" reported success. Reject answered the mirror-image
+        # case with exit 1 unconditionally, so the same condition got opposite
+        # answers depending on which verb you used. Both now read the decision
+        # that stands: exit 0 when it is the one you asked for, 1 when it is not.
+        current = _current_status(response)
         if getattr(args, "json", False):
-            print(json.dumps({"status": "already_approved", "proposal_id": args.proposal_id}))
+            print(
+                json.dumps(
+                    {
+                        "status": "already_decided",
+                        "current_status": current,
+                        "proposal_id": args.proposal_id,
+                    }
+                )
+            )
+        elif current == "approved":
+            ok(f"proposal {args.proposal_id} was already approved")
         else:
-            ok(msg)
-        return 0
-    except KeyError:
+            err(f"proposal {args.proposal_id} cannot be approved: it is {current}")
+        return 0 if current == "approved" else 1
+    if response.status_code == 404:
         err(f"proposal {args.proposal_id} not found")
         return 1
+    if response.status_code != 200:
+        err(f"rkm queue approve: server returned {response.status_code}: {response.text}")
+        return 2
 
+    payload: dict[str, Any] = response.json()
     if getattr(args, "json", False):
-        print(
-            json.dumps(
-                {
-                    "proposal_id": result.proposal_id,
-                    "reviewer": result.reviewer,
-                    "approved_at": result.approved_at.isoformat(),
-                    "promoted": result.promoted,
-                }
-            )
-        )
+        print(json.dumps(payload, default=str))
     else:
-        ok(f"proposal {result.proposal_id} approved by {result.reviewer}")
+        promoted = payload.get("promoted")
+        ok(
+            f"proposal {payload.get('proposal_id', args.proposal_id)} approved by "
+            f"{payload.get('reviewer', reviewer)} (promoted={promoted})"
+        )
     return 0
 
 
@@ -257,10 +428,13 @@ def _cmd_queue_reject(args: argparse.Namespace) -> int:
             reviewer,
             args.reason,
             queue=queue,
-            audit_logger=None,
+            audit_logger=open_audit_logger(getattr(args, "config", None)),
         )
     except AlreadyDecidedError as exc:
-        err(f"proposal {args.proposal_id} already decided: status={exc.current_status}")
+        if exc.current_status == "rejected":
+            ok(f"proposal {args.proposal_id} was already rejected")
+            return 0
+        err(f"proposal {args.proposal_id} cannot be rejected: it is {exc.current_status}")
         return 1
     except KeyError:
         err(f"proposal {args.proposal_id} not found")
@@ -290,7 +464,11 @@ def _cmd_queue_diff(args: argparse.Namespace) -> int:
         err(f"proposal {args.proposal_id} not found")
         return 1
 
-    derived_from: list[str] = list(proposal.lineage.get("derived_from", []))
+    # ``or`` rather than a dict default: run_pipeline writes
+    # ``lineage={"derived_from": None}``, so the key is present, the default
+    # never applies, and list(None) raised an unhandled TypeError on every
+    # proposal the pipeline produces.
+    derived_from: list[str] = list(proposal.lineage.get("derived_from") or [])
     peer = _peer_from_derived_from(derived_from)
 
     artifact = proposal.artifact

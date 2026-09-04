@@ -108,17 +108,17 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, sum by (le) (rate(nautilus_request_duration_bucket[5m])))",
+          "expr": "histogram_quantile(0.50, sum by (le) (rate(nautilus_request_duration_seconds_bucket[5m])))",
           "legendFormat": "p50",
           "refId": "A"
         },
         {
-          "expr": "histogram_quantile(0.90, sum by (le) (rate(nautilus_request_duration_bucket[5m])))",
+          "expr": "histogram_quantile(0.90, sum by (le) (rate(nautilus_request_duration_seconds_bucket[5m])))",
           "legendFormat": "p90",
           "refId": "B"
         },
         {
-          "expr": "histogram_quantile(0.99, sum by (le) (rate(nautilus_request_duration_bucket[5m])))",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(nautilus_request_duration_seconds_bucket[5m])))",
           "legendFormat": "p99",
           "refId": "C"
         }

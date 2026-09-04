@@ -1,9 +1,10 @@
 # POC milestone fixture (reasoning-engine spec Task 1.15).
 #
 # Single pgvector source classified `cui` with data_types=[pii]. The agent
-# registry declares `a1: clearance=cui` so the default-classification-deny
-# rule is satisfied when the request carries clearance=cui, and trips on a
-# clearance=unclassified request (POC assertion 6).
+# registry declares `a1: clearance=cui`, which satisfies the
+# default-classification-deny rule, and `a2: clearance=unclassified`, which
+# trips it (POC assertion 6). Clearance comes from the registry, so the two
+# cases need two agents -- a request cannot name its own clearance.
 #
 # `attestation.sink.type: file` exercises the store-and-forward path end-to-
 # end; the destination path is env-interpolated so the integration test can
@@ -11,8 +12,10 @@
 # `session_store.backend: postgres` exercises PostgresSessionStore — the DSN
 # resolves from `TEST_PG_DSN` (exported by the pg_container fixture).
 #
-# Audit path is plain `./audit.jsonl` — the test monkeypatches CWD onto
-# `tmp_path` so the audit file stays scoped to the test run.
+# The audit path is env-interpolated for the same reason as the attestation
+# path: relative paths in a config resolve against the *config file's* own
+# directory, so a plain `./audit.jsonl` here would append to this fixture
+# directory inside the repo on every test run, no matter the CWD.
 sources:
   - id: cui_embeddings
     type: pgvector
@@ -30,6 +33,9 @@ agents:
   a1:
     id: a1
     clearance: cui
+  a2:
+    id: a2
+    clearance: unclassified
 
 rules:
   user_rules_dirs: []
@@ -40,7 +46,7 @@ analysis:
     threat: [threat, hunt, ioc]
 
 audit:
-  path: ./audit.jsonl
+  path: ${POC_AUDIT_PATH}
 
 attestation:
   enabled: true

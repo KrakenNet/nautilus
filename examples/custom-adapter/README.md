@@ -1,10 +1,10 @@
-# Custom Adapter with the Nautilus Adapter SDK
+# Custom Adapter
 
-Build a data-source adapter from scratch using the SDK. This example implements a CSV file adapter.
+Build a data-source adapter from scratch. This example implements a CSV file adapter.
 
-## What the SDK Provides
+## What Nautilus Provides
 
-The `nautilus-adapter-sdk` package (`packages/nautilus-adapter-sdk/`) gives you:
+Everything an adapter needs is in the `nautilus-rkm` package you already have:
 
 - **`Adapter` protocol** — the interface your adapter must satisfy: `connect()`, `execute()`, `close()`
 - **Pydantic types** — `IntentAnalysis`, `ScopeConstraint`, `AdapterResult`, `ErrorRecord`
@@ -37,9 +37,6 @@ custom-adapter/
 # From the repo root
 cd examples/custom-adapter
 
-# Install the SDK (if not already)
-pip install -e ../../packages/nautilus-adapter-sdk
-
 # Run compliance + adapter tests
 pytest test_compliance.py -v
 ```
@@ -49,10 +46,11 @@ pytest test_compliance.py -v
 ### 1. Implement the Adapter Protocol
 
 ```python
-from nautilus_adapter_sdk.protocols import Adapter
-from nautilus_adapter_sdk.types import AdapterResult, IntentAnalysis, ScopeConstraint
-from nautilus_adapter_sdk.config import SourceConfig
-from typing import ClassVar, Any
+from typing import Any, ClassVar
+
+from nautilus.adapters.base import Adapter
+from nautilus.config.models import SourceConfig
+from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
 class CsvAdapter:
     source_type: ClassVar[str] = "csv"
@@ -126,7 +124,7 @@ sources:
 For a complete adapter package with CI, use the Copier template:
 
 ```bash
-copier copy templates/adapter/ my-adapter/
+nautilus adapters new my-adapter
 ```
 
 This generates a full Python package with:

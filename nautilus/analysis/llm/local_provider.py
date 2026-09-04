@@ -22,6 +22,7 @@ from typing import Any
 
 from nautilus.analysis.llm.base import LLMProviderError
 from nautilus.analysis.llm.openai_provider import AsyncOpenAI, OpenAIProvider
+from nautilus.extras import install_extra_hint
 
 
 class LocalInferenceProvider(OpenAIProvider):
@@ -43,14 +44,22 @@ class LocalInferenceProvider(OpenAIProvider):
         timeout_s: float,
         api_key: str = "not-needed",
         api_key_env: str | None = None,
+        known_data_types: list[str] | None = None,
     ) -> None:
-        # Parent's ``__init__`` guards the ``openai`` import and raises
-        # :class:`LLMProviderError` if the extra is missing; we simply
-        # forward and then stamp the local-inference specifics.
+        # The parent guards the same import, but its message names only the
+        # extra; a `type: local` operator who never asked for OpenAI needs to be
+        # told why an OpenAI extra is the answer.
+        if AsyncOpenAI is None:  # pyright: ignore[reportUnnecessaryComparison]
+            raise LLMProviderError(
+                f"analysis.provider.type=local talks to the local server over the "
+                f"OpenAI wire protocol, through the openai SDK, so it needs the "
+                f"'llm-openai' extra -- {install_extra_hint('llm-openai')}"
+            )
         super().__init__(
             api_key_env=api_key_env or "__NAUTILUS_LOCAL_INFERENCE_UNUSED__",
             model=model,
             timeout_s=timeout_s,
+            known_data_types=known_data_types,
         )
         self.base_url = base_url
         self._api_key_literal = api_key

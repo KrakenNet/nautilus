@@ -7,21 +7,33 @@ Promotion path: queue.approved → review.approve_proposal → fathom_router.rel
                 → lineage.insert → queue.transition("promoted").
 
 Audit events are emitted out-of-band (CLI ops are outside Broker.arequest) via
-:func:`nautilus.rkm.audit_emitter.emit_event_oob`.
+:func:`nautilus.rkm.audit_emitter.emit_lifecycle_event`.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import Any, Protocol
 
+from nautilus.rkm.audit_emitter import emit_lifecycle_event
 from nautilus.rkm.lineage import LineageRecord, LineageStore
-from nautilus.rkm.queue import ProposalQueue
+from nautilus.rkm.queue import InvalidTransition, ProposalQueue
 from nautilus.rkm.types import Proposal
 
-if TYPE_CHECKING:
-    from nautilus.core.fathom_router import FathomRouter
+
+class RulePromoter(Protocol):
+    """The single capability approval needs from a router.
+
+    :class:`~nautilus.core.fathom_router.FathomRouter` satisfies it; naming the
+    capability rather than the class keeps promotion testable against any
+    engine front-end and stops this module importing the router.
+    """
+
+    def reload_rule(self, rule_name: str, rule_yaml: str) -> None:
+        """Load ``rule_yaml`` into the active engine under ``rule_name``."""
+        ...
 
 
 class AlreadyDecidedError(Exception):  # noqa: N818
@@ -63,13 +75,25 @@ class RejectionResult:
     reason: str
 
 
+@dataclass(frozen=True)
+class RollbackResult:
+    """Outcome of a successful :func:`rollback_rule` call."""
+
+    rule_name: str
+    restored_version: int
+    new_version: int
+    reviewer: str
+    rolled_back_at: datetime
+    reason: str
+
+
 def approve_proposal(
     proposal_id: str,
     reviewer_identity: str,
     *,
     queue: ProposalQueue,
     lineage: LineageStore,
-    router: FathomRouter | None = None,
+    router: RulePromoter | None = None,
     audit_logger: Any | None = None,
 ) -> ApprovalResult:
     """Approve a pending proposal and promote the rule into the active CLIPS env.
@@ -77,13 +101,18 @@ def approve_proposal(
     Steps:
     1. Validate proposal exists and is ``pending`` (raises :class:`AlreadyDecidedError` if not).
     2. Transition queue to ``approved``.
-    3. If ``router`` provided: call :meth:`FathomRouter.reload_rule`; on failure mark
+    3. If ``router`` provided: call :meth:`RulePromoter.reload_rule`; on failure mark
        ``promotion_failed`` (via queue transition note) and re-raise.
-    4. Insert :class:`LineageRecord` if ``lineage`` provided.
-    5. Transition queue to ``promoted``.
-    6. Emit ``proposal_approved`` + ``rule_promoted`` audit events if ``audit_logger`` provided.
+    4. Insert a :class:`LineageRecord` for the approval.
+    5. Transition queue to ``promoted`` when the rule actually loaded.
+    6. Emit ``proposal_approved``, then ``rule_promoted`` + ``proposal_promoted``
+       on a successful promotion, if ``audit_logger`` provided.
 
-    Idempotent: second call raises :class:`AlreadyDecidedError` (AC-35.9.e / 409).
+    Callable from ``pending`` or from ``approved``. Re-approving an already
+    approved proposal retries the promotion, which is the only way out of an
+    approve that transitioned the queue but failed (or never attempted) the
+    promotion. A decided proposal — rejected, promoted, expired, superseded —
+    still raises :class:`AlreadyDecidedError` (AC-35.9.e / 409).
 
     Reviewer identity is accepted as a parameter; callers resolve ``NAUTILUS_REVIEWER``
     env and pass it in (pure function — no env reads here).
@@ -92,19 +121,29 @@ def approve_proposal(
     if proposal is None:
         raise KeyError(f"proposal not found: {proposal_id!r}")
 
-    if proposal.status != "pending":
-        raise AlreadyDecidedError(proposal_id, proposal.status)
-
     now = datetime.now(UTC)
 
-    # Transition to approved.
-    queue.transition(
-        proposal_id,
-        to="approved",
-        reviewer=reviewer_identity,
-        reason=None,
-        note=None,
-    )
+    # The status is checked by ``transition()`` under the queue lock, not
+    # here: reading it first and deciding afterwards let two concurrent
+    # approves both see ``pending`` and both proceed. Already-approved
+    # proposals are re-entering only to retry promotion, and
+    # ``approved -> approved`` is not a legal transition, so a refusal is
+    # only a real conflict when the proposal is not sitting in ``approved``.
+    try:
+        queue.transition(
+            proposal_id,
+            to="approved",
+            reviewer=reviewer_identity,
+            reason=None,
+            note=None,
+        )
+    except InvalidTransition:
+        current = queue.get(proposal_id)
+        if current is None or current.status != "approved":
+            raise AlreadyDecidedError(
+                proposal_id, current.status if current is not None else "missing"
+            ) from None
+        proposal = current
 
     # Promote into CLIPS env.
     promoted = False
@@ -114,19 +153,20 @@ def approve_proposal(
             router.reload_rule(proposal_id, rule_yaml)
             promoted = True
         except Exception as exc:
-            # Mark promotion failure in the queue with a note; do not transition
-            # to promoted — leave as approved so operator can retry.
-            # We don't have a dedicated "promotion_failed" status in the state
-            # machine, so we add a note via a second transition to a valid
-            # terminal state (or simply leave as approved with the note).
-            # Re-raise so caller handles the failure.
+            # Leave the proposal in ``approved`` and re-raise. There is no
+            # ``promotion_failed`` status; the recovery paths out of
+            # ``approved`` are a re-approve (retries promotion) and a reject.
             raise PromotionFailedError(
                 f"FathomRouter.reload_rule failed for proposal {proposal_id!r}: {exc}"
             ) from exc
 
-    # Insert lineage record if promotion succeeded.
+    # Lineage records the decision, not the engine load. Gating it on
+    # ``promoted`` meant the CLI path -- which has no live router -- recorded
+    # no lineage at all, so ``nautilus rule lineage`` returned an empty version
+    # list for a rule an operator had approved.
+    lineage.insert(_build_lineage_record(proposal, reviewer_identity, now))
+
     if promoted:
-        lineage.insert(_build_lineage_record(proposal, reviewer_identity, now))
         # Transition to promoted.
         queue.transition(
             proposal_id,
@@ -138,7 +178,7 @@ def approve_proposal(
 
     # Emit audit events out-of-band.
     if audit_logger is not None:
-        _emit(
+        emit_lifecycle_event(
             audit_logger,
             "proposal_approved",
             {
@@ -148,12 +188,27 @@ def approve_proposal(
             },
         )
         if promoted:
-            _emit(
+            # Two events, because they record two steps that can come apart:
+            # ``rule_promoted`` is the engine load, ``proposal_promoted`` is
+            # the queue reaching its terminal state. A crash between them
+            # leaves a rule live with a proposal still marked ``approved``,
+            # and only a log that separates them can show that.
+            emit_lifecycle_event(
                 audit_logger,
                 "rule_promoted",
                 {
                     "proposal_id": proposal_id,
                     "reviewer": reviewer_identity,
+                    "timestamp": now.isoformat(),
+                },
+            )
+            emit_lifecycle_event(
+                audit_logger,
+                "proposal_promoted",
+                {
+                    "proposal_id": proposal_id,
+                    "reviewer": reviewer_identity,
+                    "rule_name": proposal.artifact.get("name", proposal_id),
                     "timestamp": now.isoformat(),
                 },
             )
@@ -174,30 +229,37 @@ def reject_proposal(
     queue: ProposalQueue,
     audit_logger: Any | None = None,
 ) -> RejectionResult:
-    """Reject a pending proposal.
+    """Reject a proposal that has not been promoted.
 
-    Raises :class:`AlreadyDecidedError` if not in ``pending`` status.
+    Accepts ``pending`` and ``approved``: an approval whose promotion failed
+    has to be backed out somehow, and rejection is that path. Raises
+    :class:`AlreadyDecidedError` from any other status.
     Emits ``proposal_rejected`` audit event if ``audit_logger`` provided.
     """
     proposal = queue.get(proposal_id)
     if proposal is None:
         raise KeyError(f"proposal not found: {proposal_id!r}")
 
-    if proposal.status != "pending":
-        raise AlreadyDecidedError(proposal_id, proposal.status)
-
     now = datetime.now(UTC)
 
-    queue.transition(
-        proposal_id,
-        to="rejected",
-        reviewer=reviewer_identity,
-        reason=reason,
-        note=None,
-    )
+    # Same single-writer rule as approve: ``transition()`` owns the status
+    # check because it holds the lock.
+    try:
+        queue.transition(
+            proposal_id,
+            to="rejected",
+            reviewer=reviewer_identity,
+            reason=reason,
+            note=None,
+        )
+    except InvalidTransition:
+        current = queue.get(proposal_id)
+        raise AlreadyDecidedError(
+            proposal_id, current.status if current is not None else "missing"
+        ) from None
 
     if audit_logger is not None:
-        _emit(
+        emit_lifecycle_event(
             audit_logger,
             "proposal_rejected",
             {
@@ -244,7 +306,7 @@ def retract_rule(
         cascade=cascade,  # type: ignore[arg-type]
     )
     if audit_logger is not None:
-        _emit(
+        emit_lifecycle_event(
             audit_logger,
             "rule_retracted",
             {
@@ -259,24 +321,106 @@ def retract_rule(
     return affected
 
 
+def rollback_rule(
+    rule_name: str,
+    *,
+    to_version: int,
+    reason: str,
+    reviewer: str,
+    lineage: LineageStore,
+    audit_logger: Any | None = None,
+) -> RollbackResult:
+    """Re-promote a prior version of a rule as a new lineage version.
+
+    A rollback is append-only: the target record is re-inserted at
+    ``latest + 1`` with a fresh approver and promotion time, so the history
+    of what was live when stays readable.
+
+    Lives here rather than in ``nautilus.cli.rule`` because a rollback is a
+    governance decision, and this module is where those get audited — the CLI
+    performed the lineage rewrite inline and wrote nothing at all.
+
+    Raises :class:`KeyError` when ``to_version`` is not in the rule's lineage.
+
+    The rolled-back rule is *not* reloaded into a running engine: this path
+    has no router (the CLI constructs none), so a live broker keeps serving
+    the newer rule until it is restarted.
+    """
+    target = lineage.get(rule_name, to_version)
+    if target is None:
+        raise KeyError(f"rule {rule_name!r} v{to_version} not found in lineage")
+
+    latest = lineage.get(rule_name)
+    new_version = (latest.version + 1) if latest is not None else to_version + 1
+    now = datetime.now(UTC)
+
+    lineage.insert(
+        replace(
+            target,
+            version=new_version,
+            approver=reviewer,
+            promoted_at=now,
+            retired_at=None,
+            retire_reason=None,
+            retire_reviewer=None,
+        )
+    )
+
+    if audit_logger is not None:
+        emit_lifecycle_event(
+            audit_logger,
+            "rule_rolled_back",
+            {
+                "rule_name": rule_name,
+                "restored_version": to_version,
+                "new_version": new_version,
+                "reason": reason,
+                "reviewer": reviewer,
+                "timestamp": now.isoformat(),
+            },
+        )
+
+    return RollbackResult(
+        rule_name=rule_name,
+        restored_version=to_version,
+        new_version=new_version,
+        reviewer=reviewer,
+        rolled_back_at=now,
+        reason=reason,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
 
 def _extract_rule_yaml(proposal: Proposal) -> str:
-    """Extract YAML text from proposal artifact.
+    """Extract the rule YAML a proposal is asking to promote.
 
-    Proposals with ``artifact_type == "rule"`` carry the YAML under
-    ``artifact["yaml"]`` per design.md. Falls back to serializing the
-    artifact dict for other types.
+    Rule proposals carry it either inline under ``artifact["yaml"]`` or by
+    reference under ``artifact["yaml_path"]``; ``run_pipeline`` writes the
+    latter. The previous fallback serialised the whole artifact dict to JSON
+    and handed *that* to the compiler, which could only ever fail with "YAML
+    file must contain a top-level 'rules' key" -- so an artifact carrying
+    neither key is now a clear error instead.
     """
     artifact = proposal.artifact
-    if isinstance(artifact.get("yaml"), str):
-        return artifact["yaml"]
-    import json
-
-    return json.dumps(artifact, separators=(",", ":"))
+    inline = artifact.get("yaml")
+    if isinstance(inline, str):
+        return inline
+    path = artifact.get("yaml_path")
+    if isinstance(path, str):
+        try:
+            return Path(path).read_text(encoding="utf-8")
+        except OSError as exc:
+            raise PromotionFailedError(
+                f"proposal {proposal.proposal_id!r} references unreadable rule file {path!r}: {exc}"
+            ) from exc
+    raise PromotionFailedError(
+        f"proposal {proposal.proposal_id!r} carries no rule YAML: artifact has neither "
+        f"'yaml' nor 'yaml_path' (keys: {sorted(artifact)})"
+    )
 
 
 def _build_lineage_record(
@@ -285,12 +429,16 @@ def _build_lineage_record(
     promoted_at: datetime,
 ) -> LineageRecord:
     """Build a :class:`LineageRecord` from an approved proposal."""
-    derived_from: tuple[str, ...] = tuple(proposal.lineage.get("derived_from", []))
-    observation_ids: dict[str, Any] = dict(proposal.lineage.get("observation_ids", {}))
-    sandbox_results: dict[str, Any] = dict(proposal.lineage.get("sandbox_results", {}))
+    # ``or`` rather than a dict default: run_pipeline writes
+    # ``lineage={"derived_from": None}``, so the key is present and the
+    # default never applies -- tuple(None) raised TypeError.
+    derived_from: tuple[str, ...] = tuple(proposal.lineage.get("derived_from") or ())
+    observation_ids: dict[str, Any] = dict(proposal.lineage.get("observation_ids") or {})
+    sandbox_results: dict[str, Any] = dict(proposal.lineage.get("sandbox_results") or {})
     rule_name: str = proposal.artifact.get("name", proposal.proposal_id)
     version: int = int(proposal.artifact.get("version", 1))
     return LineageRecord(
+        module=str(proposal.artifact.get("module", "")),
         rule_name=rule_name,
         version=version,
         proposer=proposal.proposer,
@@ -302,33 +450,14 @@ def _build_lineage_record(
     )
 
 
-def _emit(audit_logger: Any, event_type: str, fields: dict[str, Any]) -> None:
-    """Emit an out-of-band audit event (best-effort; swallows errors)."""
-    import sys
-
-    try:
-        from nautilus.rkm.audit_emitter import emit_event_oob
-
-        entry = {
-            "event_type": event_type,
-            "schema_version": 2,
-            "timestamp": datetime.now(UTC).isoformat(),
-            **fields,
-        }
-        emit_event_oob(audit_logger, entry)
-    except Exception as exc:  # noqa: BLE001
-        print(  # noqa: T201
-            f"[review] audit emit swallowed: event_type={event_type!r} err={exc}",
-            file=sys.stderr,
-        )
-
-
 __all__ = [
     "AlreadyDecidedError",
     "ApprovalResult",
     "PromotionFailedError",
     "RejectionResult",
+    "RollbackResult",
     "approve_proposal",
     "reject_proposal",
     "retract_rule",
+    "rollback_rule",
 ]

@@ -1,9 +1,10 @@
 """Seek-based JSONL audit reader for the Admin UI (design SS 9.1, FR-6/7/8).
 
 Provides O(1) page access on GB-sized audit files by encoding byte offsets
-as opaque base64 cursors.  Each JSONL line is an outer Fathom
-:class:`AuditRecord`; the inner Nautilus :class:`AuditEntry` is extracted
-via :func:`decode_nautilus_entry` (double-parse).
+as opaque base64 cursors.  A line is decoded by
+:func:`nautilus.audit.logger.decode_audit_line`, which knows every shape a
+writer of this file produces — including the signed chain envelope
+``audit.chained`` wraps each line in.
 
 Filters (agent_id, source_id, event_type, start/end) are applied in-memory
 after reading a page of lines.  This is acceptable because page sizes are
@@ -13,16 +14,14 @@ small (default 50) and the seek avoids scanning from the start of the file.
 from __future__ import annotations
 
 import base64
-import json
 import logging
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from fathom.models import AuditRecord
-
-from nautilus.audit.logger import decode_nautilus_entry
+from nautilus.audit.logger import decode_audit_line
 from nautilus.core.models import AuditEntry
 
 log = logging.getLogger(__name__)
@@ -75,6 +74,24 @@ class AuditReader:
             return 0
 
     # -- core reader ---------------------------------------------------
+
+    def find_entry(self, request_id: str) -> AuditEntry | None:
+        """Page the whole log (newest-first) for ``request_id``.
+
+        ``read_page`` returns one page, so a caller that searches only its
+        result reports anything older than ``page_size`` as absent. Cursor
+        pagination keeps memory bounded on GB-sized logs; the loop ends when
+        the reader stops handing back a ``next_cursor``.
+        """
+        cursor: str | None = None
+        while True:
+            page = self.read_page(cursor=cursor, sort="desc")
+            for entry in page.entries:
+                if entry.request_id == request_id:
+                    return entry
+            if not page.next_cursor or page.next_cursor == cursor:
+                return None
+            cursor = page.next_cursor
 
     def read_page(
         self,
@@ -182,25 +199,22 @@ class AuditReader:
         # For desc, cursor=0 means "start from the end".
         # A non-zero cursor means "start reading backwards from this offset".
         read_end = file_size if offset == 0 else offset
-        lines = self._read_lines_backwards(read_end, self._page_size * 2)
 
         entries: list[AuditEntry] = []
-        consumed_up_to = read_end  # track where we stopped
-        first_line_offset: int | None = None
-
-        for line_text, line_offset in lines:
+        consumed_up_to = 0  # start of the oldest line we looked at
+        for line_text, line_offset in self._iter_lines_backwards(read_end):
+            consumed_up_to = line_offset
             entry = self._parse_line(line_text)
             if entry is None:
                 continue
             if self._matches(entry, agent_id, source_id, event_type, start, end):
                 entries.append(entry)
-                if first_line_offset is None or line_offset < first_line_offset:
-                    first_line_offset = line_offset
                 if len(entries) >= self._page_size:
-                    consumed_up_to = line_offset
                     break
 
-        # next_cursor = further back in the file (older entries)
+        # next_cursor = further back in the file (older entries). A page that
+        # stopped short of a full page has reached the start of the file, so
+        # there is nothing older; a full page resumes at the line it stopped on.
         has_older = consumed_up_to > 0 and len(entries) >= self._page_size
         next_cursor = self._encode_cursor(consumed_up_to) if has_older else None
         # prev_cursor = toward end of file (newer entries)
@@ -213,60 +227,73 @@ class AuditReader:
             total_estimate=total_estimate,
         )
 
-    def _read_lines_backwards(self, from_offset: int, max_lines: int) -> list[tuple[str, int]]:
-        """Read up to ``max_lines`` complete lines backwards from ``from_offset``.
+    def _iter_lines_backwards(self, from_offset: int) -> Iterator[tuple[str, int]]:
+        """Yield ``(line_text, line_start_offset)`` backwards from ``from_offset``.
 
-        Returns list of (line_text, line_start_offset) tuples, ordered
-        newest-first (highest offset first).
+        Backwards reading used to stop after a fixed window of ``page_size * 2``
+        lines, which is correct only for an unfiltered read: a filter whose
+        matches are older than the window returned an empty page *and* no
+        cursor, i.e. "no such access happened". This yields until the start of
+        the file and lets the caller stop when its page is full, which is what
+        the ascending reader already does.
+
+        Byte offsets throughout: the file is read in binary so an offset is a
+        seekable position regardless of the encoding of the bytes around it.
         """
-        if from_offset <= 0:
-            return []
-
         chunk_size = 8192
-        result: list[tuple[str, int]] = []
         remaining = from_offset
-        leftover = ""
+        leftover = b""
 
-        with open(self._path, encoding="utf-8") as fh:
-            while remaining > 0 and len(result) < max_lines:
+        with open(self._path, "rb") as fh:
+            while remaining > 0:
                 read_size = min(chunk_size, remaining)
                 start_pos = remaining - read_size
                 fh.seek(start_pos)
-                chunk = fh.read(read_size)
+                chunk = fh.read(read_size) + leftover
                 remaining = start_pos
 
-                chunk = chunk + leftover
-                parts = chunk.split("\n")
-                # First part may be a partial line (split mid-line); save it
+                parts = chunk.split(b"\n")
+                # The first part may be a partial line — it continues backwards
+                # into the chunk we have not read yet, so it is carried over.
                 leftover = parts[0]
 
-                # Process remaining parts in reverse (newest first)
-                for part in reversed(parts[1:]):
-                    text = part.strip()
-                    if not text:
-                        continue
-                    # Approximate offset for this line
-                    line_offset = start_pos + chunk.rfind(part)
-                    result.append((text, max(line_offset, 0)))
-                    if len(result) >= max_lines:
-                        break
+                # Offset of each part, relative to the chunk we just read.
+                offsets: list[int] = []
+                pos = start_pos
+                for part in parts:
+                    offsets.append(pos)
+                    pos += len(part) + 1
 
-            # Handle leftover (the very first line in the read region)
-            if leftover.strip() and len(result) < max_lines:
-                result.append((leftover.strip(), 0))
+                for part, part_offset in zip(
+                    reversed(parts[1:]), reversed(offsets[1:]), strict=True
+                ):
+                    text = part.decode("utf-8", errors="replace").strip()
+                    if text:
+                        yield (text, part_offset)
 
-        return result
+            tail = leftover.decode("utf-8", errors="replace").strip()
+            if tail:
+                yield (tail, 0)
 
     # -- parsing / filtering -------------------------------------------
 
     @staticmethod
     def _parse_line(line: str) -> AuditEntry | None:
-        """Parse a JSONL line: outer AuditRecord -> inner AuditEntry."""
+        """One JSONL line → :class:`AuditEntry`, or ``None`` to skip it.
+
+        Two different things used to arrive here as "corrupt". A torn write is
+        corruption and the operator needs to hear about it. A line whose shape
+        this reader has no entry in — the genesis and checkpoint records
+        fathom's own chained log writes, a hot-reload event — is a normal
+        inhabitant of the file, and warning once per line per read over a
+        perfectly intact log is how ``audit.chained`` came to look like data
+        loss. :func:`decode_audit_line` separates them: ``None`` for a shape
+        that carries no entry, an exception only for a line that cannot be
+        read.
+        """
         try:
-            raw = json.loads(line)
-            record = AuditRecord.model_validate(raw)
-            return decode_nautilus_entry(record)
-        except (json.JSONDecodeError, KeyError, Exception):
+            return decode_audit_line(line)
+        except ValueError:
             log.warning("Skipping corrupt audit line: %.120s", line)
             return None
 

@@ -26,7 +26,9 @@ from elasticsearch.dsl.query import Bool, Exists, Range, Term, Terms, Wildcard
 from nautilus.adapters.base import (
     AdapterError,
     ScopeEnforcementError,
+    mtls_context,
     validate_field,
+    wrap_execute,
 )
 from nautilus.adapters.schema import AdapterField, AdapterSchema, AdapterTable
 from nautilus.config.models import BasicAuth, BearerAuth, MtlsAuth, SourceConfig
@@ -82,11 +84,14 @@ def _validate_index(index: str | None) -> str:
 def _translate_like(pattern: str) -> str:
     """Translate a SQL-style ``LIKE`` pattern to an Elasticsearch wildcard glob.
 
-    SQL ``%`` -> ES ``*``; SQL ``_`` -> ES ``?``. Existing literal ``*`` / ``?``
-    in the input are preserved (callers rely on this via the ``like_style``
-    knob in higher layers).
+    SQL ``%`` -> ES ``*``; SQL ``_`` -> ES ``?``. ``*``, ``?`` and ``\\`` are
+    literal characters in a SQL LIKE pattern, so they are escaped first --
+    otherwise ``owner LIKE '*'`` reaches ES as the match-everything glob and
+    silently *widens* the constraint. (``like_style`` is a Neo4j-only knob and
+    never reached this function.)
     """
-    return pattern.replace("%", "*").replace("_", "?")
+    escaped = pattern.replace("\\", "\\\\").replace("*", "\\*").replace("?", "\\?")
+    return escaped.replace("%", "*").replace("_", "?")
 
 
 # Builder signature: ``(field, value) -> DSL query``. The return type is ``Any``
@@ -189,6 +194,25 @@ _DSL_BUILDERS: dict[str, _BuilderFn] = {
 }
 
 
+# Operators whose DSL builders do not analyse their input, so they must run
+# against a verbatim-indexed field. Range operators belong here too: they are
+# lexicographic over the *analysed terms*, so ``classification >= 'public'`` on
+# a dynamically-mapped string ranks 'top secret' by its 'secret' token and
+# answers wrongly with no error.
+_EXACT_OPERATORS: frozenset[str] = frozenset(
+    {"=", "!=", "IN", "NOT IN", "LIKE", "<", "<=", ">", ">=", "BETWEEN"}
+)
+
+
+def _strings(value: Any) -> list[str]:
+    """Every string in a constraint value (scalars, ``IN`` lists, ``BETWEEN`` pairs)."""
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, (list, tuple)):
+        return [v for v in cast("list[Any]", value) if isinstance(v, str)]
+    return []
+
+
 class ElasticsearchAdapter:
     """Elasticsearch adapter backed by ``AsyncElasticsearch``.
 
@@ -206,6 +230,10 @@ class ElasticsearchAdapter:
         self._config: SourceConfig | None = None
         self._index: str | None = None
         self._closed: bool = False
+        # Index mapping properties, cached for the query path (see
+        # ``_exact_field``). ``get_schema`` always refetches so schema-drift
+        # detection cannot be answered from a stale cache.
+        self._props: dict[str, Any] | None = None
 
     async def connect(self, config: SourceConfig) -> None:
         """Create the ``AsyncElasticsearch`` client and validate ``config.index``.
@@ -228,8 +256,11 @@ class ElasticsearchAdapter:
         elif isinstance(auth, BearerAuth):
             # ES python client uses ``api_key`` for bearer-style tokens.
             client_kwargs["api_key"] = auth.token
-        elif isinstance(auth, MtlsAuth) and auth.ca_path is not None:
-            client_kwargs["ca_certs"] = auth.ca_path
+        elif isinstance(auth, MtlsAuth):
+            # The client certificate is the credential here; forwarding only
+            # ``ca_path`` (and only when it was set) meant the connection
+            # presented nothing and the operator was told nothing.
+            client_kwargs["ssl_context"] = mtls_context(auth, config.id)
 
         try:
             self._client = AsyncElasticsearch(**client_kwargs)
@@ -250,6 +281,85 @@ class ElasticsearchAdapter:
         if client is not None:
             await client.close()
 
+    async def _fetch_properties(self) -> dict[str, Any]:
+        """GET the index mapping's ``properties``. Raises on a backend outage."""
+        try:
+            mapping: Any = await self._client.indices.get_mapping(index=self._index)  # pyright: ignore[reportUnknownMemberType]
+        except Exception as exc:
+            raise AdapterError(
+                f"ElasticsearchAdapter could not read the mapping for index '{self._index}': {exc}"
+            ) from exc
+        index_mapping: Any = mapping.get(self._index, {})
+        props: dict[str, Any] = index_mapping.get("mappings", {}).get("properties", {})
+        self._props = props
+        return props
+
+    def _exact_field(self, field: str, value: Any = None) -> str:
+        """Return the field a term-level query must target for ``field``.
+
+        ES default dynamic mapping indexes every string as ``text`` (analysed)
+        plus a ``.keyword`` subfield (verbatim). ``Term``/``Terms``/``Wildcard``
+        do not analyse their input, so run against the bare ``text`` field they
+        compare an unanalysed value to analysed terms: ``=`` fails closed and
+        ``!=`` / ``NOT IN`` fail **open**, returning the document the operator
+        was supposed to exclude.
+
+        A ``text`` field with no ``keyword`` subfield cannot be matched exactly
+        at all, so the constraint raises rather than being silently dropped --
+        ``developing-adapters.md``: "silently dropping a constraint returns
+        over-scoped data".
+        """
+        props = self._props or {}
+        if "." in field:
+            # The caller targeted a subfield explicitly (``validate_field``
+            # permits one dotted segment); respect it.
+            return field
+        definition = props.get(field)
+        if not isinstance(definition, dict):
+            return field
+        mapping = cast("dict[str, Any]", definition)
+        if mapping.get("type") != "text":
+            # Unmapped, or already an exact type (keyword/long/date/boolean...).
+            return field
+        subfields = cast("dict[str, Any]", mapping.get("fields") or {})
+        keywords: dict[str, dict[str, Any]] = {
+            name: cast("dict[str, Any]", sub)
+            for name, sub in subfields.items()
+            if isinstance(sub, dict) and cast("dict[str, Any]", sub).get("type") == "keyword"
+        }
+        if not keywords:
+            raise ScopeEnforcementError(
+                f"ElasticsearchAdapter: field '{field}' is mapped as analysed 'text' "
+                f"with no 'keyword' subfield, so it cannot be matched exactly. An "
+                f"exact-match constraint on it would silently return over-scoped "
+                f"data. Add a keyword subfield to the mapping, or target one "
+                f"explicitly as 'field.<subfield>'."
+            )
+        # A keyword subfield with ``ignore_above`` does not index values longer
+        # than the limit *at all*, so a term query for one matches nothing and
+        # ``!=`` / ``NOT IN`` match everything -- the same fail-open the
+        # ``.keyword`` routing exists to close. Prefer an unlimited subfield;
+        # refuse the constraint if the only one available would drop the value.
+        unlimited: list[str] = sorted(
+            n for n, sub in keywords.items() if sub.get("ignore_above") is None
+        )
+        if unlimited:
+            return f"{field}.{unlimited[0]}"
+        limits: dict[str, int] = {n: int(sub["ignore_above"]) for n, sub in keywords.items()}
+        chosen = sorted(limits, key=lambda n: (-limits[n], n))[0]
+        limit = limits[chosen]
+        longest = max((len(v) for v in _strings(value)), default=0)
+        if longest > limit:
+            raise ScopeEnforcementError(
+                f"ElasticsearchAdapter: the only exact subfield for '{field}' is "
+                f"'{field}.{chosen}', which has ignore_above={limit}, and the "
+                f"constraint compares a value of length {longest}. Values over the "
+                f"limit are not indexed, so the comparison would silently return "
+                f"over-scoped data. Raise ignore_above on the mapping, or target a "
+                f"subfield without one as 'field.<subfield>'."
+            )
+        return f"{field}.{chosen}"
+
     def _constraint_to_query(self, constraint: ScopeConstraint) -> Any:
         """Translate one :class:`ScopeConstraint` into a DSL query object per AC-8.2.
 
@@ -266,6 +376,8 @@ class ElasticsearchAdapter:
         validate_field(field)
         value: Any = constraint.value
         _typecheck_value(op, value)
+        if op in _EXACT_OPERATORS:
+            field = self._exact_field(field, value)
         return _DSL_BUILDERS[op](field, value)
 
     def _build_search(
@@ -288,6 +400,7 @@ class ElasticsearchAdapter:
             search = search.query(q)
         return search
 
+    @wrap_execute
     async def execute(
         self,
         intent: IntentAnalysis,
@@ -298,6 +411,16 @@ class ElasticsearchAdapter:
         del intent, context  # Phase 2: intent/context not consumed by ES adapter
         if self._client is None or self._config is None or self._index is None:
             raise AdapterError("ElasticsearchAdapter.execute called before connect()")
+
+        # ``_exact_field`` needs the mapping to know which fields are analysed.
+        # Fetched only when a constraint actually needs it, and refetched when one
+        # names a field the cache has never seen: an index gains fields over a
+        # broker's lifetime, and a field missing from a stale cache reads as
+        # "unmapped" and routes to the bare analysed field -- the fail-open this
+        # whole path exists to close.
+        needed = {c.field.split(".", 1)[0] for c in scope if c.operator in _EXACT_OPERATORS}
+        if needed and (self._props is None or not needed <= set(self._props)):
+            await self._fetch_properties()
 
         search = self._build_search(self._index, scope, _DEFAULT_LIMIT)
 
@@ -315,38 +438,43 @@ class ElasticsearchAdapter:
             source_id=self._config.id,
             rows=rows,
             duration_ms=duration_ms,
+            truncated=len(rows) >= _DEFAULT_LIMIT,
         )
 
     async def get_schema(self) -> AdapterSchema:
-        """Return schema via GET _mapping API. AC-21, OQ3."""
+        """Return schema via GET _mapping API. AC-21, OQ3.
+
+        Raises on a backend outage rather than returning
+        :meth:`AdapterSchema.unknown`. Swallowing the error made an outage
+        indistinguishable from major schema drift: the broker quarantined the
+        source and wrote ``schema_drift_detected`` describing an event that did
+        not occur, and ``schema-ack`` -- the prescribed remediation -- baselined
+        the ``unknown()`` fingerprint, re-quarantining the source when the
+        backend *recovered*. ``Broker._check_adapter_schema`` already handles a
+        raising ``get_schema`` by skipping the fingerprint check.
+        """
         if self._client is None or self._config is None or self._index is None:
             return AdapterSchema.unknown(
                 self._config.id if self._config else "elasticsearch",
                 self.source_type,
             )
-        try:
-            mapping: Any = await self._client.indices.get_mapping(index=self._index)  # pyright: ignore[reportUnknownMemberType]
-            # mapping shape: {<index>: {"mappings": {"properties": {...}}}}
-            index_mapping: Any = mapping.get(self._index, {})
-            props: dict[str, Any] = index_mapping.get("mappings", {}).get("properties", {})
-            fields = tuple(
-                AdapterField(
-                    name=fname,
-                    type=str(fdef.get("type", "object")),
-                    nullable=True,
-                )
-                for fname, fdef in sorted(props.items())
+        props = await self._fetch_properties()
+        fields = tuple(
+            AdapterField(
+                name=fname,
+                type=str(fdef.get("type", "object")),
+                nullable=True,
             )
-            table = AdapterTable(name=self._index, fields=fields)
-            return AdapterSchema(
-                adapter_id=self._config.id,
-                source_type=self.source_type,
-                tables=(table,),
-                capability_flags={"deterministic": False},
-                fetched_at=datetime.now(UTC),
-            )
-        except Exception:  # noqa: BLE001
-            return AdapterSchema.unknown(self._config.id, self.source_type)
+            for fname, fdef in sorted(props.items())
+        )
+        table = AdapterTable(name=self._index, fields=fields)
+        return AdapterSchema(
+            adapter_id=self._config.id,
+            source_type=self.source_type,
+            tables=(table,),
+            capability_flags={"deterministic": False},
+            fetched_at=datetime.now(UTC),
+        )
 
 
 __all__ = ["ElasticsearchAdapter"]

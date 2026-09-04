@@ -45,6 +45,8 @@ def list_event_types() -> list[str]:
         "adapter_unquarantined",
         "schema_drift_detected",
         "schema_drift_severity_overridden",
+        "config_reloaded",
+        "config_reload_refused",
     ]
 
 
@@ -63,8 +65,8 @@ def dispatch(args: argparse.Namespace) -> int:
     sub = getattr(args, "events_subcommand", None)
     if sub == "list":
         return _cmd_list(args)
-    err("events: subcommand required (list).")
-    return 1
+    err("events: no subcommand given (try: list)")
+    return 2
 
 
 def _cmd_list(args: argparse.Namespace) -> int:

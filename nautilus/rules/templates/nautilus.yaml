@@ -16,7 +16,7 @@ templates:
       - { name: id,           type: string, required: true }
       - { name: clearance,    type: string, required: true }
       - { name: purpose,      type: string, required: true }
-      - { name: compartments, type: string, default: "" }   # space-separated multislot
+      - { name: compartments, type: string, default: "" }   # pipe-delimited (fathom parse_compartments)
       - { name: sub_category, type: string, default: "" }
 
   - name: intent
@@ -34,8 +34,9 @@ templates:
       - { name: classification,   type: string, required: true }
       - { name: data_types,       type: string, required: true }   # space-separated
       - { name: allowed_purposes, type: string, default: "" }      # space-separated
-      - { name: compartments,     type: string, default: "" }      # space-separated multislot
+      - { name: compartments,     type: string, default: "" }      # pipe-delimited (fathom parse_compartments)
       - { name: sub_category,     type: string, default: "" }
+      - { name: purpose_field,    type: string, default: "" }      # column carrying a row's collected-for purpose
 
   - name: session
     description: "Per-request session counters and purpose/exposure tracking."
@@ -59,7 +60,17 @@ templates:
     slots:
       - { name: source_id,  type: string, required: true }
       - { name: field,      type: string, required: true }
-      - { name: operator,   type: symbol, required: true }
+      # ``string`` with an explicit allowlist, not ``symbol``: fathom's
+      # compiler quotes every literal slot value, so a ``symbol`` slot can
+      # only be filled by a CLIPS expression and no rule could write
+      # ``operator: "="`` directly. The allowlist mirrors
+      # :data:`nautilus.core.models.ScopeOperator` and is enforced by CLIPS
+      # at build time; ``tests/unit/test_scope_operator_slot.py`` pins them
+      # together.
+      - name: operator
+        type: string
+        required: true
+        allowed_values: ["=", "!=", "IN", "NOT IN", "<", ">", "<=", ">=", "LIKE", "BETWEEN", "IS NULL"]
       - { name: value,      type: string, required: true }  # stringified; typed at broker layer
       - { name: expires_at, type: string, default: "" }      # ISO-8601 or empty
       - { name: valid_from, type: string, default: "" }      # ISO-8601 or empty

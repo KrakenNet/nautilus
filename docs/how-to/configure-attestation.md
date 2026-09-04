@@ -16,8 +16,22 @@ attestation:
 Without `private_key_path` the broker auto-generates an Ed25519 keypair
 **per process** — fine for dev, but tokens from a previous run can no
 longer be verified against the current public key after a restart.
-Generate a key once and protect it like any private key (mode `0600`,
-owned by the broker user).
+Generate a key once and protect it like any private key. Nautilus reads a
+standard PKCS#8 Ed25519 PEM, so `openssl` is all it takes. Run this **on the
+host**, before the broker starts — there is no `openssl`, no `chmod` and no
+shell in the container image, and on the container path the key is mounted
+read-only from a Secret ([Deploying §5](deploying.md#5-volumes-and-mounts)):
+
+```console
+$ openssl genpkey -algorithm ed25519 -out /var/lib/nautilus/attestation.pem && chmod 600 /var/lib/nautilus/attestation.pem
+$ ls -l /var/lib/nautilus/attestation.pem | awk '{print $1, $NF}'
+-rw------- /var/lib/nautilus/attestation.pem
+```
+
+Back it up with the log it signs — see
+[Back up and restore](operator-guide.md#9-back-up-and-restore). A chained log
+pins this key's fingerprint in its genesis record: with a different key the
+broker refuses to append to it at all.
 
 Set `enabled: false` to disable attestation entirely —
 `response.attestation_token` is `None` in that case.
@@ -49,6 +63,18 @@ attestation:
     nautilus attestation verify /var/lib/nautilus/attestations.jsonl \
       --expected-head <mirrored-line-hash>
     ```
+
+    A chained log admits exactly one writer. The first attestation a broker
+    emits takes an exclusive lock on `<path>.lock`; a second process writing
+    the same path is refused rather than allowed to fork the chain. Read-only
+    tooling that builds a broker without emitting anything (`nautilus adapters
+    list`, `schema`, `schema-fingerprint`, `schema-diff`) does not take the
+    lock and works while a server runs. Nor does `schema-ack`, which emits no
+    attestation — but it does write an *audit* line, and `audit.chained: true`
+    puts the same single-writer lock on `audit.path`, so beside a running
+    server it refuses with exit `2` rather than acknowledging drift it cannot
+    record. Stop the server and re-run it, or leave `audit.chained` off, where
+    there is no lock.
 
 - `http` — POST each envelope to an external collector, with a retry
   policy and optional `dead_letter_path`.

@@ -21,20 +21,22 @@ RouteResult`` imports keep working.
 
 from __future__ import annotations
 
-import contextlib
+import re
 import tempfile
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
+import yaml
 from fathom import Engine
 
-from nautilus.config.agent_registry import AgentRegistry
+from nautilus.config.agent_registry import AgentRegistry, UnknownAgentError
 from nautilus.config.escalation import EscalationRule, load_escalation_packs
-from nautilus.config.models import SourceConfig
+from nautilus.config.models import AgentRecord, SourceConfig
 from nautilus.core import ConsistencyError, PolicyEngineError
 from nautilus.core.clips_encoding import encode_multislot
 from nautilus.core.models import (
     DenialRecord,
+    InputFact,
     IntentAnalysis,
     RouteResult,
     RoutingDecision,
@@ -62,6 +64,18 @@ _SESSION_EXPOSURE_MULTISLOTS: tuple[str, ...] = (
 )
 
 
+def _encode_compartments(names: list[str]) -> str:
+    """Encode compartment names the way ``fathom-dominates`` reads them.
+
+    Compartments are the one slot Fathom parses itself, and
+    ``fathom.engine.parse_compartments`` splits on ``|`` — not whitespace like
+    the ``encode_multislot`` convention the other multislots use. Joining with
+    a space would make ``["alpha", "bravo"]`` a single compartment literally
+    named ``alpha bravo``.
+    """
+    return "|".join(n.strip() for n in names if n.strip())
+
+
 def _coerce_multislot(raw: Any) -> list[str]:
     """Normalize stored-session multislot into a ``list[str]``.
 
@@ -85,6 +99,54 @@ def _coerce_multislot(raw: Any) -> list[str]:
     return []
 
 
+class _UnknownAgent:
+    """Sentinel type: a registry is configured and lacks the requested id.
+
+    A distinct class rather than a bare ``object()`` so ``isinstance`` narrows
+    the resolve result and the ``AgentRecord`` branch keeps its attributes.
+    """
+
+
+_UNKNOWN_AGENT = _UnknownAgent()
+
+
+def _check_pack_name_is_unambiguous(pack_name: str) -> None:
+    """Refuse a rule-pack name more than one installed distribution claims.
+
+    Fathom's loader returns the *first* ``fathom.packs`` entry whose name
+    matches, and entry points are ordered by distribution name -- so any
+    distribution sorting before ``nautilus-rkm`` deterministically wins a
+    shipped pack's name. An operator who wrote ``packs: [data-routing-nist]``
+    got a different pack's rules with no error and no warning; the NIST
+    least-privilege scope constraint simply stopped existing and the broker
+    returned rows outside the requesting agent's ``allowed_purposes``.
+
+    A pack name decides which policy runs, so an ambiguous one is a config
+    error, not a coin toss.
+    """
+    import importlib.metadata
+    import logging
+
+    claimants = sorted(
+        {
+            str(getattr(getattr(ep, "dist", None), "name", None) or "unknown")
+            for ep in importlib.metadata.entry_points(group="fathom.packs")
+            if ep.name == pack_name
+        }
+    )
+    if len(claimants) > 1:
+        raise PolicyEngineError(
+            f"rule pack {pack_name!r} is claimed by more than one installed "
+            f"distribution ({', '.join(claimants)}). Which policy runs would be "
+            f"decided by distribution name order. Uninstall one, or rename the "
+            f"pack in the distribution you do not want."
+        )
+    if claimants:
+        logging.getLogger(__name__).info(
+            "rule pack %r resolved to distribution %r", pack_name, claimants[0]
+        )
+
+
 class FathomRouter:
     """Wraps ``fathom.Engine`` with Nautilus templates, rules, and externals.
 
@@ -105,45 +167,156 @@ class FathomRouter:
         user_rules_dirs: list[Path],
         attestation: Any | None = None,  # AttestationService | None — typed loosely; jwt optional
         check_consistency: bool = True,
+        rule_packs: list[str] | None = None,
     ) -> None:
         self._built_in_rules_dir = Path(built_in_rules_dir)
         self._user_rules_dirs = [Path(d) for d in user_rules_dirs]
+        # Rule packs resolve through the ``fathom.packs`` entry-point group by
+        # name (e.g. ``data-routing-nist``), not by filesystem path, so an
+        # installed third-party pack loads the same way a shipped one does.
+        self._rule_packs = list(rule_packs or [])
         self._attestation = attestation
         # #27 — post-run consistency checks; on by default, disabled via
         # ``rules.consistency_checks: false`` for performance-sensitive
         # deployments.
         self._check_consistency_enabled = check_consistency
+        # Rules retracted on this instance. Held here rather than applied in
+        # place because CLIPS has no "unbuild one rule": a retraction is a
+        # rebuild of the environment without it.
+        self._retracted: set[str] = set()
+        self._engine: Engine = self._build_engine()
+        # Escalation packs are YAML → EscalationRule models loaded once;
+        # _assert_escalation_rules re-pushes them as facts per request
+        # (engine.clear_facts() wipes facts each route() call).
         try:
-            self._engine: Engine = Engine()
-            self._engine.load_templates(str(self._built_in_rules_dir / "templates"))
-            load_built_in_modules(self._engine)
-            register_overlaps(self._engine)
-            register_not_in_list(self._engine)
-            register_contains_all(self._engine)
-            self._engine.load_functions(str(self._built_in_rules_dir / "functions"))
-            self._engine.load_rules(str(self._built_in_rules_dir / "rules"))
-            # Curator module — pattern-tracker meta-rules (AC-35.3.a).
-            # assert_module_isolation runs parse-time YAML static analysis
-            # before loading so routing-template violations are caught early.
-            _meta_dir = self._built_in_rules_dir / "meta"
-            _pattern_tracker = _meta_dir / "pattern-tracker.yaml"
-            assert_module_isolation(_pattern_tracker)
-            self._engine.load_rules(str(_meta_dir))
-            for user_dir in self._user_rules_dirs:
-                self._engine.load_rules(str(user_dir))
-            # Escalation packs are YAML → EscalationRule models loaded once;
-            # _assert_escalation_rules re-pushes them as facts per request
-            # (engine.clear_facts() wipes facts each route() call).
             self._escalation_rules: list[EscalationRule] = load_escalation_packs(
                 [self._built_in_rules_dir / "escalation"]
             )
         except Exception as exc:  # noqa: BLE001 — re-wrap as PolicyEngineError per design §3.4
             raise PolicyEngineError(f"Fathom engine construction failed: {exc}") from exc
 
+    def _build_engine(self) -> Engine:
+        """Build a fresh engine with every rule this router should be running.
+
+        Also the retraction path: a rule in ``self._retracted`` is filtered out
+        of the YAML on its way in, so removing one is a rebuild rather than an
+        edit of a live CLIPS environment.
+        """
+        try:
+            engine = Engine()
+            engine.load_templates(str(self._built_in_rules_dir / "templates"))
+            load_built_in_modules(engine)
+            register_overlaps(engine)
+            register_not_in_list(engine)
+            register_contains_all(engine)
+            engine.load_functions(str(self._built_in_rules_dir / "functions"))
+            self._load_rules(engine, self._built_in_rules_dir / "rules")
+            # Curator module — pattern-tracker meta-rules (AC-35.3.a).
+            # assert_module_isolation runs parse-time YAML static analysis
+            # before loading so routing-template violations are caught early.
+            meta_dir = self._built_in_rules_dir / "meta"
+            assert_module_isolation(meta_dir / "pattern-tracker.yaml")
+            self._load_rules(engine, meta_dir)
+            for user_dir in self._user_rules_dirs:
+                self._load_rules(engine, user_dir)
+            # Packs load last: their rules join the built-in ``nautilus-routing``
+            # module and reference built-in templates, both of which must
+            # already exist in the environment.
+            for pack_name in self._rule_packs:
+                _check_pack_name_is_unambiguous(pack_name)
+                engine.load_pack(pack_name)
+        except Exception as exc:  # noqa: BLE001 — re-wrap as PolicyEngineError per design §3.4
+            raise PolicyEngineError(f"Fathom engine construction failed: {exc}") from exc
+        return engine
+
+    def _load_rules(self, engine: Engine, path: Path) -> None:
+        """``engine.load_rules(path)``, minus anything retracted on this router."""
+        if not self._retracted or not path.exists():
+            engine.load_rules(str(path))
+            return
+        with tempfile.TemporaryDirectory(prefix="nautilus-rules-") as scratch:
+            scratch_dir = Path(scratch)
+            for source in sorted(path.glob("*.yaml")) if path.is_dir() else [path]:
+                filtered = self._without_retracted(source)
+                if filtered is not None:
+                    (scratch_dir / source.name).write_text(filtered, encoding="utf-8")
+            engine.load_rules(str(scratch_dir))
+
+    def _without_retracted(self, source: Path) -> str | None:
+        """``source``'s YAML with retracted rules dropped; ``None`` if empty.
+
+        Anything this router cannot parse is passed through untouched — the
+        engine is the authority on whether a rule file is valid, not this.
+        """
+        text = source.read_text(encoding="utf-8")
+        try:
+            raw: Any = yaml.safe_load(text)
+        except yaml.YAMLError:
+            return text
+        if not isinstance(raw, dict):
+            return text
+        document = cast("dict[str, Any]", raw)
+        if not isinstance(document.get("rules"), list):
+            return text
+        rules: list[Any] = [
+            rule
+            for rule in cast("list[Any]", document["rules"])
+            if not (
+                isinstance(rule, dict)
+                and cast("dict[str, Any]", rule).get("name") in self._retracted
+            )
+        ]
+        if not rules:
+            return None
+        document["rules"] = rules
+        return yaml.safe_dump(document, sort_keys=False)
+
     @property
     def engine(self) -> Engine:
         """Underlying ``fathom.Engine`` (read-only handle for diagnostics)."""
         return self._engine
+
+    @property
+    def escalation_rules(self) -> list[EscalationRule]:
+        """Escalation rules loaded at construction (read-only handle)."""
+        return self._escalation_rules
+
+    @property
+    def ruleset_hash(self) -> str:
+        """``sha256:…`` over the rule YAML this engine is deciding with.
+
+        The identity of the policy that made a decision. Recorded on every
+        audit entry so an entry can be replayed against the rules that
+        produced it rather than against whatever is loaded today.
+        """
+        return self._engine.ruleset_hash
+
+    def rules_in_force(self) -> list[dict[str, str]]:
+        """Every rule the engine will fire, as ``{"module", "name"}`` pairs.
+
+        Built-ins, user rules and pack rules alike — the engine's registry is
+        the only authority on what is actually loaded, and nothing surfaced it,
+        so a deployment could not be compared against the rules an operator
+        believes it runs.
+        """
+        rules: list[dict[str, str]] = []
+        for key in self._engine.rule_registry:
+            module, _, name = key.rpartition("::")
+            rules.append({"module": module, "name": name})
+        return sorted(rules, key=lambda r: (r["module"], r["name"]))
+
+    def hierarchy_levels(self, name: str = "classification") -> tuple[str, ...]:
+        """Levels of the named hierarchy, lowest first; empty when unknown.
+
+        The registry is populated by ``load_functions`` from the built-in
+        ``hierarchies/`` tree plus any hierarchy a loaded pack ships, so this
+        is the authority on which classification strings mean anything.
+        ``fathom.engine.dominates`` ranks every other string -1, i.e. below
+        ``unclassified``, which makes an unrecognised label readable by every
+        agent -- so callers must reject rather than route.
+        """
+        definition = self._engine._hierarchy_registry.get(name)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+        return tuple(definition.levels) if definition is not None else ()
 
     def route(
         self,
@@ -165,31 +338,79 @@ class FathomRouter:
         4. read ``routing_decision`` / ``scope_constraint`` / ``denial_record``
         5. drop any denied source from ``routing_decisions``
 
-        ``agent_registry`` is accepted additively for forward-compat with the
-        Phase-2 ``agent``-fact enrichment path; it is currently unused because
-        the Phase-1 ``agent`` fact is already materialized from ``context``
-        (``clearance``/``purpose``). Phase-1 callers that pass no registry
-        continue to work unchanged.
+        ``agent_registry``, when non-empty, is the authority for the agent's
+        ``clearance`` and ``compartments``: those are authorization inputs and
+        must not come from the caller. An id the registry does not know is
+        denied outright. When no registry is configured (or it is empty) the
+        Phase-1 behaviour stands and both come from ``context`` — there is no
+        other source of truth, so declaring ``agents:`` in ``nautilus.yaml`` is
+        what turns enforcement on.
         """
-        # The registry is accepted for signature parity with design §2.2; the
-        # Phase-2 agent-enrichment rules land in a later task.
-        del agent_registry
         try:
             self._engine.clear_facts()
+            # Reset per request; _assert appends to this as facts go in, so the
+            # record cannot drift from what was actually asserted.
+            self._input_facts: list[InputFact] = []
+
+            record = self._resolve_agent(agent_id, agent_registry)
+            if isinstance(record, _UnknownAgent):
+                # A registry is configured and does not know this id. Deny every
+                # declared source rather than routing on caller-supplied
+                # attributes, matching declare_handoff's unknown-agent
+                # short-circuit (AC-4.2).
+                return self._deny_all(
+                    sources,
+                    reason=f"unknown agent id={agent_id!r}",
+                    rule_name="unknown-agent",
+                )
+
+            # Clearance and compartments come from the registry whenever the
+            # agent is registered. They are authorization inputs: a caller that
+            # can name its own clearance can read anything, and until this
+            # change `context["clearance"]` was taken verbatim, so declaring
+            # "top-secret" was sufficient to read a secret source.
+            # A registered agent's ``default_purpose`` is what the config says
+            # it is. It was parsed, shipped in three example configs, and read
+            # only by the session-token minter, so an agent that declared one
+            # and omitted ``purpose`` was still denied by
+            # ``deny-purpose-mismatch``.
+            purpose = str(context.get("purpose") or "") or (
+                record.default_purpose or "" if record is not None else ""
+            )
+            # ``purpose`` is a live authorization input that the caller types.
+            # An operator who has written down what an agent is for gets to
+            # bound it; an agent that declares none is unrestricted, which is
+            # what every config written before this had.
+            if record is not None and not record.may_claim(purpose):
+                return self._deny_all(
+                    sources,
+                    reason=(
+                        f"purpose {purpose!r} is not one of the purposes agent "
+                        f"{agent_id!r} may claim ({sorted(record.allowed_purposes)})"
+                    ),
+                    rule_name="purpose-not-permitted",
+                )
 
             agent_fact = {
                 "id": agent_id,
-                "clearance": str(context.get("clearance", "")),
-                "purpose": str(context.get("purpose", "")),
+                "clearance": (
+                    record.clearance if record is not None else str(context.get("clearance", ""))
+                ),
+                "purpose": purpose,
+                "compartments": _encode_compartments(
+                    record.compartments
+                    if record is not None
+                    else _coerce_multislot(context.get("compartments"))
+                ),
             }
-            self._engine.assert_fact("agent", agent_fact)
+            self._assert("agent", agent_fact)
 
             intent_fact = {
                 "raw": intent.raw_intent,
                 "data_types_needed": encode_multislot(intent.data_types_needed),
                 "entities": encode_multislot(intent.entities),
             }
-            self._engine.assert_fact("intent", intent_fact)
+            self._assert("intent", intent_fact)
 
             for source in sources:
                 source_fact = {
@@ -198,8 +419,18 @@ class FathomRouter:
                     "classification": source.classification,
                     "data_types": encode_multislot(source.data_types),
                     "allowed_purposes": encode_multislot(source.allowed_purposes),
+                    # Already pipe-delimited (``SourceConfig.compartments`` is
+                    # a str). Without this the `?src_cmp` binding in
+                    # classification.yaml always resolved to the template
+                    # default "", so every source read as uncompartmented and
+                    # compartment isolation was inert.
+                    "compartments": source.compartments,
+                    # Empty unless the operator declared it; the compliance
+                    # packs branch on that, scoping when it is set and denying
+                    # when it is not.
+                    "purpose_field": source.purpose_field,
                 }
-                self._engine.assert_fact("source", source_fact)
+                self._assert("source", source_fact)
 
             exposure_count = self._assert_session(session)
 
@@ -207,49 +438,7 @@ class FathomRouter:
 
             result = self._engine.evaluate()
 
-            raw_routing = self._engine.query("routing_decision")
-            raw_scopes = self._engine.query("scope_constraint")
-            raw_denials = self._engine.query("denial_record")
-
-            denials = [
-                DenialRecord(
-                    source_id=str(d["source_id"]),
-                    reason=str(d["reason"]),
-                    rule_name=str(d["rule_name"]),
-                )
-                for d in raw_denials
-            ]
-            denied_ids = {d.source_id for d in denials}
-
-            routing = [
-                RoutingDecision(
-                    source_id=str(r["source_id"]),
-                    reason=str(r["reason"]),
-                )
-                for r in raw_routing
-                if str(r["source_id"]) not in denied_ids
-            ]
-
-            scopes_by_source: dict[str, list[ScopeConstraint]] = {}
-            for s in raw_scopes:
-                sid = str(s["source_id"])
-                # Pass through the optional temporal slots when a rule
-                # populated them — downstream ``build_scope_payload``
-                # flips to ``scope_hash_version == "v2"`` whenever any
-                # constraint carries a non-empty ``expires_at`` /
-                # ``valid_from`` (FR-19, D-7).
-                _expires_at = s.get("expires_at") if hasattr(s, "get") else None
-                _valid_from = s.get("valid_from") if hasattr(s, "get") else None
-                scopes_by_source.setdefault(sid, []).append(
-                    ScopeConstraint(
-                        source_id=sid,
-                        field=str(s["field"]),
-                        operator=s["operator"],  # validated by Pydantic Literal
-                        value=s["value"],
-                        expires_at=str(_expires_at) if _expires_at else None,
-                        valid_from=str(_valid_from) if _valid_from else None,
-                    )
-                )
+            routing, scopes_by_source, denials, raw_routing = self._decode_working_memory()
 
             # #27 — post-run consistency checks (roadmap §05:432). Raw
             # routing ids (pre-denial-filter) are the reference set: a
@@ -268,13 +457,14 @@ class FathomRouter:
             duration_us = int(getattr(result, "duration_us", 0) or 0)
             rule_trace = list(getattr(result, "rule_trace", []) or [])
 
-            facts_summary = {
-                "agent": 1,
-                "intent": 1,
-                "source": len(sources),
-                "session": 1,
-                "session_exposure": exposure_count,
-            }
+            # Derived from what was actually asserted rather than
+            # hand-maintained: the previous literal hardcoded five templates
+            # and silently omitted ``escalation_rule``, so the summary
+            # understated engine input on every request that loaded an
+            # escalation pack.
+            facts_summary: dict[str, int] = {}
+            for fact in self._input_facts:
+                facts_summary[fact.template] = facts_summary.get(fact.template, 0) + 1
 
             return RouteResult(
                 routing_decisions=routing,
@@ -283,6 +473,7 @@ class FathomRouter:
                 rule_trace=rule_trace,
                 duration_us=duration_us,
                 facts_asserted_summary=facts_summary,
+                input_facts=self._input_facts,
             )
         except PolicyEngineError:
             raise
@@ -290,6 +481,111 @@ class FathomRouter:
             raise PolicyEngineError(
                 f"FathomRouter.route() failed for agent_id={agent_id!r}: {exc}"
             ) from exc
+
+    def replay(self, input_facts: list[InputFact]) -> RouteResult:
+        """Re-evaluate a recorded request from its ``input_facts`` alone.
+
+        Asserts the recorded facts verbatim into a cleared working memory and
+        runs the engine. Nothing is re-derived from the original request: if a
+        decision cannot be reproduced from ``input_facts``, that is a real gap
+        in the record and must surface here rather than be papered over by
+        re-reading the original inputs.
+
+        Consistency checks are skipped. They validate a decision against a live
+        source registry, which a replay does not have — the recorded facts are
+        the whole world. ``facts_asserted_summary`` is recomputed from the
+        replayed facts rather than copied, so a mismatch against the original
+        entry is detectable.
+        """
+        try:
+            self._engine.clear_facts()
+            self._input_facts = []
+            for fact in input_facts:
+                self._assert(fact.template, dict(fact.slots))
+
+            result = self._engine.evaluate()
+            routing, scopes_by_source, denials, _ = self._decode_working_memory()
+
+            facts_summary: dict[str, int] = {}
+            for fact in input_facts:
+                facts_summary[fact.template] = facts_summary.get(fact.template, 0) + 1
+
+            return RouteResult(
+                routing_decisions=routing,
+                scope_constraints=scopes_by_source,
+                denial_records=denials,
+                rule_trace=list(getattr(result, "rule_trace", []) or []),
+                duration_us=int(getattr(result, "duration_us", 0) or 0),
+                facts_asserted_summary=facts_summary,
+                input_facts=self._input_facts,
+            )
+        except PolicyEngineError:
+            raise
+        except Exception as exc:  # noqa: BLE001 — wrap any engine error
+            raise PolicyEngineError(f"FathomRouter.replay() failed: {exc}") from exc
+
+    def _decode_working_memory(
+        self,
+    ) -> tuple[
+        list[RoutingDecision],
+        dict[str, list[ScopeConstraint]],
+        list[DenialRecord],
+        list[Any],
+    ]:
+        """Read decision facts back out of working memory after ``evaluate()``.
+
+        Shared by :meth:`route` and :meth:`replay` so a replayed decision is
+        decoded by exactly the same code as a live one — a replay that decoded
+        differently would report agreement it had not actually demonstrated.
+
+        Returns ``(routing, scopes_by_source, denials, raw_routing)``;
+        ``raw_routing`` is the pre-denial-filter set the consistency checks
+        use as their reference.
+        """
+        raw_routing = self._engine.query("routing_decision")
+        raw_scopes = self._engine.query("scope_constraint")
+        raw_denials = self._engine.query("denial_record")
+
+        denials = [
+            DenialRecord(
+                source_id=str(d["source_id"]),
+                reason=str(d["reason"]),
+                rule_name=str(d["rule_name"]),
+            )
+            for d in raw_denials
+        ]
+        denied_ids = {d.source_id for d in denials}
+
+        routing = [
+            RoutingDecision(
+                source_id=str(r["source_id"]),
+                reason=str(r["reason"]),
+            )
+            for r in raw_routing
+            if str(r["source_id"]) not in denied_ids
+        ]
+
+        scopes_by_source: dict[str, list[ScopeConstraint]] = {}
+        for s in raw_scopes:
+            sid = str(s["source_id"])
+            # Pass through the optional temporal slots when a rule
+            # populated them — downstream ``build_scope_payload``
+            # flips to ``scope_hash_version == "v2"`` whenever any
+            # constraint carries a non-empty ``expires_at`` /
+            # ``valid_from`` (FR-19, D-7).
+            _expires_at = s.get("expires_at") if hasattr(s, "get") else None
+            _valid_from = s.get("valid_from") if hasattr(s, "get") else None
+            scopes_by_source.setdefault(sid, []).append(
+                ScopeConstraint(
+                    source_id=sid,
+                    field=str(s["field"]),
+                    operator=s["operator"],  # validated by Pydantic Literal
+                    value=s["value"],
+                    expires_at=str(_expires_at) if _expires_at else None,
+                    valid_from=str(_valid_from) if _valid_from else None,
+                )
+            )
+        return routing, scopes_by_source, denials, raw_routing
 
     def _run_consistency_checks(
         self,
@@ -378,6 +674,51 @@ class FathomRouter:
                 "(unexpected retraction cascade or injection)",
             )
 
+    def _resolve_agent(
+        self, agent_id: str, agent_registry: AgentRegistry | None
+    ) -> AgentRecord | _UnknownAgent | None:
+        """Resolve the agent's registered identity.
+
+        Returns the :class:`AgentRecord` when registered, ``None`` when no
+        registry is configured at all, and :data:`_UNKNOWN_AGENT` when a
+        registry exists but does not contain ``agent_id``.
+
+        The empty-registry case falls back to caller-supplied attributes
+        because there is no other source of truth for them. Declaring agents
+        in ``nautilus.yaml`` is what turns enforcement on.
+        """
+        if agent_registry is None or len(agent_registry) == 0:
+            return None
+        try:
+            return agent_registry.get(agent_id)
+        except UnknownAgentError:
+            return _UNKNOWN_AGENT
+
+    def _deny_all(self, sources: list[SourceConfig], *, reason: str, rule_name: str) -> RouteResult:
+        """Deny every declared source without consulting the engine."""
+        denials = [
+            DenialRecord(source_id=s.id, reason=reason, rule_name=rule_name) for s in sources
+        ]
+        return RouteResult(
+            routing_decisions=[],
+            scope_constraints={},
+            denial_records=denials,
+            rule_trace=[f"nautilus-routing::{rule_name}"],
+            duration_us=0,
+            facts_asserted_summary={},
+            input_facts=[],
+        )
+
+    def _assert(self, template: str, slots: dict[str, Any]) -> None:
+        """Assert one fact and record it verbatim for the audit trail.
+
+        Every fact the router puts into working memory goes through here, so
+        :attr:`RouteResult.input_facts` is a record of what was actually
+        asserted rather than a reconstruction that can drift from it.
+        """
+        self._engine.assert_fact(template, slots)
+        self._input_facts.append(InputFact(template=template, slots=dict(slots)))
+
     def _assert_session(self, session: dict[str, Any]) -> int:
         """Assert one ``session`` fact + one ``session_exposure`` per multislot element.
 
@@ -408,12 +749,12 @@ class FathomRouter:
             values = _coerce_multislot(session.get(slot))
             by_slot[slot] = values
             session_fact[slot] = encode_multislot(values)
-        self._engine.assert_fact("session", session_fact)
+        self._assert("session", session_fact)
 
         exposure_count = 0
         for category, values in by_slot.items():
             for value in values:
-                self._engine.assert_fact(
+                self._assert(
                     "session_exposure",
                     {
                         "session_id": session_id,
@@ -433,7 +774,7 @@ class FathomRouter:
         model, so no re-encoding is needed (design §3.4).
         """
         for rule in rules:
-            self._engine.assert_fact(
+            self._assert(
                 "escalation_rule",
                 {
                     "id": rule.id,
@@ -444,33 +785,115 @@ class FathomRouter:
             )
 
     def reload_rule(self, rule_name: str, rule_yaml: str) -> None:
-        """Load/reload a single rule into the active CLIPS environment.
+        """Persist a promoted rule into the user rules directory, then load it.
 
-        Writes ``rule_yaml`` to a temp file then calls ``engine.load_rules``.
-        Raises :class:`~nautilus.core.PolicyEngineError` if the engine rejects
-        the rule (caller should mark proposal ``promotion_failed`` and re-raise).
+        Promotion is a deploy: ``rkm-lifecycle.md`` describes an approved
+        proposal as in force, and the queue marks it ``promoted``, which
+        ``approve_proposal`` refuses to re-approve. This used to write the YAML
+        to a ``NamedTemporaryFile``, load it, and unlink it — so the rule was
+        gone at the next restart with no way back through the queue.
+
+        The file is written where the broker's own ``rules.user_rules_dirs``
+        points, which is the directory a restart re-reads.
+
+        Raises:
+            PolicyEngineError: if the engine rejects the rule (caller marks the
+                proposal ``promotion_failed`` and re-raises), or if there is no
+                configured ``rules.user_rules_dirs`` to persist into — a
+                promotion that cannot outlive the process is not a promotion.
         """
+        if not self._user_rules_dirs:
+            raise PolicyEngineError(
+                f"cannot promote rule {rule_name!r}: no rules.user_rules_dirs is "
+                f"configured, so the rule would live only in this process and be "
+                f"gone at the next restart while the proposal reads 'promoted'. "
+                f"Configure a writable rules directory and retry the approval."
+            )
+        safe_name = re.sub(r"[^A-Za-z0-9._-]", "_", rule_name).strip("._-") or "promoted-rule"
+        target_dir = Path(self._user_rules_dirs[0])
+        target = target_dir / f"{safe_name}.yaml"
         try:
-            with tempfile.NamedTemporaryFile(
-                mode="w",
-                suffix=".yaml",
-                delete=False,
-                encoding="utf-8",
-            ) as tmp:
-                tmp.write(rule_yaml)
-                tmp_path = tmp.name
-            self._engine.load_rules(tmp_path)
+            target_dir.mkdir(parents=True, exist_ok=True)
+            target.write_text(rule_yaml, encoding="utf-8")
+        except OSError as exc:
+            raise PolicyEngineError(
+                f"cannot promote rule {rule_name!r}: writing {target} failed: {exc}"
+            ) from exc
+        try:
+            self._engine.load_rules(str(target))
         except PolicyEngineError:
+            target.unlink(missing_ok=True)
             raise
         except Exception as exc:  # noqa: BLE001
+            # A rule the engine refuses must not be left on disk, or the next
+            # restart loads it and the broker does not come up.
+            target.unlink(missing_ok=True)
             raise PolicyEngineError(
                 f"FathomRouter.reload_rule() failed for rule_name={rule_name!r}: {exc}"
             ) from exc
-        finally:
-            import os as _os
 
-            with contextlib.suppress(OSError):
-                _os.unlink(tmp_path)  # type: ignore[possibly-undefined]
+    def retract_rule(self, rule_name: str) -> dict[str, bool]:
+        """Stop ``rule_name`` firing, and stop it coming back at the next start.
+
+        Returns ``{"engine_updated", "persisted"}``:
+
+        - ``engine_updated`` — the rule was in force and the rebuilt engine no
+          longer has it. ``False`` means it was never loaded, so retraction is
+          a lineage record and nothing else.
+        - ``persisted`` — the rule's YAML lived in a configured
+          ``rules.user_rules_dirs`` and was removed from it. ``False`` for a
+          built-in or pack rule: the retraction holds for this process, and the
+          next start reloads the rule unless the pack or built-in goes too.
+
+        Retraction was previously a lineage write only, so a rule the operator
+        had been told was retracted kept deciding every request until someone
+        restarted the broker.
+        """
+        if rule_name not in {rule["name"] for rule in self.rules_in_force()}:
+            return {"engine_updated": False, "persisted": False}
+        persisted = self._remove_persisted_rule(rule_name)
+        self._retracted.add(rule_name)
+        rebuilt = self._build_engine()
+        if rule_name in {key.rpartition("::")[2] for key in rebuilt.rule_registry}:
+            self._retracted.discard(rule_name)
+            raise PolicyEngineError(
+                f"cannot retract rule {rule_name!r}: it is still in force after a "
+                f"rebuild, so it comes from a loaded rule pack. Remove the pack "
+                f"from rules.packs instead."
+            )
+        self._engine = rebuilt
+        return {"engine_updated": True, "persisted": persisted}
+
+    def _remove_persisted_rule(self, rule_name: str) -> bool:
+        """Drop ``rule_name`` from the user rule files that carry it."""
+        changed = False
+        for user_dir in self._user_rules_dirs:
+            if not user_dir.is_dir():
+                continue
+            for source in sorted(user_dir.glob("*.yaml")):
+                raw: Any = yaml.safe_load(source.read_text(encoding="utf-8"))
+                if not isinstance(raw, dict):
+                    continue
+                document = cast("dict[str, Any]", raw)
+                if not isinstance(document.get("rules"), list):
+                    continue
+                kept: list[Any] = [
+                    rule
+                    for rule in cast("list[Any]", document["rules"])
+                    if not (
+                        isinstance(rule, dict)
+                        and cast("dict[str, Any]", rule).get("name") == rule_name
+                    )
+                ]
+                if len(kept) == len(cast("list[Any]", document["rules"])):
+                    continue
+                changed = True
+                if kept:
+                    document["rules"] = kept
+                    source.write_text(yaml.safe_dump(document, sort_keys=False), encoding="utf-8")
+                else:
+                    source.unlink()
+        return changed
 
     def close(self) -> None:
         """No-op for the Phase 1 in-process Engine (kept for Protocol parity)."""

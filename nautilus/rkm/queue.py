@@ -16,6 +16,8 @@ import dataclasses
 import fcntl
 import json
 import os
+import re
+import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -27,10 +29,38 @@ from nautilus.rkm.types import Proposal, ProposalStatus
 _LOCK_TIMEOUT_S = 5.0
 _LOCK_POLL_S = 0.1
 
+# ``fcntl.lockf`` locks belong to the *process*, so a second thread asking for
+# LOCK_EX on its own descriptor is granted it immediately and two writers
+# proceed together. lockf is what makes the queue single-writer across
+# processes; this is what makes it single-writer within one. Module-level so
+# two ProposalQueue objects over the same directory still serialise.
+_PROCESS_LOCK = threading.Lock()
+
+# A proposal id is interpolated straight into a filename, so a caller-supplied
+# one must not be able to leave the queue directory. ``/v1/rkm/proposals/{id}``
+# takes it from the URL path, so "../../etc/passwd" reached ``open()``.
+# Generated ids are ``prop_<32 hex>``; this admits that and nothing exotic.
+_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+class InvalidProposalIdError(ValueError):
+    """Raised when a proposal id could not be used as a filename."""
+
+
+def _safe_id(proposal_id: str) -> str:
+    """Return ``proposal_id`` if it is usable as a bare filename."""
+    if proposal_id in {".", ".."} or not _ID_RE.match(proposal_id):
+        raise InvalidProposalIdError(f"invalid proposal id: {proposal_id!r}")
+    return proposal_id
+
+
 # Valid state-machine transitions: (from_status) -> allowed to_statuses
 _VALID_TRANSITIONS: dict[str, set[str]] = {
     "pending": {"approved", "rejected", "expired"},
-    "approved": {"promoted", "expired"},
+    # ``rejected`` is reachable from ``approved`` so an operator can back out
+    # an approval whose promotion failed. Without it a failed promotion wedged
+    # the proposal in ``approved`` with no retry, no reject and no rollback.
+    "approved": {"promoted", "rejected", "expired"},
     "rejected": set(),
     "expired": set(),
     "promoted": set(),
@@ -83,29 +113,52 @@ class ProposalQueue:
     # ------------------------------------------------------------------
 
     def _acquire_lock(self) -> Any:
-        """Open .lock file and acquire exclusive lockf within timeout.
+        """Take the in-process lock, then the cross-process lockf.
 
         Returns the open file handle (caller must close/unlock it).
-        Raises :class:`ProposalQueueLocked` on timeout.
+        Raises :class:`ProposalQueueLocked` on timeout of either.
         """
-        fh = self._lock_path.open("a")
-        deadline = time.monotonic() + _LOCK_TIMEOUT_S
-        while True:
-            try:
-                fcntl.lockf(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                return fh
-            except (BlockingIOError, OSError) as exc:
-                if time.monotonic() >= deadline:
-                    fh.close()
-                    raise ProposalQueueLocked("lock contention timeout on proposal queue") from exc
-                time.sleep(_LOCK_POLL_S)
+        if not _PROCESS_LOCK.acquire(timeout=_LOCK_TIMEOUT_S):
+            raise ProposalQueueLocked("lock contention timeout on proposal queue")
+        try:
+            fh = self._lock_path.open("a")
+            deadline = time.monotonic() + _LOCK_TIMEOUT_S
+            while True:
+                try:
+                    fcntl.lockf(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    return fh
+                except (BlockingIOError, OSError) as exc:
+                    if time.monotonic() >= deadline:
+                        fh.close()
+                        raise ProposalQueueLocked(
+                            "lock contention timeout on proposal queue"
+                        ) from exc
+                    time.sleep(_LOCK_POLL_S)
+        except BaseException:
+            _PROCESS_LOCK.release()
+            raise
 
     def _release_lock(self, fh: Any) -> None:
-        fcntl.lockf(fh, fcntl.LOCK_UN)
-        fh.close()
+        try:
+            fcntl.lockf(fh, fcntl.LOCK_UN)
+            fh.close()
+        finally:
+            _PROCESS_LOCK.release()
 
     def _proposal_path(self, proposal_id: str) -> Path:
-        return self._queue_dir / f"{proposal_id}.jsonl"
+        """The file backing ``proposal_id``, proved to be inside the queue dir.
+
+        Two checks, not one. :func:`_safe_id` rejects the id on its own terms
+        and is what produces the readable error; the containment check below
+        is the one that holds even if that pattern is ever loosened, because
+        it asks the filesystem where the path actually landed rather than
+        trusting the string it was built from.
+        """
+        root = os.path.realpath(self._queue_dir)
+        candidate = os.path.realpath(os.path.join(root, f"{_safe_id(proposal_id)}.jsonl"))
+        if not candidate.startswith(root + os.sep):
+            raise InvalidProposalIdError(f"invalid proposal id: {proposal_id!r}")
+        return Path(candidate)
 
     def _read_proposal(self, proposal_id: str) -> Proposal | None:
         """Read and reconstruct the current state of a proposal from its JSONL file."""
@@ -156,8 +209,15 @@ class ProposalQueue:
             self._release_lock(lock_fh)
 
     def get(self, proposal_id: str) -> Proposal | None:
-        """Return latest snapshot for ``proposal_id`` or ``None`` if absent."""
-        return self._read_proposal(proposal_id)
+        """Return latest snapshot for ``proposal_id`` or ``None`` if absent.
+
+        An id that could not name a file is *absent*, not an error: the
+        caller asked for something the queue does not hold.
+        """
+        try:
+            return self._read_proposal(proposal_id)
+        except InvalidProposalIdError:
+            return None
 
     def list(
         self,
@@ -165,7 +225,12 @@ class ProposalQueue:
         status: ProposalStatus | None = None,
         min_confidence: float = 0.0,
     ) -> list[Proposal]:
-        """Enumerate proposals; AC-35.9.b filtering by ``--status`` / ``--min-confidence``."""
+        """Enumerate proposals; AC-35.9.b filtering by ``--status`` / ``--min-confidence``.
+
+        A proposal with no recorded confidence scores 0.0, so any non-zero
+        ``min_confidence`` excludes it — an unscored proposal has not cleared
+        the bar, it is just unmeasured.
+        """
         results: list[Proposal] = []
         for path in sorted(self._queue_dir.glob("*.jsonl")):
             proposal_id = path.stem
@@ -173,6 +238,8 @@ class ProposalQueue:
             if proposal is None:
                 continue
             if status is not None and proposal.status != status:
+                continue
+            if float(proposal.validation.get("confidence", 0.0)) < min_confidence:
                 continue
             results.append(proposal)
         return results
@@ -233,7 +300,7 @@ class ProposalQueue:
         if not pending:
             return 0.0
         now = datetime.now(UTC)
-        oldest = min((now - p.proposed_at).total_seconds() for p in pending)
+        oldest = max((now - p.proposed_at).total_seconds() for p in pending)
         return max(0.0, oldest)
 
 

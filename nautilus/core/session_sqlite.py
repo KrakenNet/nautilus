@@ -26,6 +26,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, cast
 
+# The shape of ``nautilus_session_state``. ``CREATE TABLE IF NOT EXISTS``
+# succeeds against any table of that name, so without a stamp a newer binary
+# adding a column is a silent no-op and an older one reads columns that moved.
+# Bump on any change to _DDL, and add the migration that reaches the new number.
+_SCHEMA_VERSION: int = 1
+
 _DDL: str = (
     "CREATE TABLE IF NOT EXISTS nautilus_session_state ("
     "session_id TEXT PRIMARY KEY, "
@@ -49,10 +55,14 @@ class SqliteSessionStore:
     Args:
         path: SQLite database file location. Parent directories are
             created on :meth:`setup`.
+        ttl_seconds: Idle lifetime of a session row. A row untouched for
+            longer reads as absent and is deleted on the next write. ``0``
+            (or negative) disables expiry.
     """
 
-    def __init__(self, path: str | Path) -> None:
+    def __init__(self, path: str | Path, ttl_seconds: int = 0) -> None:
         self._path = Path(path)
+        self._ttl_seconds = ttl_seconds
         self._conn: sqlite3.Connection | None = None
         self._lock = asyncio.Lock()
         self._closed: bool = False
@@ -97,9 +107,49 @@ class SqliteSessionStore:
         conn = sqlite3.connect(self._path, check_same_thread=False)
         # WAL keeps readers unblocked during the read-merge-write transactions.
         conn.execute("PRAGMA journal_mode=WAL")
+        # 0 is both "brand new" and "written before versions existed"; the DDL
+        # is IF NOT EXISTS, so stamping an existing v0 table is the upgrade.
+        found = int(conn.execute("PRAGMA user_version").fetchone()[0])
+        if found not in (0, _SCHEMA_VERSION):
+            conn.close()
+            from nautilus.core.session_pg import SessionSchemaError
+
+            raise SessionSchemaError(
+                f"session database {self._path} carries schema version {found}; "
+                f"this build understands version {_SCHEMA_VERSION}. It was "
+                f"written by a different Nautilus — point session_store."
+                f"sqlite_path at a fresh file, or run the matching build."
+            )
         conn.execute(_DDL)
+        conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION:d}")
         conn.commit()
         return conn
+
+    async def averify_schema(self) -> None:
+        """Re-read the stored schema version, and refuse a store that moved.
+
+        The check in :meth:`setup` covers a replica *starting*. Replicas roll
+        one at a time, so the window the version stamp exists for is the one
+        where an old build is still serving while a new one has already
+        migrated — and a boot-only check never looks again. ``/readyz`` calls
+        this so the old pod drains instead of read-modify-writing rows under a
+        schema it does not understand.
+        """
+        async with self._lock:
+            await asyncio.to_thread(self._verify_schema_sync)
+
+    def _verify_schema_sync(self) -> None:
+        from nautilus.core.session_pg import SessionSchemaError
+
+        conn = self._require_conn()
+        found = int(conn.execute("PRAGMA user_version").fetchone()[0])
+        if found != _SCHEMA_VERSION:
+            raise SessionSchemaError(
+                f"session database {self._path} now carries schema version "
+                f"{found}; this build understands version {_SCHEMA_VERSION}. "
+                f"Another Nautilus migrated the store while this one was "
+                f"running."
+            )
 
     def _require_conn(self) -> sqlite3.Connection:
         if self._conn is None:
@@ -122,12 +172,22 @@ class SqliteSessionStore:
     def _get_sync(self, session_id: str) -> dict[str, Any]:
         conn = self._require_conn()
         row = conn.execute(
-            "SELECT state FROM nautilus_session_state WHERE session_id = ?",
+            f"SELECT state FROM nautilus_session_state WHERE session_id = ?{self._ttl_clause()}",
             (session_id,),
         ).fetchone()
         if row is None:
             return {}
         return _decode_state(row[0])
+
+    def _ttl_clause(self) -> str:
+        """SQL fragment restricting a read to rows inside the TTL window.
+
+        ``updated_at`` is written by ``datetime('now')`` — a fixed-width UTC
+        string — so a lexicographic comparison is a chronological one.
+        """
+        if self._ttl_seconds <= 0:
+            return ""
+        return f" AND updated_at > datetime('now', '-{int(self._ttl_seconds)} seconds')"
 
     async def aupdate(self, session_id: str, entry: dict[str, Any]) -> None:
         """Merge ``entry`` into the session row (read-merge-write upsert)."""
@@ -140,6 +200,13 @@ class SqliteSessionStore:
         # "later wins" Phase-1 merge semantics match InMemorySessionStore and
         # PostgresSessionStore.aupdate.
         with conn:
+            if self._ttl_seconds > 0:
+                # Drop every expired row, not just this session's: without it
+                # a store whose sessions are never revisited grows forever.
+                conn.execute(
+                    "DELETE FROM nautilus_session_state WHERE updated_at <= "
+                    f"datetime('now', '-{int(self._ttl_seconds)} seconds')"
+                )
             row = conn.execute(
                 "SELECT state FROM nautilus_session_state WHERE session_id = ?",
                 (session_id,),

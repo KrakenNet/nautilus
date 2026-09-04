@@ -2,22 +2,45 @@
 
 import glob
 import os
-import re
-from typing import Any, cast
+from typing import Any, NotRequired, TypedDict, cast
 
 import pytest
 import yaml
 
 ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
-NIST_DIR = os.path.join(ROOT, "rule-packs", "data-routing-nist")
-HIPAA_DIR = os.path.join(ROOT, "rule-packs", "data-routing-hipaa")
+NIST_DIR = os.path.join(ROOT, "nautilus", "rule_packs", "data_routing_nist")
+HIPAA_DIR = os.path.join(ROOT, "nautilus", "rule_packs", "data_routing_hipaa")
 
-# Expected salience bands by action type
+# Entry-point names from the ``fathom.packs`` group in pyproject.toml. Packs are
+# loaded by name, not by path; the *_DIR constants above are only for the
+# static YAML checks.
+NIST_PACK = "data-routing-nist"
+HIPAA_PACK = "data-routing-hipaa"
+
+# Named explicitly rather than re-derived from the pack YAML: a test that reads
+# the same files it is checking cannot detect a pack that fails to load.
+PACK_RULE_NAMES = {
+    NIST_PACK: {
+        "ac-6-least-privilege",
+        "ac-6-unscopable-source",
+        "ac-16-unbound-security-attributes",
+    },
+    HIPAA_PACK: {
+        "minimum-necessary-phi-scope",
+        "minimum-necessary-unscopable-phi",
+        "deny-phi-outside-tpo",
+    },
+}
+
+# Expected salience band per asserted fact template. Keyed on what a rule
+# ASSERTS, not on ``then.action``: every shipped scope rule declares
+# ``action: route``, so an action-keyed lookup finds no band and checks
+# nothing. The ordering these bands encode is load-bearing — denial must
+# outrank scoping, or a source that is about to be denied gets scoped first.
 SALIENCE_BANDS = {
-    "deny": (170, 190),
+    "denial_record": (170, 190),
     "scope_constraint": (130, 150),
-    "constrain": (130, 150),
-    "escalate": (110, 120),
+    "escalation_request": (110, 120),
 }
 
 
@@ -25,29 +48,6 @@ def _discover_yaml(base_dir: str) -> list[str]:
     """Return all .yaml files under *base_dir* using glob.glob."""
     pattern = os.path.join(base_dir, "**", "*.yaml")
     return sorted(glob.glob(pattern, recursive=True))
-
-
-def _collect_salience_values(data: dict[str, Any]) -> list[int]:
-    """Extract all salience integer values from a parsed YAML document."""
-    values: list[int] = []
-    sal = data.get("salience")
-    if isinstance(sal, int):
-        values.append(sal)
-    rules: list[Any] = data.get("rules", [])
-    for rule_obj in rules:
-        if isinstance(rule_obj, dict):
-            rule_sal = cast(dict[str, Any], rule_obj).get("salience")
-            if isinstance(rule_sal, int):
-                values.append(rule_sal)
-    return values
-
-
-def _parse_salience_band(band_str: str) -> tuple[int, int] | None:
-    """Parse a salience_band string like '170-190' into (lo, hi)."""
-    m = re.match(r"(\d+)\s*-\s*(\d+)", str(band_str))
-    if m:
-        return int(m.group(1)), int(m.group(2))
-    return None
 
 
 # ---------------------------------------------------------------------------
@@ -116,61 +116,268 @@ class TestComplianceDisclaimer:
 # ---------------------------------------------------------------------------
 
 
-def _rule_files_with_salience() -> list[tuple[str, str]]:
-    """Collect (path, pack_name) for rule files that contain salience values."""
-    result: list[tuple[str, str]] = []
-    for pack_dir, pack_name in [(NIST_DIR, "NIST"), (HIPAA_DIR, "HIPAA")]:
+def _pack_rules() -> list[tuple[str, dict[str, Any]]]:
+    """Every rule in every pack, as ``(basename, rule)``.
+
+    Discovery is over RULES, not over files that happen to carry a
+    ``salience:`` line: keying the parametrisation on the value under test
+    means deleting that line deletes its own guard.
+    """
+    result: list[tuple[str, dict[str, Any]]] = []
+    for pack_dir, _pack_name in [(NIST_DIR, "NIST"), (HIPAA_DIR, "HIPAA")]:
         rules_dir = os.path.join(pack_dir, "rules")
         for path in _discover_yaml(rules_dir):
             with open(path) as f:
-                data = yaml.safe_load(f)
-            if data and _collect_salience_values(data):
-                result.append((path, pack_name))
+                data = cast("dict[str, Any] | None", yaml.safe_load(f))
+            for rule in cast("list[dict[str, Any]]", (data or {}).get("rules", [])):
+                result.append((os.path.basename(path), rule))
     return result
 
 
 class TestSalienceBands:
-    """Salience values fall within expected bands based on action type."""
+    """Salience values fall within the band for what the rule asserts."""
 
-    _rule_files = _rule_files_with_salience()
+    _rules = _pack_rules()
+
+    def test_the_packs_actually_ship_rules(self) -> None:
+        # Guards the parametrisation below: an empty discovery would make
+        # every case vanish silently.
+        assert len(self._rules) == 6
 
     @pytest.mark.parametrize(
-        "path,pack_name",
-        _rule_files,
-        ids=[os.path.basename(p) for p, _ in _rule_files],
+        "basename,rule",
+        _rules,
+        ids=[f"{name}:{rule.get('name')}" for name, rule in _rules],
     )
-    def test_salience_within_band(self, path: str, pack_name: str) -> None:
-        with open(path) as f:
-            data = yaml.safe_load(f)
+    def test_salience_within_band(self, basename: str, rule: dict[str, Any]) -> None:
+        salience = rule.get("salience")
+        assert isinstance(salience, int), (
+            f"rule {rule.get('name')!r} in {basename} declares no salience; "
+            "it would run at the CLIPS default and interleave arbitrarily"
+        )
 
-        salience_values = _collect_salience_values(data)
-        assert salience_values, f"No salience values found in {path}"
+        then = cast("dict[str, Any]", rule.get("then") or {})
+        asserted = [
+            entry.get("template") for entry in cast("list[dict[str, Any]]", then.get("assert", []))
+        ]
+        bands = {SALIENCE_BANDS[t] for t in asserted if t in SALIENCE_BANDS}
+        assert bands, (
+            f"rule {rule.get('name')!r} in {basename} asserts {asserted}, none of which "
+            f"has a documented salience band ({sorted(SALIENCE_BANDS)}) — extend "
+            "SALIENCE_BANDS deliberately rather than leaving the rule unchecked"
+        )
+        assert len(bands) == 1, (
+            f"rule {rule.get('name')!r} in {basename} asserts templates from "
+            f"different salience bands: {asserted}"
+        )
 
-        # Determine expected band from salience_band field, action field,
-        # or infer from the known non-overlapping salience ranges.
-        band = None
-        band_str = data.get("salience_band")
-        if band_str:
-            band = _parse_salience_band(band_str)
+        lo, hi = bands.pop()
+        assert lo <= salience <= hi, (
+            f"salience {salience} outside band {lo}-{hi} for {asserted} "
+            f"in {basename} (rule {rule.get('name')!r})"
+        )
 
-        if band is None:
-            action = data.get("action", "")
-            band = SALIENCE_BANDS.get(action)
 
-        if band is not None:
-            lo, hi = band
-            for val in salience_values:
-                assert lo <= val <= hi, (
-                    f"Salience {val} outside expected band {lo}-{hi} in {os.path.basename(path)}"
-                )
-        else:
-            # No explicit band or action — verify each value falls in a
-            # known band (deny 170-190, scope_constraint 130-150,
-            # escalate 110-120).
-            all_bands = [(170, 190), (130, 150), (110, 120)]
-            for val in salience_values:
-                in_band = any(lo <= val <= hi for lo, hi in all_bands)
-                assert in_band, (
-                    f"Salience {val} in {os.path.basename(path)} does not "
-                    f"fall within any known band: {all_bands}"
-                )
+# ---------------------------------------------------------------------------
+# Engine loading — the packs must actually load and fire
+# ---------------------------------------------------------------------------
+#
+# Everything above validates YAML *shape* with yaml.safe_load and never
+# constructs an Engine, so it stayed green while both shipped packs were
+# unloadable. These tests build a real engine.
+
+
+# Per-rule triggering requests. Each entry is the minimal request that should
+# put its rule in the trace; see the pack READMEs for the control each maps to.
+class Trigger(TypedDict):
+    """One request scenario, shaped to :func:`_route`'s parameters."""
+
+    clearance: str
+    purpose: str
+    classification: str
+    data_types: list[str]
+    allowed_purposes: list[str]
+    purpose_field: NotRequired[str]
+
+
+TRIGGERS: dict[str, Trigger] = {
+    # confidential-or-above source -> purpose scope constraint
+    "ac-6-least-privilege": {
+        "clearance": "secret",
+        "purpose": "analytics",
+        "classification": "confidential",
+        "data_types": ["pii"],
+        "allowed_purposes": ["analytics"],
+        # The column the scope constraint is written against. A pack cannot
+        # know the operator's schema, so a source that declares none is denied
+        # by ``ac-6-unscopable-source`` instead of being scoped.
+        "purpose_field": "purpose",
+    },
+    # confidential source that declares no purpose_field -> denial, not scoping
+    "ac-6-unscopable-source": {
+        "clearance": "secret",
+        "purpose": "analytics",
+        "classification": "confidential",
+        "data_types": ["pii"],
+        "allowed_purposes": ["analytics"],
+    },
+    # source with no classification label at all
+    "ac-16-unbound-security-attributes": {
+        "clearance": "secret",
+        "purpose": "analytics",
+        "classification": "",
+        "data_types": ["pii"],
+        "allowed_purposes": ["analytics"],
+    },
+    # PHI source -> minimum-necessary scope constraint
+    "minimum-necessary-phi-scope": {
+        "clearance": "secret",
+        "purpose": "treatment",
+        "classification": "confidential",
+        "data_types": ["phi"],
+        "allowed_purposes": ["treatment"],
+        "purpose_field": "purpose",
+    },
+    # PHI source that declares no purpose_field -> denial, not scoping
+    "minimum-necessary-unscopable-phi": {
+        "clearance": "secret",
+        "purpose": "treatment",
+        "classification": "confidential",
+        "data_types": ["phi"],
+        "allowed_purposes": ["treatment"],
+    },
+    # PHI requested for a purpose outside treatment/payment/operations
+    "deny-phi-outside-tpo": {
+        "clearance": "secret",
+        "purpose": "analytics",
+        "classification": "confidential",
+        "data_types": ["phi"],
+        "allowed_purposes": ["analytics"],
+    },
+}
+
+
+def _route(
+    router: Any,
+    clearance: str,
+    purpose: str,
+    classification: str,
+    data_types: list[str],
+    allowed_purposes: list[str],
+    purpose_field: str = "",
+) -> Any:
+    """Route a single-source request built from a TRIGGERS entry."""
+    from nautilus.config.models import SourceConfig
+    from nautilus.core.models import IntentAnalysis
+
+    return router.route(
+        agent_id="agent-1",
+        context={"clearance": clearance, "purpose": purpose},
+        intent=IntentAnalysis(raw_intent="r", data_types_needed=data_types, entities=[]),
+        sources=[
+            SourceConfig(
+                id="src",
+                type="rest",
+                description="d",
+                classification=classification,
+                data_types=data_types,
+                allowed_purposes=allowed_purposes,
+                purpose_field=purpose_field,
+                connection="memory://",
+            )
+        ],
+        session={"session_id": "s1"},
+    )
+
+
+class TestPacksLoadIntoEngine:
+    """Each shipped rule pack loads into a real Fathom engine and fires."""
+
+    @pytest.mark.parametrize(
+        "pack_name",
+        [NIST_PACK, HIPAA_PACK],
+    )
+    def test_pack_loads(self, pack_name: str) -> None:
+        """The declared entry point resolves and the pack compiles into CLIPS."""
+        from nautilus.core.fathom_router import FathomRouter
+        from nautilus.rules import BUILT_IN_RULES_DIR
+
+        router = FathomRouter(
+            built_in_rules_dir=BUILT_IN_RULES_DIR,
+            user_rules_dirs=[],
+            rule_packs=[pack_name],
+        )
+        loaded = {r.split("::")[-1] for r in router.engine.rule_registry}
+        assert PACK_RULE_NAMES[pack_name] <= loaded, (
+            f"{pack_name} rules missing from engine: {PACK_RULE_NAMES[pack_name] - loaded}"
+        )
+
+    @pytest.mark.parametrize(
+        "pack_name,rule_name",
+        [(pack, rule) for pack, rules in PACK_RULE_NAMES.items() for rule in sorted(rules)],
+    )
+    def test_pack_rule_fires(self, pack_name: str, rule_name: str) -> None:
+        """Every declared pack rule fires on the scenario it exists to catch.
+
+        Asserting that *some* rule fires is not enough: a rule that can never
+        fire is indistinguishable from no rule, and one live sibling would hide
+        it. Each rule gets its own triggering request.
+        """
+        from nautilus.core.fathom_router import FathomRouter
+        from nautilus.rules import BUILT_IN_RULES_DIR
+
+        router = FathomRouter(
+            built_in_rules_dir=BUILT_IN_RULES_DIR,
+            user_rules_dirs=[],
+            rule_packs=[pack_name],
+        )
+        result = _route(router, **TRIGGERS[rule_name])
+        fired = {t.split("::")[-1] for t in result.rule_trace}
+        assert rule_name in fired, (
+            f"{rule_name} never fired on its own trigger; rule_trace={result.rule_trace}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# nautilus.yaml wiring
+# ---------------------------------------------------------------------------
+#
+# docs/reference/rule-packs.md told users to load packs with a ``rules.packs``
+# key in nautilus.yaml. That key did not exist on RulesConfig and nothing read
+# it, so the documented configuration parsed and then silently did nothing.
+
+
+class TestRulePacksConfigWiring:
+    """``rules.packs`` in nautilus.yaml reaches the engine."""
+
+    def test_packs_key_parses(self) -> None:
+        from nautilus.config.models import RulesConfig
+
+        assert RulesConfig().packs == []
+        assert RulesConfig(packs=[NIST_PACK]).packs == [NIST_PACK]
+
+    def test_configured_pack_loads_into_broker_engine(
+        self, tmp_path: Any, monkeypatch: Any
+    ) -> None:
+        from nautilus import Broker
+
+        monkeypatch.setenv("TEST_PG_DSN", "postgres://ignored/0")
+        monkeypatch.setenv("TEST_PGV_DSN", "postgres://ignored/1")
+
+        fixture = os.path.join(ROOT, "tests", "fixtures", "nautilus.yaml")
+        with open(fixture) as f:
+            config = yaml.safe_load(f)
+        config["rules"]["packs"] = [NIST_PACK]
+        config["audit"]["path"] = str(tmp_path / "audit.jsonl")
+        cfg_path = tmp_path / "nautilus.yaml"
+        cfg_path.write_text(yaml.safe_dump(config))
+
+        broker = Broker.from_config(cfg_path)
+        try:
+            registry = broker._router.engine.rule_registry  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+            loaded = {r.split("::")[-1] for r in registry}
+        finally:
+            broker.close()
+        assert PACK_RULE_NAMES[NIST_PACK] <= loaded, (
+            f"rules.packs did not reach the engine; missing {PACK_RULE_NAMES[NIST_PACK] - loaded}"
+        )

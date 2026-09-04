@@ -40,3 +40,8 @@ attestation:
 api:
   keys:
     - my-secret-key
+
+# The browser admin console is off unless a config asks for it. This example's
+# README points you at http://localhost:8000/admin/sources, so it asks.
+ui:
+  enabled: true

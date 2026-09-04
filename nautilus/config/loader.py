@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import yaml
+from pydantic import ValidationError
 
 from nautilus.config.models import NautilusConfig
 
@@ -28,7 +29,29 @@ _SUPPORTED_TYPES = {
     "influxdb",
     "s3",
     "llm",
+    "static",
 }
+
+
+def _redacted_errors(exc: ValidationError) -> str:
+    """Render a pydantic ``ValidationError`` without the values it rejected.
+
+    ``str(ValidationError)`` prints ``input_value=`` for every error. Config
+    values are post-interpolation by then, so a mistyped ``auth:`` block or a
+    structured ``api.keys`` entry puts the resolved password or API key into
+    stderr — and into whatever collects the container's startup logs, for a
+    failure the operator is about to paste into a ticket. The location and the
+    message are what diagnoses the error; the value is what leaks.
+
+    Discriminator tags are the exception: ``union_tag_invalid`` names the
+    offending tag in its message, which is the whole diagnosis and is never a
+    secret.
+    """
+    lines: list[str] = []
+    for error in exc.errors():
+        location = ".".join(str(part) for part in error["loc"]) or "(root)"
+        lines.append(f"  {location}: {error['msg']} [type={error['type']}]")
+    return "\n".join(lines)
 
 
 class ConfigError(Exception):
@@ -135,6 +158,13 @@ def load_config(path: str | Path) -> NautilusConfig:
         seen_ids.add(source_id)
 
         source_type = entry_dict.get("type")
+        if source_type is None:
+            # Reporting ``type='None'`` sent readers looking for a source type
+            # they had spelled wrong; the key is simply absent.
+            raise ConfigError(
+                f"Source id='{source_id}' is missing the required key 'type' "
+                f"(one of: {sorted(supported_types)})"
+            )
         if source_type not in supported_types:
             raise ConfigError(
                 f"Unsupported source type='{source_type}' for id='{source_id}' "
@@ -143,6 +173,8 @@ def load_config(path: str | Path) -> NautilusConfig:
 
     try:
         return NautilusConfig.model_validate(interpolated_dict)
+    except ValidationError as exc:
+        raise ConfigError(f"Config validation failed:\n{_redacted_errors(exc)}") from exc
     except Exception as exc:
         raise ConfigError(f"Config validation failed: {exc}") from exc
 

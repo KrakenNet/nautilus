@@ -5,7 +5,12 @@ Nautilus is a policy-first data broker for AI agents. A single
 enforces CLIPS-backed scope rules, executes adapters concurrently, and emits
 a signed attestation plus a complete audit entry.
 
-Current release: `nautilus-rkm` 0.1.0 (requires Python 3.14+).
+Requires Python 3.13+. For the current release of `nautilus-rkm` see
+[PyPI](https://pypi.org/project/nautilus-rkm/) — no page here repeats the number,
+because a second copy is one nothing updates. To find out what a *running*
+instance is, ask it: `nautilus version`, or
+[`GET /healthz`](reference/rest-api.md#get-healthz), which reports the build
+with no credential.
 
 ## Start here
 

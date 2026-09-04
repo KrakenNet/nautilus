@@ -1,6 +1,6 @@
 [project]
 name = "nautilus-rkm"
-version = "0.2.5"
+version = "0.2.6.dev0"
 description = "Policy-first data broker for AI agents — one call plans, routes, enforces, attests, and audits every data access. Built on Fathom."
 readme = "README.md"
 requires-python = ">=3.13"
@@ -23,24 +23,31 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
+# The broker, its transports and the adapters that need no driver (rest,
+# servicenow, llm, static). Database and object-store drivers are extras: six
+# of them accounted for roughly 60 MB of a 133 MB install, and a deployment
+# brokering one REST source imported none of them.
 dependencies = [
-    "fathom-rules>=0.3.4",
-    "asyncpg>=0.30.0",
-    "pgvector>=0.3.0",
+    "fathom-rules>=0.11.0",
     "pyyaml>=6.0",
     "pyjwt>=2.12.1",
-    "cryptography>=46.0.7",
+    # GHSA-g6cj-pr64-35w5 (CVE-2026-69247): PKCS#7 EnvelopedData decryption
+    # leaked a Bleichenbacher oracle through distinguishable errors below 50.
+    "cryptography>=50.0.0",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
     "httpx>=0.27",
-    "elasticsearch>=8,<10",
-    "neo4j>=5",
-    "mcp>=1.12",
+    # Capped below 2: mcp 2.x moved ``mcp.server.fastmcp`` to
+    # ``mcp.server.mcpserver`` and renamed FastMCP to MCPServer, whose
+    # __init__ takes neither ``stateless_http`` nor ``json_response`` and no
+    # **kwargs, and whose Context is generic over two parameters, not three.
+    # That is a port of nautilus/transport/mcp_server.py, not an import alias;
+    # until it is done an uncapped range ships an MCP transport that dies on
+    # import for anyone installing today.
+    "mcp>=1.12,<2",
     "sse-starlette>=2.0",
     "python-multipart>=0.0.9",
     "jinja2>=3.1",
-    "influxdb-client>=1.40",
-    "aiobotocore>=2.12",
 ]
 
 [project.urls]
@@ -54,7 +61,29 @@ Issues = "https://github.com/KrakenNet/nautilus/issues"
 nautilus = "nautilus.cli:main"
 
 [project.optional-dependencies]
+# One extra per adapter that needs a driver. ``nautilus serve`` names the extra
+# in its error when a configured source's driver is missing.
+postgres = ["asyncpg>=0.30.0"]
+pgvector = ["asyncpg>=0.30.0", "pgvector>=0.3.0"]
+elasticsearch = ["elasticsearch>=8,<10"]
+neo4j = ["neo4j>=5"]
+influxdb = ["influxdb-client>=1.40"]
+s3 = ["aiobotocore>=2.12"]
+all = [
+    "asyncpg>=0.30.0",
+    "pgvector>=0.3.0",
+    "elasticsearch>=8,<10",
+    "neo4j>=5",
+    "influxdb-client>=1.40",
+    "aiobotocore>=2.12",
+]
 dev = [
+    "asyncpg>=0.30.0",
+    "pgvector>=0.3.0",
+    "elasticsearch>=8,<10",
+    "neo4j>=5",
+    "influxdb-client>=1.40",
+    "aiobotocore>=2.12",
     "nautilus-adapter-sdk",
     "pytest>=8.0",
     "pytest-asyncio>=0.23",
@@ -66,23 +95,41 @@ dev = [
     "respx>=0.21",
     "pytest-recording>=0.13",
     "testcontainers[elasticsearch,neo4j]>=4.0",
+    # Type stubs for the two untyped drivers the live-backend tests dial.
+    # Without them pyright cannot see through asyncpg or aiobotocore and
+    # reports every attribute on a connection as unknown.
+    "asyncpg-stubs>=0.30",
+    "types-aiobotocore[s3]>=2.15",
     "locust>=2.0",
     "mkdocs>=1.6",
-    "mkdocs-material>=9.0",
+    # GHSA-xvg9-69gf-fjrf (CVE-2026-73295): DOM XSS in search suggestions.
+    "mkdocs-material>=9.7.7",
     "mkdocstrings[python]>=0.24",
-    "copier>=9.0",
+    # GHSA-9gmc-jqmh-3rvm (CVE-2026-53951): trust-prefix bypass via path
+    # traversal ran tasks unprompted.
+    "copier>=9.15.2",
+    # GHSA-gm37-52c6-37mw (CVE-2026-67422): ReDoS in the caret, tilde,
+    # betterem and magiclink inline processors. Reached through
+    # mkdocs-material, which does not floor it high enough; pinned here so
+    # the resolver cannot pick a vulnerable one.
+    "pymdown-extensions>=11.0.1",
 ]
 otel = [
     "opentelemetry-sdk>=1.20",
     "opentelemetry-api>=1.20",
     "opentelemetry-instrumentation-fastapi>=0.41b0",
     "opentelemetry-exporter-otlp-proto-http>=1.20",
+    "opentelemetry-exporter-prometheus>=0.50b0",
     "prometheus-client>=0.20",
 ]
 llm-anthropic = ["anthropic>=0.40"]
 llm-openai = ["openai>=1.50"]
 docs = [
-    "mkdocs-material>=9.5",
+    # GHSA-xvg9-69gf-fjrf (CVE-2026-73295): DOM XSS in search suggestions.
+    "mkdocs-material>=9.7.7",
+    # GHSA-gm37-52c6-37mw (CVE-2026-67422): ReDoS, reached through
+    # mkdocs-material, which does not floor it high enough.
+    "pymdown-extensions>=11.0.1",
     "mkdocstrings[python]>=0.24",
     "mike>=2.1",
 ]
@@ -112,6 +159,7 @@ exclude = ["tests*", "specs*", "docs*"]
 [tool.setuptools.package-data]
 "nautilus.analysis.llm.prompts" = ["*.txt"]
 "nautilus.rules" = ["**/*.yaml"]
+"nautilus.rule_packs" = ["**/*.yaml", "**/*.md"]
 "nautilus.ui" = ["templates/**/*", "static/*"]
 "nautilus" = ["templates/adapter/**/*"]
 
@@ -131,8 +179,13 @@ venv = ".venv"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests"]
+# The shipped example's compliance suite runs with the repo suite: it is a
+# documented onboarding path ("cd examples/custom-adapter && pytest"), and
+# while it sat outside testpaths every one of its cases errored unnoticed.
+testpaths = ["tests", "examples/custom-adapter"]
 markers = [
+    "defect: pins a confirmed 1.0 defect; expected to fail until its fix lands",
+    "journey: end-to-end test against a real backend",
     "unit: unit tests",
     "integration: integration tests",
     "slow: slow tests (e.g. latency harness with 1000 requests)",

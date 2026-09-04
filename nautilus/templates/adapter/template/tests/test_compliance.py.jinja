@@ -6,8 +6,8 @@ Run: pytest -v
 from __future__ import annotations
 
 import pytest
-from nautilus_adapter_sdk.config import SourceConfig
-from nautilus_adapter_sdk.testing.compliance import AdapterComplianceSuite
+from nautilus.adapters.testing import AdapterComplianceSuite
+from nautilus.config.models import SourceConfig
 
 from {{ package_name }} import {{ class_name }}
 
@@ -46,4 +46,4 @@ class Test{{ class_name }}Compliance:
         await self.suite.test_idempotent_close()
 
     async def test_error_path(self) -> None:
-        await self.suite.test_error_path_returns_error_record()
+        await self.suite.test_error_path_reports_the_failure()

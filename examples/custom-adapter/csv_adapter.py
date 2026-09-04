@@ -16,9 +16,9 @@ import time
 from pathlib import Path
 from typing import Any, ClassVar
 
-from nautilus_adapter_sdk.config import SourceConfig
-from nautilus_adapter_sdk.exceptions import AdapterError, ScopeEnforcementError
-from nautilus_adapter_sdk.types import AdapterResult, IntentAnalysis, ScopeConstraint
+from nautilus.adapters.base import AdapterError, ScopeEnforcementError
+from nautilus.config.models import SourceConfig
+from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
 # Operators supported by this adapter.
 _VALID_OPERATORS = {"=", "!=", "IN", "NOT IN", "LIKE", "IS NULL"}
@@ -37,6 +37,7 @@ class CsvAdapter:
     source_type: ClassVar[str] = "csv"
 
     def __init__(self) -> None:
+        self._id: str = "csv"
         self._path: Path | None = None
         self._headers: list[str] = []
         self._rows: list[dict[str, str]] = []
@@ -49,6 +50,7 @@ class CsvAdapter:
         ``config.table`` is unused for CSV but could specify a sheet name
         in a future multi-sheet extension.
         """
+        self._id = config.id
         path = Path(str(config.connection))
 
         def _load() -> tuple[list[str], list[dict[str, str]]]:
@@ -103,15 +105,10 @@ class CsvAdapter:
         duration_ms = int((time.perf_counter() - started) * 1000)
 
         return AdapterResult(
-            source_id=constraint.source_id if scope else "csv",
-            data=rows,
-            metadata={
-                "row_count": len(rows),
-                "total_rows": len(self._rows),
-                "headers": self._headers,
-                "file": str(self._path),
-                "duration_ms": duration_ms,
-            },
+            source_id=self._id,
+            rows=rows,
+            duration_ms=duration_ms,
+            error=None,
         )
 
     async def close(self) -> None:

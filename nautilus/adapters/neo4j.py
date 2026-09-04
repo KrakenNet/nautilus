@@ -31,11 +31,13 @@ import time
 from datetime import UTC, datetime
 from typing import Any, ClassVar, cast
 
-from neo4j import AsyncGraphDatabase, RoutingControl
+from neo4j import READ_ACCESS, AsyncGraphDatabase, RoutingControl
 
 from nautilus.adapters.base import (
     AdapterError,
     ScopeEnforcementError,
+    mtls_context,
+    wrap_execute,
 )
 from nautilus.adapters.schema import AdapterSchema, AdapterTable
 from nautilus.config.models import BasicAuth, BearerAuth, MtlsAuth, SourceConfig
@@ -177,7 +179,7 @@ class Neo4jAdapter:
         self._like_style = config.like_style
         if self._like_style == "regex":
             log.warning(
-                "CONFIG WARN: Neo4j source '%s' uses like_style='regex'; "
+                "CONFIG WARN: Neo4j source %r uses like_style='regex'; "
                 "regex evaluation is unbounded and may enable ReDoS. Prefer "
                 "'starts_with' unless explicitly required (AC-10.3).",
                 config.id,
@@ -187,6 +189,7 @@ class Neo4jAdapter:
             return
 
         auth: tuple[str, str] | None = None
+        driver_kwargs: dict[str, Any] = {}
         a = config.auth
         if isinstance(a, BasicAuth):
             auth = (a.username, a.password)
@@ -195,9 +198,11 @@ class Neo4jAdapter:
             # arbitrary 2-tuples and the Phase-2 fixtures use BasicAuth here.
             auth = ("bearer", a.token)
         elif isinstance(a, MtlsAuth):
-            # mTLS at the transport layer is configured via the URI scheme
-            # (``neo4j+s://``) and certificate trust store; no auth tuple.
+            # No auth tuple: the certificate is the credential. It has to reach
+            # the driver, though — this branch used to discard the whole block
+            # and connect with the ambient trust store.
             auth = None
+            driver_kwargs["ssl_context"] = mtls_context(a, config.id)
 
         try:
             # ``AsyncGraphDatabase.driver`` is partially typed in the neo4j
@@ -205,7 +210,7 @@ class Neo4jAdapter:
             # ``**config: Any``). Pin to ``Any`` for the broker-side handle
             # which mirrors the ``ElasticsearchAdapter._client`` pattern.
             self._driver = AsyncGraphDatabase.driver(  # pyright: ignore[reportUnknownMemberType]
-                config.connection, auth=auth
+                config.connection, auth=auth, **driver_kwargs
             )
         except AdapterError:
             raise
@@ -305,6 +310,7 @@ class Neo4jAdapter:
     # identifier-quoting (label/property regex-validated then backticked) — no
     # user-supplied value reaches the Cypher template (NFR-4). Tag the def line
     # so the guard treats it as a known-safe co-occurrence.
+    @wrap_execute
     async def execute(  # sqlgrep: ignore
         self,
         intent: IntentAnalysis,
@@ -346,30 +352,46 @@ class Neo4jAdapter:
             source_id=self._config.id,
             rows=rows,
             duration_ms=duration_ms,
+            truncated=len(rows) >= _DEFAULT_LIMIT,
         )
 
     async def get_schema(self) -> AdapterSchema:
-        """Return schema via db.labels / db.relationshipTypes. AC-21, OQ3."""
+        """Return schema via db.labels / db.relationshipTypes. AC-21, OQ3.
+
+        Raises on a backend outage rather than returning
+        :meth:`AdapterSchema.unknown`. Swallowing the error made an outage
+        indistinguishable from major schema drift: the broker quarantined the
+        source and wrote ``schema_drift_detected`` describing an event that did
+        not occur, and ``schema-ack`` -- the prescribed remediation -- baselined
+        the ``unknown()`` fingerprint, re-quarantining the source when the
+        backend *recovered*. ``Broker._check_adapter_schema`` already handles a
+        raising ``get_schema`` by skipping the fingerprint check.
+        """
         if self._driver is None or self._config is None:
             return AdapterSchema.unknown(
                 self._config.id if self._config else "neo4j",
                 self.source_type,
             )
         try:
-            labels_result: Any = await self._driver.execute_query(
-                cast(Any, "CALL db.labels()"),
-                routing_=RoutingControl.READ,
-            )
-            rel_result: Any = await self._driver.execute_query(
-                cast(Any, "CALL db.relationshipTypes()"),
-                routing_=RoutingControl.READ,
-            )
+            # A plain session rather than ``execute_query``: the latter retries
+            # transient failures for ``max_transaction_retry_time`` (30s by
+            # default), so an unreachable backend blocked the startup
+            # fingerprint check -- and the request, session write and audit
+            # entry behind it -- for half a minute before failing. Retrying a
+            # schema probe buys nothing; the caller skips the check on error.
+            async with self._driver.session(default_access_mode=READ_ACCESS) as session:
+                labels_records: list[Any] = await (
+                    await session.run(cast(Any, "CALL db.labels()"))
+                ).data()
+                rel_records: list[Any] = await (
+                    await session.run(cast(Any, "CALL db.relationshipTypes()"))
+                ).data()
 
             # Each label becomes a "table"; we can't enumerate properties without
             # running MATCH queries, so we return label names only.
             tables: list[AdapterTable] = []
-            for record in cast(list[Any], labels_result.records):
-                label_name: str = record[0]
+            for record in labels_records:
+                label_name: str = next(iter(record.values()))
                 tables.append(
                     AdapterTable(
                         name=label_name,
@@ -379,8 +401,8 @@ class Neo4jAdapter:
 
             # Relationship types are exposed as capability flags.
             rel_types: list[str] = []
-            for record in cast(list[Any], rel_result.records):
-                rel_types.append(str(record[0]))
+            for record in rel_records:
+                rel_types.append(str(next(iter(record.values()))))
 
             return AdapterSchema(
                 adapter_id=self._config.id,
@@ -391,8 +413,12 @@ class Neo4jAdapter:
                 },
                 fetched_at=datetime.now(UTC),
             )
-        except Exception:  # noqa: BLE001
-            return AdapterSchema.unknown(self._config.id, self.source_type)
+        except AdapterError:
+            raise
+        except Exception as exc:
+            raise AdapterError(
+                f"neo4j: get_schema failed for source '{self._config.id}': {exc}"
+            ) from exc
 
 
 __all__ = ["Neo4jAdapter"]

@@ -52,8 +52,8 @@ class ConfidenceBreakdown:
     """Per-term confidence breakdown (AC-35.8.a).
 
     Sum: ``total = base + regression_penalty + relaxation_penalty +
-    shadow_penalty + fire_rate_penalty + cascade_penalty``. Penalties are
-    *negative* numbers (subtractions).
+    shadow_penalty + fire_rate_penalty + cascade_penalty + drift_penalty``.
+    Penalties are *negative* numbers (subtractions).
     """
 
     base: float
@@ -63,6 +63,10 @@ class ConfidenceBreakdown:
     fire_rate_penalty: float
     cascade_penalty: float
     total: float
+    # Most of the corpus could not be replayed because the baseline no longer
+    # reproduces what the entries recorded. A score computed from the minority
+    # that still replays is not a score of the proposal.
+    drift_penalty: float = 0.0
 
 
 __all__ = [

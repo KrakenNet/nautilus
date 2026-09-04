@@ -80,6 +80,57 @@ For anything non-trivial, comment on the issue to say you're picking it up befor
 - All CI checks must pass before merge.
 - Maintainers may request changes — this is collaborative, not adversarial.
 
+## Releases and Version Numbers
+
+There is exactly one version string: `[project] version` in `pyproject.toml`.
+[release-please](https://github.com/googleapis/release-please) owns it — it opens
+the bump PR, writes the `CHANGELOG.md` entry, and tags `vX.Y.Z` on merge.
+Everything else derives from it:
+
+- The build backend copies it into the installed distribution's metadata.
+- `nautilus.__version__` reads that metadata back (`importlib.metadata`).
+- `nautilus version`, `GET /healthz` and `info.version` in `GET /openapi.json`
+  all report `nautilus.__version__`.
+
+So do not hand-edit a version anywhere, and do not add a second literal — not in
+a module, not in a README, not in a doc page. The one we used to keep in
+`nautilus/__init__.py` drifted from `pyproject.toml` in 0.1.4 and needed a
+follow-up commit to re-sync; there is now no second side to drift.
+
+**A branch reports its own lineage, not the newest tag, and that used to rot
+silently.** The version in the tree is whatever the last release commit *on this
+branch* set. A long-lived branch cut before a release and never brought up to
+date builds artifacts stamped with its fork point: this branch sat 76 commits
+past `v0.2.2` while `v0.2.3`, `v0.2.4` and `v0.2.5` were tagged and on PyPI, so
+everything it built called itself `0.2.2` — the same string as a released wheel
+from months earlier. Two things now stop that:
+
+- `tests/defects/test_wave_ops12_build_identity.py` goes red when the packaged
+  version is not strictly ahead of **every** tag in the repository (or, on a
+  commit that is itself tagged, is not equal to that tag). It is deliberately
+  not a reachability rule: `v0.2.3`–`v0.2.5` are not ancestors of this branch,
+  and a rule that only looked at reachable tags would have called `0.2.2`
+  correct on the exact tree where it was colliding with a published wheel. On
+  an unreleased tree the honest string is a `.devN` of the next version — the
+  tree is `0.2.6.dev0` now. The check skips outside a git checkout (a wheel has
+  no tags to compare against) and **fails, rather than skipping, in a checkout
+  with no tags**, because `actions/checkout` fetches none by default and a
+  skip there is how this rots again; `ci.yml` sets `fetch-tags: true`.
+- A version cannot separate two builds of one release line, and is not asked
+  to. The revision does: `docker build --build-arg BUILD_REV=…` stamps the
+  revision into the image, and `GET /healthz` and `nautilus version` read it
+  back out of the image. `.dockerignore` excludes `.git/`, so nothing inside the
+  build can derive it; an image built without the argument reports `unknown` and
+  never falls back to the version string. `NAUTILUS_BUILD_REV` is the same value
+  for a checkout or a wheel, which carry no stamp — against a stamped image it is
+  ignored and reported, because an identifier the command line can set is a
+  property of the command line.
+
+Still merge `main` before you cut a release branch. Two artifacts answering
+`/healthz` with the same `version` *and* the same `build` but different
+behaviour is a release-process bug; the same `version` and different `build` is
+just a rollout in progress, which is what the field is for.
+
 ## Reporting Issues
 
 - Use the provided issue templates when available.
@@ -112,4 +163,4 @@ This appends `Signed-off-by: Your Name <you@example.com>` to the commit message,
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the [MIT License](LICENSE).
+By contributing, you agree that your contributions will be licensed under the [Apache License 2.0](LICENSE).

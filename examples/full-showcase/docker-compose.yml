@@ -31,6 +31,7 @@ services:
     volumes:
       - ./nautilus.yaml:/config/nautilus.yaml:ro
       - audit-data:/data/audit
+      - state-data:/var/lib/nautilus
     environment:
       # Postgres
       - PG_DSN=postgresql://nautilus:nautilus@postgres:5432/nautilus
@@ -276,5 +277,6 @@ volumes:
   minio-data:
   tempo-data:
   audit-data:
+  state-data:
   es-data:
   neo4j-data:

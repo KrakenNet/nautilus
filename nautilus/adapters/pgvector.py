@@ -13,7 +13,8 @@ embedding vector + top_k to the parameter list.
 from __future__ import annotations
 
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
+from types import CoroutineType
 from typing import Any, ClassVar, cast
 
 import asyncpg  # pyright: ignore[reportMissingTypeStubs]
@@ -21,7 +22,7 @@ from pgvector.asyncpg import (  # pyright: ignore[reportMissingTypeStubs]
     register_vector as _register_vector_raw,  # pyright: ignore[reportUnknownVariableType]
 )
 
-from nautilus.adapters.base import AdapterError, quote_identifier
+from nautilus.adapters.base import AdapterError, quote_identifier, quote_table, wrap_execute
 from nautilus.adapters.embedder import Embedder, EmbeddingUnavailableError, NoopEmbedder
 from nautilus.adapters.postgres import PostgresAdapter
 from nautilus.adapters.schema import AdapterSchema
@@ -31,8 +32,10 @@ from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 # asyncpg's ``init`` hook has signature ``async (conn) -> None``; we re-export
 # ``register_vector`` under a fully-typed alias so the ``create_pool(init=...)``
 # call site does not leak ``Unknown`` types into strict pyright mode.
-_register_vector: Callable[[Any], Awaitable[None]] = cast(
-    "Callable[[Any], Awaitable[None]]", _register_vector_raw
+# ``CoroutineType``, not ``Awaitable``: that is what asyncpg declares ``init``
+# as returning, and an ``Awaitable`` return is not assignable to it.
+_register_vector: Callable[[Any], CoroutineType[Any, Any, None]] = cast(
+    "Callable[[Any], CoroutineType[Any, Any, None]]", _register_vector_raw
 )
 
 # Default distance operator when ``SourceConfig.distance_operator`` is None
@@ -180,7 +183,7 @@ class PgVectorAdapter(PostgresAdapter):
         # (Task 2.8): centralises the regex check + double-quote escaping so
         # ``pgvector`` and ``postgres`` agree byte-for-byte on identifier
         # rendering (NFR-4, design §6.2, §7.3).
-        quoted_table = quote_identifier(table.split(".")[-1])
+        quoted_table = quote_table(table)
         quoted_metadata = quote_identifier(metadata_column)
         quoted_embedding = quote_identifier(embedding_column)
 
@@ -199,6 +202,7 @@ class PgVectorAdapter(PostgresAdapter):
         params: list[Any] = [*scope_params, embedding, top_k]
         return sql, params
 
+    @wrap_execute
     async def execute(
         self,
         intent: IntentAnalysis,

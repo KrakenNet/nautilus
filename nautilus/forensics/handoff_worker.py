@@ -31,8 +31,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import fathom
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 
+from nautilus.audit.logger import decode_audit_line
 from nautilus.core.models import AuditEntry, InferredHandoff
 from nautilus.forensics.offsets import ProcessedOffsets
 from nautilus.forensics.sinks import (
@@ -45,6 +46,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
 log = logging.getLogger(__name__)
+
 
 # Paths to the authoritative Fathom assets are resolved relative to the
 # installed package so the worker can run from any cwd (CLI friendliness).
@@ -242,13 +244,18 @@ def _process_segment(
                 offsets.mark_seen(sha)
                 lines_processed += 1
                 try:
-                    entry = AuditEntry.model_validate_json(stripped)
-                except ValidationError as exc:
+                    entry = decode_audit_line(stripped)
+                except ValueError as exc:
                     log.warning(
                         "handoff_worker: skipping malformed audit line at offset %d: %s",
                         new_offset,
                         exc,
                     )
+                    continue
+                if entry is None:
+                    # A readable line that carries no audit entry: the chain's
+                    # own genesis and checkpoint records, a hot-reload event.
+                    # Not malformed, and not a handoff.
                     continue
 
                 if segment_max_ts is None or entry.timestamp > segment_max_ts:

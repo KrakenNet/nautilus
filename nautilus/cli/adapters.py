@@ -17,7 +17,15 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from nautilus.cli._common import err, ok, require_reviewer, warn
+from nautilus.cli._common import (
+    API_KEY_HELP,
+    err,
+    ok,
+    refuse_unless_writable,
+    require_reviewer,
+    resolve_api_key,
+    warn,
+)
 
 if TYPE_CHECKING:
     from nautilus.adapters.schema import AdapterSchema
@@ -49,13 +57,26 @@ def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> N
     p_list.add_argument(
         "--status",
         default=None,
-        help="Filter by status (active, quarantined, unknown).",
+        help="Filter by status (active, quarantined). Requires --url: quarantine "
+        "lives in the serving process, not in the config.",
     )
+    p_list.add_argument(
+        "--config",
+        default=None,
+        help="Path to nautilus.yaml (default: ./nautilus.yaml when present).",
+    )
+    p_list.add_argument("--url", default=None, help="Base URL of a running server.")
+    p_list.add_argument("--api-key", dest="api_key", help=API_KEY_HELP)
     p_list.add_argument("--json", action="store_true", help="Emit JSON to stdout.")
 
     # schema
     p_schema = adapters_sub.add_parser("schema", help="Print AdapterSchema for an adapter.")
     p_schema.add_argument("name", help="Adapter name/id.")
+    p_schema.add_argument(
+        "--config",
+        default=None,
+        help="Path to nautilus.yaml (default: ./nautilus.yaml when present).",
+    )
     p_schema.add_argument("--json", action="store_true", help="Emit JSON to stdout.")
 
     # schema-fingerprint
@@ -63,10 +84,16 @@ def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> N
         "schema-fingerprint", help="Print current fingerprint hash for an adapter."
     )
     p_fp.add_argument("name", help="Adapter name/id.")
+    p_fp.add_argument(
+        "--config",
+        default=None,
+        help="Path to nautilus.yaml (default: ./nautilus.yaml when present).",
+    )
 
     # schema-diff
     p_diff = adapters_sub.add_parser("schema-diff", help="Show drift vs stored fingerprint.")
     p_diff.add_argument("name", help="Adapter name/id.")
+    p_diff.add_argument("--config", required=True, help="Path to nautilus.yaml.")
     p_diff.add_argument("--json", action="store_true", help="Emit JSON to stdout.")
 
     # schema-ack
@@ -74,6 +101,7 @@ def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> N
         "schema-ack", help="Acknowledge drift; update stored fingerprint (AC-21.g)."
     )
     p_ack.add_argument("name", help="Adapter name/id.")
+    p_ack.add_argument("--config", required=True, help="Path to nautilus.yaml.")
     p_ack.add_argument("--reason", required=True, help="Reason for acknowledgement.")
     p_ack.add_argument(
         "--yes",
@@ -113,10 +141,65 @@ def dispatch(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 
 
-def _open_store() -> object:  # pyright: ignore[reportUnusedFunction]
-    from nautilus.adapters.schema import SchemaFingerprintStore
+def _resolve_config(args: argparse.Namespace) -> str | None:
+    """Config path from ``--config``, else ``./nautilus.yaml`` when it exists.
 
-    return SchemaFingerprintStore(root=None)
+    These commands took no config at all and rebuilt a broker from ``None``
+    inside a bare ``except``, so every invocation reported an empty registry
+    with exit 0 -- including the one the Grafana how-to lists under "what to
+    alert on".
+    """
+    explicit: str | None = getattr(args, "config", None)
+    if explicit:
+        return explicit
+    default = Path("nautilus.yaml")
+    return str(default) if default.is_file() else None
+
+
+def _live_adapter_schema(config_path: str, name: str) -> tuple[Any, AdapterSchema | None]:
+    """Return ``(broker, schema)`` for the configured adapter ``name``.
+
+    Baseline operations have to run against the broker's own fingerprint
+    store and the adapter's real schema. Comparing — or acknowledging — the
+    ``AdapterSchema.unknown`` stub would write a baseline the broker can
+    never match, quarantining the adapter permanently.
+
+    ``schema`` is ``None`` when the adapter is unknown, cannot connect, or
+    does not introspect its schema.
+
+    A config that will not load is the operator's answer, not a bug: it is
+    reported the way ``_configured_adapters`` reports it and raised as
+    ``SystemExit(1)``, which ``dispatch`` turns into the exit code. Every
+    caller here needs a live broker, so there is nothing to hand back --
+    and returning without one only moved the traceback one frame out.
+    """
+    import asyncio
+
+    from nautilus.core.broker import Broker
+
+    try:
+        broker = Broker.from_config(config_path)
+    except Exception as exc:  # noqa: BLE001 — a bad config is the operator's answer
+        err(f"could not load {config_path}: {exc}")
+        raise SystemExit(1) from exc
+    adapter = broker._adapters.get(name)  # pyright: ignore[reportPrivateUsage]
+    if adapter is None or not hasattr(adapter, "get_schema"):
+        asyncio.run(broker.aclose())
+        return broker, None
+
+    async def _fetch() -> AdapterSchema | None:
+        try:
+            await adapter.connect(
+                broker._registry.get(name)  # pyright: ignore[reportPrivateUsage]
+            )
+            return await adapter.get_schema()  # type: ignore[union-attr]
+        except Exception as exc:  # noqa: BLE001 — reported, not raised
+            warn(f"could not read schema for {name!r}: {exc}")
+            return None
+        finally:
+            await broker.aclose()
+
+    return broker, asyncio.run(_fetch())
 
 
 def _schema_as_dict(schema: AdapterSchema) -> dict[str, Any]:
@@ -192,52 +275,108 @@ def _cmd_new(args: argparse.Namespace) -> int:
 
 
 def _cmd_list(args: argparse.Namespace) -> int:
-    """List registered adapters from the broker config (best-effort)."""
-    from nautilus.adapters.base import Adapter
+    """List adapters from a running server (--url) or from a config file."""
+    url: str | None = getattr(args, "url", None)
+    status_filter: str | None = getattr(args, "status", None)
 
-    adapters: list[Adapter]
-    try:
-        from nautilus.core.broker import Broker
+    if url:
+        rows = _remote_adapters(url, resolve_api_key(args))
+        if rows is None:
+            return 1
+    else:
+        if status_filter:
+            err(
+                f"--status {status_filter!r} needs --url: quarantine state lives in "
+                "the serving process, so a config file cannot answer it. Reporting "
+                "an empty list here would look like 'nothing is quarantined'."
+            )
+            return 1
+        config_path = _resolve_config(args)
+        if config_path is None:
+            err(
+                "no config found: pass --config PATH, or run from a directory "
+                "containing nautilus.yaml"
+            )
+            return 1
+        rows = _configured_adapters(config_path)
+        if rows is None:
+            return 1
 
-        broker = Broker.from_config(None)  # type: ignore[arg-type]
-        adapters = list(broker._adapters.values())  # pyright: ignore[reportPrivateUsage]
-    except Exception:  # noqa: BLE001
-        adapters = []
-
-    status_filter = getattr(args, "status", None)
     if status_filter:
-        adapters = [a for a in adapters if getattr(a, "status", "unknown") == status_filter]
+        rows = [r for r in rows if r["status"] == status_filter]
 
     if getattr(args, "json", False):
-        out: list[dict[str, object]] = []
-        for a in adapters:
-            out.append(
-                {
-                    "id": getattr(a, "adapter_id", str(a)),
-                    "status": getattr(a, "status", "unknown"),
-                }
-            )
-        print(json.dumps(out))
+        print(json.dumps(rows))
         return 0
 
-    if not adapters:
+    if not rows:
         ok("no adapters registered")
         return 0
 
-    for a in adapters:
-        aid = getattr(a, "adapter_id", str(a))
-        status = getattr(a, "status", "unknown")
-        print(f"  {aid}  status={status}")
+    for row in rows:
+        print(f"  {row['id']}  type={row['type']}  status={row['status']}")
     return 0
 
 
+def _configured_adapters(config_path: str) -> list[dict[str, str]] | None:
+    """Adapters declared by ``config_path``; ``None`` after reporting an error.
+
+    ``status`` is ``configured``, not ``active``: this process is not the one
+    serving requests, so it cannot know whether an adapter is connected or
+    quarantined. Saying ``active`` here would be a guess dressed as a fact.
+    """
+    import asyncio
+
+    from nautilus.core.broker import Broker
+
+    try:
+        broker = Broker.from_config(config_path)
+    except Exception as exc:  # noqa: BLE001 — a bad config is the operator's answer
+        err(f"could not load {config_path}: {exc}")
+        return None
+    try:
+        return [
+            {"id": source.id, "type": source.type, "status": "configured"}
+            for source in broker.sources
+        ]
+    finally:
+        asyncio.run(broker.aclose())
+
+
+def _remote_adapters(url: str, api_key: str | None) -> list[dict[str, str]] | None:
+    """Adapters and live status from a running server."""
+    import httpx
+
+    headers = {"X-API-Key": api_key} if api_key else {}
+    try:
+        response = httpx.get(f"{url.rstrip('/')}/v1/adapters", headers=headers, timeout=10)
+    except Exception as exc:  # noqa: BLE001 — surfaced to the operator
+        err(f"could not reach {url}: {exc}")
+        return None
+    # ``raise_for_status`` used to sit inside the block above, so a broker that
+    # answered perfectly well and refused the credential was reported as
+    # "could not reach {url}" -- sending the operator to check DNS, the firewall
+    # and whether the process was up, when the answer was that the key was wrong.
+    if response.status_code == 401:
+        err(f"{url} refused the credential (401). Pass a valid --api-key.")
+        return None
+    if response.status_code == 403:
+        err(f"{url} accepted the credential but it lacks the capability (403).")
+        return None
+    if response.status_code != 200:
+        err(f"{url} returned {response.status_code}: {response.text[:200]}")
+        return None
+    payload: Any = response.json()
+    return list(payload.get("adapters", []))
+
+
 def _cmd_schema(args: argparse.Namespace) -> int:
-    schema = _get_adapter_schema(args.name)
+    schema = _get_adapter_schema(args)
     if schema is None:
-        warn(f"no schema available for adapter {args.name!r}")
+        err(f"no schema available for adapter {args.name!r}")
         if getattr(args, "json", False):
             print(json.dumps(None))
-        return 0
+        return 1
 
     if getattr(args, "json", False):
         print(json.dumps(_schema_as_dict(schema), default=str))
@@ -250,10 +389,10 @@ def _cmd_schema(args: argparse.Namespace) -> int:
 
 
 def _cmd_schema_fingerprint(args: argparse.Namespace) -> int:
-    schema = _get_adapter_schema(args.name)
+    schema = _get_adapter_schema(args)
     if schema is None:
-        warn(f"no schema available for adapter {args.name!r}")
-        return 0
+        err(f"no schema available for adapter {args.name!r}")
+        return 1
 
     fp = schema.fingerprint()  # type: ignore[attr-defined]
     print(fp)
@@ -261,17 +400,14 @@ def _cmd_schema_fingerprint(args: argparse.Namespace) -> int:
 
 
 def _cmd_schema_diff(args: argparse.Namespace) -> int:
-    from nautilus.adapters.schema import SchemaFingerprintStore
-
-    store = SchemaFingerprintStore(root=None)
-    stored_fp = store.get(args.name)
-    current_schema = _get_adapter_schema(args.name)
+    broker, current_schema = _live_adapter_schema(args.config, args.name)
+    stored_fp = broker.fingerprint_store.get(args.name)
 
     if current_schema is None:
         warn(f"no schema available for adapter {args.name!r}")
         return 0
 
-    current_fp = current_schema.fingerprint()  # type: ignore[attr-defined]
+    current_fp = current_schema.fingerprint()
 
     if stored_fp is None:
         warn(f"no stored fingerprint for {args.name!r}; treating as new")
@@ -316,32 +452,60 @@ def _cmd_schema_ack(args: argparse.Namespace) -> int:
 
     reviewer = require_reviewer()  # exits 1 if NAUTILUS_REVIEWER not set
 
-    from nautilus.adapters.schema import SchemaFingerprintStore
-
-    store = SchemaFingerprintStore(root=None)
-    current_schema = _get_adapter_schema(args.name)
+    broker, current_schema = _live_adapter_schema(args.config, args.name)
 
     if current_schema is None:
         err(f"no schema available for adapter {args.name!r}; cannot ack")
         return 1
 
-    current_fp = current_schema.fingerprint()  # type: ignore[attr-defined]
-    store.record_ack(
+    # ``record_ack`` rewrites the baseline on disk, and only then is the
+    # override audited. Reaching the writer lock at that point crashed with a
+    # traceback *after* the drift had been accepted, leaving the acknowledgement
+    # in force with nothing in the log that says who made it -- the same failure
+    # ``open_audit_logger`` refuses for a governance decision, so it is refused
+    # the same way here, before anything is written.
+    refuse_unless_writable(
+        broker.audit_logger.sink,
+        act="this acknowledgement cannot be recorded, so it will not be made",
+        remedy=(
+            "Stop the server first; the baseline this writes is read back "
+            "when it restarts, and the quarantine lifts with it."
+        ),
+    )
+
+    current_fp = current_schema.fingerprint()
+    broker.fingerprint_store.record_ack(
         args.name,
         current_fp,
         reviewer=reviewer,
         reason=args.reason,
     )
+    # The ack overrides a fail-closed decision the broker already audited, so
+    # it belongs in the same log next to the drift entry it answers.
+    broker.emit_adapter_event("schema_drift_severity_overridden", args.name)
     ok(f"schema-ack recorded for {args.name!r} by {reviewer}: {args.reason}")
     return 0
 
 
-def _get_adapter_schema(name: str) -> AdapterSchema | None:
-    """Try to retrieve an AdapterSchema for the named adapter. Best-effort."""
-    from nautilus.adapters.schema import AdapterSchema
+def _get_adapter_schema(args: argparse.Namespace) -> AdapterSchema | None:
+    """Read the named adapter's real schema, or ``None``.
 
-    # Return an unknown-type schema as a best-effort stub when no live adapter.
-    return AdapterSchema.unknown(adapter_id=name, source_type="unknown")
+    This used to return ``AdapterSchema.unknown(name, "unknown")``
+    unconditionally, without consulting a config, a registry or an adapter:
+    a nonexistent adapter was confirmed as real with exit 0, and a real one
+    printed a digest matching neither its live schema nor its stored
+    baseline. The ``if schema is None`` branch in both callers was written
+    for this and never reached.
+    """
+    config_path = _resolve_config(args)
+    if config_path is None:
+        # Not ``return None``: the callers answer that with "no schema available
+        # for adapter '<n>'", so a missing config was reported twice, the second
+        # time as a claim about the adapter rather than about the config.
+        err("no config found: pass --config PATH, or run from a directory containing nautilus.yaml")
+        raise SystemExit(1)
+    _, schema = _live_adapter_schema(config_path, args.name)
+    return schema
 
 
 __all__ = ["add_subparser", "dispatch"]

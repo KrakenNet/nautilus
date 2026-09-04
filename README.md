@@ -13,7 +13,7 @@
 
 > **Part of the [Kraken](https://github.com/KrakenNet) stack:** [Fathom](https://github.com/KrakenNet/fathom) (reasoning engine) · [**Nautilus**](https://github.com/KrakenNet/nautilus) (policy data broker) · [Stargraph](https://github.com/KrakenNet/stargraph) (agent-graph framework).
 
-**Current version:** 0.1.5
+**Current version:** the PyPI badge above (a number typed here goes stale on the next release). Ask an install: `nautilus version`, or `curl -sS $NAUTILUS/healthz`.
 **License:** Apache-2.0
 **Language:** Python 3.13+
 **Package Manager:** uv
@@ -40,25 +40,38 @@ Nautilus provides **deterministic, policy-first data brokering** using Fathom �
 uv add nautilus-rkm
 ```
 
+Database and object-store drivers are extras — install the ones your sources
+need, or `[all]` for every built-in adapter:
+
+```bash
+uv add "nautilus-rkm[postgres]"        # pgvector, elasticsearch, neo4j, influxdb, s3
+uv add "nautilus-rkm[all]"
+```
+
+A source whose driver is missing fails at startup naming the extra to install.
+
 ## Quick Start
+
+```bash
+nautilus demo    # a governed agent-to-agent handoff decision. No config, no database.
+nautilus init    # writes a nautilus.yaml that runs as it stands
+```
 
 ```python
 from nautilus import Broker
 
-broker = Broker.from_config("nautilus.yaml")
-try:
+with Broker.from_config("nautilus.yaml") as broker:
     response = broker.request(
         "agent-alpha",
         "Find vulnerabilities for CVE-2026-1234",
-        {"clearance": "unclassified", "purpose": "threat-analysis", "session_id": "s1"},
+        {"purpose": "threat-analysis", "session_id": "s1"},
     )
+    print(response.outcome)             # "allowed" | "denied" | "errored" | "skipped"
     print(response.data)                # {"main-db": [...]}
     print(response.sources_queried)     # ["main-db"]
-    print(response.sources_denied)      # ["classified-db"]
+    print(response.denial_records)      # why "classified-db" was refused, and by which rule
     print(response.attestation_token)   # signed JWS
     print(response.duration_ms)         # 47
-finally:
-    broker.close()
 ```
 
 See the [Getting Started guide](https://krakennet.github.io/nautilus/getting-started/) for a full walkthrough.
@@ -74,14 +87,15 @@ See the [Getting Started guide](https://krakennet.github.io/nautilus/getting-sta
 - Pattern-matching and LLM-based intent analysis (Anthropic, OpenAI)
 - Cross-agent handoff reasoning with session-backed escalation detection
 
-**Adapters (8 built-in)**
-- PostgreSQL, PgVector, Elasticsearch, Neo4j, REST, ServiceNow, InfluxDB, S3
+**Adapters (10 built-in)**
+- PostgreSQL, PgVector, Elasticsearch, Neo4j, REST, ServiceNow, InfluxDB, S3, LLM
+- `static` — rows declared in `nautilus.yaml`, for a first run with no database
 - Pluggable via entry points and the [Adapter SDK](https://krakennet.github.io/nautilus/reference/adapter-sdk/)
 
 **Transports**
 - FastAPI REST server (`POST /v1/request`, health/readiness probes)
 - MCP transport (stdio and HTTP modes)
-- CLI: `nautilus serve`, `nautilus health`, `nautilus version`
+- CLI: `nautilus demo`, `nautilus init`, `nautilus serve`, `nautilus health`, `nautilus version`
 
 **Rule packs**
 - `data-routing-nist` — NIST clearance/classification routing rules
@@ -105,13 +119,15 @@ Unlike stateless policy engines, Nautilus maintains working memory across reques
 - **Cross-agent handoffs** — "Agent A is passing `secret` data to Agent B who has `unclassified` clearance — deny."
 - **Escalation detection** — "Anomalous access pattern detected — escalate for forensic review."
 
+Run the handoff refusal yourself with `nautilus demo` — no config, no adapter, no database.
+
 ## Integration Shapes
 
 **As a library**
 ```python
 from nautilus import Broker
-broker = Broker.from_config("nautilus.yaml")
-response = broker.request("agent-id", "intent", context)
+with Broker.from_config("nautilus.yaml") as broker:
+    response = broker.request("agent-id", "intent", context)
 ```
 
 **As a REST sidecar**
@@ -138,19 +154,27 @@ A `nautilus.yaml` declares sources, rules, analysis, audit, and attestation:
 ```yaml
 sources:
   - id: main-db
-    adapter: postgres
-    dsn: ${DATABASE_URL}
+    type: postgres
+    description: "Customer orders"
     classification: confidential
     data_types: [users, orders]
+    allowed_purposes: [support]
+    connection: ${DATABASE_URL}
+    table: public.orders
+
+agents:
+  support-bot:
+    id: support-bot
+    clearance: confidential
+    default_purpose: support
 
 rules:
-  paths: [./rules/]
+  user_rules_dirs: [./rules/]
 
 attestation:
   enabled: true
 
 audit:
-  sink: file
   path: ./audit.jsonl
 ```
 

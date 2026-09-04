@@ -10,14 +10,29 @@ The ``_OPERATOR_ALLOWLIST`` set here is the runtime counterpart to the
 
 from __future__ import annotations
 
+import asyncio
+import functools
+import ipaddress
+import logging
 import re
-from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
+import socket
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol, cast, runtime_checkable
+from urllib.parse import urlsplit
 
 from nautilus.config.models import SourceConfig
 from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
+# Either IP family; the SSRF guards test the same predicates on both.
+_IPAddress = ipaddress.IPv4Address | ipaddress.IPv6Address
+
+log = logging.getLogger(__name__)
+
 if TYPE_CHECKING:
+    import ssl
+
     from nautilus.adapters.schema import AdapterSchema
+    from nautilus.config.models import MtlsAuth
 
 
 class AdapterError(Exception):
@@ -64,6 +79,104 @@ _OPERATOR_ALLOWLIST: frozenset[str] = frozenset(
 _FIELD_PATTERN: re.Pattern[str] = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")
 
 
+def row_bytes(row: dict[str, Any]) -> int:
+    """Roughly what ``row`` costs in the canonical JSON the caller receives.
+
+    ``+ 1`` for the separator that will follow it. Deliberately the same
+    estimate the MCP transport bounds a tool result with, so a source trimmed
+    at one layer is trimmed the same way at the next.
+    """
+    import json
+
+    return len(json.dumps(row, default=str)) + 1
+
+
+def bounded_rows(
+    rows: list[dict[str, Any]], max_bytes: int | None
+) -> tuple[list[dict[str, Any]], bool]:
+    """Return ``rows`` cut to ``max_bytes``, and whether anything was dropped.
+
+    Whole rows only: half a row is not a row. Always keeps at least one, so a
+    single oversized row comes back marked truncated rather than as an empty
+    result the caller cannot tell from "nothing matched".
+    """
+    if max_bytes is None:
+        return rows, False
+    used = 0
+    for index, row in enumerate(rows):
+        used += row_bytes(row)
+        if used > max_bytes and index > 0:
+            return rows[:index], True
+    return rows, False
+
+
+async def resolve_base_url(base_url: str, adapter: str) -> tuple[str, list[_IPAddress]]:
+    """Return ``base_url``'s host and every address it currently resolves to.
+
+    The single seam both SSRF guards run on -- :func:`RestAdapter's
+    <nautilus.adapters.rest._reject_unroutable_base_url>` (shared with
+    ``ServiceNowAdapter``) and :func:`LLMAdapter's
+    <nautilus.adapters.llm._reject_unroutable_base_url>`. They refuse different
+    address classes on purpose, so the *policy* stays in each adapter; parsing
+    and name resolution live here so there is one place to audit and one place
+    a fix lands.
+
+    An IP literal resolves to itself with no lookup. A name goes through the
+    running loop's ``getaddrinfo``, which runs in a thread, so a slow resolver
+    does not block the event loop; the caller's own deadline
+    (``SourceConfig.timeout_s``, applied by the broker around ``connect()``)
+    bounds how long it may take.
+
+    **A name that does not resolve returns an empty list, not an error.** A
+    host with no address reaches nothing, so refusing here would buy no
+    security and would only replace the driver's own DNS message with ours.
+
+    **What this cannot do.** The answer is the resolver's answer *now*; httpx,
+    asyncpg and every other driver resolve again when they dial. A resolver
+    that returns a routable address here and a private one microseconds later
+    (DNS rebinding, a short-TTL record, a round-robin set that changes) is not
+    caught. This is a config-hygiene control with a genuine TOCTOU window, not
+    a dial-time pin -- see ``docs/reference/errors/adapters.md``.
+
+    Raises:
+        ScopeEnforcementError: ``base_url`` parses with no host.
+    """
+    host = urlsplit(base_url).hostname
+    if not host:
+        # The value is withheld deliberately: a malformed connection string is
+        # exactly the shape that still carries userinfo
+        # (``http://user:pw@``), and this message reaches the audit trail.
+        raise ScopeEnforcementError(
+            f"{adapter} requires a non-empty host in base_url "
+            f"(scheme={urlsplit(base_url).scheme!r}; the value is withheld "
+            f"because a connection string can carry credentials)"
+        )
+    try:
+        addresses = [ipaddress.ip_address(host)]  # a literal resolves to itself
+    except ValueError:
+        try:
+            infos = await asyncio.get_running_loop().getaddrinfo(
+                host, None, type=socket.SOCK_STREAM
+            )
+        except (OSError, UnicodeError):
+            addresses = []
+        else:
+            addresses = [ipaddress.ip_address(str(info[4][0])) for info in infos]
+    # The lookup is the thing that decides whether the config works, and it
+    # happens inside a guard the operator never sees run: a ``rest`` source
+    # that started being refused after this stopped testing IP literals had no
+    # line anywhere saying which address its name answers with. Emitted for
+    # literals too, so "the guard did resolve, and this is what it saw" is one
+    # grep rather than two cases.
+    log.debug(
+        "%s SSRF guard: base_url host %s resolves to %s",
+        adapter,
+        host,
+        [str(address) for address in addresses] if addresses else "no address",
+    )
+    return host, addresses
+
+
 def validate_operator(op: str) -> None:
     """Validate ``op`` against the design §6.1 operator allowlist.
 
@@ -106,6 +219,25 @@ def quote_identifier(ident: str) -> str:
     return '"' + ident.replace('"', '""') + '"'
 
 
+def quote_table(table: str) -> str:
+    """Quote a possibly schema-qualified table name.
+
+    ``schema.table`` renders as ``"schema"."table"``; a bare name renders as
+    ``"table"``. Each segment goes through :func:`quote_identifier`, so the
+    same regex guard applies to both.
+
+    Callers used to do ``quote_identifier(table.split(".")[-1])``, which
+    silently discarded the schema: a source declaring
+    ``table: restricted.customers`` emitted ``SELECT * FROM "customers"`` and
+    Postgres resolved it through ``search_path``, reading a different table
+    than the config named.
+    """
+    parts = table.split(".")
+    if len(parts) > 2:
+        raise ScopeEnforcementError(f"table name {table!r} has more than one schema qualifier")
+    return ".".join(quote_identifier(part) for part in parts)
+
+
 def render_field(field: str) -> str:
     """Render a scope field reference as SQL per design §6.2.
 
@@ -133,6 +265,34 @@ SESSION_TOKEN_HEADER = "X-Nautilus-Session-Token"
 Mirrors ``nautilus.transport.auth._SESSION_TOKEN_HEADER`` — duplicated here so
 the adapter layer never imports the transport layer.
 """
+
+
+def mtls_context(auth: MtlsAuth, source_id: str) -> ssl.SSLContext:
+    """Build the TLS context a source's ``auth: {type: mtls}`` block describes.
+
+    Both the Elasticsearch and Neo4j adapters used to accept an ``mtls`` block
+    and drop the certificate: Elasticsearch forwarded ``ca_path`` alone (and
+    only when it was set), Neo4j discarded the block entirely with a comment
+    saying the certificate belongs on the URI. Either way the operator saw no
+    error and got a connection that presents no client certificate — a
+    credential silently downgraded to none.
+
+    Raises:
+        AdapterError: if the certificate, key or CA cannot be loaded. A path
+            that does not resolve is a configuration error, not a reason to
+            connect anonymously.
+    """
+    import ssl
+
+    context = ssl.create_default_context(cafile=auth.ca_path)
+    try:
+        context.load_cert_chain(certfile=auth.cert_path, keyfile=auth.key_path)
+    except (OSError, ssl.SSLError) as exc:
+        raise AdapterError(
+            f"source '{source_id}' declares mTLS but its client certificate could "
+            f"not be loaded (cert_path={auth.cert_path!r}, key_path={auth.key_path!r}): {exc}"
+        ) from exc
+    return context
 
 
 def session_token_headers(context: dict[str, Any]) -> dict[str, str] | None:
@@ -236,15 +396,69 @@ class Adapter(Protocol):
         raise NotImplementedError("AC-21.b: this adapter must implement get_schema() (task-006)")
 
 
+# Bound to a TypeVar, not spelled out as a ``Callable[...]``: a ``Callable``
+# parameter list is positional-only, so a decorated ``execute`` no longer
+# matched the :class:`Adapter` protocol (which names ``intent`` / ``scope`` /
+# ``context``) and every wrapped adapter dropped out of ``type[Adapter]``.
+type _ExecuteBody = Callable[..., Awaitable["AdapterResult"]]
+
+
+def wrap_execute[F: _ExecuteBody](fn: F) -> F:
+    """Re-raise a backend driver's own exceptions from ``execute`` as ``AdapterError``.
+
+    :class:`Adapter` documents ``AdapterError`` as the only non-scope failure
+    ``execute`` raises, and third-party adapters are written against that
+    contract. Most in-tree adapters let the raw driver exception escape instead
+    -- ``asyncpg.PostgresSyntaxError``, ``elasticsearch.ApiException`` -- which
+    the broker still records as a per-source error, but under the driver's type
+    name and with no indication of which source produced it.
+
+    ``ScopeEnforcementError`` (and any other ``AdapterError``) passes through
+    untouched: the broker distinguishes a refused constraint from an
+    infrastructure failure.
+    """
+
+    @functools.wraps(fn)
+    async def _wrapped(
+        self: Any,
+        intent: IntentAnalysis,
+        scope: list[ScopeConstraint],
+        context: dict[str, Any],
+    ) -> AdapterResult:
+        try:
+            return await fn(self, intent, scope, context)
+        except AdapterError:
+            raise
+        except Exception as exc:
+            config = getattr(self, "_config", None)
+            source_id = getattr(config, "id", "?")
+            # ``httpx.ReadTimeout()`` and friends carry no text, and appending
+            # an empty ``{exc}`` produced "... ReadTimeout: " -- a message
+            # ending in a colon and nothing, which was the whole thing an
+            # operator saw for a dead backend. Drop the tail when there is
+            # nothing to put after it.
+            detail = str(exc)
+            raise AdapterError(
+                f"{type(self).__name__}: execute failed for source '{source_id}': "
+                f"{type(exc).__name__}" + (f": {detail}" if detail else "")
+            ) from exc
+
+    return cast("F", _wrapped)
+
+
 __all__ = [
+    "mtls_context",
     "SESSION_TOKEN_HEADER",
     "Adapter",
     "AdapterError",
     "EmbeddingUnavailableError",
     "ScopeEnforcementError",
     "quote_identifier",
+    "resolve_base_url",
+    "quote_table",
     "render_field",
     "session_token_headers",
     "validate_field",
     "validate_operator",
+    "wrap_execute",
 ]

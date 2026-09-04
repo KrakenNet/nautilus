@@ -24,6 +24,11 @@ __pycache__/
 # C extensions
 *.so
 
+# The build stamp the image build writes into the package (nautilus/build.py).
+# It belongs to an artifact, not to the tree: committed, every install would
+# report whichever revision happened to be in it.
+nautilus/_build_rev
+
 # Distribution / packaging
 .Python
 build/

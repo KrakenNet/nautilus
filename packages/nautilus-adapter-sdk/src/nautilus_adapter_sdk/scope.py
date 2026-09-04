@@ -6,17 +6,22 @@ from typing import Any
 
 from nautilus_adapter_sdk.exceptions import ScopeEnforcementError
 
+# The operators the broker actually sends, i.e. the ``operator`` Literal on
+# ``nautilus.core.models.ScopeConstraint``. A separate symbolic vocabulary
+# ("eq", "not_in", …) meant an adapter that validated against this set
+# rejected every constraint it was ever handed.
 VALID_OPERATORS: set[str] = {
-    "eq",
-    "ne",
-    "gt",
-    "gte",
-    "lt",
-    "lte",
-    "in",
-    "not_in",
-    "contains",
-    "not_contains",
+    "=",
+    "!=",
+    "IN",
+    "NOT IN",
+    "<",
+    ">",
+    "<=",
+    ">=",
+    "LIKE",
+    "BETWEEN",
+    "IS NULL",
 }
 
 

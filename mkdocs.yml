@@ -51,8 +51,10 @@ nav:
   - How-to Guides:
       - Overview: how-to/index.md
       - Operator Guide: how-to/operator-guide.md
+      - Deploying: how-to/deploying.md
       - Authoring Rules: how-to/authoring-rules.md
       - Developing Adapters: how-to/developing-adapters.md
+      - Hardening: how-to/hardening.md
       - Add a Postgres Source: how-to/add-a-postgres-source.md
       - Write a Routing Rule: how-to/write-a-routing-rule.md
       - Configure Attestation: how-to/configure-attestation.md
@@ -62,6 +64,7 @@ nav:
   - Concepts:
       - Overview: concepts/index.md
       - Architecture: concepts/architecture.md
+      - The Trust Boundary: concepts/trust-boundary.md
       - The Attestation Chain: concepts/attestation-chain.md
       - RKM Rule Lifecycle: concepts/rkm-lifecycle.md
   - Reference:
@@ -71,6 +74,18 @@ nav:
       - CLI: reference/cli.md
       - Rule Packs: reference/rule-packs.md
       - Adapter SDK: reference/adapter-sdk.md
+      - Errors:
+          - Overview: reference/errors/index.md
+          - Credentials and identity: reference/errors/auth.md
+          - Session tokens: reference/errors/session-tokens.md
+          - Sessions and session store: reference/errors/sessions.md
+          - HTTP transport: reference/errors/transport.md
+          - Configuration and startup: reference/errors/config.md
+          - Adapters and data sources: reference/errors/adapters.md
+          - Rules, RKM and the engine: reference/errors/rules.md
+          - Attestation and keys: reference/errors/attestation.md
+          - Command line: reference/errors/cli.md
+          - Embedding as a library: reference/errors/library.md
       - Adapter SDK Docs:
           - Overview: sdk/docs/index.md
           - Tutorial: sdk/docs/tutorial.md

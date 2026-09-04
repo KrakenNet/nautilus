@@ -4,6 +4,7 @@ Subcommands are implemented in sibling modules:
     * :mod:`nautilus.cli.version` — ``version``
     * :mod:`nautilus.cli.health`  — ``health``
     * :mod:`nautilus.cli.serve`   — ``serve`` runners + config helpers
+    * :mod:`nautilus.cli.config`  — ``config check``, over the same helpers
 
 Shared helpers (``--json``, ``--yes``, ``NAUTILUS_REVIEWER``, output
 prefixes) live in :mod:`nautilus.cli._common`.
@@ -22,10 +23,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import contextlib
+import logging
 import sys
 import urllib  # noqa: F401  # pyright: ignore[reportUnusedImport] - re-exported for test monkeypatching
 import urllib.request  # noqa: F401  # pyright: ignore[reportUnusedImport] - re-exported for test monkeypatching
 from importlib import metadata
+from typing import TYPE_CHECKING, Any
 
 from nautilus.cli.health import (
     _DEFAULT_HEALTH_URL,  # pyright: ignore[reportPrivateUsage]
@@ -33,16 +36,23 @@ from nautilus.cli.health import (
 )
 from nautilus.cli.serve import (
     _DEFAULT_BIND,  # pyright: ignore[reportPrivateUsage]
+    ConfigRefusedError,
     _enforce_air_gap,  # pyright: ignore[reportPrivateUsage]
+    _install_reload_handler,  # pyright: ignore[reportPrivateUsage]
     _load_config_for_serve,  # pyright: ignore[reportPrivateUsage]
     _run_both,  # pyright: ignore[reportPrivateUsage]
     _run_mcp,  # pyright: ignore[reportPrivateUsage]
     _run_rest,  # pyright: ignore[reportPrivateUsage]
     _split_bind,  # pyright: ignore[reportPrivateUsage]
+    broker_for_serve,
 )
 from nautilus.cli.version import _cmd_version  # pyright: ignore[reportPrivateUsage]
 
+if TYPE_CHECKING:
+    from collections.abc import Coroutine
+
 __all__ = [
+    "ConfigRefusedError",
     "_DEFAULT_BIND",
     "_DEFAULT_HEALTH_URL",
     "_cmd_health",
@@ -52,8 +62,10 @@ __all__ = [
     "_load_config_for_serve",
     "_run_both",
     "_run_mcp",
+    "_install_reload_handler",
     "_run_rest",
     "_split_bind",
+    "broker_for_serve",
     "main",
     "metadata",
 ]
@@ -63,12 +75,21 @@ def _build_parser() -> argparse.ArgumentParser:
     """Build the top-level argparse parser with subcommands."""
     parser = argparse.ArgumentParser(
         prog="nautilus",
-        description="Nautilus reasoning-engine CLI (serve / health / version).",
+        description=(
+            "Nautilus reasoning-engine CLI. Stand a broker up (init, serve, health, "
+            "version, demo), govern its rules (rules, rkm, rule, events), and manage "
+            "what it trusts (adapters, key, session, attestation)."
+        ),
     )
     sub = parser.add_subparsers(dest="command", required=True, metavar="command")
 
     # version ---------------------------------------------------------
     sub.add_parser("version", help="Print the installed nautilus package version.")
+
+    # session ---------------------------------------------------------
+    from nautilus.cli import session as _session
+
+    _session.register(sub)
 
     # health ----------------------------------------------------------
     p_health = sub.add_parser(
@@ -88,8 +109,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_serve.add_argument(
         "--config",
-        required=True,
-        help="Path to nautilus.yaml.",
+        default="nautilus.yaml",
+        help="Path to nautilus.yaml (default: ./nautilus.yaml).",
     )
     p_serve.add_argument(
         "--transport",
@@ -105,8 +126,11 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p_serve.add_argument(
         "--bind",
-        default=_DEFAULT_BIND,
-        help=f"HOST:PORT for REST (and MCP http) bind (default: {_DEFAULT_BIND}).",
+        default=None,
+        help=(
+            "HOST:PORT for REST (and MCP http) bind. Overrides api.host / "
+            f"api.port from the config; default when neither is set: {_DEFAULT_BIND}."
+        ),
     )
     p_serve.add_argument(
         "--air-gapped",
@@ -125,6 +149,32 @@ def _build_parser() -> argparse.ArgumentParser:
             "'json' for SIEM-ingestable structured lines on stdout."
         ),
     )
+    p_serve.add_argument(
+        "--log-level",
+        choices=("debug", "info", "warning", "error", "critical"),
+        default="info",
+        help=(
+            "Threshold for application logs and for uvicorn's own logger "
+            "(default: info). 'warning' silences the startup and access lines "
+            "the how-to guides tell you to read; 'debug' adds them back plus "
+            "every library logger."
+        ),
+    )
+
+    # config ---------------------------------------------------------------
+    from nautilus.cli import config as _config_mod
+
+    _config_mod.add_subparser(sub)
+
+    # demo ----------------------------------------------------------------
+    from nautilus.cli import demo as _demo_mod
+
+    _demo_mod.add_subparser(sub)
+
+    # init ----------------------------------------------------------------
+    from nautilus.cli import init as _init_mod
+
+    _init_mod.add_subparser(sub)
 
     # rkm -----------------------------------------------------------------
     from nautilus.cli import rkm as _rkm_mod
@@ -184,57 +234,71 @@ def _cmd_serve(args: argparse.Namespace) -> int:
     # library modules keep plain ``logging.getLogger(__name__)``.
     from nautilus.observability.logging import configure_logging
 
-    configure_logging(getattr(args, "log_format", "text"))
-
-    config_path = _Path(args.config)
-    if not config_path.is_file():
-        print(
-            f"ERROR: config path does not exist or is not a file: {config_path}",
-            file=sys.stderr,
-        )
-        return 2
+    log_level = getattr(args, "log_level", "info")
+    configure_logging(
+        getattr(args, "log_format", "text"),
+        logging.getLevelNamesMapping()[log_level.upper()],
+    )
 
     try:
-        host, port = _split_bind(args.bind)
+        explicit_bind = _split_bind(args.bind) if args.bind is not None else None
     except ValueError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
+    # The path check, the --air-gapped pre-pass and Broker.from_config live in
+    # ``broker_for_serve`` because ``nautilus config check`` runs the same
+    # three, and an operator checking a config before a deploy has to be
+    # running what ``serve`` runs rather than a copy of it that can drift.
     try:
-        effective_path = _load_config_for_serve(
-            config_path,
-            air_gapped=bool(args.air_gapped),
-        )
-    except RuntimeError as exc:
+        broker = broker_for_serve(_Path(args.config), air_gapped=bool(args.air_gapped))
+    except ConfigRefusedError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
 
-    # Broker.from_config surfaces ConfigError / validation errors with
-    # readable messages; propagate as a non-zero exit before any bind.
-    from nautilus.config.loader import ConfigError
-    from nautilus.core.broker import Broker
-
-    try:
-        broker = Broker.from_config(effective_path)
-    except ConfigError as exc:
-        print(f"ERROR: invalid config: {exc}", file=sys.stderr)
-        return 2
-    except Exception as exc:  # noqa: BLE001 - surface wiring failures cleanly
-        print(f"ERROR: broker construction failed: {exc}", file=sys.stderr)
-        return 2
+    # ``api.host`` / ``api.port`` were modelled, documented and shipped in the
+    # examples but had no reader, so a config asking for 0.0.0.0:9999 served
+    # on 127.0.0.1:8000 anyway -- which is why the root Dockerfile's
+    # bind-less CMD listened on loopback inside the container. An explicit
+    # --bind still wins.
+    host, port = (
+        explicit_bind
+        if explicit_bind is not None
+        else (
+            broker.api_config.host,
+            broker.api_config.port,
+        )
+    )
 
     transport = args.transport
     mcp_mode = args.mcp_mode
 
+    async def _serve(runner: Coroutine[Any, Any, None]) -> None:
+        """Wire SIGHUP on the loop that is about to run ``runner``, then run it.
+
+        Here rather than inside each ``_run_*`` because ``--transport both``
+        runs two of them: one handler for the process, installed once, whatever
+        is listening.
+        """
+        _install_reload_handler(broker, _Path(args.config), air_gapped=bool(args.air_gapped))
+        await runner
+
     try:
         if transport == "rest":
-            asyncio.run(_cli_module._run_rest(broker, host, port))  # pyright: ignore[reportPrivateUsage]
+            asyncio.run(_serve(_cli_module._run_rest(broker, host, port, log_level)))  # pyright: ignore[reportPrivateUsage]
         elif transport == "mcp":
-            asyncio.run(_cli_module._run_mcp(broker, mcp_mode, host, port))  # pyright: ignore[reportPrivateUsage]
+            asyncio.run(_serve(_cli_module._run_mcp(broker, mcp_mode, host, port, log_level)))  # pyright: ignore[reportPrivateUsage]
         else:
-            asyncio.run(_cli_module._run_both(broker, host, port, mcp_mode))  # pyright: ignore[reportPrivateUsage]
+            asyncio.run(_serve(_cli_module._run_both(broker, host, port, mcp_mode, log_level)))  # pyright: ignore[reportPrivateUsage]
     except KeyboardInterrupt:
         pass
+    except RuntimeError as exc:
+        # ``_serve_or_raise`` turns a lifespan that failed into this. uvicorn
+        # returns from ``serve()`` in that case rather than raising, and the
+        # unconditional ``return 0`` below reported a pod that never served as
+        # a clean run.
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 2
     finally:
         # For --transport rest the FastAPI lifespan already closed the
         # broker; aclose() is idempotent so the extra call is safe. A
@@ -253,21 +317,34 @@ def _cmd_serve(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     """CLI entry point. Returns the process exit code.
 
-    TODO(forge): OQ4 — wire new subcommand groups (rkm, rule, rules,
-    adapters, key, events) into :func:`_build_parser` and the dispatch
-    ladder. Stubs live in :mod:`nautilus.cli.rkm`, :mod:`nautilus.cli.rule`,
-    :mod:`nautilus.cli.rules`, :mod:`nautilus.cli.adapters`,
-    :mod:`nautilus.cli.key`, :mod:`nautilus.cli.events`.
+    Exit codes follow the ``.forge/shared.md`` contract: 0 success, 1 user
+    error, 2 validation/policy failure. Code 3 is not used (OQ5 LOCKED).
     """
     parser = _build_parser()
     args = parser.parse_args(argv)
 
     if args.command == "version":
         return _cmd_version()
+    if args.command == "session":
+        from nautilus.cli import session as session_cmd
+
+        return session_cmd.dispatch(args)
     if args.command == "health":
         return _cmd_health(args.url)
     if args.command == "serve":
         return _cmd_serve(args)
+    if args.command == "config":
+        from nautilus.cli import config as _config_mod
+
+        return _config_mod.dispatch(args)
+    if args.command == "demo":
+        from nautilus.cli import demo as _demo_mod
+
+        return _demo_mod.dispatch(args)
+    if args.command == "init":
+        from nautilus.cli import init as _init_mod
+
+        return _init_mod.dispatch(args)
     if args.command == "rkm":
         from nautilus.cli import rkm as _rkm_mod
 

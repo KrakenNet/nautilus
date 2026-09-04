@@ -51,19 +51,19 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "histogram_quantile(0.50, sum(rate(nautilus_adapter_latency_bucket[$__rate_interval])) by (le, adapter))",
+          "expr": "histogram_quantile(0.50, sum(rate(nautilus_adapter_latency_seconds_bucket[$__rate_interval])) by (le, adapter))",
           "legendFormat": "{{ adapter }} p50",
           "refId": "A"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "histogram_quantile(0.90, sum(rate(nautilus_adapter_latency_bucket[$__rate_interval])) by (le, adapter))",
+          "expr": "histogram_quantile(0.90, sum(rate(nautilus_adapter_latency_seconds_bucket[$__rate_interval])) by (le, adapter))",
           "legendFormat": "{{ adapter }} p90",
           "refId": "B"
         },
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "histogram_quantile(0.99, sum(rate(nautilus_adapter_latency_bucket[$__rate_interval])) by (le, adapter))",
+          "expr": "histogram_quantile(0.99, sum(rate(nautilus_adapter_latency_seconds_bucket[$__rate_interval])) by (le, adapter))",
           "legendFormat": "{{ adapter }} p99",
           "refId": "C"
         }
@@ -138,7 +138,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-          "expr": "sum(rate(nautilus_adapter_latency_count[$__rate_interval])) by (adapter, source)",
+          "expr": "sum(rate(nautilus_adapter_latency_seconds_count[$__rate_interval])) by (adapter, source)",
           "legendFormat": "{{ adapter }} / {{ source }}",
           "refId": "A"
         }
@@ -156,7 +156,7 @@
         "multi": true,
         "name": "adapter",
         "options": [],
-        "query": "label_values(nautilus_adapter_latency_bucket, adapter)",
+        "query": "label_values(nautilus_adapter_latency_seconds_bucket, adapter)",
         "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
         "refresh": 2,
         "regex": "",

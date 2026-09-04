@@ -8,7 +8,7 @@ failures surface as :class:`LLMProviderError`; schema drift surfaces as
 :class:`FallbackIntentAnalyzer` (AC-6.3).
 
 The prompt template is locked at ``prompts/intent_v1.txt`` and stamped
-into :class:`LLMProvenance.prompt_version` as ``"v1"`` so any edit to the
+into :class:`LLMProvenance.prompt_version` as ``"v2"`` so any edit to the
 template forces a visible version bump in the audit stream (NFR-12,
 AC-6.6).
 """
@@ -24,6 +24,7 @@ from typing import Any, cast
 
 from nautilus.analysis.llm.base import LLMProviderError
 from nautilus.core.models import IntentAnalysis
+from nautilus.extras import install_extra_hint
 
 try:
     from anthropic import (
@@ -45,8 +46,8 @@ except ImportError as exc:  # pragma: no cover - guarded in __init__
     _import_error = exc
 
 
-_PROMPT_PATH = Path(__file__).parent / "prompts" / "intent_v1.txt"
-_PROMPT_VERSION = "v1"
+_PROMPT_PATH = Path(__file__).parent / "prompts" / "intent_v2.txt"
+_PROMPT_VERSION = "v2"
 _TOOL_NAME = "emit_intent_analysis"
 
 
@@ -71,16 +72,21 @@ class AnthropicProvider:
         api_key_env: str,
         model: str = "claude-sonnet-4-5",
         timeout_s: float,
+        known_data_types: list[str] | None = None,
     ) -> None:
         if AsyncAnthropic is None:
             raise LLMProviderError(
-                "anthropic extra not installed; install nautilus[llm-anthropic]"
+                f"the 'llm-anthropic' extra is not installed -- "
+                f"{install_extra_hint('llm-anthropic')}"
             ) from _import_error
         self.api_key_env = api_key_env
         self.model = model
         self.timeout_s = timeout_s
         self.prompt_version = _PROMPT_VERSION
         self._prompt_template = Template(_PROMPT_PATH.read_text(encoding="utf-8"))
+        # Rendered into the prompt as the closed vocabulary the router will
+        # intersect the answer against; see ``analyze``.
+        self._known_data_types = list(known_data_types or [])
         self._tool_schema: dict[str, Any] = IntentAnalysis.model_json_schema()
         self._last_raw_response_hash: str | None = None
 
@@ -98,6 +104,8 @@ class AnthropicProvider:
         prompt = self._prompt_template.safe_substitute(
             intent=intent,
             context_json=json.dumps(context, sort_keys=True, default=str),
+            known_data_types="\n".join(f"- {dt}" for dt in self._known_data_types)
+            or "(none configured)",
         )
         tool_def: dict[str, Any] = {
             "name": _TOOL_NAME,

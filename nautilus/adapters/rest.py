@@ -11,10 +11,12 @@ SSRF defense (NFR-17, AC-9.2):
 
 - The ``httpx.AsyncClient`` is constructed with ``follow_redirects=False`` so
   the runtime never chases a redirect silently.
-- At ``connect()`` time, IP-literal base URLs that resolve to private,
-  loopback, or link-local ranges are rejected. Hostname-based base URLs are
-  NOT resolved at ``connect()`` (keeps the constructor free of network I/O
-  for unit tests); per-request DNS pinning is out of scope for Phase 2.
+- At ``connect()`` time the base URL's host is resolved and rejected if any
+  address it answers with is private, loopback, link-local or multicast. A
+  name is resolved, not only an IP literal -- the literal-only version of this
+  check was bypassed by ``http://backend``. Resolution is not repeated at dial
+  time, so a record that changes between the two lookups is not caught; see
+  :func:`nautilus.adapters.base.resolve_base_url`.
 - After every response, if ``response.next_request`` is populated (i.e. the
   upstream returned a 3xx redirect) AND the redirect target host differs
   from the configured base-URL host, the adapter raises
@@ -24,7 +26,7 @@ SSRF defense (NFR-17, AC-9.2):
 
 from __future__ import annotations
 
-import ipaddress
+import json
 import time
 from collections.abc import Callable
 from typing import Any, ClassVar, cast
@@ -34,8 +36,10 @@ import httpx
 from nautilus.adapters.base import (
     AdapterError,
     ScopeEnforcementError,
+    resolve_base_url,
     session_token_headers,
     validate_field,
+    wrap_execute,
 )
 from nautilus.adapters.schema import AdapterSchema
 from nautilus.config.models import (
@@ -49,6 +53,13 @@ from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
 # Default row cap applied when the intent does not specify a ``LIMIT``.
 _DEFAULT_LIMIT: int = 1000
+
+# The row cap bounds the rows; it runs after the whole body has been parsed, so
+# it bounds nothing an oversized upstream response can do to this process. This
+# is the byte ceiling that runs first.
+# ponytail: one constant for every REST source. Move it onto SourceConfig if a
+# deployment legitimately needs a bigger body from one endpoint.
+MAX_RESPONSE_BYTES: int = 8 * 1024 * 1024
 
 # Operator allowlist mirroring :data:`nautilus.adapters.base._OPERATOR_ALLOWLIST`.
 # ``NOT IN`` is intentionally NOT in the default template map below; it is
@@ -72,8 +83,8 @@ _OPERATOR_ALLOWLIST: frozenset[str] = frozenset(
 
 
 class SSRFBlockedError(AdapterError):
-    """Raised when the REST adapter refuses a cross-host redirect or a
-    private-IP base URL (NFR-17, AC-9.2).
+    """Raised when the REST adapter refuses a cross-host redirect or a base URL
+    that resolves to an unroutable address (NFR-17, AC-9.2).
 
     The broker converts this into a ``sources_errored`` entry with
     ``error_type=SSRFBlockedError`` (design §10 error table).
@@ -193,28 +204,36 @@ def _typecheck_value(op: str, value: Any) -> None:
             raise ScopeEnforcementError("Operator 'BETWEEN' requires a 2-tuple/list value")
 
 
-def _reject_private_ip_literal(base_url: str) -> None:
-    """Reject IP-literal base URLs pointing at private/loopback/link-local IPs.
+async def _reject_unroutable_base_url(base_url: str) -> None:
+    """Reject a ``base_url`` whose host **resolves to** a private/loopback/
+    link-local/multicast address.
 
-    Hostname-based base URLs are NOT resolved here; per-request DNS pinning is
-    out of scope for Phase 2 (see module docstring). This check only catches
-    the most common SSRF-via-config misstep: ``http://127.0.0.1``,
-    ``http://169.254.169.254`` (cloud metadata), or RFC1918 literals.
+    Shared with :class:`~nautilus.adapters.servicenow.ServiceNowAdapter`; it is
+    the one place both REST-shaped adapters route through, so the check is
+    written once.
+
+    This used to test an IP *literal* only, which made the control trivially
+    avoidable by the most ordinary configuration there is: ``http://backend``
+    inside a container resolves to an RFC1918 address and was dialled without
+    complaint, so every internal service with a DNS name -- including a cloud
+    metadata service fronted by a name -- was reachable through a control the
+    reference said covered it. The host is now resolved (see
+    :func:`~nautilus.adapters.base.resolve_base_url`) and **every** address it
+    answers with must be routable.
+
+    Residual, stated rather than implied: resolution here is not the
+    resolution httpx does when it dials, so a record that changes between the
+    two lookups (DNS rebinding, a short TTL, a changing round-robin set) is
+    not caught, and a name that does not resolve at all is accepted -- it
+    reaches nothing, and the dial fails with the driver's own DNS error.
     """
-    host = httpx.URL(base_url).host
-    if not host:
-        raise ScopeEnforcementError(
-            f"RestAdapter requires a non-empty host in base_url '{base_url}'"
-        )
-    try:
-        ip = ipaddress.ip_address(host)
-    except ValueError:
-        # Not an IP literal; accept (hostname resolution is out of scope).
-        return
-    if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast:
-        raise SSRFBlockedError(
-            f"RestAdapter refuses private/loopback/link-local IP base URL: {host}"
-        )
+    host, addresses = await resolve_base_url(base_url, "RestAdapter")
+    for ip in addresses:
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast:
+            raise SSRFBlockedError(
+                f"RestAdapter refuses base_url host '{host}': it resolves to "
+                f"private/loopback/link-local address {ip}"
+            )
 
 
 def _auth_for_config(config: SourceConfig) -> httpx.Auth | None:
@@ -284,7 +303,7 @@ class RestAdapter:
         is passed through as ``cert`` / ``verify`` kwargs; ``bearer`` / ``basic``
         attach via :func:`_auth_for_config`.
         """
-        _reject_private_ip_literal(config.connection)
+        await _reject_unroutable_base_url(config.connection)
         self._config = config
         self._base_host = httpx.URL(config.connection).host
 
@@ -389,6 +408,7 @@ class RestAdapter:
             params.extend(builder(field, value))
         return params
 
+    @wrap_execute
     async def execute(
         self,
         intent: IntentAnalysis,
@@ -423,22 +443,50 @@ class RestAdapter:
         # pyright strict invariance check).
         params_tuple: tuple[tuple[str, str], ...] = tuple(params)
         query = httpx.QueryParams(params_tuple)
-        response: httpx.Response = await self._client.request(
-            method, path, params=query, headers=headers
-        )
-        duration_ms = int((time.perf_counter() - started) * 1000)
+        async with self._client.stream(method, path, params=query, headers=headers) as response:
+            duration_ms = int((time.perf_counter() - started) * 1000)
 
-        _enforce_no_cross_host_redirect(response, self._base_host)
+            _enforce_no_cross_host_redirect(response, self._base_host)
 
-        response.raise_for_status()
-        body: Any = response.json()
+            if response.status_code >= 400:  # noqa: PLR2004 — httpx's own threshold
+                # The error path wants the body for its message, and a streamed
+                # response has not read one yet.
+                await response.aread()
+            response.raise_for_status()
+            raw = await self._read_bounded(response)
+        body: Any = json.loads(raw)
         rows: list[dict[str, Any]] = _coerce_rows(body, limit=_DEFAULT_LIMIT)
 
         return AdapterResult(
             source_id=self._config.id,
             rows=rows,
             duration_ms=duration_ms,
+            truncated=len(rows) >= _DEFAULT_LIMIT,
         )
+
+    async def _read_bounded(self, response: httpx.Response) -> bytes:
+        """Read the response body, refusing to allocate past the ceiling.
+
+        Declared ``Content-Length`` is checked first so an oversized answer
+        costs nothing; a chunked response without one is bounded as it arrives.
+        """
+        source_id = self._config.id if self._config is not None else "rest"
+        declared = response.headers.get("content-length")
+        if declared is not None and declared.isdigit() and int(declared) > MAX_RESPONSE_BYTES:
+            raise AdapterError(
+                f"source '{source_id}' answered with {declared} bytes, over the "
+                f"{MAX_RESPONSE_BYTES}-byte ceiling"
+            )
+        chunks: list[bytes] = []
+        total = 0
+        async for chunk in response.aiter_bytes():
+            total += len(chunk)
+            if total > MAX_RESPONSE_BYTES:
+                raise AdapterError(
+                    f"source '{source_id}' streamed more than the {MAX_RESPONSE_BYTES}-byte ceiling"
+                )
+            chunks.append(chunk)
+        return b"".join(chunks)
 
     async def get_schema(self) -> AdapterSchema:
         """Return operator-declared schema from adapter config. AC-21, OQ3."""

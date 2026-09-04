@@ -29,11 +29,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import fcntl
 import logging
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import IO, Any, Protocol, runtime_checkable
 
 import httpx
 from fathom.attestation import AttestationService
@@ -41,6 +42,34 @@ from fathom.chained_log import ChainedAttestationLog
 from pydantic import BaseModel, ConfigDict
 
 log = logging.getLogger(__name__)
+
+
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1", "[::1]"})
+
+
+def _warn_if_plaintext(url: str) -> None:
+    """Say it out loud when signed attestations will cross the wire in the clear.
+
+    The payload is the decision receipt: request id, agent, purpose, the sources
+    that answered, and the signed token. Configuring ``attestation.sink.url``
+    with ``http://`` is accepted -- refusing would break a sidecar collector on a
+    private network, which is a real deployment -- but it was accepted in total
+    silence, so nobody found out from Nautilus. Loopback is exempt: nothing
+    leaves the host.
+    """
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if parsed.scheme != "http":
+        return
+    if (parsed.hostname or "") in _LOOPBACK_HOSTS:
+        return
+    log.warning(
+        "attestation.sink.url is plaintext http:// to %s -- signed attestations "
+        "and the decision metadata around them cross the network unencrypted. "
+        "Use https:// unless the collector is reachable only over a trusted link.",
+        parsed.hostname or url,
+    )
 
 
 class AttestationPayload(BaseModel):
@@ -76,6 +105,38 @@ class AttestationSink(Protocol):
     async def close(self) -> None:
         """Release any held resources. Must be idempotent."""
         ...
+
+
+class SinkAlreadyLockedError(RuntimeError):
+    """Raised when a chained log already has a live writer."""
+
+
+def take_writer_lock(lock_path: Path, *, subject: str, remedy: str) -> IO[str]:
+    """Claim an exclusive ``flock`` on ``lock_path``, or name who holds it.
+
+    A hash chain is a total order, so it admits exactly one writer: a second
+    one interleaves into corruption that ``verify_chain`` cannot distinguish
+    from tampering. The chained attestation sink and the chained audit log
+    write different files with the same structure and the same failure, so
+    they take the lock the same way.
+    """
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    handle = lock_path.open("a+", encoding="utf-8")
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as exc:
+        handle.seek(0)
+        holder = handle.read().strip() or "an unidentified process"
+        handle.close()
+        raise SinkAlreadyLockedError(
+            f"{subject} is already open for writing by {holder}. A hash chain "
+            f"admits exactly one writer: a second one interleaves into corruption "
+            f"that verify_chain cannot distinguish from tampering. {remedy}"
+        ) from exc
+    handle.truncate(0)
+    handle.write(f"pid {os.getpid()}\n")
+    handle.flush()
+    return handle
 
 
 class NullAttestationSink:
@@ -158,6 +219,21 @@ class ChainedFileAttestationSink:
     ``emit`` raises. Per AC-14.5 the broker logs that at WARNING and
     continues — the corruption is surfaced by the verify CLI and the
     admin audit viewer's chain badge rather than by breaking the hot path.
+
+    **Single writer, enforced.** A chain is a total order, so two writers
+    interleaving into one file produce permanently unrecoverable corruption
+    whose ``verify_chain`` failure is indistinguishable from tampering. The
+    sink therefore takes an exclusive ``flock`` on a ``<path>.lock`` sidecar
+    and raises :class:`SinkAlreadyLockedError` if another process holds it —
+    a refused write, not a silently corrupted log. Unlike
+    :class:`FileAttestationSink`, whose atomic ``O_APPEND`` writes survive
+    concurrency, this sink has no safe concurrent mode.
+
+    The lock is taken at the first :meth:`emit`, not in the constructor: a
+    ``Broker`` is also built by read-only surfaces (``nautilus adapters list``,
+    ``schema-ack``, the config validators) that never emit an attestation, and
+    locking on construction made the documented recovery from a drift
+    quarantine impossible while the server it recovers was running.
     """
 
     def __init__(
@@ -167,8 +243,24 @@ class ChainedFileAttestationSink:
         *,
         checkpoint_interval: int = 0,
     ) -> None:
+        self._lock_path = Path(path).with_name(Path(path).name + ".lock")
+        self._lock_path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock_fh: IO[str] | None = None
         self._log = ChainedAttestationLog(path, service, checkpoint_interval=checkpoint_interval)
         self._closed = False
+
+    def _take_writer_lock(self) -> None:
+        """Claim the single-writer lock; no-op once held. Called on first append."""
+        if self._lock_fh is not None:
+            return
+        self._lock_fh = take_writer_lock(
+            self._lock_path,
+            subject=f"chained attestation log {self._log.path}",
+            remedy=(
+                "Give this broker its own path, or use chained: false "
+                "(plain FileAttestationSink appends are atomic)."
+            ),
+        )
 
     @property
     def path(self) -> Path:
@@ -178,15 +270,22 @@ class ChainedFileAttestationSink:
         """Sign + append one chained JSONL line (fsynced by the chain log)."""
         if self._closed:
             raise ValueError("emit on closed ChainedFileAttestationSink")
+        self._take_writer_lock()
         self._log.append(payload.model_dump(mode="json"))
 
     async def close(self) -> None:
-        """Idempotent close."""
+        """Idempotent close; releases the single-writer lock."""
         if self._closed:
             return
         self._closed = True
         with contextlib.suppress(Exception):
             self._log.close()
+        # Closing the handle drops the flock. The sidecar file is left behind
+        # deliberately: an unlocked lock file is not a lock, and removing it
+        # would race a process that has just opened it.
+        if self._lock_fh is not None:
+            with contextlib.suppress(Exception):
+                self._lock_fh.close()
 
 
 class RetryPolicy(BaseModel):
@@ -236,6 +335,7 @@ class HttpAttestationSink:
         dead_letter_path: Path | str | None = None,
     ) -> None:
         self._url = url
+        _warn_if_plaintext(url)
         self._retry_policy = retry_policy if retry_policy is not None else RetryPolicy()
         # ``httpx.AsyncClient`` defers the actual connection until first
         # request, so construction is cheap and the smoke-test in the Verify
@@ -305,6 +405,87 @@ class HttpAttestationSink:
                 await self._dead_letter.close()
 
 
+class SingleWriterAuditSink:
+    """One writer per chained audit log, enforced by an exclusive ``flock``.
+
+    The audit log is the record of what was decided, and ``audit.chained``
+    makes it a hash chain. Two brokers appending to one file each keep their
+    own chain head, so the log forks within seconds while both replicas answer
+    200, and the next restart of either finds a log it cannot verify and fails
+    closed on every request. The attestation sink has refused a second writer
+    since #4.22; its audit twin never got the same treatment.
+
+    This wraps any ``AuditSink`` rather than only the chained log, but the
+    broker applies it only to the chained one — plain ``FileSink`` appends are
+    atomic and survive concurrency.
+
+    The lock is taken at the first write, not in the constructor. A ``Broker``
+    is also built by read-only surfaces — ``nautilus adapters list``,
+    ``schema``, ``schema-fingerprint`` and ``schema-diff`` — which never write
+    an audit line, and locking on construction stopped all four while a server
+    was running.
+
+    ``schema-ack`` is not one of them. It audits the override it records, so it
+    reaches this lock like any other writer; ``nautilus/cli/adapters.py`` probes
+    the lock before re-baselining the adapter and refuses with exit 2 rather
+    than crashing halfway, which is how an operator who cannot record the
+    acknowledgement is stopped from making it.
+    """
+
+    def __init__(self, sink: Any, path: Path) -> None:
+        self._sink = sink
+        self._path = Path(path)
+        self._lock_path = self._path.with_name(self._path.name + ".lock")
+        self._lock_fh: IO[str] | None = None
+
+    def _acquire(self) -> None:
+        if self._lock_fh is None:
+            self._lock_fh = take_writer_lock(
+                self._lock_path,
+                subject=f"chained audit log {self._path}",
+                remedy=(
+                    "Give each replica its own audit.path, or use "
+                    "audit.chained: false (plain appends are atomic)."
+                ),
+            )
+
+    def write(self, record: Any) -> None:
+        """Take the writer lock on first use, then append."""
+        self._acquire()
+        self._sink.write(record)
+
+    def probe(self) -> str | None:
+        """Why this sink could not write, or ``None`` when it can.
+
+        Readiness has to know about the writer lock. The lock is taken lazily —
+        constructing a Broker must not claim it, or the read-only CLI surfaces
+        could not run beside a live server (wave E2) — so a replica pointed at a
+        log another process owns used to pass a ``W_OK`` check, join the load
+        balancer, and return a bare 500 to every request it was handed.
+
+        Acquiring here rather than reporting-without-acquiring is deliberate: a
+        process that answers readiness is a process that intends to write, and
+        taking the lock at the first probe moves the failure to the probe, which
+        is where an operator is looking.
+        """
+        try:
+            self._acquire()
+        except SinkAlreadyLockedError as exc:
+            return str(exc)
+        return None
+
+    def close(self) -> None:
+        """Flush the wrapped sink and drop the writer lock. Idempotent."""
+        with contextlib.suppress(Exception):
+            close = getattr(self._sink, "close", None)
+            if close is not None:
+                close()
+        if self._lock_fh is not None:
+            with contextlib.suppress(Exception):
+                self._lock_fh.close()
+            self._lock_fh = None
+
+
 __all__ = [
     "AttestationPayload",
     "AttestationSink",
@@ -313,4 +494,7 @@ __all__ = [
     "HttpAttestationSink",
     "NullAttestationSink",
     "RetryPolicy",
+    "SingleWriterAuditSink",
+    "SinkAlreadyLockedError",
+    "take_writer_lock",
 ]

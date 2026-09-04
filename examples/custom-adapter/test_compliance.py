@@ -10,18 +10,24 @@ from pathlib import Path
 
 import pytest
 from csv_adapter import CsvAdapter
-from nautilus_adapter_sdk.config import SourceConfig
-from nautilus_adapter_sdk.testing.compliance import AdapterComplianceSuite
+
+from nautilus.adapters.testing import AdapterComplianceSuite
+from nautilus.config.models import SourceConfig
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
+# The last row is not filler. ``AdapterComplianceSuite`` probes ``id = "test"``
+# and checks that the constraint actually narrowed the rows; with no row that can
+# match, the check is vacuous and warns instead of proving anything. Its
+# department and name are chosen to leave the counts in TestCsvAdapter alone.
 SAMPLE_DATA = [
     {"id": "1", "name": "Alice", "department": "Engineering", "clearance": "cui-basic"},
     {"id": "2", "name": "Bob", "department": "Legal", "clearance": "cui-specified"},
     {"id": "3", "name": "Charlie", "department": "Engineering", "clearance": "unclassified"},
     {"id": "4", "name": "Dana", "department": "Security", "clearance": "cui-specified"},
+    {"id": "test", "name": "Probe Zero", "department": "Compliance", "clearance": "unclassified"},
 ]
 
 
@@ -86,7 +92,7 @@ class TestCsvAdapter:
 
     @pytest.mark.asyncio
     async def test_filter_by_department(self, source_config: SourceConfig) -> None:
-        from nautilus_adapter_sdk.types import IntentAnalysis, ScopeConstraint
+        from nautilus.core.models import IntentAnalysis, ScopeConstraint
 
         adapter = CsvAdapter()
         await adapter.connect(source_config)
@@ -94,10 +100,8 @@ class TestCsvAdapter:
         result = await adapter.execute(
             IntentAnalysis(
                 raw_intent="find engineers",
-                normalized_intent="find_engineers",
-                data_types=["employee"],
-                purpose="lookup",
-                confidence=1.0,
+                data_types_needed=["employee"],
+                entities=[],
             ),
             [
                 ScopeConstraint(
@@ -110,13 +114,13 @@ class TestCsvAdapter:
             {},
         )
 
-        assert len(result.data) == 2
-        assert all(r["department"] == "Engineering" for r in result.data)
+        assert len(result.rows) == 2
+        assert all(r["department"] == "Engineering" for r in result.rows)
         await adapter.close()
 
     @pytest.mark.asyncio
     async def test_filter_like(self, source_config: SourceConfig) -> None:
-        from nautilus_adapter_sdk.types import IntentAnalysis, ScopeConstraint
+        from nautilus.core.models import IntentAnalysis, ScopeConstraint
 
         adapter = CsvAdapter()
         await adapter.connect(source_config)
@@ -124,10 +128,8 @@ class TestCsvAdapter:
         result = await adapter.execute(
             IntentAnalysis(
                 raw_intent="search",
-                normalized_intent="search",
-                data_types=["employee"],
-                purpose="lookup",
-                confidence=1.0,
+                data_types_needed=["employee"],
+                entities=[],
             ),
             [
                 ScopeConstraint(
@@ -140,13 +142,13 @@ class TestCsvAdapter:
             {},
         )
 
-        assert len(result.data) == 1
-        assert result.data[0]["name"] == "Alice"
+        assert len(result.rows) == 1
+        assert result.rows[0]["name"] == "Alice"
         await adapter.close()
 
     @pytest.mark.asyncio
     async def test_no_scope_returns_all(self, source_config: SourceConfig) -> None:
-        from nautilus_adapter_sdk.types import IntentAnalysis
+        from nautilus.core.models import IntentAnalysis
 
         adapter = CsvAdapter()
         await adapter.connect(source_config)
@@ -154,14 +156,12 @@ class TestCsvAdapter:
         result = await adapter.execute(
             IntentAnalysis(
                 raw_intent="list all",
-                normalized_intent="list_all",
-                data_types=["employee"],
-                purpose="lookup",
-                confidence=1.0,
+                data_types_needed=["employee"],
+                entities=[],
             ),
             [],
             {},
         )
 
-        assert len(result.data) == 4
+        assert len(result.rows) == len(SAMPLE_DATA)
         await adapter.close()

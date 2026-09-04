@@ -2,10 +2,10 @@
 
 Subcommands:
     rule list [--status STATUS] [--json]
-    rule retract <name> --reason TEXT --yes [--cascade | --orphan-children]
+    rule retract <name> --reason TEXT --yes [--cascade | --orphan-children] [--config PATH]
     rule lineage <name> [--depth N] [--json]
     rule history <name> [--json]
-    rule rollback <name> --to-version VERSION --reason TEXT --yes
+    rule rollback <name> --to-version VERSION --reason TEXT --yes [--config PATH]
 
 Direct Python imports — broker not required at CLI time.
 Reviewer identity from ``NAUTILUS_REVIEWER`` env (DQ4 LOCKED).
@@ -19,7 +19,7 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from nautilus.cli._common import err, ok, require_reviewer, warn
+from nautilus.cli._common import err, ok, open_audit_logger, require_reviewer, warn
 
 if TYPE_CHECKING:
     from nautilus.rkm.lineage import LineageStore
@@ -52,6 +52,14 @@ def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> N
         action="store_true",
         default=False,
         help="Cascade retirement to all transitive descendants (AC-35.10.d).",
+    )
+    p_retract.add_argument(
+        "--config",
+        default=None,
+        help=(
+            "Path to nautilus.yaml; its ``audit.path`` receives the decision "
+            "record (default: ./audit.jsonl)."
+        ),
     )
     p_retract.add_argument(
         "--orphan-children",
@@ -90,6 +98,14 @@ def add_subparser(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> N
     )
     p_rollback.add_argument("--reason", required=True, help="Rollback reason (required).")
     p_rollback.add_argument("--yes", action="store_true", help="Confirm destructive operation.")
+    p_rollback.add_argument(
+        "--config",
+        default=None,
+        help=(
+            "Path to nautilus.yaml; its ``audit.path`` receives the decision "
+            "record (default: ./audit.jsonl)."
+        ),
+    )
 
 
 def dispatch(args: argparse.Namespace) -> int:
@@ -174,7 +190,7 @@ def _cmd_retract(args: argparse.Namespace) -> int:
         reviewer=reviewer,
         cascade=cascade_mode,
         lineage=lineage,
-        audit_logger=None,
+        audit_logger=open_audit_logger(getattr(args, "config", None)),
     )
     ok(f"rule {args.name!r} v{latest.version} retracted by {reviewer}")
     if affected:
@@ -256,31 +272,24 @@ def _cmd_rollback(args: argparse.Namespace) -> int:
 
     reviewer = require_reviewer()
 
-    lineage = _open_lineage()
-    target = lineage.get(args.name, args.to_version)
-    if target is None:
+    from nautilus.rkm.review import rollback_rule
+
+    try:
+        result = rollback_rule(
+            args.name,
+            to_version=args.to_version,
+            reason=args.reason,
+            reviewer=reviewer,
+            lineage=_open_lineage(),
+            audit_logger=open_audit_logger(getattr(args, "config", None)),
+        )
+    except KeyError:
         err(f"rule {args.name!r} v{args.to_version} not found in lineage")
         return 1
 
-    # Determine next version number (latest + 1).
-    latest = lineage.get(args.name)
-    next_version: int = (latest.version + 1) if latest is not None else args.to_version + 1
-
-    from datetime import UTC, datetime
-
-    restored = dataclasses.replace(
-        target,
-        version=next_version,
-        approver=reviewer,
-        promoted_at=datetime.now(UTC),
-        retired_at=None,
-        retire_reason=None,
-        retire_reviewer=None,
-    )
-    lineage.insert(restored)
     ok(
-        f"rule {args.name!r} rolled back to v{args.to_version}"
-        f" as v{next_version} by {reviewer}: {args.reason}"
+        f"rule {result.rule_name!r} rolled back to v{result.restored_version}"
+        f" as v{result.new_version} by {result.reviewer}: {result.reason}"
     )
     return 0
 

@@ -24,14 +24,14 @@ Key properties:
   ``provenance="llm_generated"`` so escalation/denial rules can
   distinguish generated content from records of fact.
 - Loopback/private endpoints are ALLOWED (local inference is the
-  air-gap-compatible deployment); link-local/metadata and multicast
-  literals are rejected. Under ``serve --air-gapped`` non-loopback LLM
-  sources are dropped entirely (see ``nautilus.cli.serve``).
+  air-gap-compatible deployment); base URLs whose host *resolves to*
+  link-local/metadata, multicast or unspecified addresses are rejected.
+  Under ``serve --air-gapped`` non-loopback LLM sources are dropped
+  entirely (see ``nautilus.cli.serve``).
 """
 
 from __future__ import annotations
 
-import ipaddress
 import time
 from typing import Any, ClassVar
 
@@ -40,8 +40,10 @@ import httpx
 from nautilus.adapters.base import (
     AdapterError,
     ScopeEnforcementError,
+    resolve_base_url,
     validate_field,
     validate_operator,
+    wrap_execute,
 )
 from nautilus.adapters.rest import _auth_for_config  # pyright: ignore[reportPrivateUsage]
 from nautilus.adapters.schema import AdapterSchema
@@ -58,28 +60,30 @@ _SYSTEM_PROMPT = (
 )
 
 
-def _reject_unroutable_literal(base_url: str) -> None:
-    """Reject link-local/metadata, multicast, and unspecified IP literals.
+async def _reject_unroutable_base_url(base_url: str) -> None:
+    """Reject a base URL that **resolves to** a link-local/metadata,
+    multicast, or unspecified address.
 
     Unlike :class:`~nautilus.adapters.rest.RestAdapter` (which also blocks
-    loopback/private as SSRF defense), loopback and RFC1918 literals are
+    loopback/private as SSRF defense), loopback and RFC1918 addresses are
     *allowed* here: a local inference server is the primary —and the only
     air-gap-compatible— deployment for an LLM source. Cloud metadata
     endpoints (169.254.x.x) stay blocked.
+
+    Blocking them by IP *literal* alone did not block them: every cloud
+    metadata service also answers to a name (``metadata.google.internal``,
+    ``instance-data``), and a name went through untested. The host is now
+    resolved through :func:`~nautilus.adapters.base.resolve_base_url` and
+    every address it answers with is checked — with that function's TOCTOU
+    residual, which applies here identically.
     """
-    host = httpx.URL(base_url).host
-    if not host:
-        raise ScopeEnforcementError(
-            f"LLMAdapter requires a non-empty host in base_url '{base_url}'"
-        )
-    try:
-        ip = ipaddress.ip_address(host)
-    except ValueError:
-        return  # hostname literal; resolution is out of scope
-    if ip.is_link_local or ip.is_multicast or ip.is_unspecified:
-        raise ScopeEnforcementError(
-            f"LLMAdapter refuses link-local/multicast/unspecified base URL host: {host}"
-        )
+    host, addresses = await resolve_base_url(base_url, "LLMAdapter")
+    for ip in addresses:
+        if ip.is_link_local or ip.is_multicast or ip.is_unspecified:
+            raise ScopeEnforcementError(
+                f"LLMAdapter refuses base_url host '{host}': it resolves to "
+                f"link-local/multicast/unspecified address {ip}"
+            )
 
 
 def _assemble_prompt(intent: IntentAnalysis, scope: list[ScopeConstraint]) -> str:
@@ -139,7 +143,7 @@ class LLMAdapter:
 
     async def connect(self, config: SourceConfig) -> None:
         """Validate the endpoint + model and build the HTTP client."""
-        _reject_unroutable_literal(config.connection)
+        await _reject_unroutable_base_url(config.connection)
         if not config.model:
             raise AdapterError(
                 f"LLMAdapter source '{config.id}' requires a 'model' field in its source block"
@@ -165,6 +169,7 @@ class LLMAdapter:
                 follow_redirects=False,
             )
 
+    @wrap_execute
     async def execute(
         self,
         intent: IntentAnalysis,

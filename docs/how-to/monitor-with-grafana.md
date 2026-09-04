@@ -25,7 +25,12 @@ Three dashboards are provisioned out of the box
 ## Wiring your own deployment
 
 The broker exposes Prometheus metrics at `GET /metrics` on the REST
-transport (unauthenticated, excluded from the OpenAPI schema). Scrape it:
+transport (unauthenticated, excluded from the OpenAPI schema) — **provided the
+`otel` extra is installed**. On a base install the route has no
+`prometheus_client` to call and answers `500`. Install it with
+`pip install "nautilus-rkm[otel]"`; the full list of exported series, and the
+two configurations under which most of them vanish, is in
+[What `/metrics` exports](operator-guide.md#what-metrics-exports). Scrape it:
 
 ```yaml
 # prometheus.yml
@@ -54,9 +59,15 @@ or copy the provisioning setup from
 
 - `readyz` failures (session-store outage; check
   `session_store_mode: degraded_*` in recent audit entries).
-- A rising denial rate — either a misbehaving agent or an
-  over-aggressive new rule (correlate with `rule_trace` in audit
-  entries; `nautilus rules test` before shipping rules prevents most of
-  these).
+- A rising denial rate — `rate(nautilus_scope_denials_total[5m])` — either a
+  misbehaving agent or an over-aggressive new rule (correlate with
+  `rule_trace` in audit entries; `nautilus rules test` before shipping rules
+  prevents most of these).
+- Adapter failures — `rate(nautilus_adapter_errors_total[5m])`, labelled by
+  `source_id` and `error_type`.
+
+Every counter is published at zero on startup, so an alert written against one
+of these matches a real series on a broker that has not yet fired it. A series
+that is missing is an exporter problem, not a quiet broker.
 - Quarantined adapters (`nautilus adapters list --status quarantined`) —
   schema drift detected; resolve with `schema-ack` after review.

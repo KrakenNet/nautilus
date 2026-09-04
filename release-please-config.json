@@ -6,13 +6,7 @@
   "skip-changelog": false,
   "packages": {
     ".": {
-      "package-name": "nautilus-rkm",
-      "extra-files": [
-        {
-          "type": "generic",
-          "path": "nautilus/__init__.py"
-        }
-      ]
+      "package-name": "nautilus-rkm"
     }
   }
 }

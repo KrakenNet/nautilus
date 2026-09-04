@@ -17,16 +17,92 @@ from __future__ import annotations
 
 import contextlib
 import time
+from collections.abc import Collection
 from typing import Any, ClassVar, cast
+from urllib.parse import parse_qs, urlsplit, urlunsplit
 
-from nautilus.adapters.base import AdapterError, ScopeEnforcementError
+from nautilus.adapters.base import AdapterError, ScopeEnforcementError, wrap_execute
 from nautilus.adapters.schema import AdapterSchema
-from nautilus.config.models import SourceConfig
+from nautilus.config.models import BasicAuth, NoneAuth, SourceConfig
 from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
 
 # Default row cap when the intent does not specify a ``LIMIT``.
 _DEFAULT_LIMIT: int = 1000
-_TagFilter = tuple[str, str, str | list[str]]
+
+# The row cap bounds how many objects come back; it says nothing about how big
+# one of them is. An exact-key read materialized the whole body and decoded it
+# to ``str``, so a multi-gigabyte object was a multi-gigabyte allocation inside
+# the broker.
+# ponytail: one constant for every S3 source. Move it onto SourceConfig if a
+# deployment legitimately serves bigger objects through the broker.
+MAX_OBJECT_BYTES: int = 8 * 1024 * 1024
+
+
+def _client_kwargs(config: SourceConfig) -> dict[str, Any]:
+    """Build the aiobotocore ``create_client`` kwargs for one source.
+
+    ``SourceConfig.connection`` is a post-interpolation *string*, always. Two
+    shapes are accepted:
+
+    - ``s3://[REGION]`` — real AWS; the optional host is the region name.
+    - ``http(s)://HOST[:PORT]`` — an S3-compatible endpoint (MinIO, Ceph, R2).
+
+    Either accepts ``?region=NAME``. When no region is given none is passed,
+    which leaves ``AWS_REGION`` / ``AWS_DEFAULT_REGION`` / ``~/.aws/config`` in
+    charge; the previous unconditional ``us-east-1`` overrode all three and made
+    every bucket outside that region unreachable.
+
+    Credentials come from ``auth:`` like every other adapter — ``basic`` maps
+    to (access key, secret key). The old ``access_key:`` / ``secret_key:``
+    sibling keys never worked: ``SourceConfig`` ignores unknown fields, so they
+    were dropped in silence.
+    """
+    split = urlsplit(config.connection)
+    region = (parse_qs(split.query).get("region") or [""])[0]
+    kwargs: dict[str, Any] = {}
+    if split.scheme == "s3":
+        region = region or split.netloc
+    else:
+        # Strip the query: it is Nautilus configuration, and a query string on
+        # an endpoint URL breaks SigV4 signing.
+        kwargs["endpoint_url"] = urlunsplit((split.scheme, split.netloc, split.path, "", ""))
+    if region:
+        kwargs["region_name"] = region
+
+    auth = config.auth
+    if isinstance(auth, BasicAuth):
+        kwargs["aws_access_key_id"] = auth.username
+        kwargs["aws_secret_access_key"] = auth.password
+    elif auth is not None and not isinstance(auth, NoneAuth):
+        raise AdapterError(
+            f"S3Adapter: source '{config.id}' declares auth type {auth.type!r}, which S3 "
+            f"cannot use. Use 'basic' (username=access key id, password=secret access "
+            f"key), or omit 'auth' to use the ambient credential chain."
+        )
+    return kwargs
+
+
+# One parsed tag predicate: (tag_name, operator, operand). The operand is a
+# tuple of members for ``IN`` and a single string otherwise.
+_TagFilter = tuple[str, str, "str | tuple[str, ...]"]
+
+
+def _tag_operand(op: str, value: Any) -> str | tuple[str, ...]:
+    """Coerce a scope value into the operand ``_matches_tags`` compares against.
+
+    ``IN`` keeps its members separate so membership stays exact. A bare
+    string is one member, not a sequence of characters.
+    """
+    if op != "IN":
+        return str(value)
+    if isinstance(value, str):
+        return (value,)
+    if isinstance(value, (list, tuple, set, frozenset)):
+        members = cast("Collection[object]", value)
+        return tuple(str(v) for v in members)
+    raise ScopeEnforcementError(
+        f"S3Adapter: IN operator requires a list value, got {type(value).__name__}"
+    )
 
 
 class S3Adapter:
@@ -49,51 +125,23 @@ class S3Adapter:
     async def connect(self, config: SourceConfig) -> None:
         """Create an aiobotocore session and S3 client from ``config``.
 
-        ``config.connection`` is expected to carry a JSON-like or
-        semicolon-delimited connection descriptor. For Phase 1, the adapter
-        reads well-known keys from the config object:
-
-        - ``endpoint_url``: S3-compatible endpoint (MinIO, Ceph, R2)
-        - ``region``: AWS region name (defaults to ``us-east-1``)
-        - ``access_key``: AWS access key ID
-        - ``secret_key``: AWS secret access key
-        - ``bucket``: target bucket name
-
-        These are passed via ``config.connection`` as a Python dict (parsed
-        upstream by the config loader) or directly via named config fields.
+        ``connection`` is either ``s3://[REGION]`` (real AWS) or the URL of an
+        S3-compatible endpoint; ``table`` is the bucket. See
+        :func:`_client_kwargs` for the region and credential rules.
         """
         from aiobotocore.session import AioSession  # pyright: ignore[reportMissingTypeStubs]
 
         self._config = config
-
-        # Connection can be a dict-like object or a string DSN. For Phase 1
-        # we expect the broker to pass a dict via config.connection; if it is
-        # a plain string, treat it as the endpoint URL with env-based auth.
-        conn: Any = config.connection
-        if isinstance(conn, dict):
-            conn_dict: dict[str, Any] = conn  # pyright: ignore[reportUnknownVariableType]
-        else:
-            # Fallback: treat connection string as endpoint_url, rely on
-            # environment variables for auth (standard boto credential chain).
-            conn_dict = {"endpoint_url": str(conn)}
-
-        self._bucket = conn_dict.get("bucket") or config.table or "default"
-
-        session_kwargs: dict[str, Any] = {}
-        self._session = AioSession(**session_kwargs)
-
-        client_kwargs: dict[str, Any] = {
-            "region_name": conn_dict.get("region", "us-east-1"),
-        }
-        endpoint_url = conn_dict.get("endpoint_url")
-        if endpoint_url:
-            client_kwargs["endpoint_url"] = endpoint_url
-
-        access_key = conn_dict.get("access_key")
-        secret_key = conn_dict.get("secret_key")
-        if access_key and secret_key:
-            client_kwargs["aws_access_key_id"] = access_key
-            client_kwargs["aws_secret_access_key"] = secret_key
+        self._bucket = config.table or "default"
+        self._session = AioSession()
+        client_kwargs = _client_kwargs(config)
+        if "endpoint_url" in client_kwargs and not (
+            "region_name" in client_kwargs or self._session.get_config_variable("region")
+        ):
+            # SigV4 needs *a* region even against MinIO/Ceph, which ignore it.
+            # Only filled in when the ambient chain has none, so AWS_REGION and
+            # ~/.aws/config still win (R2, for one, insists on "auto").
+            client_kwargs["region_name"] = "us-east-1"
 
         try:
             ctx = self._session.create_client("s3", **client_kwargs)
@@ -116,6 +164,7 @@ class S3Adapter:
             with contextlib.suppress(Exception):
                 await client_ctx.__aexit__(None, None, None)
 
+    @wrap_execute
     async def execute(
         self,
         intent: IntentAnalysis,
@@ -138,10 +187,18 @@ class S3Adapter:
         if self._client is None or self._config is None or self._bucket is None:
             raise AdapterError("S3Adapter.execute called before connect()")
 
-        prefix: str | None = None
-        exact_key: str | None = None
-        tag_filters: list[_TagFilter] = []  # (tag_name, op, value)
-        classification_filter: str | None = None
+        # Every constraint on a field ANDs with the others. These used to be
+        # single slots assigned in the loop, so a second constraint on 'key'
+        # overwrote the first: "under restricted/ AND not the payroll object"
+        # returned the payroll object.
+        prefixes: list[str] = []
+        exact_keys: set[str] = set()
+        classifications: set[str] = set()
+        # (tag_name, op, value). ``IN`` keeps its members as a tuple; it used
+        # to be str(value), which turned ["alice", "bob"] into the literal
+        # "['alice', 'bob']" and made the membership test below a substring
+        # match -- a tag value of "li" passed a filter for alice-or-bob.
+        tag_filters: list[_TagFilter] = []
 
         for constraint in scope:
             field = constraint.field
@@ -150,14 +207,14 @@ class S3Adapter:
 
             if field == "key":
                 if op == "=":
-                    exact_key = str(value)
+                    exact_keys.add(str(value))
                 elif op == "LIKE":
                     if not isinstance(value, str):
                         raise ScopeEnforcementError(
                             "S3Adapter: LIKE operator requires a string value"
                         )
                     # Strip trailing % wildcard for prefix matching.
-                    prefix = value.rstrip("%")
+                    prefixes.append(value.rstrip("%"))
                 else:
                     raise ScopeEnforcementError(
                         f"S3Adapter: unsupported operator '{op}' for field 'key'"
@@ -170,27 +227,33 @@ class S3Adapter:
                     raise ScopeEnforcementError(
                         f"S3Adapter: unsupported operator '{op}' for tag filter"
                     )
-                if op == "IN":
-                    if not isinstance(value, list):
-                        raise ScopeEnforcementError("S3Adapter: IN operator requires a list value")
-                    tag_filters.append((tag_name, op, cast(list[str], value)))
-                else:
-                    tag_filters.append((tag_name, op, str(value)))
+                tag_filters.append((tag_name, op, _tag_operand(op, value)))
             elif field == "classification":
                 if op != "=":
                     raise ScopeEnforcementError(
                         f"S3Adapter: unsupported operator '{op}' for classification"
                     )
-                classification_filter = str(value)
+                classifications.add(str(value))
             else:
                 raise ScopeEnforcementError(f"S3Adapter: unsupported scope field '{field}'")
 
-        # Classification gate: reject early if the source classification
-        # does not match the requested classification label.
-        if (
-            classification_filter is not None
-            and self._config.classification != classification_filter
-        ):
+        # Intersect the accumulated constraints. The longest prefix is the
+        # binding one; anything the others exclude makes the whole conjunction
+        # unsatisfiable, and so does a second, different exact key or
+        # classification. An unsatisfiable scope selects no object -- returning
+        # rows for the loosest of the constraints would be the fail-open.
+        prefix: str | None = max(prefixes, key=len) if prefixes else None
+        exact_key: str | None = next(iter(exact_keys)) if len(exact_keys) == 1 else None
+        unsatisfiable = (
+            len(exact_keys) > 1
+            or len(classifications) > 1
+            or (prefix is not None and any(not prefix.startswith(p) for p in prefixes))
+            or (exact_key is not None and prefix is not None and not exact_key.startswith(prefix))
+            # Classification gate: the source's own label must match the
+            # requested one.
+            or bool(classifications and self._config.classification not in classifications)
+        )
+        if unsatisfiable:
             return AdapterResult(
                 source_id=self._config.id,
                 rows=[],
@@ -201,7 +264,15 @@ class S3Adapter:
 
         try:
             if exact_key is not None:
-                rows = await self._get_object(exact_key)
+                # AND with the other constraints. Short-circuiting straight to
+                # the object dropped ``prefix`` and ``tag_filters`` -- both
+                # already parsed -- while they stayed in
+                # ``BrokerResponse.scope_restrictions`` and in the signed
+                # attestation as though applied. Every other adapter ANDs.
+                matches = (not prefix or exact_key.startswith(prefix)) and (
+                    not tag_filters or await self._matches_tags(exact_key, tag_filters)
+                )
+                rows = await self._get_object(exact_key) if matches else []
             else:
                 rows = await self._list_objects(
                     prefix=prefix,
@@ -220,6 +291,7 @@ class S3Adapter:
             source_id=self._config.id,
             rows=rows,
             duration_ms=duration_ms,
+            truncated=len(rows) >= _DEFAULT_LIMIT,
         )
 
     async def get_schema(self) -> AdapterSchema:
@@ -235,8 +307,21 @@ class S3Adapter:
             Bucket=self._bucket,
             Key=key,
         )
+        declared = response.get("ContentLength")
+        source_id = self._config.id if self._config else "s3"
+        if isinstance(declared, int) and declared > MAX_OBJECT_BYTES:
+            raise AdapterError(
+                f"source '{source_id}' object {key!r} is {declared} bytes, over the "
+                f"{MAX_OBJECT_BYTES}-byte ceiling"
+            )
         body_stream = response["Body"]
-        body_bytes: bytes = await body_stream.read()
+        # Read one byte past the ceiling so an undeclared length is caught too.
+        body_bytes: bytes = await body_stream.read(MAX_OBJECT_BYTES + 1)
+        if len(body_bytes) > MAX_OBJECT_BYTES:
+            raise AdapterError(
+                f"source '{source_id}' object {key!r} streamed more than the "
+                f"{MAX_OBJECT_BYTES}-byte ceiling"
+            )
         return [
             {
                 "key": key,
@@ -303,18 +388,16 @@ class S3Adapter:
 
         for tag_name, op, expected in tag_filters:
             actual = tags.get(tag_name)
-            if op == "IN":
-                assert isinstance(expected, list)
-                if actual is None or actual not in expected:
-                    return False
-            elif op == "=":
-                assert isinstance(expected, str)
+            if op == "=":
                 if actual != expected:
                     return False
             elif op == "!=":
-                assert isinstance(expected, str)
                 if actual == expected:
                     return False
+            elif op == "IN" and (actual is None or actual not in expected):
+                # ``expected`` is a tuple of members here, so this is exact
+                # membership rather than a substring test.
+                return False
 
         return True
 

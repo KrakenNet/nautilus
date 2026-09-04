@@ -12,9 +12,11 @@ frozen canonicalization so Phase-1 tokens remain verifiable (NFR-6).
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
-from nautilus.core.attestation_payload import build_payload
+from nautilus.core.attestation_payload import build_payload, canonical_input_hash
 
 
 @pytest.mark.unit
@@ -94,3 +96,34 @@ def test_sources_queried_is_copied_not_referenced() -> None:
     payload, _ = build_payload("r", "a", sources, [], [])
     sources.append("s2")
     assert payload["sources_queried"] == ["s1"]
+
+
+@pytest.mark.unit
+def test_canonical_input_hash_matches_a_token_fathom_actually_signed() -> None:
+    """The reimplemented derivation must not drift from fathom's.
+
+    ``Broker._sign`` signs with ``sign_claims`` so it can carry the four claims
+    ``verify-a-token.md`` documents, which means it derives ``input_hash``
+    itself. If that ever diverges from ``AttestationService.sign``, tokens
+    would bind an ``input_hash`` no existing verifier can reproduce — and
+    nothing else in the suite would notice.
+    """
+    import base64
+    import json
+
+    from fathom.attestation import AttestationService
+
+    facts = [{"iss": "nautilus", "request_id": "r1", "sources_queried": ["a", "b"]}]
+    service = AttestationService.generate_keypair()
+    token = service.sign(
+        result=SimpleNamespace(decision="d", rule_trace=[]),  # type: ignore[arg-type]
+        session_id="s1",
+        input_facts=facts,
+    )
+    payload_b64 = token.split(".")[1]
+    claims = json.loads(base64.urlsafe_b64decode(payload_b64 + "=" * (-len(payload_b64) % 4)))
+
+    assert canonical_input_hash(facts) == claims["input_hash"]
+
+    # Control: the helper is sensitive to the facts, not a constant.
+    assert canonical_input_hash([{"iss": "nautilus", "request_id": "r2"}]) != claims["input_hash"]

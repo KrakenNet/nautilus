@@ -6,6 +6,10 @@ Phase-1 MVP fixtures land here. The ``pg_container`` fixture boots a
 ``PostgresAdapter`` and ``PgVectorAdapter`` integration paths can share a
 single database (design §13.3 / §15 step 13).
 
+``isolate_audit_log`` (autouse) points the shared fixture config's audit path
+at ``tmp_path`` so a test run never appends to the repository's own
+``audit.jsonl``.
+
 ``poc_tmp_cleanup`` (autouse, session-scoped) sweeps any stray
 ``/tmp/poc-*.jsonl`` artifacts left behind by earlier runs so the Task 1.15
 POC gate starts each session on a clean slate. Windows hosts (no ``/tmp``)
@@ -21,6 +25,48 @@ from typing import Any
 
 import pytest
 from testcontainers.postgres import PostgresContainer  # pyright: ignore[reportMissingTypeStubs]
+
+
+@pytest.fixture(autouse=True)
+def isolate_schema_baselines(tmp_path_factory: pytest.TempPathFactory) -> Iterator[None]:
+    """Give each test its own schema-drift baseline directory.
+
+    Baselines persist next to the config file so drift survives a restart.
+    Most tests share ``tests/fixtures/nautilus.yaml`` while swapping in fake
+    adapters, so without this they would write baselines into the source
+    tree and quarantine each other's adapters depending on run order.
+    Within a test the directory is shared, so drift detection stays real.
+    """
+    from nautilus.core.broker import Broker
+
+    root = str(tmp_path_factory.mktemp("schema-baselines"))
+
+    def _rooted(base_dir: Path | None) -> str:
+        del base_dir
+        return root
+
+    original = Broker._fingerprint_root  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    Broker._fingerprint_root = staticmethod(_rooted)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    yield
+    Broker._fingerprint_root = original  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+
+
+@pytest.fixture(autouse=True)
+def isolate_audit_log(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Give each test its own audit log instead of the repo's.
+
+    ``tests/fixtures/nautilus.yaml`` is shared by ~20 tests and its
+    ``audit.path`` resolves against the CWD, so every run appended to
+    ``audit.jsonl`` at the repository root -- 82 lines in one pass. That file
+    is gitignored, live, and the thing a replay gate would judge against, so
+    it has to stay reproducible.
+
+    The path lands in ``tmp_path`` so tests that ``chdir`` there and read
+    ``./audit.jsonl`` still find the file they wrote.
+    """
+    audit_path = tmp_path / "audit.jsonl"
+    monkeypatch.setenv("NAUTILUS_AUDIT_PATH", str(audit_path))
+    return audit_path
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -132,3 +178,30 @@ def pg_container() -> Iterator[str]:
         os.environ.pop("TEST_PG_DSN", None)
         os.environ.pop("TEST_PGV_DSN", None)
         container.stop()
+
+
+def pytest_collection_modifyitems(items: list[Any]) -> None:
+    """Auto-mark every test that needs a live Docker daemon.
+
+    CI selects with ``-m "not docker"``, i.e. a test runs unless it is
+    explicitly excluded. That is deliberate: the previous selection was
+    ``-m unit``, so a test without the ``unit`` marker was silently *not
+    collected* rather than failing, and 399 of 1299 tests — including whole
+    regression suites — never ran in CI. Opt-out cannot fail that way.
+
+    Marking is derived from the fixtures a test actually requests rather than
+    hand-applied per file, so a new test that pulls ``pg_container`` is covered
+    without anyone remembering to tag it.
+    """
+    container_fixtures = {
+        "pg_container",
+        # tests/backends.py -- the journey and defect-pin backends.
+        "pg_dsn",
+        "es_url",
+        "neo4j_bolt",
+        "minio_endpoint",
+        "influx",
+    }
+    for item in items:
+        if container_fixtures & set(getattr(item, "fixturenames", ())):
+            item.add_marker(pytest.mark.docker)

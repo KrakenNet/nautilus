@@ -147,7 +147,7 @@ def seed_minio() -> None:
         "policies/data-classification-policy.json": {
             "title": "Data Classification Policy v3.2",
             "effective_date": "2024-01-01",
-            "levels": ["unclassified", "cui-basic", "cui-specified"],
+            "levels": ["unclassified", "cui", "confidential"],
             "review_cycle": "annual",
             "owner": "Chief Information Security Officer",
         },
@@ -178,25 +178,25 @@ def seed_minio() -> None:
     tags_map = {
         "reports/q1-2024-security-audit.json": {
             "framework": "nist",
-            "classification": "cui-specified",
+            "classification": "confidential",
             "type": "report",
         },
         "reports/q2-2024-hipaa-assessment.json": {
             "framework": "hipaa",
-            "classification": "cui-specified",
+            "classification": "confidential",
             "type": "report",
         },
         "policies/data-classification-policy.json": {
             "type": "policy",
-            "classification": "cui-basic",
+            "classification": "cui",
         },
         "policies/incident-response-plan.json": {
             "type": "policy",
-            "classification": "cui-basic",
+            "classification": "cui",
         },
         "audit-trails/2024-access-review.json": {
             "type": "audit-trail",
-            "classification": "cui-specified",
+            "classification": "confidential",
         },
     }
 

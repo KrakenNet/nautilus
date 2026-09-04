@@ -6,18 +6,19 @@ Provides reusable dependency functions that extract common objects from
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from starlette.requests import Request
 
+# Runtime imports, not TYPE_CHECKING: with ``from __future__ import
+# annotations`` FastAPI resolves these names when it registers the routes
+# that depend on them. An unresolvable ``Request`` is treated as a body
+# parameter (422 on every admin call); an unresolvable ``Broker`` 500s
+# /openapi.json.
+from nautilus.core.broker import Broker
 from nautilus.transport.auth import (
     api_key_header,
     proxy_trust_dependency,
     verify_api_key,
 )
-
-if TYPE_CHECKING:
-    from starlette.requests import Request
-
-    from nautilus.core.broker import Broker
 
 
 async def get_broker(request: Request) -> Broker:
@@ -65,9 +66,16 @@ async def get_auth_user(request: Request) -> str:
 
 
 async def get_audit_path(request: Request) -> str:
-    """Return the audit JSONL file path from the broker's configuration."""
+    """Return the audit JSONL file the broker actually writes to.
+
+    ``config.audit.path`` is what the operator typed and is resolved against the
+    config directory when the broker is built; reading it raw pointed the audit
+    surface at the same relative name under the *process* cwd, so an incident
+    response answered 200 with an empty trail.
+    """
     broker: Broker = request.app.state.broker  # type: ignore[assignment]
-    return str(broker._config.audit.path)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    path = broker.audit_path
+    return str(path) if path is not None else str(broker.config.audit.path)
 
 
 __all__ = [

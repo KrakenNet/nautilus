@@ -21,7 +21,7 @@ sources:
   - id: vuln_db
     type: postgres
     description: "National Vulnerability Database mirror — CVEs, patches, advisories"
-    classification: cui-basic
+    classification: cui
     data_types: [cve, vulnerability, patch, advisory]
     allowed_purposes: [threat-analysis, incident-response, compliance-audit]
     connection: ${PG_DSN}
@@ -41,9 +41,13 @@ sources:
   - id: compliance_docs
     type: s3
     description: "Compliance reports, policies, and audit artifacts"
-    classification: cui-specified
+    classification: confidential
     data_types: [report, policy, audit-trail, compliance]
     allowed_purposes: [compliance-audit, legal-review]
+    # An S3-compatible endpoint URL, or `s3://REGION` for real AWS.
+    # `?region=NAME` pins the signing region; omit it to let the boto
+    # chain (AWS_REGION, ~/.aws/config) decide. Per-source credentials
+    # go in `auth:` as {type: basic, username: <key id>, password: <secret>}.
     connection: ${MINIO_ENDPOINT}
     table: compliance-docs  # S3 adapter uses this as the bucket name
 
@@ -51,7 +55,7 @@ sources:
   - id: app_logs
     type: elasticsearch
     description: "Application log index — errors, warnings, access events"
-    classification: cui-basic
+    classification: cui
     data_types: [log, event, alert, error]
     allowed_purposes: [incident-response, monitoring, threat-analysis]
     connection: ${ES_URL}
@@ -61,7 +65,7 @@ sources:
   - id: threat_graph
     type: neo4j
     description: "Threat intelligence knowledge graph — actors, TTPs, IOCs"
-    classification: cui-basic
+    classification: cui
     data_types: [threat-actor, indicator, technique, campaign]
     allowed_purposes: [threat-analysis, incident-response]
     connection: ${NEO4J_URL}
@@ -75,13 +79,13 @@ sources:
 agents:
   analyst:
     id: analyst
-    clearance: cui-basic
+    clearance: cui
     compartments: []
     default_purpose: threat-analysis
 
   auditor:
     id: auditor
-    clearance: cui-specified
+    clearance: confidential
     compartments: [compliance]
     default_purpose: compliance-audit
 
@@ -112,6 +116,12 @@ analysis:
 audit:
   path: /data/audit/audit.jsonl
 
+# ── Broker state ─────────────────────────────────────────────────────────
+# The config file is mounted read-only, so the schema-drift baselines need
+# somewhere writable of their own. Without this they are memory-only and drift
+# is undetectable across a restart.
+state_dir: /var/lib/nautilus
+
 # ── Attestation (auto-generates Ed25519 key on startup) ──────────────────
 attestation:
   enabled: true
@@ -129,3 +139,9 @@ api:
 # ── Session store (in-memory for demo) ───────────────────────────────────
 session_store:
   backend: memory
+
+# ── Admin console ────────────────────────────────────────────────────────
+# Off by default: it is a second front door to the same broker, and a login
+# page on a port nobody meant to open is an invitation. The demo shows it.
+ui:
+  enabled: true

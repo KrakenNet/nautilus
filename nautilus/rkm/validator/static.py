@@ -1,41 +1,51 @@
-"""Static analysis validator (#35.5) — wraps ``Fathom.validate``.
+"""Static analysis validator (#35.5) — runs the rule through the compiler.
 
 Performance budget: <500ms per rule (AC-35.5.c). Errors carry
 file:line:col + optional remediation ``hint`` (AC-35.5.d).
+
+This gate used to check YAML shape, template names and duplicate names and
+stop there, so a rule using condition keys the compiler forbids was reported
+``OK`` and then refused to let the broker start. It now parses and compiles
+every rule with the same ``fathom.compiler.Compiler`` the engine uses, and
+additionally checks the ``then`` block's asserts — template name and required
+slots — which compile cleanly and raise ``ConsistencyError`` on the first
+matching request.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, cast
 
 import yaml
+from fathom.compiler import Compiler
+from fathom.errors import CompilationError
+from fathom.models import RuleDefinition, TemplateDefinition
 
+from nautilus.rkm.curator.isolation import CuratorIsolationViolation, assert_module_isolation
 from nautilus.rkm.types import ValidationError
+from nautilus.rules import BUILT_IN_RULES_DIR
 
-# Templates shipped with Nautilus (nautilus/rules/templates/).
-# Loaded once at import time; callers that need custom templates may extend
-# _KNOWN_TEMPLATES at process start before invoking validate_static().
-_KNOWN_TEMPLATES: frozenset[str] = frozenset(
-    [
-        "agent",
-        "audit_event",
-        "data_handoff",
-        "data_type_affinity",
-        "denial_record",
-        "escalation_rule",
-        "inferred_handoff",
-        "intent",
-        "relationship_candidate",
-        "routing_decision",
-        "scope_constraint",
-        "session",
-        "session_exposure",
-        "source",
-        "source_relationship",
-    ]
-)
+
+@lru_cache(maxsize=1)
+def _template_registry() -> dict[str, TemplateDefinition]:
+    """Templates shipped with Nautilus, keyed by name.
+
+    Read from ``nautilus/rules/templates/`` rather than hardcoded, so a
+    template added to the YAML is known to the validator on the same commit.
+    """
+    compiler = Compiler()
+    registry: dict[str, TemplateDefinition] = {}
+    for path in sorted((BUILT_IN_RULES_DIR / "templates").glob("*.yaml")):
+        for template in compiler.parse_template_file(path):
+            registry[template.name] = template
+    return registry
+
+
+def _known_templates() -> frozenset[str]:
+    return frozenset(_template_registry())
 
 
 @dataclass(frozen=True)
@@ -54,6 +64,7 @@ def validate_static(rule_yaml_path: Path) -> StaticResult:
     - Missing ``rules`` / ``module`` top-level keys per rule
     - Unknown template references in ``lhs`` patterns
     - Duplicate rule names within the file
+    - A non-routing module asserting a routing-owned template
 
     Returns a :class:`StaticResult` with ``ok=True`` and empty ``errors``
     on success, or ``ok=False`` with populated ``errors`` on failure.
@@ -169,8 +180,12 @@ def validate_static(rule_yaml_path: Path) -> StaticResult:
             )
         seen_names.add(rule_name)
 
-        # Unknown template references in lhs (AC-35.5.b).
-        lhs: Any = rule_dict.get("lhs") or []
+        # Unknown template references in the rule's LHS (AC-35.5.b).
+        # Product rules author patterns under ``when:``; ``lhs:`` is accepted
+        # for the older proposal shape. Reading only ``lhs`` meant this check
+        # never inspected a real rule — an unknown template in a ``when:``
+        # pattern passed static validation and failed later in the compiler.
+        lhs: Any = rule_dict.get("lhs") or rule_dict.get("when") or []
         if isinstance(lhs, list):
             lhs_list = cast("list[Any]", lhs)
             for pattern_idx, pattern in enumerate(lhs_list):
@@ -178,7 +193,7 @@ def validate_static(rule_yaml_path: Path) -> StaticResult:
                     continue
                 pattern_dict = cast("dict[str, Any]", pattern)
                 tmpl: Any = pattern_dict.get("template")
-                if tmpl is not None and tmpl not in _KNOWN_TEMPLATES:
+                if tmpl is not None and tmpl not in _known_templates():
                     tmpl_line = _node_lookup.lhs_template_line(rule_idx, pattern_idx)
                     errors.append(
                         ValidationError(
@@ -188,15 +203,194 @@ def validate_static(rule_yaml_path: Path) -> StaticResult:
                             message=(f"Unknown template '{tmpl}' in rule '{rule_name}'."),
                             hint=(
                                 f"Known templates: "
-                                f"{', '.join(sorted(_KNOWN_TEMPLATES))}. "
+                                f"{', '.join(sorted(_known_templates()))}. "
                                 "Register custom templates before referencing them."
                             ),
                         )
                     )
 
+    # Module isolation. A rule outside ``nautilus-routing`` must not write the
+    # routing module's facts: that is the control that keeps a self-proposing
+    # curator from rewriting routing decisions directly. It ran only at router
+    # construction, against the shipped meta-ruleset (which ships ``rules: []``),
+    # so it never saw a rule an author validates.
+    module_name = str(data_dict.get("module", ""))
+    if module_name and module_name != "nautilus-routing":
+        try:
+            assert_module_isolation(rule_yaml_path, module_name)
+        except CuratorIsolationViolation as exc:
+            errors.append(
+                ValidationError(
+                    file=file_str,
+                    line=1,
+                    col=1,
+                    message=f"Module isolation violation: {exc}",
+                    hint=(
+                        f"Rules in module '{module_name}' may not assert, modify or "
+                        f"retract templates owned by 'nautilus-routing'. Emit a "
+                        f"proposal instead and let review promote it."
+                    ),
+                )
+            )
+
+    if errors:
+        return StaticResult(ok=False, errors=tuple(errors))
+
+    # Compile. Everything above inspects the YAML's shape; only the compiler
+    # knows whether the rule the engine will be handed is a rule at all.
+    errors.extend(_compile_errors(rule_yaml_path, file_str, _node_lookup, rules))
+
+    if errors:
+        return StaticResult(ok=False, errors=tuple(errors))
+
+    # Build. Compiling is not loading: an unknown module, a slot no template
+    # declares, an operator CLIPS does not have -- each compiles and then makes
+    # ``load_rules`` fail, which is a broker that does not start on a file this
+    # gate called OK. The only authority on "the engine accepts this" is the
+    # engine.
+    errors.extend(_build_errors(rule_yaml_path, file_str))
     if errors:
         return StaticResult(ok=False, errors=tuple(errors))
     return StaticResult(ok=True, errors=())
+
+
+def _build_errors(rule_yaml_path: Path, file_str: str) -> list[ValidationError]:
+    """Load the file into a real engine, the way the broker does at startup."""
+    import shutil
+    import tempfile
+
+    from nautilus.core.fathom_router import FathomRouter
+
+    def _build(user_rules_dirs: list[Path]) -> list[ValidationError]:
+        try:
+            FathomRouter(
+                built_in_rules_dir=BUILT_IN_RULES_DIR,
+                user_rules_dirs=user_rules_dirs,
+                check_consistency=False,
+            )
+        except Exception as exc:  # noqa: BLE001 — every build failure is a validation error
+            return [
+                ValidationError(
+                    file=file_str,
+                    line=1,
+                    col=1,
+                    message=f"The engine refuses to load this file: {exc}",
+                    hint=(
+                        "The rule compiles but the engine rejects it. Check the "
+                        "module name, that every slot is declared by its template, "
+                        "and that every operator is one CLIPS defines."
+                    ),
+                )
+            ]
+        return []
+
+    if rule_yaml_path.resolve().is_relative_to(BUILT_IN_RULES_DIR.resolve()):
+        # A shipped file is already loaded by construction; loading a copy of it
+        # as a user directory would report a duplicate rule name that says
+        # something about this validator and nothing about the file.
+        return _build([])
+
+    with tempfile.TemporaryDirectory() as tmp:
+        # Its own directory: ``load_rules`` takes a directory, and the file's
+        # real neighbours are not what is being validated.
+        shutil.copy(rule_yaml_path, Path(tmp) / rule_yaml_path.name)
+        return _build([Path(tmp)])
+
+
+def _compile_errors(
+    rule_yaml_path: Path,
+    file_str: str,
+    node_lookup: _NodeLookup,
+    rules: list[Any],
+) -> list[ValidationError]:
+    """Parse and compile the ruleset, plus check every ``then`` assert."""
+    compiler = Compiler()
+    try:
+        ruleset = compiler.parse_rule_file(rule_yaml_path)
+    except CompilationError as exc:
+        detail = getattr(exc, "__cause__", None)
+        return [
+            ValidationError(
+                file=file_str,
+                line=1,
+                col=1,
+                message=f"Rule file does not compile: {exc}{f' — {detail}' if detail else ''}",
+                hint=(
+                    "Each 'when' condition takes slot + one of expression/bind/test. "
+                    "'operator:'/'value:' are not condition keys."
+                ),
+            )
+        ]
+
+    templates = _template_registry()
+    errors: list[ValidationError] = []
+    for rule_idx, defn in enumerate(ruleset.rules):
+        line = node_lookup.rule_field_line(rule_idx, "name") if rule_idx < len(rules) else 1
+        try:
+            compiler.compile_rule(defn, ruleset.module, templates)
+        except CompilationError as exc:
+            errors.append(
+                ValidationError(
+                    file=file_str,
+                    line=line,
+                    col=1,
+                    message=f"Rule '{defn.name}' does not compile: {exc}",
+                    hint="Check the condition operators and the 'then' action.",
+                )
+            )
+            continue
+        errors.extend(_assert_errors(defn, templates, file_str, line))
+    return errors
+
+
+def _assert_errors(
+    defn: RuleDefinition,
+    templates: dict[str, TemplateDefinition],
+    file_str: str,
+    line: int,
+) -> list[ValidationError]:
+    """Check the templates and required slots the rule's RHS asserts.
+
+    The compiler emits an assert for whatever slots the author listed; a
+    missing required slot is only caught by the engine's consistency checks on
+    the first request that makes the rule fire. ``denial_record.rule_name`` is
+    the case that matters: omit it and the rule passes every documented gate,
+    then raises ``ConsistencyError: denial_missing_linkage`` in production.
+    """
+    errors: list[ValidationError] = []
+    for spec in defn.then.asserts:
+        template = templates.get(spec.template)
+        if template is None:
+            errors.append(
+                ValidationError(
+                    file=file_str,
+                    line=line,
+                    col=1,
+                    message=(f"Rule '{defn.name}' asserts unknown template '{spec.template}'."),
+                    hint=f"Known templates: {', '.join(sorted(templates))}.",
+                )
+            )
+            continue
+        missing = sorted(
+            slot.name for slot in template.slots if slot.required and slot.name not in spec.slots
+        )
+        if missing:
+            errors.append(
+                ValidationError(
+                    file=file_str,
+                    line=line,
+                    col=1,
+                    message=(
+                        f"Rule '{defn.name}' asserts '{spec.template}' without required "
+                        f"slot(s): {', '.join(missing)}."
+                    ),
+                    hint=(
+                        "The rule loads and then raises a consistency error on the first "
+                        "request that matches it. Add the slot to the 'then' assert."
+                    ),
+                )
+            )
+    return errors
 
 
 # ---------------------------------------------------------------------------
@@ -243,9 +437,9 @@ class _NodeLookup:
         rule_node = seq[rule_idx]
         if not isinstance(rule_node, yaml.MappingNode):
             return 1
-        # Find 'lhs' key
+        # Find the LHS key ('when' on product rules, 'lhs' on proposals).
         for k, v in rule_node.value:
-            if k.value == "lhs" and isinstance(v, yaml.SequenceNode):
+            if k.value in {"lhs", "when"} and isinstance(v, yaml.SequenceNode):
                 lhs_items = v.value
                 if pattern_idx < len(lhs_items):
                     pattern_node = lhs_items[pattern_idx]

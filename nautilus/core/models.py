@@ -11,7 +11,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 
 class IntentAnalysis(BaseModel):
@@ -28,6 +28,10 @@ class IntentAnalysis(BaseModel):
     estimated_sensitivity: str | None = None
 
 
+MAX_INTENT_LENGTH = 8192
+"""Longest ``intent`` a transport will accept, in characters (see below)."""
+
+
 class BrokerRequest(BaseModel):
     """Public input to :meth:`Broker.arequest` (research §5).
 
@@ -36,8 +40,23 @@ class BrokerRequest(BaseModel):
     hints (e.g. ``session_id``, transport metadata, prior-turn facts).
     """
 
+    # ``session_id``, ``purpose`` and ``clearance`` live in ``context``. Sent at
+    # the top level -- the obvious shape -- pydantic's default ``extra="ignore"``
+    # dropped them without a word: the caller got a fresh session on every
+    # request, so the cumulative exposure ledger never accumulated and its caps
+    # never tripped, and the purpose they asked for was replaced by the agent's
+    # default. The config models refuse unknown keys for the same reason; an
+    # input that changes what runs deserves the same answer.
+    model_config = ConfigDict(extra="forbid")
+
     agent_id: str
-    intent: str
+    # The audit entry stores the raw intent three times (``raw_intent``, the
+    # intent analysis's copy, and the input fact's ``raw`` slot), so an
+    # unbounded intent is a 3x write amplifier onto the fail-closed audit
+    # sink: a 4 MB intent wrote 12.6 MB of JSONL in 0.22 s from the
+    # lowest-privilege credential in the config. 8 KiB is far more natural
+    # language than any caller sends and far less than that costs.
+    intent: str = Field(max_length=MAX_INTENT_LENGTH)
     context: dict[str, Any] = Field(default_factory=dict)
     fact_set_hash: str | None = None
 
@@ -53,6 +72,26 @@ class RoutingDecision(BaseModel):
     reason: str
 
 
+ScopeOperator = Literal[
+    "=",
+    "!=",
+    "IN",
+    "NOT IN",
+    "<",
+    ">",
+    "<=",
+    ">=",
+    "LIKE",
+    "BETWEEN",
+    "IS NULL",
+]
+"""The comparison operators a router may put in a scope constraint (design §4.4).
+
+Named so callers that build or dispatch on a constraint operator can spell the
+same type rather than widening to ``str``.
+"""
+
+
 class ScopeConstraint(BaseModel):
     """Per-source WHERE-clause fragment produced by the router (design §4.4).
 
@@ -63,19 +102,7 @@ class ScopeConstraint(BaseModel):
 
     source_id: str
     field: str
-    operator: Literal[
-        "=",
-        "!=",
-        "IN",
-        "NOT IN",
-        "<",
-        ">",
-        "<=",
-        ">=",
-        "LIKE",
-        "BETWEEN",
-        "IS NULL",
-    ]
+    operator: ScopeOperator
     value: Any  # validated by operator-specific rules
     expires_at: str | None = None
     valid_from: str | None = None
@@ -92,6 +119,60 @@ class DenialRecord(BaseModel):
     source_id: str
     reason: str
     rule_name: str
+    # Whether this refusal was about the request at all. A source is refused
+    # by the rules whether or not the intent ever concerned it, so a caller
+    # reading ``sources_denied`` could not tell "you were refused" from "some
+    # unrelated source is off-limits". Computed from data-type overlap by the
+    # broker. Defaults ``True`` so a Phase-1 record round-trips as a denial
+    # (NFR-5).
+    relevant: bool = True
+
+
+class SourceInfo(BaseModel):
+    """What a source *is*, echoed back beside the rows it returned.
+
+    ``data`` is ``{source_id: rows}`` and ``sources_queried`` is bare ids, so
+    two sources of the same shape are indistinguishable in a reply — a model
+    presented a cold-storage archive's rows as a customer's current orders.
+    The metadata that would have stopped it is already published at
+    ``GET /v1/sources``; this carries it in the response that used it.
+    """
+
+    description: str | None = None
+    classification: str | None = None
+    data_types: list[str] = Field(default_factory=list[str])
+
+
+class SkipRecord(BaseModel):
+    """Why one configured source took no part in a request (design §4.8).
+
+    A source is skipped when no routing decision selected it and nothing
+    denied it — almost always because its declared ``data_types`` have
+    nothing to do with the intent. ``sources_skipped`` carried the id and no
+    explanation, so a caller whose source was quietly absent had nothing to
+    debug against.
+    """
+
+    source_id: str
+    reason: str
+
+
+class InputFact(BaseModel):
+    """One fact as it was asserted into the engine for a single request.
+
+    ``facts_asserted_summary`` records only ``template -> count``, which is
+    enough to say *how many* facts a request produced and nothing about *what*
+    they were. Replaying a recorded decision — the RKM sandbox's whole job —
+    needs the slot values, so this records them verbatim at the point of
+    assertion.
+
+    Slot values are the already-encoded strings/numbers handed to
+    ``Engine.assert_fact`` (multislots arrive space-encoded), so a replay
+    asserts byte-identical input without re-running any encoding step.
+    """
+
+    template: str
+    slots: dict[str, str | int | float]
 
 
 class RouteResult(BaseModel):
@@ -109,6 +190,10 @@ class RouteResult(BaseModel):
     rule_trace: list[str]
     duration_us: int = 0
     facts_asserted_summary: dict[str, int] = Field(default_factory=dict)
+    # Verbatim record of every fact asserted for this request, in assertion
+    # order. Defaults empty so callers constructing RouteResult directly
+    # (tests, handoff paths) are unaffected.
+    input_facts: list[InputFact] = Field(default_factory=list["InputFact"])
 
 
 class ErrorRecord(BaseModel):
@@ -122,6 +207,23 @@ class ErrorRecord(BaseModel):
     error_type: str  # e.g. "ScopeEnforcementError", "AdapterError"
     message: str
     trace_id: str  # correlation to request_id
+    # Which backend this source dials, as ``scheme://host[:port]``. A source id
+    # names the operator's label for a dependency; it does not name the
+    # dependency, so "one of my sources is failing, which host is down?" had no
+    # answer anywhere the broker writes. The broker fills this from the
+    # source's ``connection`` through
+    # :func:`nautilus.config.models.redact_connection`, which rebuilds the
+    # value from scheme/host/port only -- userinfo, path and query never reach
+    # it, so a DSN password or a URL token cannot ride into the audit trail or
+    # the response. On a ``<broker>`` record it names the broker's own failed
+    # dependency -- the session store behind a ``BrokerBusyError`` or a
+    # ``SessionStoreUnavailableError`` -- because "the request failed" and
+    # "here is what broke" must not be mutually exclusive observations.
+    # ``None`` for a source that dials nothing (``static``), for a connection
+    # with no host, and for a broker-level failure with no remote dependency
+    # at all: a session-token signature is checked in-process against the key
+    # ring, so there is no address to name and none is invented.
+    endpoint: str | None = None
 
 
 class AdapterResult(BaseModel):
@@ -136,6 +238,11 @@ class AdapterResult(BaseModel):
     rows: list[dict[str, Any]]
     duration_ms: int
     error: ErrorRecord | None = None
+    # True when ``rows`` was capped by the adapter's row limit, so the caller
+    # (and the signed attestation) can tell a complete answer from a partial
+    # one. Every adapter caps at 1000 rows; before this flag existed a
+    # truncated result was indistinguishable from an exhaustive one.
+    truncated: bool = False
     # NOTE: AdapterResult intentionally carries NO ``response_hash`` field. The
     # per-source chain-of-custody digest (issue #19, design §5.7 Weakness 7) is
     # computed centrally by the broker over ``rows`` at the pre-synthesis
@@ -159,16 +266,71 @@ class BrokerResponse(BaseModel):
     sources_denied: list[str]
     sources_skipped: list[str]
     sources_errored: list[ErrorRecord]
+    # Why each denied source was denied, and which rule said so. The router
+    # produces these for every request and the audit entry has always carried
+    # them; returning ids alone left the agent that has to decide what to do
+    # next reading a JSONL file on the broker's host. Defaults empty so a
+    # Phase-1 response round-trips unchanged (NFR-5).
+    denial_records: list[DenialRecord] = Field(default_factory=list["DenialRecord"])
+    # Why each skipped source took no part.
+    skip_records: list[SkipRecord] = Field(default_factory=list["SkipRecord"])
+    # The rules that fired, in order — the same trace the audit entry records.
+    rule_trace: list[str] = Field(default_factory=list[str])
     scope_restrictions: dict[str, list[ScopeConstraint]]
     attestation_token: str | None
     duration_ms: int
     cap_breached: bool | None = None
     fact_set_hash: str | None = None
+    # Sources whose rows were cut short — by the adapter's own row cap, or by
+    # a transport bound such as ``mcp.max_response_bytes``. Either way it means
+    # the caller was given a subset. Empty (not ``None``) when nothing
+    # truncated, so a Phase-1 response round-trips unchanged (NFR-5).
+    truncated_sources: list[str] = Field(default_factory=list[str])
     source_session_signatures: dict[str, dict[str, Any]] | None = None
     # Session-provenance JWS (#18, AC-18.a). Populated only when the broker
     # is configured with ``session_tokens.enabled: true``; ``None`` otherwise
     # so Phase-1 responses round-trip unchanged (NFR-5).
     session_token: str | None = None
+    # What each queried source is, keyed by id. ``None`` when the broker did
+    # not populate it, so a Phase-1 response round-trips unchanged (NFR-5).
+    source_info: dict[str, SourceInfo] | None = None
+    # Which ruleset answered. Every rolling deploy passes through a state where
+    # two replicas hold different rulesets, and the identical request then
+    # alternates allowed / denied behind the load balancer -- so a caller who is
+    # denied retries and is allowed. The audit entry has carried this all along;
+    # the response the caller actually reads did not. ``None`` when unset, so a
+    # Phase-1 response round-trips unchanged (NFR-5).
+    ruleset_hash: str | None = None
+
+    @computed_field  # serialized, so REST and MCP callers get it too
+    @property
+    def outcome(self) -> Literal["allowed", "denied", "errored", "skipped"]:
+        """One word for what happened.
+
+        ``allowed`` if any source answered; else ``denied`` if a source the
+        request actually concerned was refused; else ``errored`` if any
+        source failed; else ``skipped``.
+
+        Denials used to outrank errors unconditionally, and every rules-refused
+        source emits a record whether or not the intent had anything to do with
+        it. So a request whose one relevant database was unreachable reported
+        ``denied`` — sending the reader after a policy rule while a service was
+        down — and a question nothing configured could answer reported ``denied``
+        too, citing sources that held nothing like what was asked for.
+
+        The ``sources_denied`` clause is the compatibility path: a response
+        deserialized without ``denial_records`` has no relevance to read, so its
+        denials still count.
+        """
+        if self.sources_queried:
+            return "allowed"
+        if any(d.relevant for d in self.denial_records) or (
+            self.sources_denied and not self.denial_records
+        ):
+            return "denied"
+        if self.sources_errored:
+            return "errored"
+        return "skipped"
 
 
 class HandoffDecision(BaseModel):
@@ -183,6 +345,29 @@ class HandoffDecision(BaseModel):
     action: Literal["allow", "deny", "escalate"]
     denial_records: list[DenialRecord] = Field(default_factory=list[DenialRecord])
     rule_trace: list[str] = Field(default_factory=list[str])
+
+
+AdapterEventType = Literal[
+    "schema_drift_detected",
+    "adapter_quarantined",
+    "adapter_unquarantined",
+    "schema_drift_severity_overridden",
+]
+"""Audit events about an adapter rather than about a request.
+
+A subset of :attr:`AuditEntry.event_type`; ``tests/unit/test_event_type_drift.py``
+fails if one is added here without being added there.
+"""
+
+
+ReloadEventType = Literal["config_reloaded", "config_reload_refused"]
+"""Audit events about the config file rather than about a request.
+
+A subset of :attr:`AuditEntry.event_type`; ``tests/unit/test_event_type_drift.py``
+fails if one is added here without being added there. ``raw_intent`` on these
+entries carries the operator-facing sentence -- the keys adopted, or the
+refusal in the words ``nautilus serve`` would have printed.
+"""
 
 
 class AuditEntry(BaseModel):
@@ -201,6 +386,12 @@ class AuditEntry(BaseModel):
     timestamp: datetime  # UTC ISO8601
     request_id: str
     agent_id: str
+    # Who the transport authenticated, as the same ``principal:<sha256 prefix>``
+    # the exposure ledger keys on — never the credential itself. ``agent_id`` is
+    # a name the caller asserts; without this an operator holding one shared key
+    # cannot tell whose request a receipt describes, or which key to revoke.
+    # Optional so Phase-1 lines and library callers round-trip unchanged (NFR-5).
+    principal_id: str | None = None
     session_id: str | None = None
     raw_intent: str = ""
     intent_analysis: IntentAnalysis | None = None
@@ -210,10 +401,19 @@ class AuditEntry(BaseModel):
     denial_records: list[DenialRecord]
     error_records: list[ErrorRecord]
     rule_trace: list[str]
+    # ``sha256:…`` over the rule YAML the engine was running. ``rule_trace``
+    # names which rules fired; this names which ruleset they came from, so an
+    # entry can be replayed against the policy that produced it. Optional so
+    # Phase-1 lines round-trip unchanged (NFR-5).
+    ruleset_hash: str | None = None
     sources_queried: list[str]
     sources_denied: list[str]
     sources_skipped: list[str] = Field(default_factory=list[str])
     sources_errored: list[str]  # source IDs only; full error detail lives in error_records
+    # Subset of ``sources_queried`` whose rows were capped by the adapter row
+    # limit. ``None`` when nothing truncated, so Phase-1 JSONL round-trips
+    # unchanged (NFR-5).
+    truncated_sources: list[str] | None = None
     attestation_token: str | None = None
     duration_ms: int
     # Phase 2 — all optional, all default None (NFR-5 round-trip guarantee).
@@ -231,6 +431,11 @@ class AuditEntry(BaseModel):
     scope_hash_version: Literal["v1", "v2"] | None = None
     session_id_source: Literal["context", "transport", "stdio_request_id"] | None = None
     session_store_mode: Literal["primary", "degraded_memory", "degraded_sqlite"] | None = None
+    # Verbatim engine input for this request, in assertion order. Optional so
+    # Phase-1 lines and non-routing entries (handoff, transport errors)
+    # round-trip unchanged (NFR-5). Present, a consumer can rebuild the exact
+    # working memory the decision was made from.
+    input_facts: list[InputFact] | None = None
     event_type: (
         Literal[
             "request",
@@ -254,13 +459,27 @@ class AuditEntry(BaseModel):
             "adapter_unquarantined",
             "schema_drift_detected",
             "schema_drift_severity_overridden",
+            "config_reloaded",
+            "config_reload_refused",
         ]
         | None
     ) = None
+    # Subject of an adapter-scoped event (``schema_drift_detected``,
+    # ``adapter_quarantined``, ``adapter_unquarantined``,
+    # ``schema_drift_severity_overridden``). Those entries carry no request,
+    # so every source list on them is empty and the adapter they are about
+    # had nowhere to go — the log recorded that drift happened without
+    # recording to whom. Optional, so Phase-1 lines round-trip (NFR-5).
+    adapter_id: str | None = None
     handoff_id: str | None = None
     handoff_decision: HandoffDecision | None = None
     trace_id: str | None = None
     schema_version: int | None = None
+    # Fields belonging to a governance event rather than to a request --
+    # ``proposal_id``, ``reviewer``, ``rule_name``, ``confidence`` and the
+    # like. They have no typed home on a request-shaped entry, and dropping
+    # them would make "who approved this rule" unanswerable from the log.
+    event_fields: dict[str, Any] | None = None
 
 
 class InferredHandoff(BaseModel):

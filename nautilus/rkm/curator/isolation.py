@@ -4,9 +4,11 @@ Walks the RHS of every meta-rule in ``meta_rule_yaml`` and rejects if
 any ``assert`` / ``modify`` / ``retract`` action targets a template
 registered in the ``nautilus-routing`` module's template set. Fathom
 doesn't expose runtime cross-module assertion hooks; parse-time is the
-conservative, testable option. Wired into
-:func:`nautilus.rkm.validator.static.validate_static` so violations
-surface via ``nautilus rules validate``.
+conservative, testable option. Called from
+:func:`nautilus.rkm.validator.static.validate_static` for every rule file
+whose module is not ``nautilus-routing`` — so violations surface via
+``nautilus rules validate`` — and once more at router construction against
+the shipped meta-ruleset.
 """
 
 from __future__ import annotations
@@ -68,17 +70,24 @@ def assert_module_isolation(meta_rule_yaml: Path, module: str = "curator") -> No
                 target: Any = action_dict.get(op)
                 if target is None:
                     continue
-                template: str | None = None
-                if isinstance(target, dict):
-                    template = cast("dict[str, Any]", target).get("template")
-                elif isinstance(target, str):
-                    template = target
-                if template and template in routing_templates:
-                    location = f"{meta_rule_yaml}:{rule_name}"
-                    raise CuratorIsolationViolation(
-                        location,
-                        f"rule {rule_name!r} targets routing-owned template {template!r}",
-                    )
+                # ``assert`` is a *list* of specs in the shape rules are
+                # actually authored in; reading only dict/str meant a real
+                # rule's asserts were never inspected.
+                targets: list[Any] = (
+                    cast("list[Any]", target) if isinstance(target, list) else [target]
+                )
+                for one in targets:
+                    template: str | None = None
+                    if isinstance(one, dict):
+                        template = cast("dict[str, Any]", one).get("template")
+                    elif isinstance(one, str):
+                        template = one
+                    if template and template in routing_templates:
+                        location = f"{meta_rule_yaml}:{rule_name}"
+                        raise CuratorIsolationViolation(
+                            location,
+                            f"rule {rule_name!r} targets routing-owned template {template!r}",
+                        )
 
 
 __all__ = ["CuratorIsolationViolation", "assert_module_isolation"]

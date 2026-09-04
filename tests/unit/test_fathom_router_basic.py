@@ -40,6 +40,7 @@ def test_route_emits_one_routing_decision_per_overlapping_source() -> None:
         SourceConfig(
             id="vuln-db",
             type="postgres",
+            table="t",
             description="vulnerability database",
             classification="secret",
             data_types=["vulnerability", "cve"],  # overlaps "vulnerability"
@@ -49,6 +50,7 @@ def test_route_emits_one_routing_decision_per_overlapping_source() -> None:
         SourceConfig(
             id="asset-db",
             type="postgres",
+            table="t",
             description="asset inventory",
             classification="secret",
             data_types=["asset", "host"],  # overlaps "asset"

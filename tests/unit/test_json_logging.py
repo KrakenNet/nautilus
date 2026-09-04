@@ -12,6 +12,8 @@ Covers:
     a known event emits a parseable JSON line on stdout (the issue's
     integration acceptance); ``"text"`` keeps a plain formatter.
 (f) ``nautilus serve --log-format`` parses, defaults to ``text``.
+(g) ``nautilus serve --log-level`` parses, defaults to ``info``, moves the
+    root logger threshold, and is handed to the uvicorn runner.
 """
 
 from __future__ import annotations
@@ -170,3 +172,77 @@ def test_serve_log_format_flag_parses_and_defaults_to_text() -> None:
     assert json_args.log_format == "json"
     with pytest.raises(SystemExit):
         parser.parse_args(["serve", "--config", "x.yaml", "--log-format", "xml"])
+
+
+# ---------------------------------------------------------------------------
+# (g) serve --log-level flag
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_serve_log_level_flag_parses_and_defaults_to_info() -> None:
+    parser = _build_parser()
+    default_args = parser.parse_args(["serve", "--config", "x.yaml"])
+    assert default_args.log_level == "info"
+    debug_args = parser.parse_args(["serve", "--config", "x.yaml", "--log-level", "debug"])
+    assert debug_args.log_level == "debug"
+    with pytest.raises(SystemExit):
+        parser.parse_args(["serve", "--config", "x.yaml", "--log-level", "verbose"])
+
+
+_STATIC_CONFIG = """
+sources:
+  - id: orders
+    type: static
+    classification: unclassified
+    data_types: [orders]
+    rows:
+      - {order_id: 1}
+
+agents:
+  analyst:
+    id: analyst
+    clearance: unclassified
+
+rules:
+  user_rules_dirs: []
+
+audit:
+  path: ./audit.jsonl
+"""
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("flag_value", "expected_level"),
+    [("warning", logging.WARNING), ("debug", logging.DEBUG), ("info", logging.INFO)],
+)
+def test_serve_log_level_sets_root_threshold_and_reaches_uvicorn(
+    restore_root_logging: None,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+    flag_value: str,
+    expected_level: int,
+) -> None:
+    """``--log-level`` is what the operator guide documents: it moves the root
+    logger threshold *and* is handed to uvicorn, which owns the access lines."""
+    import nautilus.cli as cli
+
+    config_path = tmp_path / "nautilus.yaml"
+    config_path.write_text(_STATIC_CONFIG, encoding="utf-8")
+
+    seen: dict[str, Any] = {}
+
+    async def _fake_run_rest(broker: Any, host: str, port: int, log_level: str = "info") -> None:
+        seen["log_level"] = log_level
+        seen["root_level"] = logging.getLogger().level
+
+    monkeypatch.setattr(cli, "_run_rest", _fake_run_rest)
+
+    args = _build_parser().parse_args(
+        ["serve", "--config", str(config_path), "--log-level", flag_value]
+    )
+    assert cli._cmd_serve(args) == 0  # pyright: ignore[reportPrivateUsage]
+
+    assert seen["log_level"] == flag_value
+    assert seen["root_level"] == expected_level

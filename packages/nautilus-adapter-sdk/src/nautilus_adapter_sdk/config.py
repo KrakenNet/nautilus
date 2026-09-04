@@ -7,8 +7,6 @@ can pass adapter-specific keys without schema changes.
 
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import BaseModel, ConfigDict
 
 
@@ -28,4 +26,7 @@ class SourceConfig(BaseModel):
     classification: str = ""
     data_types: list[str] = []
     allowed_purposes: list[str] = []
-    connection: dict[str, Any] = {}
+    # DSN / base URL / file path, mirroring ``nautilus.config.models``. It is
+    # a string there and every adapter — built-in, templated and example —
+    # reads it as one; declaring a dict here rejected every documented usage.
+    connection: str = ""

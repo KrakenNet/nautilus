@@ -10,9 +10,10 @@ when the ``HX-Request`` header is present.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -20,14 +21,50 @@ from fastapi.templating import Jinja2Templates
 from starlette.concurrency import run_in_threadpool
 from starlette.responses import Response
 
+from nautilus.core import BrokerBusyError, SessionNotOwnedError
 from nautilus.core.broker import Broker
+from nautilus.transport.auth import (
+    caller_identity,
+    capability_refusal,
+    key_value,
+    verify_session_token,
+)
 from nautilus.ui.audit_reader import AuditReader
 from nautilus.ui.dependencies import get_auth_user
+
+log = logging.getLogger(__name__)
 
 _TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 templates = Jinja2Templates(directory=str(_TEMPLATE_DIR))
+
+
+def require_capability(capability: str) -> Any:
+    """The capability gate its ``/v1`` twin carries, for a console route.
+
+    Wave E3 gave ``/admin/api/query`` the binding, capability and ledger-keying
+    checks ``/v1/request`` enforces, and gave the read pages none of them. They
+    reach the same audit trail and the same source catalogue: a key scoped to
+    ``query`` read every decision every other agent ever made at
+    ``/admin/audit``, while ``/v1/audit`` refused it that exact data one URL
+    away. The console is a second front door, not a second policy.
+    """
+
+    async def dependency(request: Request) -> None:
+        state = request.app.state
+        caller = caller_identity(
+            request,
+            auth_mode=getattr(state, "auth_mode", "api_key"),
+            keys=list(getattr(state, "api_keys", []) or []),
+            agent_subjects=dict(getattr(state, "agent_subjects", {}) or {}),
+            trusted_proxies=list(getattr(state, "trusted_proxies", []) or []),
+        )
+        refusal = capability_refusal(caller, capability)
+        if refusal is not None:
+            raise HTTPException(status_code=403, detail=refusal)
+
+    return dependency
 
 
 # ---------------------------------------------------------------------------
@@ -68,7 +105,9 @@ async def _safe_audit_path(request: Request) -> str | None:
     broker: Broker | None = getattr(request.app.state, "broker", None)
     if broker is None:
         return None
-    return str(broker._config.audit.path)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    # The resolved path, not the raw config string: see ui.dependencies.get_audit_path.
+    path = broker.audit_path
+    return str(path) if path is not None else str(broker.config.audit.path)
 
 
 # Cache of the last chain verification per log path, keyed on (size, mtime):
@@ -157,7 +196,7 @@ async def login_submit(request: Request, api_key: str = Form(...)) -> Response:
 
     keys: list[str] = list(getattr(request.app.state, "api_keys", []) or [])
     try:
-        verify_api_key(api_key, keys)
+        matched = verify_api_key(api_key, keys)
     except HTTPException:
         return templates.TemplateResponse(
             request,
@@ -166,11 +205,27 @@ async def login_submit(request: Request, api_key: str = Form(...)) -> Response:
             status_code=401,
         )
     response = RedirectResponse(url="/admin/sources", status_code=302)
+    # The cookie *is* the API key, so over TLS it must never be offered on a
+    # plaintext request: without ``Secure`` a single http:// link to the host --
+    # a bookmark, a redirect, a mistyped scheme -- puts a live credential on the
+    # wire. Conditioned on the scheme rather than hard-coded, because a
+    # ``Secure`` cookie is silently dropped over http and would lock an operator
+    # out of a local console. ``X-Forwarded-Proto`` is what the deployments in
+    # deploy/ actually present: TLS terminates at the ingress and the app sees
+    # http, so the header is the only thing that knows.
+    forwarded_proto = request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip().lower()
+    over_tls = request.url.scheme == "https" or forwarded_proto == "https"
+    # The configured entry's own secret, not the string the form posted. They
+    # compare equal -- ``verify_api_key`` only returns on a constant-time
+    # match -- but the cookie is then built from operator config rather than
+    # from request data, so no header value the browser sends reaches a header
+    # we set.
     response.set_cookie(
         key="nautilus_key",
-        value=api_key,
+        value=key_value(matched),
         httponly=True,
         samesite="lax",
+        secure=over_tls,
         max_age=86400,
     )
     return response
@@ -184,7 +239,7 @@ async def logout() -> Response:
     return response
 
 
-@router.get("/playground")
+@router.get("/playground", dependencies=[Depends(require_capability("query"))])
 async def playground(
     request: Request,
     user: Annotated[str | Response, Depends(_safe_auth_user)],
@@ -196,7 +251,7 @@ async def playground(
     return templates.TemplateResponse(request, "pages/playground.html", context)
 
 
-@router.post("/api/query")
+@router.post("/api/query", dependencies=[Depends(verify_session_token)])
 async def playground_query(
     request: Request,
     broker: Annotated[Broker | None, Depends(_safe_broker)],
@@ -206,6 +261,13 @@ async def playground_query(
 
     Accepts the same JSON body as ``/v1/request`` but authenticates via
     the admin session cookie, avoiding the httponly cookie / JS barrier.
+
+    Everything past authentication is the same as ``/v1/request``, because it
+    is the same broker and the same data. It was not: the console read
+    ``agent_id`` off the body with no regard for what the credential is bound
+    to, never checked the ``query`` capability, and keyed cumulative exposure
+    under ``admin:<key>`` — so one credential had two ledgers and could reset
+    its own history by changing door (§4.15).
     """
     if isinstance(user, Response):
         return JSONResponse({"error": "Not authenticated"}, status_code=401)
@@ -224,14 +286,60 @@ async def playground_query(
     if not intent:
         return JSONResponse({"error": "intent is required"}, status_code=400)
 
+    state = request.app.state
+    caller = caller_identity(
+        request,
+        auth_mode=getattr(state, "auth_mode", "api_key"),
+        keys=list(getattr(state, "api_keys", []) or []),
+        agent_subjects=dict(getattr(state, "agent_subjects", {}) or {}),
+        trusted_proxies=list(getattr(state, "trusted_proxies", []) or []),
+    )
+    refusal = capability_refusal(caller, "query")
+    if refusal is not None:
+        return JSONResponse({"error": refusal}, status_code=403)
+    bound: str | None = caller["agent_id"]
+    if bound is not None and bound != agent_id:
+        return JSONResponse(
+            {
+                "error": (
+                    f"This credential is bound to agent_id={bound!r}, "
+                    f"so it cannot ask as {agent_id!r}"
+                )
+            },
+            status_code=403,
+        )
+
     try:
-        result = await broker.arequest(agent_id, intent, context)
+        result = await broker.arequest(
+            agent_id,
+            intent,
+            context,
+            caller={"auth": caller["auth"], "peer": caller["peer"]},
+        )
         return JSONResponse(result.model_dump(mode="json"))
-    except Exception as exc:
-        return JSONResponse({"error": str(exc)}, status_code=500)
+    except BrokerBusyError as exc:
+        # Backpressure, not failure — the same 503 /v1/request answers with.
+        return JSONResponse({"error": str(exc)}, status_code=503, headers={"Retry-After": "1"})
+    except SessionNotOwnedError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=403)
+    except OSError:
+        # The audit sink stopped accepting writes. Same answer /v1/request
+        # gives: our recorder is down, not your request. The OSError text
+        # carries the sink's absolute path, so it is logged, not returned.
+        log.exception("audit sink refused a write from the playground")
+        return JSONResponse(
+            {"error": "Nautilus could not record this request."},
+            status_code=503,
+            headers={"Retry-After": "5"},
+        )
+    except Exception:
+        # Server-side only: an unhandled exception's text is internal detail
+        # (paths, driver messages) and this endpoint answers a browser.
+        log.exception("playground request failed")
+        return JSONResponse({"error": "Internal error."}, status_code=500)
 
 
-@router.get("/sources")
+@router.get("/sources", dependencies=[Depends(require_capability("query"))])
 async def source_status(
     request: Request,
     broker: Annotated[Broker | None, Depends(_safe_broker)],
@@ -252,7 +360,20 @@ async def source_status(
     if broker is None:
         return _broker_not_ready()
 
-    sources = broker.sources
+    # Same clearance filter /v1/sources applies: the console reaches the same
+    # broker, so it must not publish a catalogue the API refuses to. The
+    # deployment's auth config has to be handed over for that to hold --
+    # without ``keys`` the registry lookup is skipped, the credential binds no
+    # agent, and ``sources_visible_to(None)`` is the whole catalogue.
+    state = request.app.state
+    caller = caller_identity(
+        request,
+        auth_mode=getattr(state, "auth_mode", "api_key"),
+        keys=list(getattr(state, "api_keys", []) or []),
+        agent_subjects=dict(getattr(state, "agent_subjects", {}) or {}),
+        trusted_proxies=list(getattr(state, "trusted_proxies", []) or []),
+    )
+    sources = broker.sources_visible_to(caller["agent_id"])
     source_rows = [
         {
             "id": s.id,
@@ -277,7 +398,7 @@ async def source_status(
     return templates.TemplateResponse(request, template_name, context)
 
 
-@router.get("/decisions")
+@router.get("/decisions", dependencies=[Depends(require_capability("audit_read"))])
 async def decisions(
     request: Request,
     audit_path: Annotated[str | None, Depends(_safe_audit_path)],
@@ -370,7 +491,7 @@ async def decisions(
     return templates.TemplateResponse(request, "pages/decisions.html", context)
 
 
-@router.get("/decisions/{request_id}")
+@router.get("/decisions/{request_id}", dependencies=[Depends(require_capability("audit_read"))])
 async def decision_detail(
     request: Request,
     request_id: str,
@@ -389,13 +510,10 @@ async def decision_detail(
         return _broker_not_ready()
 
     reader = AuditReader(audit_path)
-    page = reader.read_page()
-
-    entry = None
-    for e in page.entries:
-        if e.request_id == request_id:
-            entry = e
-            break
+    # One page is not the log. Searching only the newest page reported every
+    # older decision as missing, which is the one answer an audit console must
+    # never give for something that is on disk.
+    entry = await run_in_threadpool(reader.find_entry, request_id)
 
     if entry is None:
         return HTMLResponse(content='<div class="empty-state"><p>Decision not found</p></div>')
@@ -418,7 +536,7 @@ async def decision_detail(
     return templates.TemplateResponse(request, "partials/decision_detail.html", context)
 
 
-@router.get("/audit")
+@router.get("/audit", dependencies=[Depends(require_capability("audit_read"))])
 async def audit(
     request: Request,
     audit_path: Annotated[str | None, Depends(_safe_audit_path)],
@@ -516,7 +634,7 @@ async def audit(
     return templates.TemplateResponse(request, "pages/audit.html", context)
 
 
-@router.get("/attestation")
+@router.get("/attestation", dependencies=[Depends(require_capability("audit_read"))])
 async def attestation(
     request: Request,
     broker: Annotated[Broker | None, Depends(_safe_broker)],
@@ -534,7 +652,7 @@ async def attestation(
     return templates.TemplateResponse(request, "pages/attestation.html", context)
 
 
-@router.post("/attestation/verify")
+@router.post("/attestation/verify", dependencies=[Depends(require_capability("audit_read"))])
 async def attestation_verify(
     request: Request,
     broker: Annotated[Broker | None, Depends(_safe_broker)],

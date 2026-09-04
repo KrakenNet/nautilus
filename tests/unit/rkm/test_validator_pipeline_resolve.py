@@ -6,8 +6,8 @@ import-light and runs everywhere) because importing the pipeline pulls in
 
 Marked ``unit`` rather than ``integration`` deliberately: CI runs ``pytest -m unit``,
 so an integration marker here would mean the wiring is never actually executed.
-``run_pipeline`` still feeds ``shadow_check({}, [])``, so the flags that drive this
-stage are monkeypatched in — the same technique the fixture-driven adapter suites use.
+``run_pipeline`` now feeds ``shadow_check`` the real proposed rule, so a flag is
+monkeypatched in to exercise each relation without authoring a conflicting ruleset.
 """
 
 from __future__ import annotations
@@ -17,7 +17,10 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
+from fathom.audit import FileSink
 
+from nautilus.audit.logger import AuditLogger
 from nautilus.rkm.lineage import LineageRecord, LineageStore
 from nautilus.rkm.queue import ProposalQueue
 from nautilus.rkm.types import ConfidenceBreakdown
@@ -29,12 +32,52 @@ from nautilus.rkm.validator.shadow import ShadowFlag
 pytestmark = pytest.mark.unit
 
 
-def _setup(tmp_path: Path) -> tuple[Path, Path, ProposalQueue]:
+# A rule the engine actually compiles. ``rules: []`` was enough while
+# ``run_pipeline`` fed ``sandbox_replay({}, ...)`` and ignored the file; it now
+# replays the real proposal, and an empty body fails to compile, which rejects
+# the proposal before stage 5 is reached.
+_COMPILING_RULE: dict[str, Any] = {
+    "module": "nautilus-routing",
+    "ruleset": "rkm-proposal-resolve",
+    "version": "1.0",
+    "rules": [
+        {
+            "name": "resolve-stage-probe",
+            "salience": 100,
+            "when": [
+                {
+                    "template": "source",
+                    "conditions": [
+                        {"slot": "id", "bind": "?sid"},
+                        {"test": '(eq ?sid "vuln_db")'},
+                    ],
+                }
+            ],
+            "then": {
+                "action": "route",
+                "reason": "resolve stage probe",
+                "assert": [
+                    {
+                        "template": "routing_decision",
+                        "slots": {"source_id": "?sid", "reason": "resolve stage probe"},
+                    }
+                ],
+            },
+        }
+    ],
+}
+
+
+def _setup(tmp_path: Path) -> tuple[Path, Path, ProposalQueue, AuditLogger]:
     rule_yaml = tmp_path / "ok.yaml"
-    rule_yaml.write_text("rules: []\n")
+    rule_yaml.write_text(yaml.safe_dump(_COMPILING_RULE, sort_keys=False))
     audit_log = tmp_path / "audit.jsonl"
     audit_log.write_text("")
-    return rule_yaml, audit_log, ProposalQueue(tmp_path / "queue")
+    # ``run_pipeline`` takes the writer rather than opening its own: under
+    # ``audit.chained`` the log has exactly one writer, and a second sink over
+    # it forks the hash chain.
+    logger = AuditLogger(sink=FileSink(path=tmp_path / "events.jsonl"))
+    return rule_yaml, audit_log, ProposalQueue(tmp_path / "queue"), logger
 
 
 def _live_record(name: str, *, version: int = 1) -> LineageRecord:
@@ -60,11 +103,13 @@ def _force_flag(monkeypatch: pytest.MonkeyPatch, relation: str) -> None:
     monkeypatch.setattr(pipeline_mod, "shadow_check", _stub)
 
 
-def test_resolution_is_recorded_on_every_proposal(tmp_path: Path) -> None:
+def test_resolution_is_recorded_on_every_proposal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """With no flags the stage still runs and records its verdict."""
-    rule_yaml, audit_log, queue = _setup(tmp_path)
+    rule_yaml, audit_log, queue, logger = _setup(tmp_path)
 
-    proposal = run_pipeline(rule_yaml, queue=queue, audit_log=audit_log)
+    proposal = run_pipeline(rule_yaml, queue=queue, audit_log=audit_log, audit_logger=logger)
 
     assert proposal.validation["resolution"]["action"] == "no_conflict"
     assert proposal.status == "pending"
@@ -74,12 +119,14 @@ def test_resolution_is_recorded_on_every_proposal(tmp_path: Path) -> None:
 def test_auto_retire_marks_proposal_superseded(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    rule_yaml, audit_log, queue = _setup(tmp_path)
+    rule_yaml, audit_log, queue, logger = _setup(tmp_path)
     lineage = LineageStore()
     lineage.insert(_live_record("broad_rule"))
     _force_flag(monkeypatch, "subsumed_by")
 
-    proposal = run_pipeline(rule_yaml, queue=queue, audit_log=audit_log, lineage=lineage)
+    proposal = run_pipeline(
+        rule_yaml, queue=queue, audit_log=audit_log, audit_logger=logger, lineage=lineage
+    )
 
     assert proposal.status == "superseded"
     resolution = proposal.validation["resolution"]
@@ -102,12 +149,12 @@ def test_auto_retire_never_retires_the_live_rule(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The stage resolves conflicts without ever mutating the active rule base."""
-    rule_yaml, audit_log, queue = _setup(tmp_path)
+    rule_yaml, audit_log, queue, logger = _setup(tmp_path)
     lineage = LineageStore()
     lineage.insert(_live_record("broad_rule"))
     _force_flag(monkeypatch, "subsumed_by")
 
-    run_pipeline(rule_yaml, queue=queue, audit_log=audit_log, lineage=lineage)
+    run_pipeline(rule_yaml, queue=queue, audit_log=audit_log, audit_logger=logger, lineage=lineage)
 
     still_live = lineage.get("broad_rule", 1)
     assert still_live is not None
@@ -118,12 +165,14 @@ def test_auto_retire_never_retires_the_live_rule(
 def test_ambiguous_relations_stay_pending_for_a_human(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, relation: str
 ) -> None:
-    rule_yaml, audit_log, queue = _setup(tmp_path)
+    rule_yaml, audit_log, queue, logger = _setup(tmp_path)
     lineage = LineageStore()
     lineage.insert(_live_record("broad_rule"))
     _force_flag(monkeypatch, relation)
 
-    proposal = run_pipeline(rule_yaml, queue=queue, audit_log=audit_log, lineage=lineage)
+    proposal = run_pipeline(
+        rule_yaml, queue=queue, audit_log=audit_log, audit_logger=logger, lineage=lineage
+    )
 
     assert proposal.status == "pending"
     assert proposal.validation["resolution"]["action"] == "human_review"
@@ -133,10 +182,12 @@ def test_thin_provenance_stays_pending_for_a_human(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A subsumed_by flag with no lineage evidence must not auto-retire."""
-    rule_yaml, audit_log, queue = _setup(tmp_path)
+    rule_yaml, audit_log, queue, logger = _setup(tmp_path)
     _force_flag(monkeypatch, "subsumed_by")
 
-    proposal = run_pipeline(rule_yaml, queue=queue, audit_log=audit_log, lineage=LineageStore())
+    proposal = run_pipeline(
+        rule_yaml, queue=queue, audit_log=audit_log, audit_logger=logger, lineage=LineageStore()
+    )
 
     assert proposal.status == "pending"
     assert proposal.validation["resolution"]["action"] == "human_review"
@@ -146,7 +197,7 @@ def test_score_rejection_takes_precedence_over_auto_retire(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A proposal failing the 0.6 score gate is rejected, not superseded."""
-    rule_yaml, audit_log, queue = _setup(tmp_path)
+    rule_yaml, audit_log, queue, logger = _setup(tmp_path)
     lineage = LineageStore()
     lineage.insert(_live_record("broad_rule"))
     _force_flag(monkeypatch, "subsumed_by")
@@ -166,6 +217,8 @@ def test_score_rejection_takes_precedence_over_auto_retire(
 
     monkeypatch.setattr(pipeline_mod, "score", _stub_score)
 
-    proposal = run_pipeline(rule_yaml, queue=queue, audit_log=audit_log, lineage=lineage)
+    proposal = run_pipeline(
+        rule_yaml, queue=queue, audit_log=audit_log, audit_logger=logger, lineage=lineage
+    )
 
     assert proposal.status == "rejected"

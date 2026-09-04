@@ -12,6 +12,7 @@ services:
     volumes:
       - ./nautilus.full.yaml:/config/nautilus.yaml:ro
       - audit-data:/data/audit
+      - state-data:/var/lib/nautilus
     environment:
       # Anthropic (LLM intent analysis — falls back to pattern matching on error)
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}

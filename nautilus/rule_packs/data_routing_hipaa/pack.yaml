@@ -1,0 +1,21 @@
+# Descriptive metadata only. Fathom's RulePackLoader discovers content by
+# scanning the templates/, modules/, functions/, and rules/ subdirectories of
+# the package this entry point resolves to -- it does not read this file. Keep
+# the listing below in sync with what is actually on disk.
+name: data-routing-hipaa
+version: "0.2.0"
+description: >-
+  HIPAA Privacy Rule constraints for Nautilus data routing: minimum necessary
+  and the treatment/payment/operations purpose limitation.
+compliance_framework: "HIPAA"
+author: Project Fathom
+license: Apache-2.0
+
+rules:
+  - rules/minimum-necessary.yaml
+  - rules/phi-access-control.yaml
+
+disclaimer: >-
+  Reference implementation only -- not certified for production compliance.
+  Organizations must validate rules against their specific regulatory
+  requirements and engage qualified compliance personnel.

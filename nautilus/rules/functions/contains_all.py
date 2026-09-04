@@ -2,7 +2,11 @@
 
 Mirrors ``overlaps`` / ``not-in-list`` (see :mod:`nautilus.rules.functions.overlaps`)
 — a Python callable registered via ``Engine.register_function`` so the YAML
-rule LHS can invoke ``(contains-all ?trigger-combination ?session-types)``.
+rule LHS can invoke it through fathom's dispatcher:
+``(python-function contains-all ?trigger-combination ?session-types)``.
+Registered externals are reachable only through ``python-function``; calling
+``(contains-all ...)`` directly fails the CLIPS build with ``[EXPRNPSR3]
+Missing function declaration``.
 
 Both arguments are CLIPS space-separated strings (Nautilus encodes multislot
 values with :func:`nautilus.core.clips_encoding.encode_multislot`). The
@@ -38,7 +42,7 @@ def register_contains_all(engine: Engine) -> None:
 
     Example (from a rule LHS)::
 
-        (test (contains-all ?trigger ?seen))
+        (test (python-function contains-all ?trigger ?seen))
     """
 
     def contains_all(sub_set: object, super_set: object) -> bool:

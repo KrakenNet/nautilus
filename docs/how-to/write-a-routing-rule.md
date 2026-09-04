@@ -19,15 +19,13 @@ rules:
       - template: agent
         conditions:
           - slot: clearance
-            operator: eq
-            value: unclassified
+            expression: equals("unclassified")
       - template: source
         conditions:
           - slot: id
             bind: ?sid
           - slot: classification
-            operator: eq
-            value: unclassified
+            expression: equals("unclassified")
     then:
       action: scope
       assert:
@@ -40,8 +38,9 @@ rules:
 ```
 
 The `scope_constraint` reaches the adapter as a WHERE-clause fragment
-(`severity = 'low'`). Operators must come from the adapter allowlist
-(`=`, `eq`, `!=`, `IN`, `NOT IN`, `LIKE`, `IS NULL`) and the constraint
+(`severity = 'low'`). Operators must come from the `scope_constraint`
+template's allowlist (`=`, `!=`, `IN`, `NOT IN`, `<`, `>`, `<=`, `>=`,
+`LIKE`, `BETWEEN`, `IS NULL`) and the constraint
 must target a source that is actually routed — the router's consistency
 checks fail the request otherwise.
 

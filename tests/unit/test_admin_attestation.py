@@ -24,11 +24,21 @@ from nautilus.ui.router import router
 AUTH_HEADERS = {"X-Forwarded-User": "test-operator"}
 
 
+# The admin router authenticates in ``proxy_trust`` mode, which trusts the
+# forwarded identity only when the peer is one of the configured proxies.
+TRUSTED_PEER = ("10.0.0.5", 40000)
+
+
+def _client(app: FastAPI) -> TestClient:
+    return TestClient(app, client=TRUSTED_PEER)
+
+
 def _build_app() -> FastAPI:
     """Create a minimal FastAPI app with the admin router (no broker needed)."""
     app = FastAPI()
     app.include_router(router)
     app.state.auth_mode = "proxy_trust"
+    app.state.trusted_proxies = ["10.0.0.0/8"]
     return app
 
 
@@ -42,7 +52,7 @@ class TestAttestationPage:
 
     def test_no_signing_key_shows_not_configured(self) -> None:
         """When signing_key_configured is False (POC default), shows message."""
-        client = TestClient(_build_app())
+        client = _client(_build_app())
         resp = client.get("/admin/attestation", headers=AUTH_HEADERS)
         assert resp.status_code == 200
         assert "Attestation not configured" in resp.text
@@ -58,7 +68,7 @@ class TestAttestationVerify:
 
     def test_valid_token_returns_invalid_stub(self) -> None:
         """POC stub: even a well-formed token returns 'invalid' result."""
-        client = TestClient(_build_app())
+        client = _client(_build_app())
         resp = client.post(
             "/admin/attestation/verify",
             data={"token": "eyJhbGciOiJFZERTQSJ9.eyJzdWIiOiJ0ZXN0In0.signature"},
@@ -71,7 +81,7 @@ class TestAttestationVerify:
 
     def test_tampered_token_returns_invalid_stub(self) -> None:
         """POC stub: tampered token also returns 'invalid' result."""
-        client = TestClient(_build_app())
+        client = _client(_build_app())
         resp = client.post(
             "/admin/attestation/verify",
             data={"token": "TAMPERED.TOKEN.DATA"},

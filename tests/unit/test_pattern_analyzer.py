@@ -38,6 +38,7 @@ def _source(source_id: str, data_types: list[str]) -> SourceConfig:
     return SourceConfig(
         id=source_id,
         type="postgres",
+        table="t",
         description="test source",
         classification="unclassified",
         data_types=data_types,
@@ -299,14 +300,19 @@ def test_build_keyword_map_dedupes_data_types_across_sources() -> None:
     assert keyword_map["vulnerability"] == ["vulnerability"]
 
 
-def test_build_keyword_map_explicit_entry_wins_on_collision() -> None:
-    """An explicit ``keyword_map`` entry overrides the generated base wholesale."""
+def test_build_keyword_map_explicit_entry_adds_to_the_generated_base() -> None:
+    """An explicit ``keyword_map`` entry is unioned with the generated base.
+
+    It used to replace it, which meant curating synonyms for a data type
+    silently removed the data type's own advertised name from the vocabulary —
+    see ``tests/defects/test_wave_e11.py``. Explicit keywords come first so an
+    operator's own ordering is still visible.
+    """
     sources = [_source("s1", ["vulnerability"])]
     explicit = {"vulnerability": ["vuln", "weakness"]}
     keyword_map = build_keyword_map(sources, explicit)
 
-    # Explicit list replaces the generated ["vulnerability"] base entirely.
-    assert keyword_map["vulnerability"] == ["vuln", "weakness"]
+    assert keyword_map["vulnerability"] == ["vuln", "weakness", "vulnerability"]
 
 
 def test_build_keyword_map_explicit_only_keys_are_preserved() -> None:

@@ -24,23 +24,29 @@ Failure policy (NFR-7, D-1):
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
+import importlib.util
 import json
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal, cast
 
+from nautilus.config.loader import ConfigError
+from nautilus.config.models import redact_connection
 from nautilus.core.session import InMemorySessionStore
 from nautilus.core.session_sqlite import SqliteSessionStore
+from nautilus.extras import install_extra_hint
 
 # Fallback database location when ``fallback_sqlite`` is selected without an
 # explicit ``sqlite_path`` (mirrors the ``.nautilus/`` convention used by keys).
 _DEFAULT_SQLITE_PATH: Path = Path(".nautilus/sessions.db")
 
-# ``asyncpg`` is a Phase-2 runtime dep (pyproject) but imports are deferred
-# into ``setup`` / ``aget`` / ``aupdate`` to keep ``from nautilus.core.session_pg
-# import ...`` cheap (the Task 1.8 Verify smoke imports the module without
-# touching asyncpg) and to tolerate environments where asyncpg is unavailable.
+# ``asyncpg`` is an optional extra and its imports are deferred into ``setup`` /
+# ``aget`` / ``aupdate`` so this module stays importable, and cheap, where the
+# extra is absent. ``__init__`` checks the extra is *installed* without importing
+# it, so an absent driver is a named refusal, not a lifespan ModuleNotFoundError.
 
 
 # Idempotent DDL — design §3.2, mirrors ``PostgresFactStore._ensure_schema``
@@ -53,6 +59,33 @@ _DDL: str = (
     "updated_at TIMESTAMPTZ NOT NULL DEFAULT now()"
     ")"
 )
+
+
+# Bump on any change to _DDL, and add the migration that reaches the new
+# number. Replicas roll one at a time, so old and new binaries share one
+# database for the length of a rollout — which is exactly when an unversioned
+# schema lets two readers disagree about what a row means.
+_SCHEMA_VERSION: int = 1
+
+_VERSION_DDL: str = (
+    "CREATE TABLE IF NOT EXISTS nautilus_schema_version (version INTEGER PRIMARY KEY)"
+)
+
+
+class SessionSchemaError(Exception):
+    """The store is pointed at a schema this build does not understand.
+
+    Deliberately not a :class:`SessionStoreUnavailableError`: a version
+    mismatch is a deployment error, not a transient outage, so it must not be
+    absorbed by ``on_failure: fallback_memory``. Falling back would leave every
+    replica with a private ledger while the shared one sits there unread.
+    """
+
+
+# One advisory-lock key for the schema DDL. ``CREATE TABLE IF NOT EXISTS`` is
+# not concurrency-safe: two replicas starting together collide on the composite
+# type Postgres creates alongside the table.
+_DDL_LOCK_KEY: int = 0x6E617574  # "naut"
 
 
 def _decode_state(raw: Any) -> dict[str, Any]:
@@ -77,7 +110,18 @@ class SessionStoreUnavailableError(Exception):
 
     Wraps the underlying ``asyncpg`` exception in ``__cause__`` so operators
     can diagnose the root cause (NFR-7, D-1).
+
+    ``endpoint`` is the store's ``scheme://host[:port]`` when the raiser knows
+    it. ``nautilus.core.broker._broker_error`` copies it onto the ``<broker>``
+    :class:`~nautilus.core.models.ErrorRecord`, which is how a request that
+    *failed* names the dependency that failed it -- the same field a request
+    that survived a dead source already carried. ``None`` when there is no
+    remote dependency to name (the SQLite store raises this class too).
     """
+
+    def __init__(self, message: str, *, endpoint: str | None = None) -> None:
+        super().__init__(message)
+        self.endpoint: str | None = endpoint
 
 
 FailureMode = Literal["fail_closed", "fallback_memory", "fallback_sqlite"]
@@ -99,6 +143,10 @@ class PostgresSessionStore:
             ``sqlite_path`` (#26).
         sqlite_path: Database file for the ``"fallback_sqlite"`` policy.
             Ignored under other policies.
+        ttl_seconds: Idle lifetime of a session row. A row untouched for
+            longer reads as absent and is deleted on the next write. ``0``
+            (or negative) disables expiry. Inherited by whichever store a
+            degradation falls back to, so expiry survives a fallback.
     """
 
     def __init__(
@@ -107,11 +155,38 @@ class PostgresSessionStore:
         *,
         on_failure: FailureMode = "fail_closed",
         sqlite_path: str | Path | None = None,
+        ttl_seconds: int = 0,
+        pool_min_size: int = 1,
+        pool_max_size: int = 10,
+        lock_pool_max_size: int = 32,
+        acquire_timeout_s: float = 10.0,
     ) -> None:
+        # Presence-check the driver here, at construction, rather than letting
+        # ``setup``'s deferred import raise ``ModuleNotFoundError`` out of the
+        # ASGI lifespan hook. The published image installs no drivers, so a
+        # config that asks for this store is the single most likely way to meet
+        # one -- and the bare import error named neither the extra nor a remedy
+        # a distroless operator could carry out. ``on_failure`` deliberately
+        # does not apply: it degrades a store that is *unreachable*, and a
+        # driver that is not installed never becomes reachable, so degrading
+        # would run the exposure ledger in memory forever without saying so.
+        if importlib.util.find_spec("asyncpg") is None:
+            raise ConfigError(
+                f"session_store.backend=postgres needs the 'postgres' extra, whose "
+                f"driver asyncpg is not installed -- {install_extra_hint('postgres')}. "
+                f"Or set session_store.backend to sqlite (durable, single-node) or "
+                f"memory, neither of which needs a driver."
+            )
         self._dsn: str = dsn
         self._on_failure: FailureMode = on_failure
+        self._ttl_seconds: int = ttl_seconds
+        self._pool_min_size: int = pool_min_size
+        self._pool_max_size: int = pool_max_size
+        self._lock_pool_max_size: int = lock_pool_max_size
+        self._acquire_timeout_s: float = acquire_timeout_s
         self._sqlite_path: Path = Path(sqlite_path) if sqlite_path else _DEFAULT_SQLITE_PATH
         self._pool: Any = None
+        self._lock_pool: Any = None
         self._closed: bool = False
         self._degraded_memory: InMemorySessionStore | None = None
         self._degraded_sqlite: SqliteSessionStore | None = None
@@ -132,6 +207,29 @@ class PostgresSessionStore:
     def degraded_since(self) -> datetime | None:
         """UTC timestamp of first degradation, or ``None`` while healthy."""
         return self._degraded_since
+
+    @property
+    def endpoint(self) -> str | None:
+        """Which Postgres this store dials, as ``scheme://host[:port]``.
+
+        The broker copies this onto the ``<broker>``
+        :class:`~nautilus.core.models.ErrorRecord` for a failure that could not
+        reach the store, so the address is in the response, the audit trail and
+        the log line -- a ``reason`` code names what happened, not what to go
+        look at. Built by
+        :func:`~nautilus.config.models.redact_connection`, which copies out
+        scheme, host and port by allowlist, so the DSN's password (in userinfo
+        *or* in a query parameter) cannot ride out of ``nautilus.yaml`` into
+        those three audiences. ``None`` for a DSN with no host -- the libpq
+        keyword form ``host=db password=pw`` -- because a guess is how the
+        withheld half gets echoed by accident.
+
+        Read from the store rather than from ``config.session_store.dsn``:
+        with ``dsn`` unset the broker falls back to the ``TEST_PG_DSN``
+        environment variable, and the config would then name nothing while the
+        process dials something.
+        """
+        return redact_connection(self._dsn)
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -155,9 +253,50 @@ class PostgresSessionStore:
         )
 
         try:
-            self._pool = await asyncpg.create_pool(dsn=self._dsn)  # pyright: ignore[reportUnknownMemberType]
-            async with self._pool.acquire() as conn:
+            # Two pools, deliberately. Ledger locks are held for the whole
+            # length of a request; the reads and writes they protect are taken
+            # and returned *inside* that hold. Drawn from one pool, the request
+            # holding the last connection can never acquire the one it needs to
+            # finish, and nothing in flight can release — measured at 32
+            # concurrent callers against a single pool of 10.
+            self._pool = await asyncpg.create_pool(  # pyright: ignore[reportUnknownMemberType]
+                dsn=self._dsn,
+                min_size=self._pool_min_size,
+                max_size=self._pool_max_size,
+            )
+            # One connection per in-flight request, so this is the store's real
+            # concurrency ceiling — sized above the query pool for that reason.
+            self._lock_pool = await asyncpg.create_pool(  # pyright: ignore[reportUnknownMemberType]
+                dsn=self._dsn,
+                min_size=self._pool_min_size,
+                max_size=self._lock_pool_max_size,
+            )
+            async with self._acquire() as conn, conn.transaction():
+                # The lock is transaction-scoped, so it releases with the DDL
+                # even if this process dies mid-statement.
+                await conn.execute("SELECT pg_advisory_xact_lock($1)", _DDL_LOCK_KEY)
                 await conn.execute(_DDL)
+                await conn.execute(_VERSION_DDL)
+                row = await conn.fetchrow("SELECT version FROM nautilus_schema_version")
+                if row is None:
+                    # No row means either a fresh database or one written
+                    # before versions existed; the DDL above is IF NOT EXISTS,
+                    # so stamping it is the upgrade in both cases.
+                    await conn.execute(
+                        "INSERT INTO nautilus_schema_version (version) VALUES ($1)",
+                        _SCHEMA_VERSION,
+                    )
+                elif int(row["version"]) != _SCHEMA_VERSION:
+                    raise SessionSchemaError(
+                        f"session database carries schema version "
+                        f"{int(row['version'])}; this build understands version "
+                        f"{_SCHEMA_VERSION}. Finish or roll back the rollout — "
+                        f"do not run both builds against one store."
+                    )
+        except SessionSchemaError:
+            # Not an availability failure — see the class docstring. Escapes
+            # both handlers below so ``fallback_memory`` cannot swallow it.
+            raise
         except (
             CannotConnectNowError,
             ConnectionDoesNotExistError,
@@ -174,18 +313,18 @@ class PostgresSessionStore:
     async def _handle_failure(self, exc: BaseException) -> None:
         """Apply ``on_failure`` policy to a connect/DDL failure."""
         if self._on_failure == "fail_closed":
-            raise SessionStoreUnavailableError(
+            raise self._unavailable(
                 f"PostgresSessionStore unavailable (dsn={self._sanitized_dsn()}): {exc}"
             ) from exc
         if self._on_failure == "fallback_sqlite":
             # #26 — durable degradation: session state survives restarts.
             # If SQLite itself cannot be opened, escalate rather than
             # silently downgrading to memory (the operator chose durability).
-            sqlite_store = SqliteSessionStore(self._sqlite_path)
+            sqlite_store = SqliteSessionStore(self._sqlite_path, self._ttl_seconds)
             try:
                 await sqlite_store.setup()
             except Exception as sqlite_exc:  # noqa: BLE001 — any sqlite3/OS error
-                raise SessionStoreUnavailableError(
+                raise self._unavailable(
                     f"PostgresSessionStore unavailable (dsn={self._sanitized_dsn()}: {exc}) "
                     f"and sqlite fallback at {self._sqlite_path} failed: {sqlite_exc}"
                 ) from sqlite_exc
@@ -193,25 +332,39 @@ class PostgresSessionStore:
             self._mode = "degraded_sqlite"
         else:
             # fallback_memory: degrade, do not raise.
-            self._degraded_memory = InMemorySessionStore()
+            self._degraded_memory = InMemorySessionStore(self._ttl_seconds)
             self._mode = "degraded_memory"
         self._degraded_since = datetime.now(UTC)
-        # Release any partial pool so we do not leak sockets.
-        pool = self._pool
-        self._pool = None
-        if pool is not None:
-            with contextlib.suppress(Exception):
-                await pool.close()
+        # Release any partial pools so we do not leak sockets.
+        for attr in ("_pool", "_lock_pool"):
+            pool = getattr(self, attr)
+            setattr(self, attr, None)
+            if pool is not None:
+                with contextlib.suppress(Exception):
+                    await pool.close()
 
     def _sanitized_dsn(self) -> str:
-        """Strip credentials from the DSN for error messages."""
-        # Crude but dependency-free: ``postgres://user:pw@host/db`` →
-        # ``postgres://host/db``. Good enough for log/error lines.
-        if "@" in self._dsn:
-            scheme, _, rest = self._dsn.partition("://")
-            _, _, host_and_path = rest.partition("@")
-            return f"{scheme}://{host_and_path}"
-        return self._dsn
+        """The DSN as it may appear in an error message, or a marker.
+
+        Was a partition on ``@``, which keeps everything after the host:
+        ``postgres://u:pw@host/db?password=second`` came back still carrying
+        ``password=second``, and a DSN with no ``@`` at all -- the libpq
+        keyword form ``host=db password=pw`` -- was returned verbatim. Both
+        shapes reach ``ErrorRecord.message``, so both reached the audit trail
+        and the requesting agent. :attr:`endpoint` copies out scheme/host/port
+        instead, and a DSN with no host gets a marker rather than a paraphrase.
+        """
+        return self.endpoint or "<no host in session_store.dsn>"
+
+    def _unavailable(self, message: str) -> SessionStoreUnavailableError:
+        """Every "this store did not answer" raise, tagged with the address.
+
+        One place, not a keyword repeated at six raise sites: the broker reads
+        ``.endpoint`` off whatever exception ended the request, so a site that
+        forgot the keyword would be a silently unnamed dependency rather than a
+        visible error.
+        """
+        return SessionStoreUnavailableError(message, endpoint=self.endpoint)
 
     # ------------------------------------------------------------------
     # AsyncSessionStore surface
@@ -224,16 +377,54 @@ class PostgresSessionStore:
         if self._degraded_memory is not None:
             return self._degraded_memory.get(session_id)
         if self._pool is None:
-            raise SessionStoreUnavailableError(
-                "PostgresSessionStore.aget() called before setup() succeeded"
+            raise self._unavailable("PostgresSessionStore.aget() called before setup() succeeded")
+        # Bounded: ``pool.fetchrow`` acquires with no deadline, and /readyz
+        # calls this. A probe that hangs instead of answering 503 leaves a pod
+        # that cannot serve sitting in the load balancer.
+        async with self._acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT state FROM nautilus_session_state WHERE session_id = $1"
+                + self._ttl_clause(),
+                session_id,
             )
-        row = await self._pool.fetchrow(
-            "SELECT state FROM nautilus_session_state WHERE session_id = $1",
-            session_id,
-        )
         if row is None:
             return {}
         return _decode_state(row["state"])
+
+    async def averify_schema(self) -> None:
+        """Re-read the stored schema version, and refuse a store that moved.
+
+        The check in :meth:`setup` covers a replica *starting*. Replicas roll
+        one at a time, so the window the version stamp exists for is the one
+        where an old build is still serving while a new one has already
+        migrated — and a boot-only check never looks again. ``/readyz`` calls
+        this so the old pod drains instead of read-modify-writing rows under a
+        schema it does not understand.
+
+        A degraded store is checked where it actually is: the sqlite fallback
+        has its own stamp, and the memory fallback has no shared schema to
+        disagree about.
+        """
+        if self._degraded_sqlite is not None:
+            await self._degraded_sqlite.averify_schema()
+            return
+        if self._degraded_memory is not None or self._pool is None:
+            return
+        async with self._acquire() as conn:
+            row = await conn.fetchrow("SELECT version FROM nautilus_schema_version")
+        if row is not None and int(row["version"]) != _SCHEMA_VERSION:
+            raise SessionSchemaError(
+                f"session store at {self._sanitized_dsn()} now carries schema "
+                f"version {int(row['version'])}; this build understands version "
+                f"{_SCHEMA_VERSION}. Another Nautilus migrated the store while "
+                f"this one was running."
+            )
+
+    def _ttl_clause(self) -> str:
+        """SQL fragment restricting a read to rows inside the TTL window."""
+        if self._ttl_seconds <= 0:
+            return ""
+        return f" AND updated_at > now() - interval '{int(self._ttl_seconds)} seconds'"
 
     async def aupdate(self, session_id: str, entry: dict[str, Any]) -> None:
         """Merge ``entry`` into the session row (upsert with JSONB concat)."""
@@ -244,14 +435,21 @@ class PostgresSessionStore:
             self._degraded_memory.update(session_id, entry)
             return
         if self._pool is None:
-            raise SessionStoreUnavailableError(
+            raise self._unavailable(
                 "PostgresSessionStore.aupdate() called before setup() succeeded"
             )
         # Read-merge-write under a transaction so concurrent writers for the
         # same session_id don't clobber each other's keys. JSONB concat (``||``)
         # would merge at the DB layer but loses the "later wins" Phase-1
         # semantics for nested dicts — keep parity with InMemorySessionStore.
-        async with self._pool.acquire() as conn, conn.transaction():
+        async with self._acquire() as conn, conn.transaction():
+            if self._ttl_seconds > 0:
+                # Drop every expired row, not just this session's: without it
+                # a store whose sessions are never revisited grows forever.
+                await conn.execute(
+                    "DELETE FROM nautilus_session_state WHERE updated_at <= "
+                    f"now() - interval '{int(self._ttl_seconds)} seconds'"
+                )
             row = await conn.fetchrow(
                 "SELECT state FROM nautilus_session_state WHERE session_id = $1 FOR UPDATE",
                 session_id,
@@ -267,15 +465,114 @@ class PostgresSessionStore:
                 json.dumps(current),
             )
 
+    @contextlib.asynccontextmanager
+    async def _acquire(self) -> AsyncIterator[Any]:
+        """Take a pooled connection, or say so when the pool is exhausted.
+
+        ``pool.acquire()`` with no timeout waits forever: a deployment past its
+        pool size stopped answering, with no error, no audit entry and nothing
+        in the logs. A deadline turns that into something an operator can see
+        and act on — the message names the setting that fixes it.
+        """
+        assert self._pool is not None  # noqa: S101 — callers check
+        try:
+            conn = await self._pool.acquire(timeout=self._acquire_timeout_s)
+        except TimeoutError as exc:
+            raise self._unavailable(
+                f"session-store pool exhausted: no connection became free within "
+                f"{self._acquire_timeout_s}s (pool max_size={self._pool_max_size}). "
+                f"Raise session_store.pool_max_size to at least your peak concurrency."
+            ) from exc
+        try:
+            yield conn
+        finally:
+            await self._pool.release(conn)
+
+    @contextlib.asynccontextmanager
+    async def alock(self, key: str) -> AsyncIterator[None]:
+        """Hold a cross-process lock on ``key`` for the block's duration.
+
+        The broker's exposure ledger is a read-merge-write spanning two calls
+        into this store, so serialising it needs a lock the *store* owns: an
+        in-process ``asyncio.Lock`` serialises one replica against itself and
+        nothing against the replica next to it. Postgres advisory locks are
+        that lock — held on their own connection, released on exit, and dropped
+        by the server if the holder's connection dies.
+
+        A degraded store (in-memory / SQLite fallback) is per-process by
+        definition; there is nothing to serialise against, so this is a no-op.
+        """
+        async with self.alock_all([key]):
+            yield
+
+    @contextlib.asynccontextmanager
+    async def alock_all(self, keys: list[str]) -> AsyncIterator[None]:
+        """Hold a cross-process lock on every key in ``keys`` — one connection.
+
+        A request accumulates under more than one key (its declared session and
+        its caller's principal), and every one of them is read-modify-written.
+        Postgres advisory locks are session-scoped, not statement-scoped, so one
+        connection can hold all of them: taking a connection per key made the
+        store's concurrency ceiling ``pool_max_size / keys-per-request``, which
+        measured as five concurrent requests on the shipped pool of ten.
+
+        Keys are locked in sorted order so two requests sharing one key and
+        differing on another cannot deadlock against each other. Connections
+        come from the dedicated lock pool, never the query pool, so a request
+        holding a lock can always acquire the connection it needs to finish.
+
+        A degraded store (in-memory / SQLite fallback) is per-process by
+        definition; there is nothing to serialise against, so this is a no-op.
+        """
+        if self._lock_pool is None:
+            yield
+            return
+        ordered = sorted({k for k in keys if k})
+        if not ordered:
+            yield
+            return
+        async with self._acquire_lock_connection() as conn:
+            for key in ordered:
+                await conn.execute("SELECT pg_advisory_lock(hashtextextended($1, 0))", key)
+            try:
+                yield
+            finally:
+                # Shielded: a cancelled request must still release what it took.
+                # asyncpg's pool reset would catch this on release anyway, but
+                # relying on that puts correctness in a library's cleanup path.
+                for key in reversed(ordered):
+                    await asyncio.shield(
+                        conn.execute("SELECT pg_advisory_unlock(hashtextextended($1, 0))", key)
+                    )
+
+    @contextlib.asynccontextmanager
+    async def _acquire_lock_connection(self) -> AsyncIterator[Any]:
+        """Take a connection from the lock pool, or say the ceiling was hit."""
+        assert self._lock_pool is not None  # noqa: S101 — callers check
+        try:
+            conn = await self._lock_pool.acquire(timeout=self._acquire_timeout_s)
+        except TimeoutError as exc:
+            raise self._unavailable(
+                f"session-store lock pool exhausted: no connection became free within "
+                f"{self._acquire_timeout_s}s (lock pool max_size={self._lock_pool_max_size}). "
+                f"One is held per in-flight request, so raise "
+                f"session_store.lock_pool_max_size to at least your peak concurrency."
+            ) from exc
+        try:
+            yield conn
+        finally:
+            await self._lock_pool.release(conn)
+
     async def aclose(self) -> None:
         """Idempotent close — release the pool (FR-17)."""
         if self._closed:
             return
         self._closed = True
-        pool = self._pool
-        self._pool = None
-        if pool is not None:
-            await pool.close()
+        for attr in ("_pool", "_lock_pool"):
+            pool = getattr(self, attr)
+            setattr(self, attr, None)
+            if pool is not None:
+                await pool.close()
         self._degraded_memory = None
         sqlite_store = self._degraded_sqlite
         self._degraded_sqlite = None
@@ -287,5 +584,6 @@ __all__ = [
     "FailureMode",
     "Mode",
     "PostgresSessionStore",
+    "SessionSchemaError",
     "SessionStoreUnavailableError",
 ]

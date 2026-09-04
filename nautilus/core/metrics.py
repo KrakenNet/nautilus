@@ -1,8 +1,9 @@
 """Prometheus metrics for the RKM proposal queue (AC-35.9.f).
 
-Two gauges scraped lazily at collection time:
+Gauges scraped lazily at collection time:
 - ``nautilus_rkm_queue_depth``        — pending proposal count
 - ``nautilus_rkm_queue_oldest_age_seconds`` — wall-time age of oldest pending proposal
+- ``nautilus_ruleset_info{ruleset_hash}`` — the policy this replica loaded
 
 Usage::
 
@@ -89,6 +90,61 @@ if _has_prometheus:
         REGISTRY.register(_collector)
 
 
+class _RulesetCollector(Collector):
+    """Names the ruleset this replica loaded, as a scrape-time label.
+
+    Every rolling deploy passes through a state where two replicas hold
+    different rulesets, and the identical request then alternates allowed /
+    denied behind the load balancer. ``GET /v1/rules`` exposes the hash but is
+    itself load-balanced, so polling the Service just makes it flap -- there
+    was no way to tell "two replicas disagree" from "someone changed the
+    rules". A per-replica scrape target is: alert on more than one distinct
+    ``ruleset_hash`` across the fleet.
+    """
+
+    def __init__(self) -> None:
+        self._getter: Callable[[], object] | None = None
+
+    def set_getter(self, getter: Callable[[], object]) -> None:
+        self._getter = getter
+
+    def describe(self) -> list[GaugeMetricFamily]:  # type: ignore[override]
+        return [self._family()]
+
+    def _family(self) -> GaugeMetricFamily:  # type: ignore[override]
+        return GaugeMetricFamily(
+            "nautilus_ruleset_info",
+            "Always 1; the ruleset_hash label names the policy this replica runs",
+            labels=["ruleset_hash"],
+        )
+
+    def collect(self) -> list[GaugeMetricFamily]:  # type: ignore[override]
+        family = self._family()
+        if self._getter is not None:
+            with contextlib.suppress(Exception):
+                ruleset_hash = self._getter()
+                if ruleset_hash:
+                    family.add_metric([str(ruleset_hash)], 1.0)
+        return [family]
+
+
+_ruleset_collector = _RulesetCollector()
+if _has_prometheus:
+    with contextlib.suppress(Exception):
+        REGISTRY.register(_ruleset_collector)
+
+
+def register_ruleset(getter: Callable[[], object]) -> None:
+    """Wire the ruleset gauge to a callable returning this replica's hash.
+
+    Args:
+        getter: Zero-argument callable returning the ``ruleset_hash`` string
+                (or ``None`` before the broker is ready). Called on every
+                scrape — keep it cheap.
+    """
+    _ruleset_collector.set_getter(getter)
+
+
 def register_rkm_queue(getter: Callable[[], object]) -> None:
     """Wire the collector to a callable that returns the live ProposalQueue.
 
@@ -100,4 +156,4 @@ def register_rkm_queue(getter: Callable[[], object]) -> None:
     _collector.set_getter(getter)
 
 
-__all__ = ["register_rkm_queue"]
+__all__ = ["register_rkm_queue", "register_ruleset"]

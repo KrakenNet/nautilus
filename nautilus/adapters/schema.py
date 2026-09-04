@@ -14,10 +14,20 @@ Reuse anchors:
 from __future__ import annotations
 
 import dataclasses
+import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, Literal, cast
+
+log = logging.getLogger(__name__)
+
+# Version of what a stored fingerprint *means*. Bump it whenever the schema a
+# fingerprint is taken over changes shape (0.2.x hashed every table the
+# connection could see; the current format hashes only the declared table).
+# A record written under an older format is not drift -- it is not comparable
+# -- so it re-baselines instead of quarantining every source on upgrade.
+FINGERPRINT_FORMAT: int = 2
 
 
 @dataclass(frozen=True)
@@ -89,8 +99,12 @@ class AdapterSchema:
         # reuse anchor :69
         from nautilus.core.attestation_payload import _sha256  # pyright: ignore[reportPrivateUsage]
 
-        # Convert to a plain dict for stable serialisation.
-        payload = dataclasses.asdict(self)
+        # Convert to a plain dict for stable serialisation. ``fetched_at`` is
+        # excluded: it records WHEN the schema was read, not WHAT it is, and
+        # every adapter stamps it with ``datetime.now(UTC)``. Hashing it makes
+        # an unchanged schema fingerprint differently on every fetch, which
+        # defeats the drift comparison the fingerprint exists for (AC-21.b).
+        payload = {k: v for k, v in dataclasses.asdict(self).items() if k != "fetched_at"}
         return _sha256(payload)
 
 
@@ -295,23 +309,113 @@ class SchemaFingerprintStore:
     def __init__(self, root: str | None = None) -> None:
         self._store: dict[str, str] = {}
         self._root = root
+        # One warning, not one per request: registration runs in the request
+        # path, so an unwritable root would otherwise log on every call.
+        self._warned_unwritable = False
+
+    def _path_for(self, adapter_id: str) -> str | None:
+        """On-disk location of ``adapter_id``'s record, or ``None`` if in-memory.
+
+        The id becomes a filename, so it must not be able to name a path:
+        a separator or ``..`` would write the baseline outside the store.
+        """
+        import os
+
+        if self._root is None:
+            return None
+        if os.sep in adapter_id or (os.altsep and os.altsep in adapter_id) or ".." in adapter_id:
+            raise ValueError(f"adapter id {adapter_id!r} is not usable as a fingerprint filename")
+        return os.path.join(
+            self._root, ".nautilus", "adapters", "fingerprints", f"{adapter_id}.json"
+        )
 
     def get(self, adapter_id: str) -> str | None:
-        """Return the last-recorded fingerprint for ``adapter_id``. AC-21.c."""
-        return self._store.get(adapter_id)
+        """Return the last-recorded fingerprint for ``adapter_id``. AC-21.c.
+
+        The on-disk record wins when the store is rooted. A baseline recorded
+        before a restart has to survive it — and ``nautilus adapters schema-ack``
+        runs in its own process, so answering from the in-memory cache first
+        meant a serving broker never saw the ack: it kept comparing against the
+        pre-ack fingerprint and stayed quarantined until restart, while the
+        quarantine message told the operator to run exactly that command.
+        """
+        fp_path = self._path_for(adapter_id)
+        if fp_path is None:
+            return self._store.get(adapter_id)
+        import json
+        import os
+
+        if not os.path.exists(fp_path):
+            return self._store.get(adapter_id)
+        try:
+            with open(fp_path) as fh:
+                stored: object = json.load(fh)
+        except (OSError, ValueError):
+            # An unreadable baseline is not a matching baseline; the caller
+            # treats "no baseline" as first registration and re-records.
+            return None
+        if not isinstance(stored, dict):
+            return None
+        record = cast("dict[str, object]", stored)
+        fingerprint = record.get("fingerprint")
+        if not isinstance(fingerprint, str):
+            return None
+        if record.get("format") != FINGERPRINT_FORMAT:
+            # Written by a release that fingerprinted a different shape. Its
+            # value cannot be compared to today's, so reporting a mismatch
+            # would quarantine every source on upgrade with no migration path.
+            log.info(
+                "re-baselining adapter %r: its fingerprint was recorded in format %r, "
+                "this release uses format %d",
+                adapter_id,
+                record.get("format"),
+                FINGERPRINT_FORMAT,
+            )
+            return None
+        self._store[adapter_id] = fingerprint
+        return fingerprint
 
     def record(self, adapter_id: str, fingerprint: str) -> None:
-        """Persist a fingerprint at adapter-registration time. AC-21.c."""
+        """Persist a fingerprint at adapter-registration time. AC-21.c.
+
+        Registration happens inside the request path, so a root the process
+        cannot write to used to turn every request policy had already allowed
+        into ``outcome: errored`` -- which is what both shipped deployment
+        shapes do, since each mounts the config directory read-only. A baseline
+        is a drift *detection aid*; losing it is worth a warning, not an
+        outage, and ``state_dir`` says where to put it instead.
+
+        :meth:`record_ack` stays strict on purpose: an operator ack that never
+        reached disk has not cleared the quarantine it reports clearing.
+        """
         import json
         import os
 
         self._store[adapter_id] = fingerprint
-        if self._root is not None:
-            fp_dir = os.path.join(self._root, ".nautilus", "adapters", "fingerprints")
-            os.makedirs(fp_dir, exist_ok=True)
-            fp_path = os.path.join(fp_dir, f"{adapter_id}.json")
+        fp_path = self._path_for(adapter_id)
+        if fp_path is None:
+            return
+        try:
+            os.makedirs(os.path.dirname(fp_path), exist_ok=True)
             with open(fp_path, "w") as fh:
-                json.dump({"adapter_id": adapter_id, "fingerprint": fingerprint}, fh)
+                json.dump(
+                    {
+                        "adapter_id": adapter_id,
+                        "fingerprint": fingerprint,
+                        "format": FINGERPRINT_FORMAT,
+                    },
+                    fh,
+                )
+        except OSError as exc:
+            if not self._warned_unwritable:
+                self._warned_unwritable = True
+                log.warning(
+                    "schema baselines are memory-only: cannot write %s (%s). Drift is "
+                    "still detected within this process but not across a restart. Set "
+                    "state_dir to a writable directory to keep them.",
+                    fp_path,
+                    exc,
+                )
 
     def record_ack(
         self,
@@ -327,15 +431,15 @@ class SchemaFingerprintStore:
         from datetime import UTC, datetime
 
         self._store[adapter_id] = fingerprint
-        if self._root is not None:
-            fp_dir = os.path.join(self._root, ".nautilus", "adapters", "fingerprints")
-            os.makedirs(fp_dir, exist_ok=True)
-            fp_path = os.path.join(fp_dir, f"{adapter_id}.json")
+        fp_path = self._path_for(adapter_id)
+        if fp_path is not None:
+            os.makedirs(os.path.dirname(fp_path), exist_ok=True)
             with open(fp_path, "w") as fh:
                 json.dump(
                     {
                         "adapter_id": adapter_id,
                         "fingerprint": fingerprint,
+                        "format": FINGERPRINT_FORMAT,
                         "reviewer": reviewer,
                         "reason": reason,
                         "acked_at": datetime.now(UTC).isoformat(),
@@ -345,6 +449,7 @@ class SchemaFingerprintStore:
 
 
 __all__ = [
+    "FINGERPRINT_FORMAT",
     "AdapterField",
     "AdapterSchema",
     "AdapterTable",

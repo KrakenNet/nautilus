@@ -6,31 +6,56 @@ Two modes, selected by ``config.api.auth.mode``:
   is compared against every configured key via :func:`secrets.compare_digest`
   (constant-time, resistant to timing oracles).
 - ``"proxy_trust"`` — upstream proxy has already authenticated the caller
-  and forwards its identity in ``X-Forwarded-User``. Nautilus trusts the
-  header verbatim; the value is exposed as the request principal but no
-  cryptographic check is performed (FR-26, D-11).
+  (mTLS, SPIFFE, OIDC) and forwards its identity in ``X-Forwarded-User``.
+  Nautilus accepts the header only from a peer inside
+  ``api.auth.trusted_proxies``, and resolves it to an agent through
+  ``agents.<id>.subject`` (FR-26, D-11).
 
-Both FastAPI REST (``fastapi_app``) and the MCP HTTP transport wrap their
-write endpoints with the dependency returned by :func:`require_api_key`
-when the mode is ``"api_key"``, and with :func:`proxy_trust_dependency`
-otherwise. Read-only probes (``/healthz``, ``/readyz``) stay un-gated.
+Either mode resolves a *caller*: who the transport authenticated, which agent
+that credential may speak for, and what it may do. :func:`caller_identity` is
+that resolution, and it is shared by REST, MCP and the admin UI so a client
+cannot get a different answer by changing ports.
+
+FastAPI REST (``fastapi_app``) and the admin console gate their write
+endpoints with :func:`require_api_key` when the mode is ``"api_key"`` and with
+:func:`proxy_trust_dependency` otherwise; read-only probes (``/healthz``,
+``/readyz``) stay un-gated. The MCP HTTP transport mounts neither: its one gate
+is ``wrap_http_with_api_key``. So the ``proxy_trust`` vetting lives in
+:func:`_vet_forwarded_user`, which :func:`caller_identity` calls itself — every
+surface resolving a caller is vetted, whether or not it mounted a dependency.
 """
 
 from __future__ import annotations
 
+import logging
 import secrets
+from collections.abc import Mapping
+from ipaddress import ip_address, ip_network
 from typing import TYPE_CHECKING, Any
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import APIKeyHeader
 
-if TYPE_CHECKING:
-    from starlette.requests import Request  # noqa: TC002
+# Imported at runtime, not under TYPE_CHECKING: with ``from __future__ import
+# annotations`` a TYPE_CHECKING-only name leaves FastAPI an unresolvable
+# ForwardRef, so it read ``request`` as a query parameter and every call to a
+# route depending on ``verify_session_token`` 422'd instead of being verified.
+# The same trap is documented in ``ui/router.py`` and ``fastapi_app.py``.
+from starlette.requests import Request
 
+from nautilus.config.models import CAPABILITIES
+from nautilus.core.principal import ledger_identity
+
+log = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
     from nautilus.attestation.session_token import SessionTokenClaims
 
 # Optional session-token header for AC-18.f verification.
-_SESSION_TOKEN_HEADER = "X-Nautilus-Session-Token"
+SESSION_TOKEN_HEADER = "X-Nautilus-Session-Token"
+"""Header carrying the broker-issued session JWS. Mirrored (deliberately,
+to keep the adapter layer off the transport layer) by
+``nautilus.adapters.base.SESSION_TOKEN_HEADER``."""
 
 
 # Module-level APIKeyHeader instance — FastAPI caches dependency providers
@@ -40,7 +65,136 @@ api_key_header = APIKeyHeader(name="X-API-Key", auto_error=True)
 """FastAPI security scheme for the ``X-API-Key`` header (auto_error=True)."""
 
 
-def verify_api_key(header_value: str, keys: list[str]) -> None:
+ALL_CAPABILITIES: frozenset[str] = frozenset(CAPABILITIES)
+"""What an unbound credential holds — the bare-key and no-registry behaviour."""
+
+
+def key_value(entry: object) -> str:
+    """The secret in a configured key, whichever form the operator wrote."""
+    return entry if isinstance(entry, str) else str(getattr(entry, "key", ""))
+
+
+def _match_key(header_value: str, keys: list[Any]) -> Any | None:
+    """The configured entry whose secret is ``header_value``, or ``None``.
+
+    Compares every entry with :func:`secrets.compare_digest` — a plain ``in`` /
+    ``==`` would leak per-byte timing and let an attacker derive the secret
+    (D-11).
+    """
+    header_bytes = header_value.encode("utf-8") if header_value else b""
+    for entry in keys:
+        if secrets.compare_digest(header_bytes, key_value(entry).encode("utf-8")):
+            return entry
+    return None
+
+
+def _capabilities_of(entry: object) -> frozenset[str]:
+    """What a matched key entry may do; a bare string may do everything."""
+    if isinstance(entry, str):
+        return ALL_CAPABILITIES
+    declared = getattr(entry, "capabilities", None)
+    if declared is None:
+        return ALL_CAPABILITIES
+    return frozenset(str(c) for c in declared)
+
+
+def caller_identity(
+    request: Request,
+    *,
+    auth_mode: str = "api_key",
+    keys: list[Any] | None = None,
+    agent_subjects: dict[str, str] | None = None,
+    trusted_proxies: list[str] | None = None,
+) -> dict[str, Any]:
+    """Who the transport authenticated this request as (§4.15, readiness §2).
+
+    Four fields:
+
+    - ``auth`` — the authenticated principal: the credential's configured
+      ``api.keys[].principal`` (namespaced, see
+      :func:`~nautilus.core.principal.ledger_identity`), the API key value itself
+      when the entry names none, or, under ``proxy_trust``, the upstream's
+      ``X-Forwarded-User``. This keys the cumulative-exposure ledger and
+      session ownership, so it must carry nothing the caller's own payload can
+      set — and, because a rotation is not a new caller, nothing the operator
+      changes on a rotation either. A secret makes a poor identity for the
+      second reason: keying on it, the same caller before and after a rotation
+      is two principals, so the replacement credential starts on a clean
+      exposure budget and answers ``403 session_not_yours`` on the sessions its
+      predecessor opened. ``principal`` is the identity said out loud; an entry
+      without one keeps the old derivation, because changing it for every key
+      would orphan every ledger a running deployment holds.
+    - ``peer`` — the socket address, recorded for provenance and used as the
+      ledger key's fallback only when the deployment authenticates nobody.
+    - ``agent_id`` — the *only* agent this credential may speak for, or ``None``
+      when nothing binds it: a bare-string key, or a deployment that registers
+      no ``agents.<id>.subject`` at all. ``None`` is the historical behaviour:
+      the caller names its own agent. A subject that is unregistered *while
+      others are registered* does not land here — it is refused, because
+      unbound is a promotion, not a fallback.
+    - ``capabilities`` — what this credential may do. Everything, unless a
+      structured key entry says otherwise.
+
+    Shared rather than per-transport on purpose: it lived inside ``create_app``
+    and only REST ever called it, so the same client presenting the same key to
+    the MCP port accumulated into a different ledger and escaped escalation by
+    switching transport.
+
+    Raises:
+        HTTPException: 401 under ``proxy_trust`` when the forwarded identity
+            does not survive :func:`_vet_forwarded_user` — see there for why
+            this function does the vetting rather than assuming it.
+    """
+    agent_id: str | None = None
+    capabilities = ALL_CAPABILITIES
+    if auth_mode == "proxy_trust":
+        # The ingress authenticated the subject; ``agents.<id>.subject`` is what
+        # says which agent it is. The vetting happens here rather than in a
+        # dependency, so ``agent_subjects.get`` is reached only for a subject
+        # this deployment believes, and ``None`` means it binds nobody.
+        auth = _vet_forwarded_user(request, trusted_proxies or [], agent_subjects or {})
+        agent_id = (agent_subjects or {}).get(auth)
+    else:
+        # The admin console authenticates a browser with a ``nautilus_key``
+        # cookie, and that cookie holds an API key — ``/admin/login`` verifies
+        # it against the same registry before setting it. Reading only the
+        # header gave the same credential a different identity depending on
+        # which door it came through: unbound, holding every capability, and
+        # accumulating exposure under a separate principal.
+        auth = request.headers.get("X-API-Key") or request.cookies.get("nautilus_key") or ""
+        entry = _match_key(auth, keys) if keys else None
+        if entry is not None:
+            agent_id = getattr(entry, "agent_id", None)
+            capabilities = _capabilities_of(entry)
+            # Not the presented secret: a rotation is not a new caller. See
+            # :func:`~nautilus.core.principal.ledger_identity`.
+            auth = ledger_identity(entry)
+    peer = request.client.host if request.client else ""
+    return {"auth": auth, "peer": peer, "agent_id": agent_id, "capabilities": capabilities}
+
+
+def capability_refusal(caller: Mapping[str, Any], capability: str) -> str | None:
+    """Why ``caller`` may not use ``capability``, or ``None`` when it may.
+
+    Returns the message instead of raising so each surface can answer in its
+    own dialect -- an ``HTTPException`` on REST, a ``JSONResponse`` in the admin
+    console, a tool error over MCP -- while all three agree on what is refused
+    and why. The check lived inside a REST dependency, which is exactly why a
+    credential scoped to ``audit_read`` was refused by ``/v1/request`` and ran
+    the same query over MCP: ``verify_api_key`` asks only whether the secret
+    matches *some* configured entry, never what that entry may do.
+
+    A credential the transport could not identify holds everything, which is the
+    unauthenticated-deployment and bare-string-key behaviour and is decided
+    before this function is reached.
+    """
+    held = caller.get("capabilities") or ALL_CAPABILITIES
+    if capability in held:
+        return None
+    return f"This credential does not hold the {capability!r} capability (it holds {sorted(held)})"
+
+
+def verify_api_key(header_value: str, keys: list[Any]) -> Any:
     """Verify ``header_value`` against every key in ``keys`` in constant time.
 
     Uses :func:`secrets.compare_digest` per key — a plain ``in`` / ``==``
@@ -49,7 +203,14 @@ def verify_api_key(header_value: str, keys: list[str]) -> None:
 
     Args:
         header_value: Raw ``X-API-Key`` header value supplied by the caller.
-        keys: Operator-configured allow-list (from ``config.api.keys``).
+        keys: Operator-configured allow-list (from ``config.api.keys``) —
+            bare strings, structured :class:`~nautilus.config.models.ApiKeyEntry`
+            records, or a mix.
+
+    Returns:
+        The matched allow-list entry. Callers that only need the yes/no
+        answer ignore it; the admin console uses it to build its session
+        cookie out of operator config rather than out of the posted form.
 
     Raises:
         HTTPException: 401 if ``header_value`` does not match any key, or
@@ -63,10 +224,9 @@ def verify_api_key(header_value: str, keys: list[str]) -> None:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="API key required",
         )
-    header_bytes = header_value.encode("utf-8") if header_value else b""
-    for key in keys:
-        if secrets.compare_digest(header_bytes, key.encode("utf-8")):
-            return
+    entry = _match_key(header_value, list(keys))
+    if entry is not None:
+        return entry
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid API key",
@@ -94,25 +254,112 @@ async def require_api_key(
     return header_value
 
 
-async def proxy_trust_dependency(request: Request) -> str:
-    """Return the upstream-proxy-asserted user from ``X-Forwarded-User``.
+def _peer_is_trusted(peer: str, trusted: list[str]) -> bool:
+    """Is ``peer`` inside one of the configured ``trusted_proxies`` blocks?"""
+    if not peer:
+        return False
+    try:
+        address = ip_address(peer)
+    except ValueError:
+        return False
+    for entry in trusted:
+        try:
+            if address in ip_network(entry, strict=False):
+                return True
+        except ValueError:
+            continue
+    return False
 
-    Used when ``config.api.auth.mode == "proxy_trust"`` — the upstream
-    mesh/ingress has already authenticated the caller and forwarded the
-    resolved identity. Nautilus trusts the header verbatim (D-11).
+
+def _vet_forwarded_user(
+    request: Request,
+    trusted_proxies: list[str],
+    agent_subjects: Mapping[str, str],
+) -> str:
+    """The ``X-Forwarded-User`` this deployment may believe, or 401.
+
+    Under ``proxy_trust`` the upstream mesh/ingress has already authenticated
+    the caller (mTLS, SPIFFE, OIDC) and the header *is* the credential — so it
+    is only an identity while nobody but the proxy can set it. Two things make
+    that true, and both are checked here:
+
+    - the socket peer falls inside ``api.auth.trusted_proxies``, which the
+      config refuses to omit under this mode. Without it, ``X-Forwarded-User``
+      is a field the caller fills in: it may name any subject, and rotating it
+      per request mints a fresh ledger principal, which resets the cumulative
+      exposure the product is built to accumulate.
+    - the subject is one ``agents.<id>.subject`` names, whenever the config
+      names any subject at all. An unmapped subject resolves to
+      ``agent_id=None``, and ``None`` is the *unbound* case — the caller names
+      its own agent and holds ``ALL_CAPABILITIES``, ``govern`` and key rotation
+      included. So one typo in a SPIFFE ID, or one workload the mesh
+      authenticates before anybody adds it to the config, silently upgraded a
+      bound credential to a root one. The refusal is scoped to deployments that
+      have bound somebody: with no ``subject`` anywhere the operator has stated
+      no intent, and that deployment keeps the unbound behaviour a bare
+      API-key string already has.
+
+    This is a plain function, not only a dependency, because a dependency
+    protects the routes somebody remembered to wire it into.
+    ``proxy_trust_dependency`` was wired into REST and the admin console and
+    into neither the MCP server nor its ``serve`` wiring, whose only gate is
+    ``wrap_http_with_api_key``; ``caller_identity`` read the raw header there
+    and cited that dependency in a comment as the reason it was safe to.
+    Calling this from ``caller_identity`` itself makes the citation true on
+    every transport, including ones not written yet: an omitted
+    ``trusted_proxies`` trusts nobody rather than everybody.
 
     Raises:
-        HTTPException: 401 if ``X-Forwarded-User`` is missing or empty —
-            the proxy SHOULD always set it when traffic reaches us;
-            missing header implies a bypass attempt.
+        HTTPException: 401 if the peer is not a configured proxy, if
+            ``X-Forwarded-User`` is missing or empty — the proxy SHOULD always
+            set it when traffic reaches us; a missing header implies a bypass
+            attempt — or if the subject is not one the config binds.
     """
+    peer = request.client.host if request.client else ""
+    if not _peer_is_trusted(peer, trusted_proxies):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Forwarded identity rejected: peer is not a trusted proxy",
+        )
     user = request.headers.get("X-Forwarded-User")
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing X-Forwarded-User",
         )
+    if agent_subjects and user not in agent_subjects:
+        log.warning("refusing forwarded subject %r: no agents.<id>.subject names it", user)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=(
+                "Forwarded identity rejected: no agent is bound to this subject. "
+                "Add it as agents.<id>.subject, or the caller would run unbound "
+                "with every capability."
+            ),
+        )
     return user
+
+
+async def proxy_trust_dependency(request: Request) -> str:
+    """Return the upstream-proxy-asserted user from ``X-Forwarded-User``.
+
+    Used when ``config.api.auth.mode == "proxy_trust"``: the FastAPI-shaped
+    front for :func:`_vet_forwarded_user`, reading the deployment's
+    ``trusted_proxies`` and ``agent_subjects`` off ``app.state``. It is the
+    401-at-the-door for the surfaces that mount it; the vetting itself is
+    shared, so a surface that does not mount it is refused all the same when it
+    resolves a caller.
+
+    Raises:
+        HTTPException: 401 — see :func:`_vet_forwarded_user`.
+    """
+    app = request.scope.get("app")
+    state = getattr(app, "state", None)
+    return _vet_forwarded_user(
+        request,
+        list(getattr(state, "trusted_proxies", []) or []),
+        dict(getattr(state, "agent_subjects", {}) or {}),
+    )
 
 
 async def verify_session_token(
@@ -129,7 +376,7 @@ async def verify_session_token(
     is absent the dependency is a no-op and returns ``None`` so existing tests
     that don't populate the state continue to pass.
     """
-    token_value = request.headers.get(_SESSION_TOKEN_HEADER)
+    token_value = request.headers.get(SESSION_TOKEN_HEADER)
     if not token_value:
         return None
     from nautilus.attestation.session_token import SessionTokenError, SessionTokenService
@@ -164,7 +411,11 @@ async def verify_session_token(
 
 
 __all__ = [
+    "ALL_CAPABILITIES",
+    "SESSION_TOKEN_HEADER",
     "api_key_header",
+    "caller_identity",
+    "key_value",
     "proxy_trust_dependency",
     "require_api_key",
     "verify_api_key",

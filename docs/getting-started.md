@@ -12,77 +12,101 @@ Requires Python 3.13 or later.
 uv add nautilus-rkm
 ```
 
-## Configuration
+The broker, both transports and the adapters that need no driver (`rest`,
+`servicenow`, `llm`, `static`) come with that. Database and object-store
+drivers are extras:
 
-This walkthrough uses a self-contained, in-memory demo adapter so you can run
-your first request with nothing but the repo — no database or external service
-required. (For a real source, swap `type: demo-local` for `postgres` and point
-`connection` at your database; see the [Adapter SDK](reference/adapter-sdk.md).)
-
-Save this single-file adapter as `demo_adapter.py`:
-
-```python
-from typing import Any, ClassVar
-
-from nautilus.config.models import SourceConfig
-from nautilus.core.models import AdapterResult, IntentAnalysis, ScopeConstraint
-
-
-class DemoLocalAdapter:
-    source_type: ClassVar[str] = "demo-local"
-
-    async def connect(self, config: SourceConfig) -> None:
-        pass
-
-    async def execute(
-        self,
-        intent: IntentAnalysis,
-        scope: list[ScopeConstraint],
-        context: dict[str, Any],
-    ) -> AdapterResult:
-        return AdapterResult(
-            source_id="main-db",
-            rows=[
-                {"order_id": 1001, "user_id": 42, "total": 19.99},
-                {"order_id": 1002, "user_id": 42, "total": 7.50},
-            ],
-            duration_ms=0,
-        )
-
-    async def close(self) -> None:
-        pass
+```bash
+uv add "nautilus-rkm[postgres]"   # also: pgvector, elasticsearch, neo4j, influxdb, s3
+uv add "nautilus-rkm[all]"        # every built-in adapter
 ```
 
-Create a `nautilus.yaml` alongside it:
+A configured source whose driver is not installed fails at startup, naming the
+extra — it never fails later, mid-request. So does
+`session_store.backend: postgres`, and `analysis.provider`.
+
+Running the container image instead? Extras are chosen when the image is
+**built**, because the runtime stage is distroless: no shell, no `pip`, nothing
+to install into. The published image carries `--extra otel` and no drivers, so
+anything on the list above is `docker build --build-arg EXTRAS="--extra
+postgres"` rather than a config change. The full per-extra table is in
+[Deploying › Extras](how-to/deploying.md#extras-and-what-the-published-image-carries),
+and every one of those startup failures prints the `--build-arg` line it wants.
+
+## First run
+
+Nothing to configure, nothing to install beyond the package:
+
+```bash
+nautilus demo
+```
+
+It declares two agent-to-agent handoffs and lets the broker decide each one:
+
+```
+  analyst (confidential) hands confidential data to chief (secret)
+    handoff ALLOWED
+
+  chief (secret) hands secret data to intern (unclassified)
+    handoff DENIED
+    reason: receiving agent clearance does not dominate declared classification
+    rule:   information-flow-violation
+```
+
+That is the whole product in miniature: a decision made by a rule, with the
+rule named, and an audit entry written for both outcomes. No database, no
+adapter, no network.
+
+## Configuration
+
+```bash
+nautilus init
+```
+
+writes a `nautilus.yaml` that runs as it stands. Its source has type `static`,
+which serves rows declared in the config itself — so a first run needs no
+database and no adapter code:
 
 ```yaml
 sources:
-  - id: main-db
-    type: demo-local
-    description: "In-memory demo source (no external service required)"
-    classification: confidential
-    data_types: [users, orders]
+  - id: orders
+    type: static
+    description: Sample order rows, served from this file.
+    classification: unclassified
+    data_types: [orders]
     allowed_purposes: [support]
-    connection: "memory://"
+    rows:
+      - {order_id: 1001, user_id: 42, total: 19.99}
+      - {order_id: 1002, user_id: 43, total: 7.50}
 
-adapters:
-  - module_path: ./demo_adapter.py
-    class: DemoLocalAdapter
-    source_type: demo-local
-
-rules:
-  user_rules_dirs: []
-
-analysis:
-  keyword_map:
-    orders: [order, orders]
+agents:
+  agent-alpha:
+    id: agent-alpha
+    clearance: confidential
+    allowed_purposes: [support]
 
 attestation:
   enabled: true
 
 audit:
   path: ./audit.jsonl
+
+api:
+  keys:
+    - <generated per scaffold — read it out of the file, at mode 0600>
 ```
+
+`api.keys` matters the moment you serve over HTTP. It defaults to **empty**,
+and empty fails closed: `/healthz` answers 200 while `/v1/sources` and
+`/v1/request` answer `401 Not authenticated`. `nautilus init` generates a key
+so the first `nautilus serve` works; replace it before anything but you can
+reach the port. A config with no keys says so in the startup log.
+
+For a real source, swap the `static` block for the type that matches your data
+— `postgres`, `elasticsearch`, `neo4j`, `rest`, `s3` and the rest are built in
+— and point `connection` at it. To reach something with no built-in adapter,
+`nautilus adapters new` scaffolds one; see the
+[Adapter SDK](reference/adapter-sdk.md).
 
 ## First request
 
@@ -91,23 +115,38 @@ Run this from the directory containing `nautilus.yaml` and `demo_adapter.py`:
 ```python
 from nautilus import Broker
 
-broker = Broker.from_config("nautilus.yaml")
-try:
+with Broker.from_config("nautilus.yaml") as broker:
     response = broker.request(
         "agent-alpha",
-        "Find recent orders for user 42",
-        {"clearance": "confidential", "purpose": "support", "session_id": "s1"},
+        "Find recent orders",
+        {"purpose": "support", "session_id": "s1"},
     )
-    print(response.data)            # {"main-db": [{"order_id": 1001, ...}, {"order_id": 1002, ...}]}
-    print(response.sources_queried) # ["main-db"]
+    print(response.outcome)         # "allowed"
+    print(response.data)            # {"orders": [{"order_id": 1001, ...}, {"order_id": 1002, ...}]}
+    print(response.sources_queried) # ["orders"]
     print(response.attestation_token)
-finally:
-    broker.close()
 ```
+
+The `with` block runs `setup()` on the way in — which is what creates the
+schema for the persistent session stores — and closes the broker on the way
+out. In async code the same shape is `async with await Broker.afrom_config(...)`;
+the two are genuinely different because `close()` refuses to run inside a
+running event loop.
+
+When a source is missing from `response.data`, the response says why:
+`response.denial_records` carries the reason and the rule for anything
+refused, `response.skip_records` for anything the intent never asked for, and
+`response.rule_trace` is the rules that fired.
 
 `response` is a `BrokerResponse`: `response.data` maps source IDs to result
 rows, `response.attestation_token` is a signed JWS, and `response.request_id`
 joins the response to its audit entry.
+
+Note what the third argument is *not* doing: it names a purpose, not a
+clearance. `agent-alpha` is declared in the config, so its clearance comes from
+there. A config that declares no `agents:` takes the caller's word for both —
+which the broker warns about at startup. See
+[Operator guide](how-to/operator-guide.md#2-configure-nautilusyaml).
 
 ## Next steps
 

@@ -11,7 +11,9 @@ from typing import Any
 
 import pytest
 import yaml
+from fathom.audit import FileSink
 
+from nautilus.audit.logger import AuditLogger
 from nautilus.rkm.queue import ProposalQueue
 from nautilus.rkm.validator.pipeline import run_pipeline
 from nautilus.rkm.validator.shadow import ShadowFlag, shadow_check
@@ -21,13 +23,25 @@ pytestmark = pytest.mark.integration
 _FIXTURE_DIR = Path(__file__).parent.parent / "fixtures" / "rkm" / "shadow-pairs"
 
 
+def _logger(audit_log: Path) -> AuditLogger:
+    """The audit sink the caller owns.
+
+    ``run_pipeline`` takes the logger rather than opening one over the path it
+    was handed: the deployment's log may be a hash chain with exactly one
+    writer, and a second sink over it is unrecoverable corruption.
+    """
+    return AuditLogger(sink=FileSink(path=audit_log))
+
+
 def test_pipeline_submits_proposal_to_queue(tmp_path: Path) -> None:
     rule_yaml = tmp_path / "ok.yaml"
     rule_yaml.write_text("rules: []\n")
     audit_log = tmp_path / "audit.jsonl"
     audit_log.write_text("")
     queue = ProposalQueue(tmp_path / "queue")
-    proposal = run_pipeline(rule_yaml, queue=queue, audit_log=audit_log)
+    proposal = run_pipeline(
+        rule_yaml, queue=queue, audit_log=audit_log, audit_logger=_logger(audit_log)
+    )
     assert proposal.proposal_id.startswith("prop_")
     assert queue.get(proposal.proposal_id) is not None
 
@@ -95,3 +109,132 @@ def test_shadow_fixture_suite_no_false_negatives() -> None:
     for pair_dir in pair_dirs:
         rule_a, rule_b, expected = _load_pair(pair_dir)
         _check_pair(rule_a, rule_b, expected, pair_dir.name)
+
+
+# ---------------------------------------------------------------------------
+# The pipeline passes the actual proposal to every stage
+# ---------------------------------------------------------------------------
+#
+# ``run_pipeline`` previously called ``shadow_check({}, [])`` and
+# ``sandbox_replay({}, audit_log)``. An empty rule constrains nothing and
+# asserts nothing, so every proposal — benign, regressive, or uncompilable —
+# produced an identical validation record. These tests fail if that returns.
+
+
+def _proposal_file(tmp_path: Path, name: str, body: dict[str, Any]) -> Path:
+    path = tmp_path / f"{name}.yaml"
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "module": "nautilus-routing",
+                "ruleset": f"rkm-proposal-{name}",
+                "version": "1.0",
+                "rules": [body],
+            },
+            sort_keys=False,
+        )
+    )
+    return path
+
+
+def test_pipeline_rejects_a_regressive_proposal(tmp_path: Path) -> None:
+    """A rule that withdraws granted access is rejected, with the reason recorded."""
+    from tests.integration.test_rkm_sandbox import (  # noqa: SLF001
+        DENY_ALL_PII,
+        _write_audit_log,  # pyright: ignore[reportPrivateUsage]
+    )
+
+    audit_log = tmp_path / "audit.jsonl"
+    _write_audit_log(audit_log, 5)
+    queue = ProposalQueue(tmp_path / "queue")
+
+    proposal = run_pipeline(
+        _proposal_file(tmp_path, "regressive", DENY_ALL_PII),
+        queue=queue,
+        audit_log=audit_log,
+        audit_logger=_logger(audit_log),
+    )
+    assert proposal.status == "rejected"
+    sandbox = proposal.validation["sandbox"]
+    assert sandbox["error"], "rejection reason must be recorded on the proposal"
+    assert sandbox["regressions"] == 5
+
+
+def test_pipeline_distinguishes_proposals(tmp_path: Path) -> None:
+    """Two different proposals produce different sandbox records.
+
+    This is the discriminating check: with ``{}`` passed to every stage, a
+    benign rule and a regressive one were indistinguishable in the queue.
+    """
+    from tests.integration.test_rkm_sandbox import (  # noqa: SLF001
+        DEAD_RULE,
+        DENY_ALL_PII,
+        _write_audit_log,  # pyright: ignore[reportPrivateUsage]
+    )
+
+    audit_log = tmp_path / "audit.jsonl"
+    _write_audit_log(audit_log, 5)
+    queue = ProposalQueue(tmp_path / "queue")
+
+    benign = run_pipeline(
+        _proposal_file(tmp_path, "benign", DEAD_RULE),
+        queue=queue,
+        audit_log=audit_log,
+        audit_logger=_logger(audit_log),
+    )
+    regressive = run_pipeline(
+        _proposal_file(tmp_path, "regressive", DENY_ALL_PII),
+        queue=queue,
+        audit_log=audit_log,
+        audit_logger=_logger(audit_log),
+    )
+
+    assert benign.validation["sandbox"] != regressive.validation["sandbox"]
+    assert benign.status != regressive.status
+
+
+def test_pipeline_rejects_an_uncompilable_proposal(tmp_path: Path) -> None:
+    """A rule the engine will not accept must not be queued as pending."""
+    audit_log = tmp_path / "audit.jsonl"
+    audit_log.write_text("")
+    queue = ProposalQueue(tmp_path / "queue")
+
+    proposal = run_pipeline(
+        _proposal_file(tmp_path, "broken", {"name": "broken", "when": "not-a-list"}),
+        queue=queue,
+        audit_log=audit_log,
+        audit_logger=_logger(audit_log),
+    )
+    assert proposal.status == "rejected"
+    assert proposal.validation["sandbox"]["error"]
+
+
+def test_the_pipeline_writes_the_key_its_readers_read(tmp_path: Path) -> None:
+    """`confidence`, not `score`.
+
+    The pipeline wrote ``validation["score"]`` while the REST proposal
+    detail, ``rkm queue list`` and ``ProposalQueue.list(min_confidence=...)``
+    all read ``validation["confidence"]``, so a scored proposal displayed as
+    0.0 on every human-review surface and no confidence filter could match.
+    """
+    from tests.integration.test_rkm_sandbox import (  # noqa: SLF001
+        ROUTE_VULN_DB,
+        _write_audit_log,  # pyright: ignore[reportPrivateUsage]
+    )
+
+    audit_log = tmp_path / "audit.jsonl"
+    _write_audit_log(audit_log, 5)
+    queue = ProposalQueue(tmp_path / "queue")
+
+    proposal = run_pipeline(
+        _proposal_file(tmp_path, "benign", ROUTE_VULN_DB),
+        queue=queue,
+        audit_log=audit_log,
+        audit_logger=_logger(audit_log),
+    )
+    confidence = proposal.validation["confidence"]
+    assert isinstance(confidence, float)
+    assert proposal.validation["confidence_breakdown"]["total"] == confidence
+    # Reachable through the filter the CLI flag feeds.
+    assert [p.proposal_id for p in queue.list(min_confidence=confidence)] == [proposal.proposal_id]
+    assert queue.list(min_confidence=confidence + 0.01) == []
