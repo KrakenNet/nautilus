@@ -71,7 +71,7 @@ policy decision, so it goes through review with the regression named in the prop
 
 ### `proposal not found: {proposal_id!r}`
 
-**`KeyError`** from `nautilus/rkm/review.py:122,241`; `nautilus/rkm/queue.py:256` uses the
+**`KeyError`** from `nautilus/rkm/review.py:122,241`; `nautilus/rkm/queue.py:268` uses the
 unquoted form, `proposal not found: {proposal_id}`. The queue file has no such proposal.
 `GET /v1/rkm/queue` lists what is there. Over HTTP the transport does not pass this string
 through: `GET`, approve and reject all answer **404** with

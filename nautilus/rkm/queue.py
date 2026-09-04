@@ -146,7 +146,19 @@ class ProposalQueue:
             _PROCESS_LOCK.release()
 
     def _proposal_path(self, proposal_id: str) -> Path:
-        return self._queue_dir / f"{_safe_id(proposal_id)}.jsonl"
+        """The file backing ``proposal_id``, proved to be inside the queue dir.
+
+        Two checks, not one. :func:`_safe_id` rejects the id on its own terms
+        and is what produces the readable error; the containment check below
+        is the one that holds even if that pattern is ever loosened, because
+        it asks the filesystem where the path actually landed rather than
+        trusting the string it was built from.
+        """
+        root = os.path.realpath(self._queue_dir)
+        candidate = os.path.realpath(os.path.join(root, f"{_safe_id(proposal_id)}.jsonl"))
+        if not candidate.startswith(root + os.sep):
+            raise InvalidProposalIdError(f"invalid proposal id: {proposal_id!r}")
+        return Path(candidate)
 
     def _read_proposal(self, proposal_id: str) -> Proposal | None:
         """Read and reconstruct the current state of a proposal from its JSONL file."""

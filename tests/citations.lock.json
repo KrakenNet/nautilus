@@ -4617,14 +4617,14 @@
    }
   },
   {
-   "citation": "nautilus/rkm/queue.py:256",
+   "citation": "nautilus/rkm/queue.py:268",
    "cited_in": [
     "docs/reference/errors/rules.md"
    ],
    "file": "nautilus/rkm/queue.py",
    "sha": "2ac5e5d9e6353db2",
    "lines": {
-    "256": "raise KeyError(f\"proposal not found: {proposal_id}\")"
+    "268": "raise KeyError(f\"proposal not found: {proposal_id}\")"
    }
   },
   {
