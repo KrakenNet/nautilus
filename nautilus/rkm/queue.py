@@ -16,6 +16,7 @@ import dataclasses
 import fcntl
 import json
 import os
+import re
 import threading
 import time
 from datetime import UTC, datetime
@@ -34,6 +35,24 @@ _LOCK_POLL_S = 0.1
 # processes; this is what makes it single-writer within one. Module-level so
 # two ProposalQueue objects over the same directory still serialise.
 _PROCESS_LOCK = threading.Lock()
+
+# A proposal id is interpolated straight into a filename, so a caller-supplied
+# one must not be able to leave the queue directory. ``/v1/rkm/proposals/{id}``
+# takes it from the URL path, so "../../etc/passwd" reached ``open()``.
+# Generated ids are ``prop_<32 hex>``; this admits that and nothing exotic.
+_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+
+class InvalidProposalIdError(ValueError):
+    """Raised when a proposal id could not be used as a filename."""
+
+
+def _safe_id(proposal_id: str) -> str:
+    """Return ``proposal_id`` if it is usable as a bare filename."""
+    if proposal_id in {".", ".."} or not _ID_RE.match(proposal_id):
+        raise InvalidProposalIdError(f"invalid proposal id: {proposal_id!r}")
+    return proposal_id
+
 
 # Valid state-machine transitions: (from_status) -> allowed to_statuses
 _VALID_TRANSITIONS: dict[str, set[str]] = {
@@ -127,7 +146,7 @@ class ProposalQueue:
             _PROCESS_LOCK.release()
 
     def _proposal_path(self, proposal_id: str) -> Path:
-        return self._queue_dir / f"{proposal_id}.jsonl"
+        return self._queue_dir / f"{_safe_id(proposal_id)}.jsonl"
 
     def _read_proposal(self, proposal_id: str) -> Proposal | None:
         """Read and reconstruct the current state of a proposal from its JSONL file."""
@@ -178,8 +197,15 @@ class ProposalQueue:
             self._release_lock(lock_fh)
 
     def get(self, proposal_id: str) -> Proposal | None:
-        """Return latest snapshot for ``proposal_id`` or ``None`` if absent."""
-        return self._read_proposal(proposal_id)
+        """Return latest snapshot for ``proposal_id`` or ``None`` if absent.
+
+        An id that could not name a file is *absent*, not an error: the
+        caller asked for something the queue does not hold.
+        """
+        try:
+            return self._read_proposal(proposal_id)
+        except InvalidProposalIdError:
+            return None
 
     def list(
         self,

@@ -93,7 +93,7 @@ audit:
 
 api:
   keys:
-    - <generated per scaffold — the command prints it>
+    - <generated per scaffold — read it out of the file, at mode 0600>
 ```
 
 `api.keys` matters the moment you serve over HTTP. It defaults to **empty**,

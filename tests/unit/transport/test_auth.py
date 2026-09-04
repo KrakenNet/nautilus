@@ -80,10 +80,12 @@ def _forwarded_request(identity: str) -> Any:
 
 
 def test_a_verify_api_key_good_against_multi_key_list_passes() -> None:
-    """``verify_api_key("good", ["good","other"])`` returns without raising."""
-    # Must not raise; returns None by contract.
+    """``verify_api_key("good", ["good","other"])`` returns the entry it matched."""
+    # Must not raise, and hands back the *configured* entry rather than the
+    # value presented: /admin/login builds its session cookie out of the
+    # return value so no header the browser sends reaches a header we set.
     result = verify_api_key("good", ["good", "other"])
-    assert result is None
+    assert result == "good"
 
 
 # --- (b) verify_api_key rejects mismatched key with HTTP 401 ------------------

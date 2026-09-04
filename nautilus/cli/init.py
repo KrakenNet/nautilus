@@ -10,6 +10,7 @@ no database, no driver and no adapter code.
 from __future__ import annotations
 
 import argparse
+import os
 import secrets
 from pathlib import Path
 
@@ -86,15 +87,22 @@ def dispatch(args: argparse.Namespace) -> int:
     # A fresh key per scaffold: a constant here would ship one shared secret to
     # everyone who ever ran the command.
     api_key = secrets.token_hex(16)
-    target.write_text(_TEMPLATE.replace("__API_KEY__", api_key), encoding="utf-8")
+    # 0600 at creation, not chmod after: the file holds a live credential, and
+    # a write_text() at the default 0644 leaves it world-readable for however
+    # long the chmod takes. O_EXCL also makes the exists() check above race-free.
+    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(_TEMPLATE.replace("__API_KEY__", api_key))
 
-    ok(f"wrote {target}")
+    ok(f"wrote {target} (mode 0600)")
     print("  next steps :")
     print(f"    nautilus serve --config {target}   # REST on 127.0.0.1:8000")
     print("    nautilus demo                       # a governed handoff decision")
     print()
-    print(f"  the generated api key is in {target}:")
-    print(f"    curl -H 'X-API-Key: {api_key}' http://127.0.0.1:8000/v1/sources")
+    # The key is printed nowhere: stdout is scrollback, CI logs and screen
+    # shares. It is in the file, at 0600, which is the one place it belongs.
+    print(f"  the generated api key is the api.keys entry in {target}:")
+    print("    curl -H 'X-API-Key: <that key>' http://127.0.0.1:8000/v1/sources")
     return 0
 
 

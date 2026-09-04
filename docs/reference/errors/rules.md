@@ -71,7 +71,7 @@ policy decision, so it goes through review with the regression named in the prop
 
 ### `proposal not found: {proposal_id!r}`
 
-**`KeyError`** from `nautilus/rkm/review.py:122,241`; `nautilus/rkm/queue.py:230` uses the
+**`KeyError`** from `nautilus/rkm/review.py:122,241`; `nautilus/rkm/queue.py:256` uses the
 unquoted form, `proposal not found: {proposal_id}`. The queue file has no such proposal.
 `GET /v1/rkm/queue` lists what is there. Over HTTP the transport does not pass this string
 through: `GET`, approve and reject all answer **404** with
@@ -84,14 +84,24 @@ and `:1561-1565`, from `AlreadyDecidedError` (`nautilus/rkm/review.py:39`). `cur
 the status the proposal already holds — `approved`, `rejected` or `retracted`. Decisions are not
 idempotent replays: a second one is refused, not silently ignored.
 
+### `invalid proposal id: {proposal_id!r}`
+
+**`InvalidProposalIdError`** (`nautilus/rkm/queue.py:46`), raised from
+`_safe_id` at `:52`. A proposal id is interpolated into a filename, so it must be a
+bare name: `[A-Za-z0-9._-]+`, and neither `.` nor `..`. `GET /v1/rkm/proposals/{proposal_id}`
+takes the id straight off the URL path, so an id containing `/` or `..` used to reach `open()`
+outside the queue directory. Reads answer **404** rather than raising — an id that cannot name a
+file is a proposal the queue does not hold — while `submit` raises, because a write that cannot
+name its own file has nowhere to go.
+
 ### `cannot transition {proposal_id} from {current!r} to {to!r}`
 
-**`InvalidTransition`** (`nautilus/rkm/queue.py:56`), raised at `:234`. Maps to HTTP 409. The
+**`InvalidTransition`** (`nautilus/rkm/queue.py:75`), raised at `:234`. Maps to HTTP 409. The
 state machine has no edge between those two states.
 
 ### `lock contention timeout on proposal queue`
 
-**`ProposalQueueLocked`** (`nautilus/rkm/queue.py:52`), raised at `:103` and `:114` after a
+**`ProposalQueueLocked`** (`nautilus/rkm/queue.py:71`), raised at `:103` and `:114` after a
 5-second `lockf` backoff. Maps to HTTP 503. Another *live* process holds the queue file lock —
 a concurrent `nautilus rkm` command, or a server serving a governance route. There is no such
 thing as a stale one: `lockf` locks are held by the process, and the kernel drops them when it

@@ -59,7 +59,6 @@ import yaml
 
 pytestmark = [pytest.mark.integration]
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
 _KEY = "e12-key"
 _SOURCE: dict[str, Any] = {
     "id": "orders",

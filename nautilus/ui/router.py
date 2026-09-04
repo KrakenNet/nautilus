@@ -10,6 +10,7 @@ when the ``HX-Request`` header is present.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any
@@ -25,10 +26,13 @@ from nautilus.core.broker import Broker
 from nautilus.transport.auth import (
     caller_identity,
     capability_refusal,
+    key_value,
     verify_session_token,
 )
 from nautilus.ui.audit_reader import AuditReader
 from nautilus.ui.dependencies import get_auth_user
+
+log = logging.getLogger(__name__)
 
 _TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 
@@ -192,7 +196,7 @@ async def login_submit(request: Request, api_key: str = Form(...)) -> Response:
 
     keys: list[str] = list(getattr(request.app.state, "api_keys", []) or [])
     try:
-        verify_api_key(api_key, keys)
+        matched = verify_api_key(api_key, keys)
     except HTTPException:
         return templates.TemplateResponse(
             request,
@@ -211,9 +215,14 @@ async def login_submit(request: Request, api_key: str = Form(...)) -> Response:
     # http, so the header is the only thing that knows.
     forwarded_proto = request.headers.get("X-Forwarded-Proto", "").split(",")[0].strip().lower()
     over_tls = request.url.scheme == "https" or forwarded_proto == "https"
+    # The configured entry's own secret, not the string the form posted. They
+    # compare equal -- ``verify_api_key`` only returns on a constant-time
+    # match -- but the cookie is then built from operator config rather than
+    # from request data, so no header value the browser sends reaches a header
+    # we set.
     response.set_cookie(
         key="nautilus_key",
-        value=api_key,
+        value=key_value(matched),
         httponly=True,
         samesite="lax",
         secure=over_tls,
@@ -313,16 +322,21 @@ async def playground_query(
         return JSONResponse({"error": str(exc)}, status_code=503, headers={"Retry-After": "1"})
     except SessionNotOwnedError as exc:
         return JSONResponse({"error": str(exc)}, status_code=403)
-    except OSError as exc:
+    except OSError:
         # The audit sink stopped accepting writes. Same answer /v1/request
-        # gives: our recorder is down, not your request.
+        # gives: our recorder is down, not your request. The OSError text
+        # carries the sink's absolute path, so it is logged, not returned.
+        log.exception("audit sink refused a write from the playground")
         return JSONResponse(
-            {"error": f"Nautilus could not record this request: {exc}"},
+            {"error": "Nautilus could not record this request."},
             status_code=503,
             headers={"Retry-After": "5"},
         )
-    except Exception as exc:
-        return JSONResponse({"error": str(exc)}, status_code=500)
+    except Exception:
+        # Server-side only: an unhandled exception's text is internal detail
+        # (paths, driver messages) and this endpoint answers a browser.
+        log.exception("playground request failed")
+        return JSONResponse({"error": "Internal error."}, status_code=500)
 
 
 @router.get("/sources", dependencies=[Depends(require_capability("query"))])

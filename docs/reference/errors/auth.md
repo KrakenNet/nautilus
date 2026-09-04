@@ -29,7 +29,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST "$NAUTILUS/v1/request" \
 
 ## `API key required`
 
-**HTTP 401.** `nautilus/transport/auth.py:215-221`, raised by `verify_api_key` when the
+**HTTP 401.** `nautilus/transport/auth.py:220-226`, raised by `verify_api_key` when the
 operator-configured allow-list is empty.
 
 **Means.** `api.keys` has zero entries, so nobody is allowed. This is fail-closed on purpose: an
@@ -62,7 +62,7 @@ PY
 
 ## `Invalid API key`
 
-**HTTP 401.** `nautilus/transport/auth.py:224-227`.
+**HTTP 401.** `nautilus/transport/auth.py:230-233`.
 
 **Means.** The header was present and matched none of the configured keys. Comparison is
 `secrets.compare_digest` per entry, so a near-miss and a wild guess take the same time.
@@ -154,7 +154,7 @@ curl -s -X POST "$NAUTILUS/v1/sessions" \
 
 ## `Forwarded identity rejected: peer is not a trusted proxy`
 
-**HTTP 401.** `nautilus/transport/auth.py:313-317`, `_vet_forwarded_user`.
+**HTTP 401.** `nautilus/transport/auth.py:319-323`, `_vet_forwarded_user`.
 
 **Means.** `api.auth.mode` is `proxy_trust`, so `X-Forwarded-User` *is* the credential — and the
 socket peer address is not inside any entry of `api.auth.trusted_proxies`.
@@ -169,7 +169,7 @@ whatever opened the TCP connection, not the contents of `X-Forwarded-For`.
 
 ## `Missing X-Forwarded-User`
 
-**HTTP 401.** `nautilus/transport/auth.py:318-323`.
+**HTTP 401.** `nautilus/transport/auth.py:324-329`.
 
 **Means.** The peer is trusted but the header is absent or empty. A trusted proxy should always
 set it, so a missing header reads as a bypass attempt rather than an oversight.

@@ -401,12 +401,12 @@ nautilus config; echo "exit=$?"
 
 ## `nautilus init`
 
-`nautilus/cli/init.py:80-95`. Writes `nautilus.yaml` with a freshly generated API key into
+`nautilus/cli/init.py:81-101`. Writes `nautilus.yaml` with a freshly generated API key into
 `--dir` (default `.`).
 
 ### `ERROR: {target} already exists — refusing to overwrite it`
 
-`nautilus/cli/init.py:83`. Exit **1**. `{target}` is `Path(--dir) / "nautilus.yaml"`, printed
+`nautilus/cli/init.py:84`. Exit **1**. `{target}` is `Path(--dir) / "nautilus.yaml"`, printed
 with `str()` — the path as you spelled it, not resolved: `--dir /tmp/n-init` prints
 `/tmp/n-init/nautilus.yaml`.
 

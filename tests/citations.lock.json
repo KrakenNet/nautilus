@@ -82,14 +82,14 @@
    }
   },
   {
-   "citation": "auth.py:325",
+   "citation": "auth.py:331",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/transport/auth.py",
    "sha": "cd42dbc8b1140e13",
    "lines": {
-    "325": "log.warning(\"refusing forwarded subject %r: no agents.<id>.subject names it\", user)"
+    "331": "log.warning(\"refusing forwarded subject %r: no agents.<id>.subject names it\", user)"
    }
   },
   {
@@ -2210,40 +2210,45 @@
    }
   },
   {
-   "citation": "nautilus/cli/init.py:80-95",
+   "citation": "nautilus/cli/init.py:81-101",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/init.py",
-   "sha": "bf3af73decc396ef",
+   "sha": "3c0b48742de8153e",
    "lines": {
-    "80": "\"\"\"Write the config. Returns the process exit code.\"\"\"",
-    "81": "target = Path(getattr(args, \"dir\", \".\")) / \"nautilus.yaml\"",
-    "82": "if target.exists():",
-    "83": "err(f\"{target} already exists — refusing to overwrite it\")",
-    "84": "return 1",
-    "85": "target.parent.mkdir(parents=True, exist_ok=True)",
-    "86": "# A fresh key per scaffold: a constant here would ship one shared secret to",
-    "87": "# everyone who ever ran the command.",
-    "88": "api_key = secrets.token_hex(16)",
-    "89": "target.write_text(_TEMPLATE.replace(\"__API_KEY__\", api_key), encoding=\"utf-8\")",
-    "90": "",
-    "91": "ok(f\"wrote {target}\")",
-    "92": "print(\"  next steps :\")",
-    "93": "print(f\"    nautilus serve --config {target}   # REST on 127.0.0.1:8000\")",
-    "94": "print(\"    nautilus demo                       # a governed handoff decision\")",
-    "95": "print()"
+    "81": "\"\"\"Write the config. Returns the process exit code.\"\"\"",
+    "82": "target = Path(getattr(args, \"dir\", \".\")) / \"nautilus.yaml\"",
+    "83": "if target.exists():",
+    "84": "err(f\"{target} already exists — refusing to overwrite it\")",
+    "85": "return 1",
+    "86": "target.parent.mkdir(parents=True, exist_ok=True)",
+    "87": "# A fresh key per scaffold: a constant here would ship one shared secret to",
+    "88": "# everyone who ever ran the command.",
+    "89": "api_key = secrets.token_hex(16)",
+    "90": "# 0600 at creation, not chmod after: the file holds a live credential, and",
+    "91": "# a write_text() at the default 0644 leaves it world-readable for however",
+    "92": "# long the chmod takes. O_EXCL also makes the exists() check above race-free.",
+    "93": "fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)",
+    "94": "with os.fdopen(fd, \"w\", encoding=\"utf-8\") as fh:",
+    "95": "fh.write(_TEMPLATE.replace(\"__API_KEY__\", api_key))",
+    "96": "",
+    "97": "ok(f\"wrote {target} (mode 0600)\")",
+    "98": "print(\"  next steps :\")",
+    "99": "print(f\"    nautilus serve --config {target}   # REST on 127.0.0.1:8000\")",
+    "100": "print(\"    nautilus demo                       # a governed handoff decision\")",
+    "101": "print()"
    }
   },
   {
-   "citation": "nautilus/cli/init.py:83",
+   "citation": "nautilus/cli/init.py:84",
    "cited_in": [
     "docs/reference/errors/cli.md"
    ],
    "file": "nautilus/cli/init.py",
    "sha": "b74f44c4519fe806",
    "lines": {
-    "83": "err(f\"{target} already exists — refusing to overwrite it\")"
+    "84": "err(f\"{target} already exists — refusing to overwrite it\")"
    }
   },
   {
@@ -4612,36 +4617,47 @@
    }
   },
   {
-   "citation": "nautilus/rkm/queue.py:230",
+   "citation": "nautilus/rkm/queue.py:256",
    "cited_in": [
     "docs/reference/errors/rules.md"
    ],
    "file": "nautilus/rkm/queue.py",
    "sha": "2ac5e5d9e6353db2",
    "lines": {
-    "230": "raise KeyError(f\"proposal not found: {proposal_id}\")"
+    "256": "raise KeyError(f\"proposal not found: {proposal_id}\")"
    }
   },
   {
-   "citation": "nautilus/rkm/queue.py:52",
+   "citation": "nautilus/rkm/queue.py:46",
+   "cited_in": [
+    "docs/reference/errors/rules.md"
+   ],
+   "file": "nautilus/rkm/queue.py",
+   "sha": "8833475998a27ec5",
+   "lines": {
+    "46": "class InvalidProposalIdError(ValueError):"
+   }
+  },
+  {
+   "citation": "nautilus/rkm/queue.py:71",
    "cited_in": [
     "docs/reference/errors/rules.md"
    ],
    "file": "nautilus/rkm/queue.py",
    "sha": "f49d339570361122",
    "lines": {
-    "52": "class ProposalQueueLocked(Exception):  # noqa: N818"
+    "71": "class ProposalQueueLocked(Exception):  # noqa: N818"
    }
   },
   {
-   "citation": "nautilus/rkm/queue.py:56",
+   "citation": "nautilus/rkm/queue.py:75",
    "cited_in": [
     "docs/reference/errors/rules.md"
    ],
    "file": "nautilus/rkm/queue.py",
    "sha": "f5ab7f43a1ab35dd",
    "lines": {
-    "56": "class InvalidTransition(Exception):  # noqa: N818"
+    "75": "class InvalidTransition(Exception):  # noqa: N818"
    }
   },
   {
@@ -4765,123 +4781,123 @@
    }
   },
   {
-   "citation": "nautilus/transport/auth.py:215-221",
+   "citation": "nautilus/transport/auth.py:220-226",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/transport/auth.py",
    "sha": "f68190cd14528c0e",
    "lines": {
-    "215": "if not keys:",
-    "216": "# Fail-closed: an empty allow-list means \"nobody is allowed\",",
-    "217": "# not \"everybody is allowed\" (FR-26 — api_key is a hard gate).",
-    "218": "raise HTTPException(",
-    "219": "status_code=status.HTTP_401_UNAUTHORIZED,",
-    "220": "detail=\"API key required\",",
-    "221": ")"
+    "220": "if not keys:",
+    "221": "# Fail-closed: an empty allow-list means \"nobody is allowed\",",
+    "222": "# not \"everybody is allowed\" (FR-26 — api_key is a hard gate).",
+    "223": "raise HTTPException(",
+    "224": "status_code=status.HTTP_401_UNAUTHORIZED,",
+    "225": "detail=\"API key required\",",
+    "226": ")"
    }
   },
   {
-   "citation": "nautilus/transport/auth.py:224-227",
+   "citation": "nautilus/transport/auth.py:230-233",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/transport/auth.py",
    "sha": "f61924ba9b442ff8",
    "lines": {
-    "224": "raise HTTPException(",
-    "225": "status_code=status.HTTP_401_UNAUTHORIZED,",
-    "226": "detail=\"Invalid API key\",",
-    "227": ")"
+    "230": "raise HTTPException(",
+    "231": "status_code=status.HTTP_401_UNAUTHORIZED,",
+    "232": "detail=\"Invalid API key\",",
+    "233": ")"
    }
   },
   {
-   "citation": "nautilus/transport/auth.py:251",
+   "citation": "nautilus/transport/auth.py:257",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/transport/auth.py",
    "sha": "5ecd06cd7ef5b7d6",
    "lines": {
-    "251": "def _peer_is_trusted(peer: str, trusted: list[str]) -> bool:"
+    "257": "def _peer_is_trusted(peer: str, trusted: list[str]) -> bool:"
    }
   },
   {
-   "citation": "nautilus/transport/auth.py:276",
+   "citation": "nautilus/transport/auth.py:282",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/transport/auth.py",
    "sha": "28bcc49a73fd4fdd",
    "lines": {
-    "276": "the caller (mTLS, SPIFFE, OIDC) and the header *is* the credential — so it"
+    "282": "the caller (mTLS, SPIFFE, OIDC) and the header *is* the credential — so it"
    }
   },
   {
-   "citation": "nautilus/transport/auth.py:313-317",
+   "citation": "nautilus/transport/auth.py:319-323",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/transport/auth.py",
    "sha": "783e87da71a0cbbf",
    "lines": {
-    "313": "if not _peer_is_trusted(peer, trusted_proxies):",
-    "314": "raise HTTPException(",
-    "315": "status_code=status.HTTP_401_UNAUTHORIZED,",
-    "316": "detail=\"Forwarded identity rejected: peer is not a trusted proxy\",",
-    "317": ")"
+    "319": "if not _peer_is_trusted(peer, trusted_proxies):",
+    "320": "raise HTTPException(",
+    "321": "status_code=status.HTTP_401_UNAUTHORIZED,",
+    "322": "detail=\"Forwarded identity rejected: peer is not a trusted proxy\",",
+    "323": ")"
    }
   },
   {
-   "citation": "nautilus/transport/auth.py:318-323",
+   "citation": "nautilus/transport/auth.py:324-329",
    "cited_in": [
     "docs/reference/errors/auth.md"
    ],
    "file": "nautilus/transport/auth.py",
    "sha": "ad701c5eae07febb",
    "lines": {
-    "318": "user = request.headers.get(\"X-Forwarded-User\")",
-    "319": "if not user:",
-    "320": "raise HTTPException(",
-    "321": "status_code=status.HTTP_401_UNAUTHORIZED,",
-    "322": "detail=\"Missing X-Forwarded-User\",",
-    "323": ")"
+    "324": "user = request.headers.get(\"X-Forwarded-User\")",
+    "325": "if not user:",
+    "326": "raise HTTPException(",
+    "327": "status_code=status.HTTP_401_UNAUTHORIZED,",
+    "328": "detail=\"Missing X-Forwarded-User\",",
+    "329": ")"
    }
   },
   {
-   "citation": "nautilus/transport/auth.py:325",
+   "citation": "nautilus/transport/auth.py:331",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/transport/auth.py",
    "sha": "cd42dbc8b1140e13",
    "lines": {
-    "325": "log.warning(\"refusing forwarded subject %r: no agents.<id>.subject names it\", user)"
+    "331": "log.warning(\"refusing forwarded subject %r: no agents.<id>.subject names it\", user)"
    }
   },
   {
-   "citation": "nautilus/transport/auth.py:337",
+   "citation": "nautilus/transport/auth.py:343",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/transport/auth.py",
    "sha": "4f4ff001ec9be017",
    "lines": {
-    "337": "async def proxy_trust_dependency(request: Request) -> str:"
+    "343": "async def proxy_trust_dependency(request: Request) -> str:"
    }
   },
   {
-   "citation": "nautilus/transport/auth.py:388-391",
+   "citation": "nautilus/transport/auth.py:394-397",
    "cited_in": [
     "docs/reference/errors/session-tokens.md"
    ],
    "file": "nautilus/transport/auth.py",
    "sha": "9525a47f277c85f3",
    "lines": {
-    "388": "raise HTTPException(",
-    "389": "status_code=status.HTTP_401_UNAUTHORIZED,",
-    "390": "detail=f\"Invalid session token: {exc.reason_code}\",",
-    "391": ") from exc"
+    "394": "raise HTTPException(",
+    "395": "status_code=status.HTTP_401_UNAUTHORIZED,",
+    "396": "detail=f\"Invalid session token: {exc.reason_code}\",",
+    "397": ") from exc"
    }
   },
   {
@@ -5617,14 +5633,14 @@
    }
   },
   {
-   "citation": "nautilus/ui/router.py:195",
+   "citation": "nautilus/ui/router.py:199",
    "cited_in": [
     "docs/how-to/hardening.md"
    ],
    "file": "nautilus/ui/router.py",
-   "sha": "4721c9036772aba0",
+   "sha": "dc4c271896c582f3",
    "lines": {
-    "195": "verify_api_key(api_key, keys)"
+    "199": "matched = verify_api_key(api_key, keys)"
    }
   },
   {

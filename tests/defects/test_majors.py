@@ -419,6 +419,89 @@ def test_m44_s3_ands_an_exact_key_with_the_other_constraints(
 
 
 # ---------------------------------------------------------------------------
+# 4.4b (#109) -- S3 ``IN`` on a tag was a substring test, not a membership test
+# ---------------------------------------------------------------------------
+
+
+def test_m44b_s3_in_on_a_tag_is_exact_membership_not_a_substring(
+    s3_seeded: tuple[str, str, str, str],
+    write_config: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``tag.x IN [...]`` must compare members, not scan a stringified list.
+
+    ``s3.py`` used to store the ``IN`` value as ``str(value)``, turning
+    ``["nothigh", "other"]`` into the literal ``"['nothigh', 'other']"``. The
+    check below it is ``actual in expected``, so on a string that is a
+    *substring* test: the object tagged ``sensitivity=high`` passed a filter
+    that names neither ``high`` nor anything equal to it, and the release
+    returned a restricted object under a scope the receipt said excluded it.
+    """
+    endpoint, access, secret, bucket = s3_seeded
+    monkeypatch.setenv("AWS_ACCESS_KEY_ID", access)
+    monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", secret)
+    monkeypatch.setenv("AWS_ENDPOINT_URL", endpoint)
+    monkeypatch.setenv("JOURNEY_S3", endpoint)
+    config = write_config(
+        {
+            "sources": [
+                _one_source(
+                    type="s3",
+                    connection="${JOURNEY_S3}",
+                    table=bucket,
+                    data_types=["docs"],
+                )
+            ],
+            "agents": {"a": {"id": "a", "clearance": "unclassified"}},
+        }
+    )
+
+    from nautilus import Broker
+
+    def _tag_in(members: list[str]) -> dict[str, Any]:
+        return {
+            "source_id": "src",
+            "field": "tag.sensitivity",
+            "operator": "IN",
+            "value": members,
+        }
+
+    async def _run(constraints: list[dict[str, Any]]) -> Any:
+        broker = Broker.from_config(config)
+        try:
+            return await broker.arequest(
+                "a",
+                "docs",
+                {
+                    "purpose": "p",
+                    "session_id": "s1",
+                    "scope_constraints": constraints,
+                },
+            )
+        finally:
+            await broker.aclose()
+
+    def _bodies(response: Any) -> list[str]:
+        return [str(r) for r in response.data.get("src", [])]
+
+    # Control: naming the real tag value returns the object, so the refusal
+    # below is a refusal and not an adapter that returns nothing at all.
+    listed = asyncio.run(_run([_tag_in(["high", "medium"])]))
+    assert any("restricted/secrets.txt" in b for b in _bodies(listed)), (
+        f"the fixture is wrong: IN ['high', 'medium'] returned {_bodies(listed)!r}, "
+        f"errored={getattr(listed, 'sources_errored', None)}"
+    )
+
+    # "high" is a substring of "['nothigh', 'other']" and a member of neither.
+    substring = asyncio.run(_run([_tag_in(["nothigh", "other"])]))
+    assert not any("restricted/secrets.txt" in b for b in _bodies(substring)), (
+        "tag.sensitivity IN ['nothigh', 'other'] returned the object tagged "
+        "sensitivity=high. The members were stringified, so membership became "
+        "a substring scan of the rendered list."
+    )
+
+
+# ---------------------------------------------------------------------------
 # 4.5 -- InfluxDB: two documented operator families produce invalid Flux
 # ---------------------------------------------------------------------------
 

@@ -6786,7 +6786,7 @@ ok     nautilus/core/broker.py:3238 %r on source_id
 ok     nautilus/core/broker.py:3261 %r on state.request_id
 ok     nautilus/core/broker.py:3261 %r on source_id
 ok     nautilus/core/broker.py:4046 %r on source_id
-ok     nautilus/transport/auth.py:325 %r on user
+ok     nautilus/transport/auth.py:331 %r on user
 
 0 unescaped interpolations
 $ echo $?
@@ -6795,7 +6795,7 @@ $ echo $?
 
 Run it from the repository root; the paths are relative to it. Twenty-three
 rows, every one of them `%r`, `0 unescaped interpolations`, exit `0`.
-`auth.py:325` logs the `X-Forwarded-User` header a proxy sent;
+`auth.py:331` logs the `X-Forwarded-User` header a proxy sent;
 `broker.py:3727` logs the `agent_id` and `purpose` out of a request body; `broker.py:2404` logs a handoff's `agent_id` and `session_id`,
 also from the body; the `broker.py` `source_id` rows are the per-source
 failure, schema-fetch, drift, quarantine-lift and truncation sites plus the
@@ -7319,7 +7319,7 @@ mode you run:
   that *is* the key.
 - `api.auth.mode: proxy_trust` — Nautilus authenticates nobody. It reads the
   subject your ingress already resolved out of `X-Forwarded-User`
-  (`nautilus/transport/auth.py:337`).
+  (`nautilus/transport/auth.py:343`).
 
 **What compensates**, and only in the second mode: put an authenticating proxy
 in front and make it the only reachable peer. The factors then live in the
@@ -7356,7 +7356,7 @@ Two things this does **not** cover, and both are load-bearing:
    other. The control is enforced entirely in a component this page does not
    configure; verify it there.
 2. **`POST /admin/login` still validates an API key in `proxy_trust` mode.** It
-   calls `verify_api_key` unconditionally (`nautilus/ui/router.py:195`), so
+   calls `verify_api_key` unconditionally (`nautilus/ui/router.py:199`), so
    it answers `302` for a correct key and `401` for a wrong one even when no key
    authorises anything — a live oracle for guessing `api.keys`, with no rate
    limit in front of it. The cookie it hands back opens nothing, which is the
@@ -7393,7 +7393,7 @@ is one opaque string:
 ```console
 $ grep -rniE 'oidc|saml|oauth|openid|id_token' nautilus/ --include='*.py'
 nautilus/transport/auth.py:9:  (mTLS, SPIFFE, OIDC) and forwards its identity in ``X-Forwarded-User``.
-nautilus/transport/auth.py:276:    the caller (mTLS, SPIFFE, OIDC) and the header *is* the credential — so it
+nautilus/transport/auth.py:282:    the caller (mTLS, SPIFFE, OIDC) and the header *is* the credential — so it
 nautilus/config/models.py:242:    # id, an OIDC subject, a certificate CN. Matched against ``X-Forwarded-User``
 ```
 
@@ -7404,7 +7404,7 @@ Three comments, no implementation. Every one of them describes something the
 issuers:
 
 - `api.auth.trusted_proxies` — a list of CIDR blocks. A socket peer inside **any**
-  block may assert **any** subject (`nautilus/transport/auth.py:251`). There is
+  block may assert **any** subject (`nautilus/transport/auth.py:257`). There is
   no per-proxy subject allowlist, so front the broker with two proxies and
   either one can assert the other's identities.
 - `agents.<id>.subject` — a `dict[subject → agent_id]` built by

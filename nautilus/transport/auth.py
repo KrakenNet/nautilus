@@ -194,7 +194,7 @@ def capability_refusal(caller: Mapping[str, Any], capability: str) -> str | None
     return f"This credential does not hold the {capability!r} capability (it holds {sorted(held)})"
 
 
-def verify_api_key(header_value: str, keys: list[Any]) -> None:
+def verify_api_key(header_value: str, keys: list[Any]) -> Any:
     """Verify ``header_value`` against every key in ``keys`` in constant time.
 
     Uses :func:`secrets.compare_digest` per key — a plain ``in`` / ``==``
@@ -206,6 +206,11 @@ def verify_api_key(header_value: str, keys: list[Any]) -> None:
         keys: Operator-configured allow-list (from ``config.api.keys``) —
             bare strings, structured :class:`~nautilus.config.models.ApiKeyEntry`
             records, or a mix.
+
+    Returns:
+        The matched allow-list entry. Callers that only need the yes/no
+        answer ignore it; the admin console uses it to build its session
+        cookie out of operator config rather than out of the posted form.
 
     Raises:
         HTTPException: 401 if ``header_value`` does not match any key, or
@@ -219,8 +224,9 @@ def verify_api_key(header_value: str, keys: list[Any]) -> None:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="API key required",
         )
-    if _match_key(header_value, list(keys)) is not None:
-        return
+    entry = _match_key(header_value, list(keys))
+    if entry is not None:
+        return entry
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid API key",

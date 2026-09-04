@@ -14,7 +14,7 @@ Two wrappers exist, and which one you see tells you where the token was carried.
 
 ### `Invalid session token: {exc.reason_code}`
 
-**HTTP 401.** `nautilus/transport/auth.py:388-391` and `:401-404`, from the
+**HTTP 401.** `nautilus/transport/auth.py:394-397` and `:407-410`, from the
 `verify_session_token` dependency. The token was in the **`X-Nautilus-Session-Token` header**.
 Only the code is shown. Rendered example:
 

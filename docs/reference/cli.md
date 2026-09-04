@@ -859,7 +859,9 @@ Write a `nautilus.yaml` that loads and answers. The config it writes declares it
 rows inline (source `type: static`), so it runs with no database, no driver and
 no adapter code. A fresh 32-hex-character API key is generated per invocation
 with `secrets.token_hex(16)` — a constant here would ship one shared secret to
-every user.
+every user. The file is created at mode **0600**: it holds a live credential, so
+group and other must not read it. The key is never printed — stdout is
+scrollback, CI logs and screen shares.
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
@@ -870,13 +872,13 @@ nautilus init --dir .
 ```
 
 ```text
-OK: wrote nautilus.yaml
+OK: wrote nautilus.yaml (mode 0600)
   next steps :
     nautilus serve --config nautilus.yaml   # REST on 127.0.0.1:8000
     nautilus demo                       # a governed handoff decision
 
-  the generated api key is in nautilus.yaml:
-    curl -H 'X-API-Key: deadbeefdeadbeefdeadbeefdeadbeef' http://127.0.0.1:8000/v1/sources
+  the generated api key is the api.keys entry in nautilus.yaml:
+    curl -H 'X-API-Key: <that key>' http://127.0.0.1:8000/v1/sources
 ```
 
 The file it wrote, verbatim (the key differs on every run):
