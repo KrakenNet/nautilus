@@ -12,8 +12,8 @@ Scope:
   * UQ-2 attestation token is present on successful response.
   * ``attestation.enabled=false`` → token is ``None``.
   * FR-18 one adapter raising does not break the others.
-  * NFR-3 concurrent adapter execution — two sleep-instrumented adapters
-    overlap (wall time ~max, not sum).
+  * NFR-3 concurrent adapter execution — two adapters meet at a shared
+    barrier, which only a concurrent run can clear.
   * AC-1.5 no public ``broker.reload`` API in Phase 1.
   * AC-8.7 no public ``broker.query`` API in Phase 1.
 
@@ -24,7 +24,6 @@ End-to-end pipeline behaviour against real adapters lives in
 from __future__ import annotations
 
 import asyncio
-import time
 from pathlib import Path
 from typing import Any
 
@@ -59,8 +58,8 @@ def set_test_env(monkeypatch: pytest.MonkeyPatch) -> None:
 class _FakeAdapter:
     """Minimal :class:`Adapter` Protocol impl returning configured rows or raising.
 
-    Optionally sleeps inside ``execute`` so the concurrency test (NFR-3) can
-    measure wall-clock overlap between two adapters.
+    Optionally waits on a shared barrier inside ``execute`` so the concurrency
+    test (NFR-3) can prove two adapters are in flight at the same moment.
     """
 
     source_type: str = "fake"
@@ -71,12 +70,12 @@ class _FakeAdapter:
         *,
         rows: list[dict[str, Any]] | None = None,
         raises: type[BaseException] | None = None,
-        sleep_for: float = 0.0,
+        barrier: asyncio.Barrier | None = None,
     ) -> None:
         self._source_id = source_id
         self._rows = rows if rows is not None else [{"id": 1}]
         self._raises = raises
-        self._sleep_for = sleep_for
+        self._barrier = barrier
         self.connected: bool = False
         self.closed: bool = False
 
@@ -91,8 +90,11 @@ class _FakeAdapter:
         context: dict[str, Any],
     ) -> AdapterResult:
         del intent, scope, context
-        if self._sleep_for > 0:
-            await asyncio.sleep(self._sleep_for)
+        if self._barrier is not None:
+            # Rendezvous: this returns only once every adapter sharing the
+            # barrier is also inside ``execute``. Sequential execution cannot
+            # get past it, so concurrency is proved rather than timed.
+            await self._barrier.wait()
         if self._raises is not None:
             raise self._raises(f"fake_adapter {self._source_id} configured to raise")
         # The broker derives the per-source chain-of-custody hash centrally from
@@ -301,35 +303,45 @@ async def test_one_adapter_raising_does_not_break_others() -> None:
 
 @pytest.mark.unit
 async def test_adapters_run_concurrently() -> None:
-    """NFR-3: two sleep-instrumented adapters overlap ≥50% of their durations.
+    """NFR-3: both adapters are inside ``execute`` at the same moment.
 
-    Patch both adapters to ``await asyncio.sleep(0.1)``. With concurrent
-    execution wall time should be ~0.1s, not 0.2s; we assert a 0.15s
-    ceiling which leaves a 50% margin for slow CI.
+    A rendezvous, not a stopwatch. Each adapter waits on a two-party
+    :class:`asyncio.Barrier` as the first thing it does, so the call can only
+    return if the broker had both of them in flight together; run them
+    sequentially and the first blocks forever on a barrier the second will
+    never reach.
+
+    This used to assert ``elapsed < 0.15s`` against two 0.1s sleeps. That is
+    the same claim measured through the runner's scheduler, and it fails for a
+    reason that has nothing to do with the broker: a loaded shared runner took
+    0.285s and turned `main` red while the identical job passed on 3.14 and on
+    macOS. The wait below is bounded only so a genuine regression fails in
+    seconds rather than hanging the suite; it is not a performance budget, and
+    a slow machine makes it slower without making it wrong.
     """
     broker = Broker.from_config(FIXTURE_PATH)
     try:
-        sleep_s = 0.1
+        barrier = asyncio.Barrier(2)
         _install_fakes(
             broker,
             {
-                "nvd_db": _FakeAdapter("nvd_db", sleep_for=sleep_s),
-                "internal_vulns": _FakeAdapter("internal_vulns", sleep_for=sleep_s),
+                "nvd_db": _FakeAdapter("nvd_db", barrier=barrier),
+                "internal_vulns": _FakeAdapter("internal_vulns", barrier=barrier),
             },
         )
-        started = time.perf_counter()
-        resp = await broker.arequest("agent-alpha", "vulnerability scan", _ctx())
-        elapsed = time.perf_counter() - started
+        try:
+            resp = await asyncio.wait_for(
+                broker.arequest("agent-alpha", "vulnerability scan", _ctx()),
+                timeout=30,
+            )
+        except TimeoutError:
+            pytest.fail(
+                "adapters ran sequentially: the first blocked on a two-party "
+                "barrier the second never reached, so neither returned."
+            )
         assert set(resp.sources_queried) == {"nvd_db", "internal_vulns"}, (
             f"both sources must succeed; got {resp.sources_queried!r} "
             f"errored={resp.sources_errored!r}"
-        )
-        # Concurrent: elapsed should be much less than 2*sleep_s.
-        # Sequential lower bound would be 0.2s; we assert <0.15s (i.e. the
-        # overlap is at least 50% of the per-adapter duration).
-        assert elapsed < 2 * sleep_s - (sleep_s / 2), (
-            f"adapters appear to have run sequentially: elapsed={elapsed:.3f}s "
-            f"(expected < {2 * sleep_s - sleep_s / 2:.3f}s for ≥50% overlap)"
         )
     finally:
         await broker.aclose()
