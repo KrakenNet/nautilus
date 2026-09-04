@@ -137,11 +137,18 @@ def test_release_please_would_not_propose_an_already_published_version() -> None
     Left at ``0.2.2`` with ``v0.2.5`` on PyPI, the next release PR proposes
     ``v0.2.3`` — a version the index already holds — and the publish job fails
     on upload rather than on anything a reviewer would see.
+
+    Behind, never level: this asked for ``==`` and so was false on the one
+    branch it most needed to be true. A release PR bumps the manifest to the
+    version it is proposing while the tag for it does not exist yet — 0.3.0
+    recorded against ``v0.2.5`` tagged — which is the release doing its job,
+    and ``==`` called it rot and turned #172 red. Only a manifest *below* the
+    newest tag causes the collision described above.
     """
     released = _released_versions()
     manifest = json.loads((REPO_ROOT / ".release-please-manifest.json").read_text("utf-8"))
     recorded = Version(manifest["."])
-    assert recorded == released[-1], (
+    assert recorded >= released[-1], (
         f".release-please-manifest.json records {recorded} as the last release of "
         f"this package, but v{released[-1]} is tagged. release-please computes the "
         f"next version from that record, so it would propose a version at or below "
