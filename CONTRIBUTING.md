@@ -149,6 +149,18 @@ just a rollout in progress, which is what the field is for.
 - Keep the subject line concise (under 72 characters).
 - Reference issues when applicable: "Fix rule cache invalidation (#15)".
 
+## Sign-off (DCO)
+
+Every commit must be signed off:
+
+```bash
+git commit -s -m "Add retry logic"
+```
+
+This appends `Signed-off-by: Your Name <you@example.com>` to the commit message, certifying you can legally contribute the code (full text: https://developercertificate.org/). The `DCO` check rejects PRs with unsigned commits.
+
+**Forgot to sign off?** You don't need to rewrite history. When the `DCO` check fails it comments the exact one-line command to push a *remediation commit* — just run it and push. (`git rebase --signoff origin/main` also works.)
+
 ## License
 
 By contributing, you agree that your contributions will be licensed under the [Apache License 2.0](LICENSE).

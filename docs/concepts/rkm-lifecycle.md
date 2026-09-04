@@ -8,7 +8,7 @@ lineage trail.
 ## The pipeline
 
 ```
-proposal ──► static ──► shadow ──► sandbox ──► score ──► review queue ──► promote
+proposal ──► static ──► shadow ──► sandbox ──► score ──► resolve ──► review queue ──► promote
 ```
 
 1. **Static** — structural validation: templates exist, conditions are
@@ -22,6 +22,15 @@ proposal ──► static ──► shadow ──► sandbox ──► score ─
 4. **Score** — a confidence breakdown (static cleanliness, shadow
    findings, replay volume and agreement) condensed to a number;
    proposals below threshold need a human.
+5. **Resolve** — detection alone still leaves every conflict for a
+   human, so this stage settles the one subclass that provenance can
+   decide on its own: a proposal subsumed by a single existing rule
+   that is still live and carries both observation and sandbox
+   provenance is marked `superseded`, with the evidence recorded on the
+   proposal. It is deterministic — no LLM, no clock — and fail-closed:
+   shadowing, salience inversions, and anything with thin or ambiguous
+   evidence route to human review. Auto-resolution only ever retires the
+   *proposal*, never a live rule, so the active rule base is untouched.
 
 This is the same pipeline behind `nautilus rules validate` and
 `nautilus rules test` — the CLI runs it against your file, RKM runs it
