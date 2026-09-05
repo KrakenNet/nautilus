@@ -44,7 +44,7 @@ dependencies = [
     # That is a port of nautilus/transport/mcp_server.py, not an import alias;
     # until it is done an uncapped range ships an MCP transport that dies on
     # import for anyone installing today.
-    "mcp>=1.12,<2",
+    "mcp>=1.12,<3",
     "sse-starlette>=2.0",
     "python-multipart>=0.0.9",
     "jinja2>=3.1",
