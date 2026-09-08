@@ -1,0 +1,4526 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Policy-first data broker for AI agents">
+      
+      
+      
+        <link rel="canonical" href="https://nautilus.krakn.ai/0.3/reference/errors/cli/">
+      
+      
+        <link rel="prev" href="../attestation/">
+      
+      
+        <link rel="next" href="../library/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Command line - Nautilus</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#command-line" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="Nautilus" class="md-header__button md-logo" aria-label="Nautilus" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Nautilus
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Command line
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/KrakenNet/nautilus" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    KrakenNet/nautilus
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../how-to/" class="md-tabs__link">
+          
+  
+  
+  How-to Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../concepts/" class="md-tabs__link">
+          
+  
+  
+  Concepts
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../../" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="Nautilus" class="md-nav__button md-logo" aria-label="Nautilus" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Nautilus
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/KrakenNet/nautilus" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    KrakenNet/nautilus
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How-to Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How-to Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/operator-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operator Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/deploying/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deploying
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/authoring-rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authoring Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/developing-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developing Adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/hardening/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardening
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/add-a-postgres-source/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add a Postgres Source
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/write-a-routing-rule/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Write a Routing Rule
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/configure-attestation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configure Attestation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/verify-a-token/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verify a Token
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/add-an-llm-source/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add an LLM Source
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/monitor-with-grafana/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Monitor with Grafana
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../concepts/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../concepts/trust-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Trust Boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../concepts/attestation-chain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Attestation Chain
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../concepts/rkm-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RKM Rule Lifecycle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../python-sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python SDK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../rest-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    REST API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../rule-packs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rule Packs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapter-sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapter SDK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_7" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5_7" id="__nav_5_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_7_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Errors
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../auth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials and identity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../session-tokens/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Session tokens
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sessions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sessions and session store
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../transport/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP transport
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration and startup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters and data sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rules, RKM and the engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../attestation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Attestation and keys
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command line
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command line
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#conventions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conventions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#any-governance-subcommand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Any governance subcommand
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Any governance subcommand">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#error-nautilus_reviewer-env-var-required-for-this-command-set-it-to-your-operator-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: NAUTILUS_REVIEWER env var required for this command. Set it to your operator identity.
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-this-decision-cannot-be-recorded-so-it-will-not-be-taken-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: this decision cannot be recorded, so it will not be taken: {problem}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-this-acknowledgement-cannot-be-recorded-so-it-will-not-be-made-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: this acknowledgement cannot be recorded, so it will not be made: {problem}
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-serve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus serve
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="nautilus serve">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#-bind-must-be-hostport-got-bindr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --bind must be HOST:PORT, got {bind!r}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-bind-port-must-be-an-integer-got-port_sr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --bind port must be an integer, got {port_s!r}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unable-to-read-config-config_path-exc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unable to read config '{config_path}': {exc}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#application-startup-failed-the-server-never-accepted-a-connection-the-cause-is-logged-above" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        application startup failed; the server never accepted a connection. The cause is logged above.
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-air-gapped-warnings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --air-gapped warnings
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-config-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus config check
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus health
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus rules
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="nautilus rules">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#error-file-not-found-file_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: file not found: {file_path}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-audit-log-not-found-audit_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: audit log not found: {audit_path}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-cannot-read-rules-config-from-path-exc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: cannot read rules config from {path}: {exc}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-score-min_total-below-threshold-threshold-file_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: score {min_total} below threshold {threshold}: {file_path}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-rule-name-shadow-finding-relation-existing-rule-existing_rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: rule '{name}': shadow finding {relation} (existing rule '{existing_rule}')
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-rule-name-insufficient-audit-history-replayed-replayed_n_actual-entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: rule '{name}': insufficient audit history (replayed {replayed_n_actual} entries)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-rule-name-skipped_drifted-audit-entries-could-not-be-replayed-the-current-rules-no-longer-reproduce-what-they-recorded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: rule '{name}': {skipped_drifted} audit entries could not be replayed -- the current rules no longer reproduce what they recorded
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-rule-name-skipped_no_input_facts-audit-entries-carry-no-engine-input-and-were-not-replayed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: rule '{name}': {skipped_no_input_facts} audit entries carry no engine input and were not replayed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-no-rules-found-in-file_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: no rules found in {file_path}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-could-not-read-audit-path-from-config_pathr-exc-using-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: could not read audit path from {config_path!r} ({exc}); using {path}
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-session-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus session version
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-missing-subcommand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A missing subcommand
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="A missing subcommand">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#error-rkm-no-subcommand-given-try-queue-lineage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: rkm: no subcommand given (try: queue, lineage)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-rkm-queue-no-op-given-try-submit-list-show-approve-reject-diff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: rkm queue: no op given (try: submit, list, show, approve, reject, diff)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-rule-no-subcommand-given-try-list-retract-lineage-history-rollback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: rule: no subcommand given (try: list, retract, lineage, history, rollback)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-rules-no-subcommand-given-try-validate-test-history" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: rules: no subcommand given (try: validate, test, history)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-adapters-no-subcommand-given-try-new-list-schema-schema-fingerprint-schema-diff-schema-ack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: adapters: no subcommand given (try: new, list, schema, schema-fingerprint, schema-diff, schema-ack)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-key-no-subcommand-given-try-list-rotate-revoke" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: key: no subcommand given (try: list, rotate, revoke)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-attestation-no-subcommand-given-try-verify" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: attestation: no subcommand given (try: verify)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-events-no-subcommand-given-try-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: events: no subcommand given (try: list)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-config-no-subcommand-given-try-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: config: no subcommand given (try: check)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-init" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus init
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="nautilus init">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#error-target-already-exists-refusing-to-overwrite-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: {target} already exists — refusing to overwrite it
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus key
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="nautilus key">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fail-key-command-url-is-required-rotation-and-revocation-are-audited-events-the-broker-emits-against-the-ring-it-is-serving-with-so-there-is-nothing-for-the-cli-to-act-on-locally-point-url-at-the-running-broker-eg-url-httplocalhost8000" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FAIL: key {command}: --url is required. Rotation and revocation are audited events the broker emits against the ring it is serving with, so there is nothing for the CLI to act on locally — point --url at the running broker (e.g. --url http://localhost:8000).
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-rotate-requires-yes-to-confirm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: rotate requires --yes to confirm.
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-revoke-requires-yes-to-confirm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: revoke requires --yes to confirm.
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fail-key-command-cannot-reach-endpoint-exc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FAIL: key {command}: cannot reach {endpoint}: {exc}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-key-command-server-returned-status_code-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: key {command}: server returned {status_code}: {text}
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus rule
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="nautilus rule">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#error-yes-required-for-destructive-op" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: --yes required for destructive op
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-reason-required-for-retract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: --reason required for retract
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-cascade-and-orphan-children-are-mutually-exclusive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: --cascade and --orphan-children are mutually exclusive
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-rule-namer-not-found-in-lineage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: rule {name!r} not found in lineage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-rule-namer-vto_version-not-found-in-lineage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: rule {name!r} v{to_version} not found in lineage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-affected-descendants-names" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: affected descendants: {names}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-no-lineage-records-for-namer-warn-no-history-for-namer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: no lineage records for {name!r} / WARN: no history for {name!r}
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-rkm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus rkm
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="nautilus rkm">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#error-rule-file-not-found-rule_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: rule file not found: {rule_path}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-rkm-queue-approve-url-is-required-approving-promotes-the-rule-into-the-engine-of-a-running-broker-so-there-is-nothing-for-the-cli-to-approve-locally-point-url-at-the-broker-eg-url-httplocalhost8000" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: rkm queue approve: --url is required. Approving promotes the rule into the engine of a running broker, so there is nothing for the CLI to approve locally — point --url at the broker (e.g. --url http://localhost:8000).
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-rkm-queue-approve-cannot-reach-endpoint-exc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: rkm queue approve: cannot reach {endpoint}: {exc}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-proposal-proposal_id-not-found" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: proposal {proposal_id} not found
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-proposal-proposal_id-cannot-be-rejected-it-is-current_status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: proposal {proposal_id} cannot be rejected: it is {current_status}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-rkm-queue-approve-server-returned-status_code-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: rkm queue approve: server returned {status_code}: {text}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-could-not-read-rkm-settings-from-config_pathr-exc-using-defaults" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: could not read rkm settings from {config_path!r} ({exc}); using defaults
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-no-lineage-records-for-idr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: no lineage records for {id!r}
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-adapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus adapters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="nautilus adapters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#error-invalid-adapter-name-namer-expected-lowercase-dashed-eg-my-csv-adapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: invalid adapter name {name!r} (expected lowercase-dashed, e.g. my-csv-adapter)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-destination-already-exists-and-is-not-empty-dest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: destination already exists and is not empty: {dest}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-copier-is-required-for-adapters-new-install-it-with-pip-install-copier" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: copier is required for 'adapters new' — install it with: pip install copier
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-no-config-found-pass-config-path-or-run-from-a-directory-containing-nautilusyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: no config found: pass --config PATH, or run from a directory containing nautilus.yaml
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-status-status_filterr-needs-url-quarantine-state-lives-in-the-serving-process-so-a-config-file-cannot-answer-it-reporting-an-empty-list-here-would-look-like-nothing-is-quarantined" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: --status {status_filter!r} needs --url: quarantine state lives in the serving process, so a config file cannot answer it. Reporting an empty list here would look like 'nothing is quarantined'.
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-could-not-load-config_path-exc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: could not load {config_path}: {exc}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-url-refused-the-credential-401-pass-a-valid-api-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: {url} refused the credential (401). Pass a valid --api-key.
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-could-not-reach-url-exc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: could not reach {url}: {exc}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-no-schema-available-for-adapter-namer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: no schema available for adapter {name!r}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-no-schema-available-for-adapter-namer-cannot-ack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: no schema available for adapter {name!r}; cannot ack
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-schema-ack-requires-yes-to-confirm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: schema-ack requires --yes to confirm
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-could-not-read-schema-for-namer-exc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: could not read schema for {name!r}: {exc}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-no-stored-fingerprint-for-namer-treating-as-new" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: no stored fingerprint for {name!r}; treating as new
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-attestation-verify" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus attestation verify
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="nautilus attestation verify">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#error-attestation-verify-log-not-found-log_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: attestation verify: log not found: {log_path}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-attestation-verify-pubkey-not-found-pubkey_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: attestation verify: pubkey not found: {pubkey_path}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-attestation-verify-resulterror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: attestation verify: {result.error}
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#argument-parsing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Argument parsing
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Embedding as a library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_8" id="__nav_5_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapter SDK Docs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapter SDK Docs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../sdk/docs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../sdk/docs/tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../sdk/docs/discovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Discovery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../sdk/docs/reference/protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../sdk/docs/reference/types/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../sdk/docs/reference/testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#conventions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Conventions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#any-governance-subcommand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Any governance subcommand
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Any governance subcommand">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#error-nautilus_reviewer-env-var-required-for-this-command-set-it-to-your-operator-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: NAUTILUS_REVIEWER env var required for this command. Set it to your operator identity.
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-this-decision-cannot-be-recorded-so-it-will-not-be-taken-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: this decision cannot be recorded, so it will not be taken: {problem}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-this-acknowledgement-cannot-be-recorded-so-it-will-not-be-made-problem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: this acknowledgement cannot be recorded, so it will not be made: {problem}
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-serve" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus serve
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="nautilus serve">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#-bind-must-be-hostport-got-bindr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --bind must be HOST:PORT, got {bind!r}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-bind-port-must-be-an-integer-got-port_sr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --bind port must be an integer, got {port_s!r}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unable-to-read-config-config_path-exc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unable to read config '{config_path}': {exc}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#application-startup-failed-the-server-never-accepted-a-connection-the-cause-is-logged-above" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        application startup failed; the server never accepted a connection. The cause is logged above.
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-air-gapped-warnings" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --air-gapped warnings
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-config-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus config check
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-health" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus health
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus rules
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="nautilus rules">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#error-file-not-found-file_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: file not found: {file_path}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-audit-log-not-found-audit_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: audit log not found: {audit_path}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-cannot-read-rules-config-from-path-exc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: cannot read rules config from {path}: {exc}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-score-min_total-below-threshold-threshold-file_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: score {min_total} below threshold {threshold}: {file_path}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-rule-name-shadow-finding-relation-existing-rule-existing_rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: rule '{name}': shadow finding {relation} (existing rule '{existing_rule}')
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-rule-name-insufficient-audit-history-replayed-replayed_n_actual-entries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: rule '{name}': insufficient audit history (replayed {replayed_n_actual} entries)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-rule-name-skipped_drifted-audit-entries-could-not-be-replayed-the-current-rules-no-longer-reproduce-what-they-recorded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: rule '{name}': {skipped_drifted} audit entries could not be replayed -- the current rules no longer reproduce what they recorded
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-rule-name-skipped_no_input_facts-audit-entries-carry-no-engine-input-and-were-not-replayed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: rule '{name}': {skipped_no_input_facts} audit entries carry no engine input and were not replayed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-no-rules-found-in-file_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: no rules found in {file_path}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-could-not-read-audit-path-from-config_pathr-exc-using-path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: could not read audit path from {config_path!r} ({exc}); using {path}
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-session-version" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus session version
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-missing-subcommand" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A missing subcommand
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="A missing subcommand">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#error-rkm-no-subcommand-given-try-queue-lineage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: rkm: no subcommand given (try: queue, lineage)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-rkm-queue-no-op-given-try-submit-list-show-approve-reject-diff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: rkm queue: no op given (try: submit, list, show, approve, reject, diff)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-rule-no-subcommand-given-try-list-retract-lineage-history-rollback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: rule: no subcommand given (try: list, retract, lineage, history, rollback)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-rules-no-subcommand-given-try-validate-test-history" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: rules: no subcommand given (try: validate, test, history)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-adapters-no-subcommand-given-try-new-list-schema-schema-fingerprint-schema-diff-schema-ack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: adapters: no subcommand given (try: new, list, schema, schema-fingerprint, schema-diff, schema-ack)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-key-no-subcommand-given-try-list-rotate-revoke" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: key: no subcommand given (try: list, rotate, revoke)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-attestation-no-subcommand-given-try-verify" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: attestation: no subcommand given (try: verify)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-events-no-subcommand-given-try-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: events: no subcommand given (try: list)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-config-no-subcommand-given-try-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: config: no subcommand given (try: check)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-init" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus init
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="nautilus init">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#error-target-already-exists-refusing-to-overwrite-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: {target} already exists — refusing to overwrite it
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus key
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="nautilus key">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fail-key-command-url-is-required-rotation-and-revocation-are-audited-events-the-broker-emits-against-the-ring-it-is-serving-with-so-there-is-nothing-for-the-cli-to-act-on-locally-point-url-at-the-running-broker-eg-url-httplocalhost8000" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FAIL: key {command}: --url is required. Rotation and revocation are audited events the broker emits against the ring it is serving with, so there is nothing for the CLI to act on locally — point --url at the running broker (e.g. --url http://localhost:8000).
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-rotate-requires-yes-to-confirm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: rotate requires --yes to confirm.
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-revoke-requires-yes-to-confirm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: revoke requires --yes to confirm.
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fail-key-command-cannot-reach-endpoint-exc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FAIL: key {command}: cannot reach {endpoint}: {exc}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-key-command-server-returned-status_code-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: key {command}: server returned {status_code}: {text}
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-rule" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus rule
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="nautilus rule">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#error-yes-required-for-destructive-op" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: --yes required for destructive op
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-reason-required-for-retract" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: --reason required for retract
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-cascade-and-orphan-children-are-mutually-exclusive" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: --cascade and --orphan-children are mutually exclusive
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-rule-namer-not-found-in-lineage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: rule {name!r} not found in lineage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-rule-namer-vto_version-not-found-in-lineage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: rule {name!r} v{to_version} not found in lineage
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-affected-descendants-names" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: affected descendants: {names}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-no-lineage-records-for-namer-warn-no-history-for-namer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: no lineage records for {name!r} / WARN: no history for {name!r}
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-rkm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus rkm
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="nautilus rkm">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#error-rule-file-not-found-rule_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: rule file not found: {rule_path}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-rkm-queue-approve-url-is-required-approving-promotes-the-rule-into-the-engine-of-a-running-broker-so-there-is-nothing-for-the-cli-to-approve-locally-point-url-at-the-broker-eg-url-httplocalhost8000" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: rkm queue approve: --url is required. Approving promotes the rule into the engine of a running broker, so there is nothing for the CLI to approve locally — point --url at the broker (e.g. --url http://localhost:8000).
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-rkm-queue-approve-cannot-reach-endpoint-exc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: rkm queue approve: cannot reach {endpoint}: {exc}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-proposal-proposal_id-not-found" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: proposal {proposal_id} not found
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-proposal-proposal_id-cannot-be-rejected-it-is-current_status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: proposal {proposal_id} cannot be rejected: it is {current_status}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-rkm-queue-approve-server-returned-status_code-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: rkm queue approve: server returned {status_code}: {text}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-could-not-read-rkm-settings-from-config_pathr-exc-using-defaults" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: could not read rkm settings from {config_path!r} ({exc}); using defaults
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-no-lineage-records-for-idr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: no lineage records for {id!r}
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-adapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus adapters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="nautilus adapters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#error-invalid-adapter-name-namer-expected-lowercase-dashed-eg-my-csv-adapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: invalid adapter name {name!r} (expected lowercase-dashed, e.g. my-csv-adapter)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-destination-already-exists-and-is-not-empty-dest" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: destination already exists and is not empty: {dest}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-copier-is-required-for-adapters-new-install-it-with-pip-install-copier" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: copier is required for 'adapters new' — install it with: pip install copier
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-no-config-found-pass-config-path-or-run-from-a-directory-containing-nautilusyaml" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: no config found: pass --config PATH, or run from a directory containing nautilus.yaml
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-status-status_filterr-needs-url-quarantine-state-lives-in-the-serving-process-so-a-config-file-cannot-answer-it-reporting-an-empty-list-here-would-look-like-nothing-is-quarantined" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: --status {status_filter!r} needs --url: quarantine state lives in the serving process, so a config file cannot answer it. Reporting an empty list here would look like 'nothing is quarantined'.
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-could-not-load-config_path-exc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: could not load {config_path}: {exc}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-url-refused-the-credential-401-pass-a-valid-api-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: {url} refused the credential (401). Pass a valid --api-key.
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-could-not-reach-url-exc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: could not reach {url}: {exc}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-no-schema-available-for-adapter-namer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: no schema available for adapter {name!r}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-no-schema-available-for-adapter-namer-cannot-ack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: no schema available for adapter {name!r}; cannot ack
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-schema-ack-requires-yes-to-confirm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: schema-ack requires --yes to confirm
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-could-not-read-schema-for-namer-exc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: could not read schema for {name!r}: {exc}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn-no-stored-fingerprint-for-namer-treating-as-new" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WARN: no stored fingerprint for {name!r}; treating as new
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-attestation-verify" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus attestation verify
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="nautilus attestation verify">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#error-attestation-verify-log-not-found-log_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: attestation verify: log not found: {log_path}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-attestation-verify-pubkey-not-found-pubkey_path" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: attestation verify: pubkey not found: {pubkey_path}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-attestation-verify-resulterror" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERROR: attestation verify: {result.error}
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#argument-parsing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Argument parsing
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="command-line">Command line<a class="headerlink" href="#command-line" title="Permanent link">&para;</a></h1>
+<h2 id="conventions">Conventions<a class="headerlink" href="#conventions" title="Permanent link">&para;</a></h2>
+<p>Diagnostics go to <strong>stderr</strong> with a fixed prefix (<code>nautilus/cli/_common.py:88-101</code>):
+<code>ERROR:</code>, <code>WARN:</code>, <code>FAIL:</code>. There are no Unicode sigils and no colour. <code>OK:</code> marks
+success.</p>
+<p>Exit codes (<code>nautilus/cli/_common.py:5-7</code>): <strong>0</strong> success, <strong>1</strong> user error, <strong>2</strong>
+validation/policy failure. Code <strong>3</strong> is deliberately never used.</p>
+<p>Anything wrapped in <code>{…}</code> interpolates; <code>{exc}</code> is a lower-level error passed through unchanged.</p>
+<h2 id="any-governance-subcommand">Any governance subcommand<a class="headerlink" href="#any-governance-subcommand" title="Permanent link">&para;</a></h2>
+<h3 id="error-nautilus_reviewer-env-var-required-for-this-command-set-it-to-your-operator-identity"><code>ERROR: NAUTILUS_REVIEWER env var required for this command. Set it to your operator identity.</code><a class="headerlink" href="#error-nautilus_reviewer-env-var-required-for-this-command-set-it-to-your-operator-identity" title="Permanent link">&para;</a></h3>
+<p><code>require_reviewer</code>, <code>nautilus/cli/_common.py:28-35</code>. Exit <strong>1</strong>.</p>
+<p><strong>Means.</strong> A command that records a governance decision has no operator identity to record. The
+value comes from the environment only — there is no <code>$USER</code> auto-detection, because a reviewer
+identity that the tool guesses is not evidence of anything.</p>
+<p><strong>Fix.</strong> <code>export NAUTILUS_REVIEWER="your.name@example.com"</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>env<span class="w"> </span>-u<span class="w"> </span>NAUTILUS_REVIEWER<span class="w"> </span>python<span class="w"> </span>-<span class="w"> </span><span class="s">&lt;&lt;&#39;PY&#39;</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="s">from nautilus.cli._common import require_reviewer</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="s">try:</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="s">    require_reviewer()</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a><span class="s">except SystemExit as exc:</span>
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a><span class="s">    print(&quot;exit code:&quot;, exc.code)</span>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="s">PY</span>
+</code></pre></div>
+<h3 id="error-this-decision-cannot-be-recorded-so-it-will-not-be-taken-problem"><code>ERROR: this decision cannot be recorded, so it will not be taken: {problem}</code><a class="headerlink" href="#error-this-decision-cannot-be-recorded-so-it-will-not-be-taken-problem" title="Permanent link">&para;</a></h3>
+<p><code>refuse_unless_writable</code>, <code>nautilus/cli/_common.py</code>. Exit <strong>2</strong>. Raised from
+<code>open_audit_logger</code>, so it reaches every command that records a decision
+locally: <code>rule retract</code>, <code>rule rollback</code>, <code>rkm queue submit</code> and
+<code>rkm queue reject</code>. <code>{problem}</code>, in parentheses at the end of the line, is the
+<code>SinkAlreadyLockedError</code> text, which names the pid holding the lock.
+<code>adapters schema-ack</code> meets the same lock and is refused by the same function,
+in the same shape and with the same exit code, but
+<a href="#error-this-acknowledgement-cannot-be-recorded-so-it-will-not-be-made-problem">in its own words</a>.</p>
+<p><strong>Means.</strong> <code>audit.chained: true</code> makes the audit log a hash chain, and a chain
+admits exactly one writer. A running <code>nautilus serve</code> holds that lock, so this
+process cannot append to the log. The lock is probed while the logger is being
+opened — before the rule is promoted, the lineage row inserted or the proposal
+marked — so the decision is refused rather than taken and left unrecorded.</p>
+<p><strong>Fix.</strong> Take the decision through the running broker's governance API, or stop
+the broker and re-run the command. With <code>audit.chained: false</code> there is no lock
+and no refusal: plain appends are atomic.</p>
+<!-- not-executed: needs a second process serving the same chained audit log -->
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># terminal 1</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>nautilus<span class="w"> </span>serve<span class="w"> </span>--config<span class="w"> </span>nautilus.yaml<span class="w"> </span>--bind<span class="w"> </span><span class="m">127</span>.0.0.1:8811
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># terminal 2</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="nv">NAUTILUS_REVIEWER</span><span class="o">=</span>ops@example.com<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="w">  </span>nautilus<span class="w"> </span>rkm<span class="w"> </span>queue<span class="w"> </span>reject<span class="w"> </span>prop_ed07c440e3134477b64c452fa48a3072<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="w">  </span>--reason<span class="w"> </span>superseded<span class="w"> </span>--config<span class="w"> </span>nautilus.yaml<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>ERROR: this decision cannot be recorded, so it will not be taken: another process is writing the chained audit log. Take the decision through the running server&#39;s governance API, or stop the server first. (chained audit log audit.jsonl is already open for writing by pid 2692396. A hash chain admits exactly one writer: a second one interleaves into corruption that verify_chain cannot distinguish from tampering. Give each replica its own audit.path, or use audit.chained: false (plain appends are atomic).)
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>exit=2
+</code></pre></div>
+<h3 id="error-this-acknowledgement-cannot-be-recorded-so-it-will-not-be-made-problem"><code>ERROR: this acknowledgement cannot be recorded, so it will not be made: {problem}</code><a class="headerlink" href="#error-this-acknowledgement-cannot-be-recorded-so-it-will-not-be-made-problem" title="Permanent link">&para;</a></h3>
+<p><code>refuse_unless_writable</code>, called from <code>_cmd_schema_ack</code> in
+<code>nautilus/cli/adapters.py</code>. Exit <strong>2</strong>. The only command that raises it is
+<code>adapters schema-ack</code>, which is not taking a governance decision and has no
+server-side route to take one through — the two clauses that differ from the
+governance refusal above. Everything else about it is identical, including the
+<code>{problem}</code> text naming the pid.</p>
+<p><strong>Means.</strong> Acknowledging drift writes an audit line (the
+<code>schema_drift_severity_overridden</code> event), so with <code>audit.chained: true</code> it
+needs the same single writer lock a running <code>nautilus serve</code> is holding. The
+lock is probed <em>before</em> the fingerprint baseline is rewritten: the ack that
+cannot be recorded is not made at all, rather than made on disk and missing
+from the log.</p>
+<p><strong>Fix.</strong> Stop the server and re-run it. The baseline <code>schema-ack</code> writes is
+read back at the next startup, and the drift quarantine lifts with it, so
+nothing is lost by acknowledging while the server is down. With
+<code>audit.chained: false</code> there is no lock and no refusal.</p>
+<!-- not-executed: needs a second process serving the same chained audit log -->
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># terminal 1</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>nautilus<span class="w"> </span>serve<span class="w"> </span>--config<span class="w"> </span>nautilus.yaml<span class="w"> </span>--bind<span class="w"> </span><span class="m">127</span>.0.0.1:8811
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># terminal 2</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a><span class="nv">NAUTILUS_REVIEWER</span><span class="o">=</span>ops@example.com<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span>nautilus<span class="w"> </span>adapters<span class="w"> </span>schema-ack<span class="w"> </span>orders<span class="w"> </span>--config<span class="w"> </span>nautilus.yaml<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a><span class="w">  </span>--reason<span class="w"> </span><span class="s2">&quot;upstream added a nullable column&quot;</span><span class="w"> </span>--yes<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>ERROR: this acknowledgement cannot be recorded, so it will not be made: another process is writing the chained audit log. Stop the server first; the baseline this writes is read back when it restarts, and the quarantine lifts with it. (chained audit log audit.jsonl is already open for writing by pid 2692396. A hash chain admits exactly one writer: a second one interleaves into corruption that verify_chain cannot distinguish from tampering. Give each replica its own audit.path, or use audit.chained: false (plain appends are atomic).)
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>exit=2
+</code></pre></div>
+<h2 id="nautilus-serve"><code>nautilus serve</code><a class="headerlink" href="#nautilus-serve" title="Permanent link">&para;</a></h2>
+<p><code>nautilus/cli/__init__.py:224-309</code> and <code>nautilus/cli/serve.py</code>. All of these exit <strong>2</strong>.</p>
+<p>The three config messages are raised as <code>ConfigRefusedError</code> by
+<code>broker_for_serve</code> (<code>nautilus/cli/serve.py:358-407</code>) and printed by whichever
+command called it — <code>serve</code> at <code>__init__.py:256</code>, <code>config check</code> in
+<code>nautilus/cli/config.py</code>. That is why the two commands refuse a config in
+identical words.</p>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Line</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ERROR: config path does not exist or is not a file: {config_path}</code></td>
+<td><code>nautilus/cli/serve.py:381</code></td>
+</tr>
+<tr>
+<td><code>ERROR: invalid config: {exc}</code></td>
+<td><code>nautilus/cli/serve.py:405</code></td>
+</tr>
+<tr>
+<td><code>ERROR: broker construction failed: {exc}</code></td>
+<td><code>nautilus/cli/serve.py:407</code></td>
+</tr>
+<tr>
+<td><code>ERROR: {exc}</code> (bind parsing, air-gapped load, serve failure)</td>
+<td><code>__init__.py:246,256,300</code></td>
+</tr>
+</tbody>
+</table>
+<p>The wrapped <code>{exc}</code> texts:</p>
+<h3 id="-bind-must-be-hostport-got-bindr"><code>--bind must be HOST:PORT, got {bind!r}</code><a class="headerlink" href="#-bind-must-be-hostport-got-bindr" title="Permanent link">&para;</a></h3>
+<p><strong><code>ValueError</code></strong>, <code>nautilus/cli/serve.py:24-30</code>, printed as <code>ERROR: --bind must be HOST:PORT,
+got 'badbind'</code>. Raised when the value has no <code>:</code> or an empty half.</p>
+<h3 id="-bind-port-must-be-an-integer-got-port_sr"><code>--bind port must be an integer, got {port_s!r}</code><a class="headerlink" href="#-bind-port-must-be-an-integer-got-port_sr" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/serve.py:31-33</code>.</p>
+<h3 id="unable-to-read-config-config_path-exc"><code>Unable to read config '{config_path}': {exc}</code><a class="headerlink" href="#unable-to-read-config-config_path-exc" title="Permanent link">&para;</a></h3>
+<p><strong><code>RuntimeError</code></strong>, <code>nautilus/cli/serve.py:127-129</code>, from the <code>--air-gapped</code> pre-pass that reads
+the YAML before the broker does.</p>
+<h3 id="application-startup-failed-the-server-never-accepted-a-connection-the-cause-is-logged-above"><code>application startup failed; the server never accepted a connection. The cause is logged above.</code><a class="headerlink" href="#application-startup-failed-the-server-never-accepted-a-connection-the-cause-is-logged-above" title="Permanent link">&para;</a></h3>
+<p><strong><code>RuntimeError</code></strong>, <code>nautilus/cli/serve.py:272-277</code>. uvicorn returns from <code>serve()</code> rather than
+raising when a lifespan fails, so without this the process exited <strong>0</strong> after never serving a
+request. The real cause — a <code>ConfigError</code>, an unreachable session store — is in the log lines
+directly above.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>nautilus<span class="w"> </span>serve<span class="w"> </span>--config<span class="w"> </span>/nonexistent/nautilus.yaml<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="-air-gapped-warnings"><code>--air-gapped</code> warnings<a class="headerlink" href="#-air-gapped-warnings" title="Permanent link">&para;</a></h3>
+<p><code>--air-gapped</code> strips anything that would leave the host. Each removal is announced on stderr
+(<code>nautilus/cli/serve.py:64-109</code>); none is fatal.</p>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>WARN: --air-gapped drops LLM source id={…!r} — connection host is not loopback (NFR-1, #43)</code></td>
+</tr>
+<tr>
+<td><code>WARN: --air-gapped overrides analysis.mode from {current_mode!r} to 'pattern' (NFR-1)</code></td>
+</tr>
+<tr>
+<td><code>WARN: --air-gapped refuses analysis.provider (type={provider_type!r}); dropping it (NFR-1)</code></td>
+</tr>
+</tbody>
+</table>
+<p>If a source you rely on is silently missing under <code>--air-gapped</code>, this is why.</p>
+<h2 id="nautilus-config-check"><code>nautilus config check</code><a class="headerlink" href="#nautilus-config-check" title="Permanent link">&para;</a></h2>
+<p><code>nautilus/cli/config.py</code>. Exits <strong>0</strong> or <strong>2</strong>, never <strong>1</strong>.</p>
+<p>Every refusal comes from <code>broker_for_serve</code> and is therefore one of the three messages in the
+<a href="#nautilus-serve"><code>nautilus serve</code></a> table above, printed with the same <code>ERROR:</code> prefix and the
+same exit <strong>2</strong>. There is no failure text of its own — a check that could refuse a config for a
+reason <code>serve</code> does not have would be a second config validator, which is the thing this command
+exists not to be.</p>
+<p>The one output that is not <code>serve</code>'s is the success summary on stdout, which is not an error and
+is documented in the <a href="../../cli/#nautilus-config-check">CLI reference</a>.</p>
+<h2 id="nautilus-health"><code>nautilus health</code><a class="headerlink" href="#nautilus-health" title="Permanent link">&para;</a></h2>
+<p><code>nautilus/cli/health.py:15-28</code>. Exit <strong>0</strong> only on HTTP 200.</p>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Line</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>FAIL {status} {url}</code></td>
+<td><code>:21</code></td>
+<td>The endpoint answered with a non-200 status. For <code>/readyz</code> the body carries the <code>reason</code> — see <a href="../transport/">transport.md</a>.</td>
+</tr>
+<tr>
+<td><code>FAIL {exc.code} {url}</code></td>
+<td><code>:24</code></td>
+<td>An <code>HTTPError</code>: the code is <code>{exc.code}</code>.</td>
+</tr>
+<tr>
+<td><code>FAIL unreachable {url}: {exc}</code></td>
+<td><code>:27</code></td>
+<td>The connection never completed. <code>{exc}</code> is the <code>URLError</code> — connection refused, DNS failure, timeout.</td>
+</tr>
+</tbody>
+</table>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>nautilus<span class="w"> </span>health<span class="w"> </span>--url<span class="w"> </span>http://127.0.0.1:1/readyz<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h2 id="nautilus-rules"><code>nautilus rules</code><a class="headerlink" href="#nautilus-rules" title="Permanent link">&para;</a></h2>
+<p><code>nautilus/cli/rules.py</code>. Three subcommands: <code>validate</code> (static check), <code>test</code> (static check plus
+a sandbox replay and a score) and <code>history</code>.</p>
+<p>For the per-rule compiler diagnostics — <code>ERROR {file}:{line}: {message}</code> and
+<code>ERROR: rule {name!r}: {exc}</code> — see <a href="../rules/">rules.md</a>.</p>
+<h3 id="error-file-not-found-file_path"><code>ERROR: file not found: {file_path}</code><a class="headerlink" href="#error-file-not-found-file_path" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rules.py:149</code> (<code>validate</code>) and <code>:265</code> (<code>test</code>). Exit <strong>1</strong>. <code>{file_path}</code> is the
+positional <code>file</code> argument of <code>validate</code>, or the <code>--file</code> value of <code>test</code>, with <code>str()</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>nautilus<span class="w"> </span>rules<span class="w"> </span>validate<span class="w"> </span>/nope.yaml<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>nautilus<span class="w"> </span>rules<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--file<span class="w"> </span>/nope.yaml<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-audit-log-not-found-audit_path"><code>ERROR: audit log not found: {audit_path}</code><a class="headerlink" href="#error-audit-log-not-found-audit_path" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rules.py:188</code> (<code>validate --sandbox</code>) and <code>:271</code> (<code>test --audit-log</code>). Exit <strong>1</strong>.
+<code>{audit_path}</code> is the <code>--audit-log</code> value, defaulting to <code>./audit.jsonl</code> relative to the working
+directory — not to the rule file.</p>
+<p><strong>Means.</strong> The sandbox stage replays real past requests against the candidate rule to find
+regressions. Without a log there is nothing to replay.</p>
+<p><strong>Fix.</strong> Point <code>--audit-log</code> at the broker's <code>audit.path</code>, or drop <code>--sandbox</code> to run the static
+check alone. <code>test</code> checks the log before it compiles the rule, so this fires even on a rule file
+that would not compile; <code>validate --sandbox</code> compiles first.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nb">cd</span><span class="w"> </span>/tmp/nautilus-errors<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>nautilus<span class="w"> </span>rules<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--file<span class="w"> </span>rule.yaml<span class="w"> </span>--audit-log<span class="w"> </span>/nope.jsonl<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-cannot-read-rules-config-from-path-exc"><code>ERROR: cannot read rules config from {path}: {exc}</code><a class="headerlink" href="#error-cannot-read-rules-config-from-path-exc" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rules.py:423</code>. Exit <strong>1</strong>, raised as <code>SystemExit(1)</code> rather than returned.
+<code>{path}</code> is the <code>--config</code> value; <code>{exc}</code> is the loader failure — look it up in
+<a href="../config/">config.md</a>. The CLI needs <code>rules.packs</code> and <code>rules.user_rules_dirs</code> from that config
+to know which rules the candidate is being compiled alongside.</p>
+<!-- not-executed: reached only after the rule file compiles -->
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>:<span class="w"> </span>&gt;<span class="w"> </span>/tmp/n-bad.yaml
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>nautilus<span class="w"> </span>rules<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--file<span class="w"> </span>rule-packs/cve-rem-cmdb-substrate/rules/library-allow.yaml<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>--config<span class="w"> </span>/tmp/n-bad.yaml<span class="w"> </span>--audit-log<span class="w"> </span>/tmp/nautilus-errors/audit.jsonl<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-score-min_total-below-threshold-threshold-file_path"><code>ERROR: score {min_total} below threshold {threshold}: {file_path}</code><a class="headerlink" href="#error-score-min_total-below-threshold-threshold-file_path" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rules.py:402</code>. Exit <strong>2</strong> — a policy failure, not a usage error. Both numbers are
+formatted to two decimals (<code>{min_total:.2f}</code>, <code>{threshold:.2f}</code>), so the rendered line reads
+<code>ERROR: score 0.42 below threshold 0.70: my_rule.yaml</code>. <code>{min_total}</code> is the <strong>lowest</strong> score
+across every rule in the file, so one weak rule fails the file. <code>{threshold}</code> is <code>--threshold</code>.</p>
+<p><strong>Means.</strong> The rule compiles and replays without regression, but scores below the bar — coverage,
+specificity and replay evidence all feed the score. On success the same command prints
+<code>OK: {file_path} score={min_total:.2f} (threshold {threshold:.2f})</code> and exits <strong>0</strong>.</p>
+<p><strong>Fix.</strong> Tighten the rule, or replay against more history (<code>--replay-n</code>, <code>--min-entries</code>) so the
+evidence term is not starved.</p>
+<!-- not-executed: reached only after the rule file compiles and replays -->
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>nautilus<span class="w"> </span>rules<span class="w"> </span><span class="nb">test</span><span class="w"> </span>--file<span class="w"> </span>rule-packs/cve-rem-cmdb-substrate/rules/library-allow.yaml<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="w">  </span>--audit-log<span class="w"> </span>/tmp/nautilus-errors/audit.jsonl<span class="w"> </span>--threshold<span class="w"> </span><span class="m">1</span>.0<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="warn-rule-name-shadow-finding-relation-existing-rule-existing_rule"><code>WARN: rule '{name}': shadow finding {relation} (existing rule '{existing_rule}')</code><a class="headerlink" href="#warn-rule-name-shadow-finding-relation-existing-rule-existing_rule" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rules.py:374-377</code>. <strong>Exit 0</strong>. <code>{name}</code> is the candidate rule; <code>{relation}</code> is how
+it overlaps an installed rule (for example <code>subsumes</code>, <code>subsumed_by</code>, <code>conflicts</code>);
+<code>{existing_rule}</code> is that installed rule's name. The candidate is not wrong, but one of the two is
+redundant or contradictory once both are in force.</p>
+<h3 id="warn-rule-name-insufficient-audit-history-replayed-replayed_n_actual-entries"><code>WARN: rule '{name}': insufficient audit history (replayed {replayed_n_actual} entries)</code><a class="headerlink" href="#warn-rule-name-insufficient-audit-history-replayed-replayed_n_actual-entries" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rules.py:379-382</code>. <strong>Exit 0</strong>. <code>{replayed_n_actual}</code> is how many audit entries
+actually replayed, against the <code>--min-entries</code> floor. The score is still printed, but its
+regression evidence is thin — a rule that denies nothing in ten replays has not been tested.</p>
+<p><strong>Fix.</strong> Replay against more history: raise <code>--replay-n</code>, or point <code>--audit-log</code> at a longer log.</p>
+<h3 id="warn-rule-name-skipped_drifted-audit-entries-could-not-be-replayed-the-current-rules-no-longer-reproduce-what-they-recorded"><code>WARN: rule '{name}': {skipped_drifted} audit entries could not be replayed -- the current rules no longer reproduce what they recorded</code><a class="headerlink" href="#warn-rule-name-skipped_drifted-audit-entries-could-not-be-replayed-the-current-rules-no-longer-reproduce-what-they-recorded" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rules.py:383-387</code>. <strong>Exit 0</strong>. Note the ASCII double hyphen <code>--</code>, not an em dash.
+<code>{skipped_drifted}</code> is the count of entries dropped from the replay.</p>
+<p><strong>Means.</strong> Those entries were recorded under a rule set that no longer exists, so replaying them
+would compare the candidate against a decision the engine can no longer make. They are skipped
+rather than counted as regressions.</p>
+<h3 id="warn-rule-name-skipped_no_input_facts-audit-entries-carry-no-engine-input-and-were-not-replayed"><code>WARN: rule '{name}': {skipped_no_input_facts} audit entries carry no engine input and were not replayed</code><a class="headerlink" href="#warn-rule-name-skipped_no_input_facts-audit-entries-carry-no-engine-input-and-were-not-replayed" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rules.py:388-392</code>. <strong>Exit 0</strong>. <code>{skipped_no_input_facts}</code> is the count of entries
+with no recorded engine input — entries written before input capture, or by a path that does not
+record it. There is nothing to feed the candidate rule.</p>
+<h3 id="warn-no-rules-found-in-file_path"><code>WARN: no rules found in {file_path}</code><a class="headerlink" href="#warn-no-rules-found-in-file_path" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rules.py:299</code>. <strong>Exit 0</strong>. The file parsed but declared no rules — usually a YAML
+list that is empty, or keys at the wrong nesting depth. Nothing was scored.</p>
+<h3 id="warn-could-not-read-audit-path-from-config_pathr-exc-using-path"><code>WARN: could not read audit path from {config_path!r} ({exc}); using {path}</code><a class="headerlink" href="#warn-could-not-read-audit-path-from-config_pathr-exc-using-path" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/_common.py:79</code>, shared by every governance subcommand that resolves an audit sink.
+<strong>Exit 0</strong> — the decision is still recorded, but in the default <code>./audit.jsonl</code> rather than the
+path your config names. <code>{config_path}</code> is <code>repr()</code>-quoted, <code>{exc}</code> is the loader failure,
+<code>{path}</code> is the fallback actually used.</p>
+<p><strong>Means.</strong> A governance record went somewhere you were not expecting. If a later
+<code>nautilus rule lineage</code> cannot find the decision, this warning is why.</p>
+<h2 id="nautilus-session-version"><code>nautilus session version</code><a class="headerlink" href="#nautilus-session-version" title="Permanent link">&para;</a></h2>
+<p>See <a href="../sessions/">sessions.md</a>.</p>
+<h2 id="a-missing-subcommand">A missing subcommand<a class="headerlink" href="#a-missing-subcommand" title="Permanent link">&para;</a></h2>
+<p>Every command group answers a bare invocation with its own sentence naming the subcommands it
+accepts, and every one of them exits <strong>2</strong> — <code>rkm</code>, <code>rkm queue</code>, <code>rule</code>, <code>rules</code>, <code>adapters</code>,
+<code>key</code>, <code>attestation</code>, <code>events</code> and <code>config</code> alike. One code covers the whole class, so a script
+can test for it without a per-group table:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">for</span><span class="w"> </span>g<span class="w"> </span><span class="k">in</span><span class="w"> </span>rkm<span class="w"> </span><span class="s2">&quot;rkm queue&quot;</span><span class="w"> </span>rule<span class="w"> </span>rules<span class="w"> </span>adapters<span class="w"> </span>key<span class="w"> </span>attestation<span class="w"> </span>events<span class="w"> </span>config<span class="p">;</span><span class="w"> </span><span class="k">do</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="w">  </span>nautilus<span class="w"> </span><span class="nv">$g</span><span class="w"> </span>&gt;/dev/null<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$g</span><span class="s2"> -&gt; </span><span class="nv">$?</span><span class="s2">&quot;</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a><span class="k">done</span>
+</code></pre></div>
+<h3 id="error-rkm-no-subcommand-given-try-queue-lineage"><code>ERROR: rkm: no subcommand given (try: queue, lineage)</code><a class="headerlink" href="#error-rkm-no-subcommand-given-try-queue-lineage" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rkm.py:159</code>. Exit <strong>2</strong>. No interpolation.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>nautilus<span class="w"> </span>rkm<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-rkm-queue-no-op-given-try-submit-list-show-approve-reject-diff"><code>ERROR: rkm queue: no op given (try: submit, list, show, approve, reject, diff)</code><a class="headerlink" href="#error-rkm-queue-no-op-given-try-submit-list-show-approve-reject-diff" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rkm.py:185</code>. Exit <strong>2</strong>. No interpolation. <code>queue</code> is a group of its own, so
+<code>nautilus rkm queue</code> is as incomplete as <code>nautilus rkm</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>nautilus<span class="w"> </span>rkm<span class="w"> </span>queue<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-rule-no-subcommand-given-try-list-retract-lineage-history-rollback"><code>ERROR: rule: no subcommand given (try: list, retract, lineage, history, rollback)</code><a class="headerlink" href="#error-rule-no-subcommand-given-try-list-retract-lineage-history-rollback" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rule.py:125</code>. Exit <strong>2</strong>. No interpolation.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>nautilus<span class="w"> </span>rule<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-rules-no-subcommand-given-try-validate-test-history"><code>ERROR: rules: no subcommand given (try: validate, test, history)</code><a class="headerlink" href="#error-rules-no-subcommand-given-try-validate-test-history" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rules.py:126</code>. Exit <strong>2</strong>. No interpolation. Reached when
+<code>args.rules_subcommand</code> is neither <code>validate</code>, <code>test</code> nor <code>history</code> — in practice, when you typed
+<code>nautilus rules</code> and stopped. A <em>misspelled</em> subcommand never gets this far: argparse rejects the
+choice itself and prints its own usage line.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>nautilus<span class="w"> </span>rules<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-adapters-no-subcommand-given-try-new-list-schema-schema-fingerprint-schema-diff-schema-ack"><code>ERROR: adapters: no subcommand given (try: new, list, schema, schema-fingerprint, schema-diff, schema-ack)</code><a class="headerlink" href="#error-adapters-no-subcommand-given-try-new-list-schema-schema-fingerprint-schema-diff-schema-ack" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/adapters.py:129-132</code>. Exit <strong>2</strong>. No interpolation.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>nautilus<span class="w"> </span>adapters<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-key-no-subcommand-given-try-list-rotate-revoke"><code>ERROR: key: no subcommand given (try: list, rotate, revoke)</code><a class="headerlink" href="#error-key-no-subcommand-given-try-list-rotate-revoke" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/key.py:74</code>. Exit <strong>2</strong>. No interpolation.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>nautilus<span class="w"> </span>key<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-attestation-no-subcommand-given-try-verify"><code>ERROR: attestation: no subcommand given (try: verify)</code><a class="headerlink" href="#error-attestation-no-subcommand-given-try-verify" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/attestation.py:60</code>. Exit <strong>2</strong>. No interpolation. <code>verify</code> is the only subcommand;
+signing happens inside the broker, never in the CLI.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>nautilus<span class="w"> </span>attestation<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-events-no-subcommand-given-try-list"><code>ERROR: events: no subcommand given (try: list)</code><a class="headerlink" href="#error-events-no-subcommand-given-try-list" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/events.py:68</code>. Exit <strong>2</strong>. No interpolation.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>nautilus<span class="w"> </span>events<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-config-no-subcommand-given-try-check"><code>ERROR: config: no subcommand given (try: check)</code><a class="headerlink" href="#error-config-no-subcommand-given-try-check" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/config.py</code>. Exit <strong>2</strong>. No interpolation. <code>check</code> is the only subcommand: a
+config is read by a process start, and this is the one way to ask what a start would make of it
+without performing one.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a>nautilus<span class="w"> </span>config<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h2 id="nautilus-init"><code>nautilus init</code><a class="headerlink" href="#nautilus-init" title="Permanent link">&para;</a></h2>
+<p><code>nautilus/cli/init.py:81-101</code>. Writes <code>nautilus.yaml</code> with a freshly generated API key into
+<code>--dir</code> (default <code>.</code>).</p>
+<h3 id="error-target-already-exists-refusing-to-overwrite-it"><code>ERROR: {target} already exists — refusing to overwrite it</code><a class="headerlink" href="#error-target-already-exists-refusing-to-overwrite-it" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/init.py:84</code>. Exit <strong>1</strong>. <code>{target}</code> is <code>Path(--dir) / "nautilus.yaml"</code>, printed
+with <code>str()</code> — the path as you spelled it, not resolved: <code>--dir /tmp/n-init</code> prints
+<code>/tmp/n-init/nautilus.yaml</code>.</p>
+<p><strong>Means.</strong> <code>init</code> never merges and never backs up. The existing file may hold a key that real
+agents authenticate with, so overwriting it is a credential rotation nobody asked for.</p>
+<p><strong>Fix.</strong> Write elsewhere (<code>nautilus init --dir ./fresh</code>), or move the existing file aside first.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a>mkdir<span class="w"> </span>-p<span class="w"> </span>/tmp/n-init<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>:<span class="w"> </span>&gt;<span class="w"> </span>/tmp/n-init/nautilus.yaml
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>nautilus<span class="w"> </span>init<span class="w"> </span>--dir<span class="w"> </span>/tmp/n-init<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h2 id="nautilus-key"><code>nautilus key</code><a class="headerlink" href="#nautilus-key" title="Permanent link">&para;</a></h2>
+<p><code>nautilus/cli/key.py</code>. All three subcommands talk to a <strong>running broker</strong> over HTTP; none of them
+touches a config file. The <code>keys</code> capability is required on the key you pass to <code>--api-key</code>.</p>
+<h3 id="fail-key-command-url-is-required-rotation-and-revocation-are-audited-events-the-broker-emits-against-the-ring-it-is-serving-with-so-there-is-nothing-for-the-cli-to-act-on-locally-point-url-at-the-running-broker-eg-url-httplocalhost8000"><code>FAIL: key {command}: --url is required. Rotation and revocation are audited events the broker emits against the ring it is serving with, so there is nothing for the CLI to act on locally — point --url at the running broker (e.g. --url http://localhost:8000).</code><a class="headerlink" href="#fail-key-command-url-is-required-rotation-and-revocation-are-audited-events-the-broker-emits-against-the-ring-it-is-serving-with-so-there-is-nothing-for-the-cli-to-act-on-locally-point-url-at-the-running-broker-eg-url-httplocalhost8000" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/key.py:83-88</code> (<code>_require_url</code>). Exit <strong>2</strong>, and it is a <code>FAIL:</code> line, not
+<code>ERROR:</code>, because the missing piece is a network endpoint. <code>{command}</code> is the literal
+subcommand name: <code>list</code>, <code>rotate</code> or <code>revoke</code>.</p>
+<p><strong>Means.</strong> The signing ring lives in the broker process. A CLI that edited a file on disk would
+mint keys the running broker never learns about.</p>
+<p><strong>Fix.</strong> Pass <code>--url</code> and a <code>keys</code>-capable <code>--api-key</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>nautilus<span class="w"> </span>key<span class="w"> </span>rotate<span class="w"> </span>--yes<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>nautilus<span class="w"> </span>key<span class="w"> </span>rotate<span class="w"> </span>--yes<span class="w"> </span>--url<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$NAUTILUS</span><span class="s2">&quot;</span><span class="w"> </span>--api-key<span class="w"> </span>govern-key<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-rotate-requires-yes-to-confirm"><code>ERROR: rotate requires --yes to confirm.</code><a class="headerlink" href="#error-rotate-requires-yes-to-confirm" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/key.py:162</code>. Exit <strong>1</strong>. No interpolation. Checked <strong>before</strong> <code>--url</code> and before
+<code>NAUTILUS_REVIEWER</code>, so this is the first thing a bare <code>nautilus key rotate</code> says.</p>
+<p><strong>Means.</strong> Rotation changes which key signs new session tokens. Old tokens keep verifying — only
+revocation is retroactive — but the change is a governance event either way.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>nautilus<span class="w"> </span>key<span class="w"> </span>rotate<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-revoke-requires-yes-to-confirm"><code>ERROR: revoke requires --yes to confirm.</code><a class="headerlink" href="#error-revoke-requires-yes-to-confirm" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/key.py:187</code>. Exit <strong>1</strong>. No interpolation.</p>
+<p><strong>Means.</strong> Revocation <em>is</em> retroactive: every session token already minted under that <code>kid</code> stops
+verifying with reason code <code>unknown_kid</code> (see
+<a href="../session-tokens/#key-kidr-has-been-revoked">session-tokens.md</a>).</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>nautilus<span class="w"> </span>key<span class="w"> </span>revoke<span class="w"> </span><span class="m">00000000</span>-0000-4000-8000-000000000000<span class="w"> </span>--reason<span class="w"> </span>leaked<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="fail-key-command-cannot-reach-endpoint-exc"><code>FAIL: key {command}: cannot reach {endpoint}: {exc}</code><a class="headerlink" href="#fail-key-command-cannot-reach-endpoint-exc" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/key.py:126</code>. Exit <strong>2</strong>. <code>{command}</code> is <code>list</code>, <code>rotate</code> or <code>revoke</code>; <code>{endpoint}</code>
+is the full URL the CLI built (<code>{--url}/v1/keys</code>, <code>/v1/keys/rotate</code>, <code>/v1/keys/{kid}/revoke</code>);
+<code>{exc}</code> is the <code>httpx.HTTPError</code> — connection refused, DNS failure, TLS error, timeout.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>nautilus<span class="w"> </span>key<span class="w"> </span>list<span class="w"> </span>--url<span class="w"> </span>http://127.0.0.1:1<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-key-command-server-returned-status_code-text"><code>ERROR: key {command}: server returned {status_code}: {text}</code><a class="headerlink" href="#error-key-command-server-returned-status_code-text" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/key.py:129</code>. Exit <strong>2</strong>. The broker answered, and answered something other than
+200. <code>{status_code}</code> is the HTTP status; <code>{text}</code> is the raw response body, normally
+<code>{"detail": "..."}</code> — look that sentence up in <a href="../auth/">auth.md</a> (401/403) or
+<a href="../attestation/">attestation.md</a> (400/404/409). The commonest cause is a key without the <code>keys</code>
+capability.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>nautilus<span class="w"> </span>key<span class="w"> </span>list<span class="w"> </span>--url<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$NAUTILUS</span><span class="s2">&quot;</span><span class="w"> </span>--api-key<span class="w"> </span>query-key<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h2 id="nautilus-rule"><code>nautilus rule</code><a class="headerlink" href="#nautilus-rule" title="Permanent link">&para;</a></h2>
+<p><code>nautilus/cli/rule.py</code>. Local lineage operations against the audit log — no broker needed.
+<code>retract</code> and <code>rollback</code> are destructive and require <code>--yes</code> and <code>NAUTILUS_REVIEWER</code>.</p>
+<h3 id="error-yes-required-for-destructive-op"><code>ERROR: --yes required for destructive op</code><a class="headerlink" href="#error-yes-required-for-destructive-op" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rule.py:160</code> (retract) and <code>:270</code> (rollback). Exit <strong>1</strong>. No interpolation. The same
+sentence for both, and it is checked first, before <code>--reason</code> and before the reviewer identity.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>nautilus<span class="w"> </span>rule<span class="w"> </span>retract<span class="w"> </span>some_rule<span class="w"> </span>--reason<span class="w"> </span><span class="s2">&quot;superseded&quot;</span><span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>nautilus<span class="w"> </span>rule<span class="w"> </span>rollback<span class="w"> </span>some_rule<span class="w"> </span>--to-version<span class="w"> </span><span class="m">1</span><span class="w"> </span>--reason<span class="w"> </span><span class="s2">&quot;bad deploy&quot;</span><span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-reason-required-for-retract"><code>ERROR: --reason required for retract</code><a class="headerlink" href="#error-reason-required-for-retract" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rule.py:163</code>. Exit <strong>1</strong>. No interpolation. <code>--reason</code> is <code>required=True</code> in
+argparse, so omitting the flag entirely gets argparse's own message and exit 2; this sentence is
+what a <em>blank</em> reason gets — the value is <code>.strip()</code>ed before the check.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>nautilus<span class="w"> </span>rule<span class="w"> </span>retract<span class="w"> </span>some_rule<span class="w"> </span>--reason<span class="w"> </span><span class="s1">&#39;   &#39;</span><span class="w"> </span>--yes<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-cascade-and-orphan-children-are-mutually-exclusive"><code>ERROR: --cascade and --orphan-children are mutually exclusive</code><a class="headerlink" href="#error-cascade-and-orphan-children-are-mutually-exclusive" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rule.py:166</code>. Exit <strong>1</strong>. No interpolation.</p>
+<p><strong>Means.</strong> A retracted rule may have descendants in the lineage DAG. <code>--cascade</code> retracts them
+too; <code>--orphan-children</code> leaves them in force with a dangling parent. Asking for both is not a
+policy.</p>
+<p><strong>Fix.</strong> Pick one. Passing neither is legal and means "retire only the named rule".</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>nautilus<span class="w"> </span>rule<span class="w"> </span>retract<span class="w"> </span>some_rule<span class="w"> </span>--reason<span class="w"> </span>r<span class="w"> </span>--yes<span class="w"> </span>--cascade<span class="w"> </span>--orphan-children<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-rule-namer-not-found-in-lineage"><code>ERROR: rule {name!r} not found in lineage</code><a class="headerlink" href="#error-rule-namer-not-found-in-lineage" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rule.py:183</code>. Exit <strong>1</strong>. <code>{name}</code> is the positional rule name, <code>repr()</code>-quoted:
+<code>rule 'no_such_rule' not found in lineage</code>. The lineage store is the audit log resolved by
+<code>audit_path_for()</code> — <code>--config</code>'s <code>audit.path</code>, else <code>./audit.jsonl</code> in the working directory.
+A rule that exists in a YAML file but was never promoted has no lineage record.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="nb">cd</span><span class="w"> </span>/tmp/nautilus-errors<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>nautilus<span class="w"> </span>rule<span class="w"> </span>retract<span class="w"> </span>no_such_rule<span class="w"> </span>--reason<span class="w"> </span>r<span class="w"> </span>--yes<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-rule-namer-vto_version-not-found-in-lineage"><code>ERROR: rule {name!r} v{to_version} not found in lineage</code><a class="headerlink" href="#error-rule-namer-vto_version-not-found-in-lineage" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rule.py:287</code>. Exit <strong>1</strong>. <code>{name}</code> is <code>repr()</code>-quoted, <code>{to_version}</code> is the
+integer from <code>--to-version</code> with no <code>v</code> prefix of its own — the <code>v</code> in the message is literal:
+<code>rule 'my_rule' v7 not found in lineage</code>. Use <code>nautilus rule history my_rule</code> to see which
+versions exist.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="nb">cd</span><span class="w"> </span>/tmp/nautilus-errors<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>nautilus<span class="w"> </span>rule<span class="w"> </span>rollback<span class="w"> </span>my_rule<span class="w"> </span>--to-version<span class="w"> </span><span class="m">999</span><span class="w"> </span>--reason<span class="w"> </span>r<span class="w"> </span>--yes<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="warn-affected-descendants-names"><code>WARN: affected descendants: {names}</code><a class="headerlink" href="#warn-affected-descendants-names" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rule.py:197</code>. <strong>Exit 0</strong> — <code>retract --cascade</code> succeeded. <code>{names}</code> is the affected
+rule names joined with <code>", "</code>. Every rule listed was retracted too; this is the record of what
+else stopped being enforced.</p>
+<h3 id="warn-no-lineage-records-for-namer-warn-no-history-for-namer"><code>WARN: no lineage records for {name!r}</code> / <code>WARN: no history for {name!r}</code><a class="headerlink" href="#warn-no-lineage-records-for-namer-warn-no-history-for-namer" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rule.py:206</code> and <code>:245</code>. <strong>Exit 0</strong> — these are warnings, not failures.
+<code>nautilus rule lineage</code> and <code>nautilus rule history</code> answer with an empty result rather than an
+error, so a script checking only the exit code will not notice.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="nb">cd</span><span class="w"> </span>/tmp/nautilus-errors<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>nautilus<span class="w"> </span>rule<span class="w"> </span><span class="nb">history</span><span class="w"> </span>never_promoted<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h2 id="nautilus-rkm"><code>nautilus rkm</code><a class="headerlink" href="#nautilus-rkm" title="Permanent link">&para;</a></h2>
+<p><code>nautilus/cli/rkm.py</code>. The review queue. <code>submit</code>, <code>list</code>, <code>show</code>, <code>reject</code> and <code>diff</code> work
+against the local audit log; <code>approve</code> is the only one that requires a running broker.</p>
+<h3 id="error-rule-file-not-found-rule_path"><code>ERROR: rule file not found: {rule_path}</code><a class="headerlink" href="#error-rule-file-not-found-rule_path" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rkm.py:202</code>. Exit <strong>1</strong>. <code>{rule_path}</code> is the <code>--file</code> value with <code>str()</code>, not
+resolved. This is <code>submit</code> reading the rule YAML it is about to propose.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a>nautilus<span class="w"> </span>rkm<span class="w"> </span>queue<span class="w"> </span>submit<span class="w"> </span>--file<span class="w"> </span>/nope.yaml<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-rkm-queue-approve-url-is-required-approving-promotes-the-rule-into-the-engine-of-a-running-broker-so-there-is-nothing-for-the-cli-to-approve-locally-point-url-at-the-broker-eg-url-httplocalhost8000"><code>ERROR: rkm queue approve: --url is required. Approving promotes the rule into the engine of a running broker, so there is nothing for the CLI to approve locally — point --url at the broker (e.g. --url http://localhost:8000).</code><a class="headerlink" href="#error-rkm-queue-approve-url-is-required-approving-promotes-the-rule-into-the-engine-of-a-running-broker-so-there-is-nothing-for-the-cli-to-approve-locally-point-url-at-the-broker-eg-url-httplocalhost8000" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rkm.py:324-328</code>. Exit <strong>2</strong>. No interpolation. <code>NAUTILUS_REVIEWER</code> is checked
+<em>first</em>, so an unset reviewer identity masks this message until you set it.</p>
+<p><strong>Fix.</strong> Point <code>--url</code> at the broker whose engine should start enforcing the rule, and pass a
+<code>govern</code>-capable <code>--api-key</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="nv">NAUTILUS_REVIEWER</span><span class="o">=</span>you@example.com<span class="w"> </span>nautilus<span class="w"> </span>rkm<span class="w"> </span>queue<span class="w"> </span>approve<span class="w"> </span>prop_deadbeef<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-rkm-queue-approve-cannot-reach-endpoint-exc"><code>ERROR: rkm queue approve: cannot reach {endpoint}: {exc}</code><a class="headerlink" href="#error-rkm-queue-approve-cannot-reach-endpoint-exc" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rkm.py:344</code>. Exit <strong>2</strong>. <code>{endpoint}</code> is
+<code>{--url}/v1/rkm/queue/{proposal_id}/approve</code>; <code>{exc}</code> is the <code>httpx.HTTPError</code>. Nothing was
+decided — the proposal is still pending, so retrying is safe.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="nv">NAUTILUS_REVIEWER</span><span class="o">=</span>you@example.com<span class="w"> </span>nautilus<span class="w"> </span>rkm<span class="w"> </span>queue<span class="w"> </span>approve<span class="w"> </span>prop_deadbeef<span class="w"> </span>--url<span class="w"> </span>http://127.0.0.1:1<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-proposal-proposal_id-not-found"><code>ERROR: proposal {proposal_id} not found</code><a class="headerlink" href="#error-proposal-proposal_id-not-found" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rkm.py:297</code>, <code>:347</code>, <code>:370</code>, <code>:387</code>, <code>:411</code>. Exit <strong>1</strong>. <code>{proposal_id}</code> is the
+positional argument with <code>str()</code> — <strong>not</strong> <code>repr()</code>-quoted, unlike the HTTP route's
+<code>proposal not found: {proposal_id!r}</code> in <a href="../rules/#proposal-not-found-proposal_idr">rules.md</a>.
+<code>:347</code> is the local rendering of the broker's own 404 during <code>approve</code>; the rest are local
+lookups in the audit log.</p>
+<p><strong>Fix.</strong> <code>nautilus rkm queue list</code> prints the IDs that exist. IDs have the form <code>prop_&lt;hex&gt;</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="nb">cd</span><span class="w"> </span>/tmp/nautilus-errors<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>nautilus<span class="w"> </span>rkm<span class="w"> </span>queue<span class="w"> </span>show<span class="w"> </span>prop_notreal<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-proposal-proposal_id-cannot-be-rejected-it-is-current_status"><code>ERROR: proposal {proposal_id} cannot be rejected: it is {current_status}</code><a class="headerlink" href="#error-proposal-proposal_id-cannot-be-rejected-it-is-current_status" title="Permanent link">&para;</a></h3>
+<p>From <code>AlreadyDecidedError</code>. Exit <strong>1</strong>. <code>{current_status}</code> is the decision that stands.
+<code>reject</code> accepts <code>pending</code> and <code>approved</code> — backing out an approval whose promotion failed is
+the only way out of that state — so this names a terminal status: <code>rejected</code> is idempotent (see
+below), and <code>promoted</code>, <code>expired</code> or <code>superseded</code> are refusals.</p>
+<p>Both verbs read the decision that stands and answer the same way: <strong>0</strong> when it is the one you
+asked for, <strong>1</strong> when it is not. <code>nautilus rkm queue reject</code> on an already-rejected proposal
+prints <code>OK: proposal {id} was already rejected</code> and exits 0; <code>approve</code> on an already-approved one
+prints <code>OK: proposal {id} was already approved</code> and exits 0. Approve used to report <em>every</em> 409 as
+<code>already_approved</code> with exit 0 — including a proposal that stood rejected — while reject answered
+the mirror case with exit 1 unconditionally.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="nb">cd</span><span class="w"> </span>/tmp/nautilus-errors<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>nautilus<span class="w"> </span>rkm<span class="w"> </span>queue<span class="w"> </span>reject<span class="w"> </span>prop_notreal<span class="w"> </span>--reason<span class="w"> </span>r<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-rkm-queue-approve-server-returned-status_code-text"><code>ERROR: rkm queue approve: server returned {status_code}: {text}</code><a class="headerlink" href="#error-rkm-queue-approve-server-returned-status_code-text" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rkm.py:358</code>. Exit <strong>2</strong>. Any broker response that is not 200, 404 or 409.
+<code>{status_code}</code> is the HTTP status; <code>{text}</code> is the raw body. The one you are most likely to see
+is <strong>422</strong> with a JSON object carrying <code>error</code>, <code>message</code>, <code>current_status</code> and <code>recovery</code> — a
+promotion that could not be made real. Its <code>recovery</code> field tells you what to change; the causes
+are listed in <a href="../rules/#promotion">rules.md</a>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="nv">NAUTILUS_REVIEWER</span><span class="o">=</span>you@example.com<span class="w"> </span>nautilus<span class="w"> </span>rkm<span class="w"> </span>queue<span class="w"> </span>approve<span class="w"> </span>prop_deadbeef<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a><span class="w">  </span>--url<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$NAUTILUS</span><span class="s2">&quot;</span><span class="w"> </span>--api-key<span class="w"> </span>govern-key<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="warn-could-not-read-rkm-settings-from-config_pathr-exc-using-defaults"><code>WARN: could not read rkm settings from {config_path!r} ({exc}); using defaults</code><a class="headerlink" href="#warn-could-not-read-rkm-settings-from-config_pathr-exc-using-defaults" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rkm.py:250</code>. <strong>Exit 0</strong> — the submission still happens, with default RKM settings.
+<code>{config_path}</code> is <code>repr()</code>-quoted; <code>{exc}</code> is the loader error. If a proposal behaved as though
+your <code>rkm:</code> block were absent, this line is why.</p>
+<h3 id="warn-no-lineage-records-for-idr"><code>WARN: no lineage records for {id!r}</code><a class="headerlink" href="#warn-no-lineage-records-for-idr" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/rkm.py:475</code>. <strong>Exit 0</strong>. <code>{id}</code> is the positional argument of
+<code>nautilus rkm lineage</code>, which accepts either a proposal ID or a rule name.</p>
+<h2 id="nautilus-adapters"><code>nautilus adapters</code><a class="headerlink" href="#nautilus-adapters" title="Permanent link">&para;</a></h2>
+<p><code>nautilus/cli/adapters.py</code>. Two modes: <code>--config</code> reads a <code>nautilus.yaml</code> and constructs adapters
+locally; <code>--url</code> asks a running broker. They answer different questions and are not
+interchangeable.</p>
+<h3 id="error-invalid-adapter-name-namer-expected-lowercase-dashed-eg-my-csv-adapter"><code>ERROR: invalid adapter name {name!r} (expected lowercase-dashed, e.g. my-csv-adapter)</code><a class="headerlink" href="#error-invalid-adapter-name-namer-expected-lowercase-dashed-eg-my-csv-adapter" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/adapters.py:244</code>. Exit <strong>1</strong>. <code>{name}</code> is the positional argument, <code>repr()</code>-quoted.
+The name becomes a Python distribution name and a package directory, so uppercase, underscores
+and leading digits are refused.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a>nautilus<span class="w"> </span>adapters<span class="w"> </span>new<span class="w"> </span>My_Adapter<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-destination-already-exists-and-is-not-empty-dest"><code>ERROR: destination already exists and is not empty: {dest}</code><a class="headerlink" href="#error-destination-already-exists-and-is-not-empty-dest" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/adapters.py:249</code>. Exit <strong>1</strong>. <code>{dest}</code> is <code>Path(--dir) / name</code> with <code>str()</code>.
+An <em>empty</em> directory of that name is fine — scaffolding proceeds into it.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a>mkdir<span class="w"> </span>-p<span class="w"> </span>/tmp/n-ad/my-csv-adapter<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>:<span class="w"> </span>&gt;<span class="w"> </span>/tmp/n-ad/my-csv-adapter/x
+<a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a>nautilus<span class="w"> </span>adapters<span class="w"> </span>new<span class="w"> </span>my-csv-adapter<span class="w"> </span>--dir<span class="w"> </span>/tmp/n-ad<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-copier-is-required-for-adapters-new-install-it-with-pip-install-copier"><code>ERROR: copier is required for 'adapters new' — install it with: pip install copier</code><a class="headerlink" href="#error-copier-is-required-for-adapters-new-install-it-with-pip-install-copier" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/adapters.py:255</code>. Exit <strong>1</strong>. No interpolation. <code>copier</code> renders the bundled
+template and is not a runtime dependency of Nautilus, so it is absent from a normal install.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a>pip<span class="w"> </span>install<span class="w"> </span>copier<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>nautilus<span class="w"> </span>adapters<span class="w"> </span>new<span class="w"> </span>my-csv-adapter<span class="w"> </span>--dir<span class="w"> </span>/tmp/n-ad
+</code></pre></div>
+<h3 id="error-no-config-found-pass-config-path-or-run-from-a-directory-containing-nautilusyaml"><code>ERROR: no config found: pass --config PATH, or run from a directory containing nautilus.yaml</code><a class="headerlink" href="#error-no-config-found-pass-config-path-or-run-from-a-directory-containing-nautilusyaml" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/adapters.py:296-299</code> and <code>:497</code>. Exit <strong>1</strong>. No interpolation. The implicit lookup
+is <code>./nautilus.yaml</code> in the process's working directory — not the config the broker is serving
+with, and not <code>$NAUTILUS_CONFIG</code>. It is the whole answer: <code>schema</code> and <code>schema-fingerprint</code> stop
+here rather than going on to report the missing config a second time as a missing schema.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="nb">cd</span><span class="w"> </span>/tmp<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>nautilus<span class="w"> </span>adapters<span class="w"> </span>list<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+<a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="nb">cd</span><span class="w"> </span>/tmp/nautilus-errors<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>nautilus<span class="w"> </span>adapters<span class="w"> </span>list<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-status-status_filterr-needs-url-quarantine-state-lives-in-the-serving-process-so-a-config-file-cannot-answer-it-reporting-an-empty-list-here-would-look-like-nothing-is-quarantined"><code>ERROR: --status {status_filter!r} needs --url: quarantine state lives in the serving process, so a config file cannot answer it. Reporting an empty list here would look like 'nothing is quarantined'.</code><a class="headerlink" href="#error-status-status_filterr-needs-url-quarantine-state-lives-in-the-serving-process-so-a-config-file-cannot-answer-it-reporting-an-empty-list-here-would-look-like-nothing-is-quarantined" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/adapters.py:288-292</code>. Exit <strong>1</strong>. <code>{status_filter}</code> is the <code>--status</code> value,
+<code>repr()</code>-quoted.</p>
+<p><strong>Means.</strong> Quarantine is decided at runtime by the broker as adapters fail. A config file
+describes what <em>could</em> be constructed, not what is currently healthy, so answering from it would
+be a confident lie.</p>
+<p><strong>Fix.</strong> <code>nautilus adapters list --status quarantined --url "$NAUTILUS" --api-key query-key</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a>nautilus<span class="w"> </span>adapters<span class="w"> </span>list<span class="w"> </span>--status<span class="w"> </span>quarantined<span class="w"> </span>--config<span class="w"> </span>/tmp/nautilus-errors/nautilus.yaml<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-could-not-load-config_path-exc"><code>ERROR: could not load {config_path}: {exc}</code><a class="headerlink" href="#error-could-not-load-config_path-exc" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/adapters.py:335</code> (<code>adapters list</code>, via <code>_configured_adapters</code>) and <code>:175</code> (the four
+schema subcommands, via <code>_live_adapter_schema</code>). Exit <strong>1</strong> from all five, with the same sentence:
+one helper per path, one code. <code>{config_path}</code> is the resolved config path; <code>{exc}</code> is the
+<code>ConfigError</code> or <code>OSError</code> from the loader — look that sentence up in <a href="../config/">config.md</a>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a>:<span class="w"> </span>&gt;<span class="w"> </span>/tmp/n-bad.yaml
+<a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a>nautilus<span class="w"> </span>adapters<span class="w"> </span>list<span class="w"> </span>--config<span class="w"> </span>/tmp/n-bad.yaml<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+<a id="__codelineno-44-3" name="__codelineno-44-3" href="#__codelineno-44-3"></a>nautilus<span class="w"> </span>adapters<span class="w"> </span>schema-fingerprint<span class="w"> </span>notes<span class="w"> </span>--config<span class="w"> </span>/tmp/n-bad.yaml<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a>ERROR: could not load /tmp/n-bad.yaml: Config root must be a mapping, got NoneType
+<a id="__codelineno-45-2" name="__codelineno-45-2" href="#__codelineno-45-2"></a>exit=1
+<a id="__codelineno-45-3" name="__codelineno-45-3" href="#__codelineno-45-3"></a>ERROR: could not load /tmp/n-bad.yaml: Config root must be a mapping, got NoneType
+<a id="__codelineno-45-4" name="__codelineno-45-4" href="#__codelineno-45-4"></a>exit=1
+</code></pre></div>
+<h3 id="error-url-refused-the-credential-401-pass-a-valid-api-key"><code>ERROR: {url} refused the credential (401). Pass a valid --api-key.</code><a class="headerlink" href="#error-url-refused-the-credential-401-pass-a-valid-api-key" title="Permanent link">&para;</a></h3>
+<p>The broker answered; it declined the key. This used to be reported as
+<code>could not reach {url}</code> — <code>raise_for_status()</code> sat inside the <code>except</code> that catches transport
+errors — which sent operators to DNS, the firewall and <code>systemctl status</code> for a wrong key.
+<code>403</code> and any other non-200 now get their own line too.</p>
+<h3 id="error-could-not-reach-url-exc"><code>ERROR: could not reach {url}: {exc}</code><a class="headerlink" href="#error-could-not-reach-url-exc" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/adapters.py:354</code>. Exit <strong>1</strong>. <code>{url}</code> is the <code>--url</code> value; <code>{exc}</code> is the
+<code>httpx.HTTPError</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a>nautilus<span class="w"> </span>adapters<span class="w"> </span>list<span class="w"> </span>--url<span class="w"> </span>http://127.0.0.1:1<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-no-schema-available-for-adapter-namer"><code>ERROR: no schema available for adapter {name!r}</code><a class="headerlink" href="#error-no-schema-available-for-adapter-namer" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/adapters.py:376</code> (<code>adapters schema</code>) and <code>:386</code>
+(<code>adapters schema-fingerprint</code>). Exit <strong>1</strong>. <code>{name}</code> is <code>repr()</code>-quoted. With <code>--json</code>, <code>null</code>
+is still printed on stdout before the non-zero exit, so a JSON consumer gets valid JSON either
+way.</p>
+<p><strong>Means.</strong> The adapter does not implement <code>get_schema()</code>, or it returned nothing. The HTTP
+equivalent is <code>501 Adapter '{name}' does not support schema introspection</code>
+(see <a href="../transport/#adapter-name-does-not-support-schema-introspection">transport.md</a>).</p>
+<p>The scratch broker cannot reproduce this: its <code>notes</code> source is a static adapter, which <em>does</em>
+implement <code>get_schema()</code> and exits <strong>0</strong> with the schema. Use that as the positive control, then
+try the adapter that failed.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-47-1" name="__codelineno-47-1" href="#__codelineno-47-1"></a><span class="nb">cd</span><span class="w"> </span>/tmp/nautilus-errors<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>nautilus<span class="w"> </span>adapters<span class="w"> </span>schema<span class="w"> </span>notes<span class="w"> </span>--config<span class="w"> </span>nautilus.yaml<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+<a id="__codelineno-47-2" name="__codelineno-47-2" href="#__codelineno-47-2"></a><span class="nb">cd</span><span class="w"> </span>/tmp/nautilus-errors<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>nautilus<span class="w"> </span>adapters<span class="w"> </span>schema<span class="w"> </span>no_such_source<span class="w"> </span>--config<span class="w"> </span>nautilus.yaml<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-no-schema-available-for-adapter-namer-cannot-ack"><code>ERROR: no schema available for adapter {name!r}; cannot ack</code><a class="headerlink" href="#error-no-schema-available-for-adapter-namer-cannot-ack" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/adapters.py:458</code>. Exit <strong>1</strong>. The same condition reached from <code>schema-ack</code>: there
+is no current fingerprint to record an acknowledgement against. Checked <strong>after</strong> <code>--yes</code> and
+after <code>NAUTILUS_REVIEWER</code>.</p>
+<!-- not-executed: needs an adapter without get_schema(); the scratch broker's static source has one -->
+<div class="highlight"><pre><span></span><code><a id="__codelineno-48-1" name="__codelineno-48-1" href="#__codelineno-48-1"></a><span class="nb">cd</span><span class="w"> </span>/tmp/nautilus-errors<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nv">NAUTILUS_REVIEWER</span><span class="o">=</span>you@example.com<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-48-2" name="__codelineno-48-2" href="#__codelineno-48-2"></a><span class="w">  </span>nautilus<span class="w"> </span>adapters<span class="w"> </span>schema-ack<span class="w"> </span>no_such_source<span class="w"> </span>--config<span class="w"> </span>nautilus.yaml<span class="w"> </span>--reason<span class="w"> </span><span class="s2">&quot;drift ok&quot;</span><span class="w"> </span>--yes<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-schema-ack-requires-yes-to-confirm"><code>ERROR: schema-ack requires --yes to confirm</code><a class="headerlink" href="#error-schema-ack-requires-yes-to-confirm" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/adapters.py:450</code>. Exit <strong>1</strong>. No interpolation. Acknowledging drift writes a new
+fingerprint, which silences <code>schema-diff</code> for that adapter until the schema changes again.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-49-1" name="__codelineno-49-1" href="#__codelineno-49-1"></a>nautilus<span class="w"> </span>adapters<span class="w"> </span>schema-ack<span class="w"> </span>notes<span class="w"> </span>--config<span class="w"> </span>/tmp/nautilus-errors/nautilus.yaml<span class="w"> </span>--reason<span class="w"> </span>r<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="warn-could-not-read-schema-for-namer-exc"><code>WARN: could not read schema for {name!r}: {exc}</code><a class="headerlink" href="#warn-could-not-read-schema-for-namer-exc" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/adapters.py:197</code>, inside <code>_live_adapter_schema</code> — so it comes from the four schema
+subcommands (<code>schema</code>, <code>schema-fingerprint</code>, <code>schema-diff</code>, <code>schema-ack</code>), never from
+<code>adapters list</code>, which reads the config's <code>sources</code> through <code>_configured_adapters</code> and never asks
+an adapter anything. <code>{name}</code> is <code>repr()</code>-quoted; <code>{exc}</code> is whatever <code>connect()</code> or
+<code>get_schema()</code> raised.</p>
+<p>It is a <code>WARN</code> because the schema read is the part that failed, not the command; <strong>the exit code
+comes from what the caller does next.</strong> <code>schema</code> and <code>schema-fingerprint</code> follow it with
+<code>ERROR: no schema available for adapter {name!r}</code> and exit <strong>1</strong>; <code>schema-ack</code> follows it with
+<code>; cannot ack</code> and exits <strong>1</strong>; <code>schema-diff</code> downgrades it to
+<code>WARN: no schema available for adapter {name!r}</code> and exits <strong>0</strong>, because an adapter it cannot
+reach is not evidence of drift.</p>
+<p>The scratch broker cannot reproduce this — its <code>notes</code> source is static and answers from the
+config file. Point a source at a port nothing is listening on instead:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-50-1" name="__codelineno-50-1" href="#__codelineno-50-1"></a>cat<span class="w"> </span>&gt;<span class="w"> </span>/tmp/n-deadpg.yaml<span class="w"> </span><span class="s">&lt;&lt;&#39;YAML&#39;</span>
+<a id="__codelineno-50-2" name="__codelineno-50-2" href="#__codelineno-50-2"></a><span class="s">sources:</span>
+<a id="__codelineno-50-3" name="__codelineno-50-3" href="#__codelineno-50-3"></a><span class="s">  - id: deadpg</span>
+<a id="__codelineno-50-4" name="__codelineno-50-4" href="#__codelineno-50-4"></a><span class="s">    type: postgres</span>
+<a id="__codelineno-50-5" name="__codelineno-50-5" href="#__codelineno-50-5"></a><span class="s">    classification: unclassified</span>
+<a id="__codelineno-50-6" name="__codelineno-50-6" href="#__codelineno-50-6"></a><span class="s">    data_types: [note]</span>
+<a id="__codelineno-50-7" name="__codelineno-50-7" href="#__codelineno-50-7"></a><span class="s">    allowed_purposes: [research]</span>
+<a id="__codelineno-50-8" name="__codelineno-50-8" href="#__codelineno-50-8"></a><span class="s">    connection: postgresql://nobody@127.0.0.1:1/none</span>
+<a id="__codelineno-50-9" name="__codelineno-50-9" href="#__codelineno-50-9"></a><span class="s">    table: public.notes</span>
+<a id="__codelineno-50-10" name="__codelineno-50-10" href="#__codelineno-50-10"></a><span class="s">agents:</span>
+<a id="__codelineno-50-11" name="__codelineno-50-11" href="#__codelineno-50-11"></a><span class="s">  analyst:</span>
+<a id="__codelineno-50-12" name="__codelineno-50-12" href="#__codelineno-50-12"></a><span class="s">    id: analyst</span>
+<a id="__codelineno-50-13" name="__codelineno-50-13" href="#__codelineno-50-13"></a><span class="s">    clearance: unclassified</span>
+<a id="__codelineno-50-14" name="__codelineno-50-14" href="#__codelineno-50-14"></a><span class="s">    default_purpose: research</span>
+<a id="__codelineno-50-15" name="__codelineno-50-15" href="#__codelineno-50-15"></a><span class="s">YAML</span>
+<a id="__codelineno-50-16" name="__codelineno-50-16" href="#__codelineno-50-16"></a>nautilus<span class="w"> </span>adapters<span class="w"> </span>schema<span class="w"> </span>deadpg<span class="w"> </span>--config<span class="w"> </span>/tmp/n-deadpg.yaml<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+<a id="__codelineno-50-17" name="__codelineno-50-17" href="#__codelineno-50-17"></a>nautilus<span class="w"> </span>adapters<span class="w"> </span>schema-diff<span class="w"> </span>deadpg<span class="w"> </span>--config<span class="w"> </span>/tmp/n-deadpg.yaml<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+<a id="__codelineno-50-18" name="__codelineno-50-18" href="#__codelineno-50-18"></a>nautilus<span class="w"> </span>adapters<span class="w"> </span>list<span class="w"> </span>--config<span class="w"> </span>/tmp/n-deadpg.yaml<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-51-1" name="__codelineno-51-1" href="#__codelineno-51-1"></a>WARN: could not read schema for &#39;deadpg&#39;: PostgresAdapter failed to connect to source &#39;deadpg&#39;: [Errno 111] Connect call failed (&#39;127.0.0.1&#39;, 1)
+<a id="__codelineno-51-2" name="__codelineno-51-2" href="#__codelineno-51-2"></a>ERROR: no schema available for adapter &#39;deadpg&#39;
+<a id="__codelineno-51-3" name="__codelineno-51-3" href="#__codelineno-51-3"></a>exit=1
+<a id="__codelineno-51-4" name="__codelineno-51-4" href="#__codelineno-51-4"></a>WARN: could not read schema for &#39;deadpg&#39;: PostgresAdapter failed to connect to source &#39;deadpg&#39;: [Errno 111] Connect call failed (&#39;127.0.0.1&#39;, 1)
+<a id="__codelineno-51-5" name="__codelineno-51-5" href="#__codelineno-51-5"></a>WARN: no schema available for adapter &#39;deadpg&#39;
+<a id="__codelineno-51-6" name="__codelineno-51-6" href="#__codelineno-51-6"></a>exit=0
+<a id="__codelineno-51-7" name="__codelineno-51-7" href="#__codelineno-51-7"></a>  deadpg  type=postgres  status=configured
+<a id="__codelineno-51-8" name="__codelineno-51-8" href="#__codelineno-51-8"></a>exit=0
+</code></pre></div>
+<p>The third line is the control: <code>adapters list</code> reports the same unreachable source with no
+warning at all, because it never asks it for a schema.</p>
+<h3 id="warn-no-stored-fingerprint-for-namer-treating-as-new"><code>WARN: no stored fingerprint for {name!r}; treating as new</code><a class="headerlink" href="#warn-no-stored-fingerprint-for-namer-treating-as-new" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/adapters.py:413</code>. <strong>Exit 0</strong>, from <code>schema-diff</code>. There is nothing to compare
+against yet — the first <code>schema-diff</code> for an adapter always says this. Run <code>schema-ack</code> to store
+the baseline.</p>
+<h2 id="nautilus-attestation-verify"><code>nautilus attestation verify</code><a class="headerlink" href="#nautilus-attestation-verify" title="Permanent link">&para;</a></h2>
+<p><code>nautilus/cli/attestation.py</code>. Offline verification of a chained attestation log: hash chain plus
+JWS signatures, with no broker running.</p>
+<h3 id="error-attestation-verify-log-not-found-log_path"><code>ERROR: attestation verify: log not found: {log_path}</code><a class="headerlink" href="#error-attestation-verify-log-not-found-log_path" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/attestation.py:76</code>. Exit <strong>1</strong>. <code>{log_path}</code> is the positional <code>log</code> argument with
+<code>str()</code>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-52-1" name="__codelineno-52-1" href="#__codelineno-52-1"></a>nautilus<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>/nope.jsonl<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-attestation-verify-pubkey-not-found-pubkey_path"><code>ERROR: attestation verify: pubkey not found: {pubkey_path}</code><a class="headerlink" href="#error-attestation-verify-pubkey-not-found-pubkey_path" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/attestation.py:79</code>. Exit <strong>1</strong>. <code>{pubkey_path}</code> is <code>--pubkey</code> if you passed it, and
+otherwise the default <code>&lt;log&gt;.pub.pem</code> beside the log — so verifying <code>audit.jsonl</code> with no
+<code>--pubkey</code> reports <code>audit.jsonl.pub.pem</code>, a file you may never have been told to create.</p>
+<p><strong>Fix.</strong> Pass <code>--pubkey</code> explicitly, or place the broker's Ed25519 public key PEM beside the log
+under that name.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-53-1" name="__codelineno-53-1" href="#__codelineno-53-1"></a><span class="nb">cd</span><span class="w"> </span>/tmp/nautilus-errors<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>:<span class="w"> </span>&gt;<span class="w"> </span>chain.jsonl<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>nautilus<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>chain.jsonl<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h3 id="error-attestation-verify-resulterror"><code>ERROR: attestation verify: {result.error}</code><a class="headerlink" href="#error-attestation-verify-resulterror" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/cli/attestation.py:95</code>. Exit <strong>2</strong> — verification ran and failed, which is a policy
+failure, not a usage error. <code>{result.error}</code> is the first failure the verifier found: a broken
+hash link, a signature that does not verify, an <code>--expected-head</code> that is absent from the log
+(tail truncation), or an <code>--anchor-token</code> whose checkpoint line is missing.</p>
+<p><strong>Means.</strong> The log has been altered, truncated, or was signed by a different key. Exit <strong>0</strong> means
+every line chained and every signature verified.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-54-1" name="__codelineno-54-1" href="#__codelineno-54-1"></a><span class="nb">cd</span><span class="w"> </span>/tmp/nautilus-errors<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">printf</span><span class="w"> </span><span class="s1">&#39;{&quot;a&quot;:1}\n&#39;</span><span class="w"> </span>&gt;<span class="w"> </span>chain.jsonl<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-54-2" name="__codelineno-54-2" href="#__codelineno-54-2"></a><span class="w">  </span><span class="o">&amp;&amp;</span><span class="w"> </span>nautilus<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>chain.jsonl<span class="w"> </span>--pubkey<span class="w"> </span>/nope.pem<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+<h2 id="argument-parsing">Argument parsing<a class="headerlink" href="#argument-parsing" title="Permanent link">&para;</a></h2>
+<p>An unknown subcommand or flag is handled by <code>argparse</code>, not by Nautilus, and exits <strong>2</strong>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-55-1" name="__codelineno-55-1" href="#__codelineno-55-1"></a>usage: nautilus session [-h] subcommand ...
+<a id="__codelineno-55-2" name="__codelineno-55-2" href="#__codelineno-55-2"></a>nautilus session: error: argument subcommand: invalid choice: &#39;schema&#39; (choose from version)
+</code></pre></div>
+<p><code>nautilus &lt;command&gt; --help</code> lists the valid subcommands for each group.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-56-1" name="__codelineno-56-1" href="#__codelineno-56-1"></a>nautilus<span class="w"> </span>--help<span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-25
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

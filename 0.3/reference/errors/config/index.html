@@ -1,0 +1,2842 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Policy-first data broker for AI agents">
+      
+      
+      
+        <link rel="canonical" href="https://nautilus.krakn.ai/0.3/reference/errors/config/">
+      
+      
+        <link rel="prev" href="../transport/">
+      
+      
+        <link rel="next" href="../adapters/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Configuration and startup - Nautilus</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#configuration-and-startup" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="Nautilus" class="md-header__button md-logo" aria-label="Nautilus" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Nautilus
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Configuration and startup
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/KrakenNet/nautilus" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    KrakenNet/nautilus
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../how-to/" class="md-tabs__link">
+          
+  
+  
+  How-to Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../concepts/" class="md-tabs__link">
+          
+  
+  
+  Concepts
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../../" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="Nautilus" class="md-nav__button md-logo" aria-label="Nautilus" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Nautilus
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/KrakenNet/nautilus" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    KrakenNet/nautilus
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How-to Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How-to Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/operator-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operator Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/deploying/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deploying
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/authoring-rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authoring Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/developing-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developing Adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/hardening/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardening
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/add-a-postgres-source/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add a Postgres Source
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/write-a-routing-rule/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Write a Routing Rule
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/configure-attestation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configure Attestation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/verify-a-token/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verify a Token
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/add-an-llm-source/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add an LLM Source
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../how-to/monitor-with-grafana/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Monitor with Grafana
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../concepts/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../concepts/trust-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Trust Boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../concepts/attestation-chain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Attestation Chain
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../concepts/rkm-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RKM Rule Lifecycle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../python-sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python SDK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../rest-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    REST API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../rule-packs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rule Packs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapter-sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapter SDK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_7" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5_7" id="__nav_5_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_7_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Errors
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../auth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials and identity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../session-tokens/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Session tokens
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sessions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sessions and session store
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../transport/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP transport
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration and startup
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration and startup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#reading-the-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading the file
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reading the file">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unable-to-read-config-file-config_path-exc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unable to read config file '{config_path}': {exc}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#invalid-yaml-in-config_path-exc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Invalid YAML in '{config_path}': {exc}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-root-must-be-a-mapping-got-typeraw__name__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config root must be a mapping, got {type(raw).__name__}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#interpolated-config-root-must-remain-a-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interpolated config root must remain a mapping
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#missing-env-var-var-referenced-by-source-idsource_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Missing env var '{var}' referenced by source id='{source_id}'
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-sources-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The sources list
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The sources list">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#config-must-define-a-sources-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config must define a 'sources' list
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#each-source-entry-must-be-a-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Each source entry must be a mapping
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#each-source-entry-must-have-a-string-id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Each source entry must have a string 'id'
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#duplicate-source-idsource_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Duplicate source id='{source_id}'
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#source-idsource_id-is-missing-the-required-key-type-one-of-sortedsupported_types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Source id='{source_id}' is missing the required key 'type' (one of: {sorted(supported_types)})
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unsupported-source-typesource_type-for-idsource_id-supported-sortedsupported_types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unsupported source type='{source_type}' for id='{source_id}' (supported: {sorted(supported_types)})
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#config-validation-failed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config validation failed:
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Config validation failed:">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sourcesiid-string-should-match-pattern-a-za-z0-9a-za-z0-9_-typestring_pattern_mismatch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        sources.{i}.id: String should match pattern '^[A-Za-z0-9][A-Za-z0-9._-]*$' [type=string_pattern_mismatch]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#source-selfid-has-type-selftype-but-no-required-the-selftype-adapter-requires-it-so-every-request-to-this-source-would-fail-at-runtime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        source '{self.id}' has type '{self.type}' but no '{required}'. The {self.type} adapter requires it, so every request to this source would fail at runtime.
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#source-selfid-has-type-selftype-but-no-connection-the-selftype-adapter-has-nothing-to-dial-so-every-request-to-this-source-would-fail-at-runtime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        source '{self.id}' has type '{self.type}' but no 'connection'. The {self.type} adapter has nothing to dial, so every request to this source would fail at runtime.
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analysismodeanalysismoder-requires-analysisprovider-to-be-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        analysis.mode={analysis.mode!r} requires analysis.provider to be set
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rkmauto_promoteenabled-auto-promotion-is-not-implemented" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rkm.auto_promote.enabled: auto-promotion is not implemented. …
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#classification-labels-are-not-levels-of-the-classification-hierarchy-known-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        classification labels are not levels of the 'classification' hierarchy ({known}): {errors}
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#custom-adapters-under-adapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom adapters under adapters:
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Custom adapters under adapters:">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#source-idsourceid-has-type-sourcetype-whose-driver-is-not-installed-install_extra_hintextra-import-failed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        source id='{source.id}' has type '{source.type}', whose driver is not installed -- {install_extra_hint(extra)} (import failed: {…})
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#escalation-packs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Escalation packs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Escalation packs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#escalation-pack-yaml_path-must-contain-a-top-level-list-got-typeraw__name__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Escalation pack '{yaml_path}' must contain a top-level list, got {type(raw).__name__}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#each-escalation-entry-in-yaml_path-must-be-a-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Each escalation entry in '{yaml_path}' must be a mapping
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-cli-shows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the CLI shows
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters and data sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rules, RKM and the engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../attestation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Attestation and keys
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command line
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Embedding as a library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_8" id="__nav_5_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapter SDK Docs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapter SDK Docs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../sdk/docs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../sdk/docs/tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../sdk/docs/discovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Discovery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../sdk/docs/reference/protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../sdk/docs/reference/types/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../sdk/docs/reference/testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#reading-the-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading the file
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reading the file">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#unable-to-read-config-file-config_path-exc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unable to read config file '{config_path}': {exc}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#invalid-yaml-in-config_path-exc" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Invalid YAML in '{config_path}': {exc}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#config-root-must-be-a-mapping-got-typeraw__name__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config root must be a mapping, got {type(raw).__name__}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#interpolated-config-root-must-remain-a-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interpolated config root must remain a mapping
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#missing-env-var-var-referenced-by-source-idsource_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Missing env var '{var}' referenced by source id='{source_id}'
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-sources-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The sources list
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The sources list">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#config-must-define-a-sources-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config must define a 'sources' list
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#each-source-entry-must-be-a-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Each source entry must be a mapping
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#each-source-entry-must-have-a-string-id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Each source entry must have a string 'id'
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#duplicate-source-idsource_id" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Duplicate source id='{source_id}'
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#source-idsource_id-is-missing-the-required-key-type-one-of-sortedsupported_types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Source id='{source_id}' is missing the required key 'type' (one of: {sorted(supported_types)})
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#unsupported-source-typesource_type-for-idsource_id-supported-sortedsupported_types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unsupported source type='{source_type}' for id='{source_id}' (supported: {sorted(supported_types)})
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#config-validation-failed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config validation failed:
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Config validation failed:">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sourcesiid-string-should-match-pattern-a-za-z0-9a-za-z0-9_-typestring_pattern_mismatch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        sources.{i}.id: String should match pattern '^[A-Za-z0-9][A-Za-z0-9._-]*$' [type=string_pattern_mismatch]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#source-selfid-has-type-selftype-but-no-required-the-selftype-adapter-requires-it-so-every-request-to-this-source-would-fail-at-runtime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        source '{self.id}' has type '{self.type}' but no '{required}'. The {self.type} adapter requires it, so every request to this source would fail at runtime.
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#source-selfid-has-type-selftype-but-no-connection-the-selftype-adapter-has-nothing-to-dial-so-every-request-to-this-source-would-fail-at-runtime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        source '{self.id}' has type '{self.type}' but no 'connection'. The {self.type} adapter has nothing to dial, so every request to this source would fail at runtime.
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#analysismodeanalysismoder-requires-analysisprovider-to-be-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        analysis.mode={analysis.mode!r} requires analysis.provider to be set
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rkmauto_promoteenabled-auto-promotion-is-not-implemented" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        rkm.auto_promote.enabled: auto-promotion is not implemented. …
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#classification-labels-are-not-levels-of-the-classification-hierarchy-known-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        classification labels are not levels of the 'classification' hierarchy ({known}): {errors}
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#custom-adapters-under-adapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom adapters under adapters:
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Custom adapters under adapters:">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#source-idsourceid-has-type-sourcetype-whose-driver-is-not-installed-install_extra_hintextra-import-failed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        source id='{source.id}' has type '{source.type}', whose driver is not installed -- {install_extra_hint(extra)} (import failed: {…})
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#escalation-packs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Escalation packs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Escalation packs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#escalation-pack-yaml_path-must-contain-a-top-level-list-got-typeraw__name__" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Escalation pack '{yaml_path}' must contain a top-level list, got {type(raw).__name__}
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#each-escalation-entry-in-yaml_path-must-be-a-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Each escalation entry in '{yaml_path}' must be a mapping
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-cli-shows" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the CLI shows
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="configuration-and-startup">Configuration and startup<a class="headerlink" href="#configuration-and-startup" title="Permanent link">&para;</a></h1>
+<p>Everything here is fatal at boot: <code>nautilus serve</code> prints it and exits <strong>2</strong> before binding a
+port. Most are <code>ConfigError</code> (<code>nautilus/config/loader.py:57</code>); the rest are pydantic validation
+errors arriving inside the <code>Config validation failed:</code> envelope.</p>
+<h2 id="reading-the-file">Reading the file<a class="headerlink" href="#reading-the-file" title="Permanent link">&para;</a></h2>
+<h3 id="unable-to-read-config-file-config_path-exc"><code>Unable to read config file '{config_path}': {exc}</code><a class="headerlink" href="#unable-to-read-config-file-config_path-exc" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/config/loader.py:123-126</code>. <code>{exc}</code> is the <code>OSError</code> — typically
+<code>[Errno 2] No such file or directory</code> or <code>[Errno 13] Permission denied</code>. Check the path you
+passed to <code>--config</code>.</p>
+<h3 id="invalid-yaml-in-config_path-exc"><code>Invalid YAML in '{config_path}': {exc}</code><a class="headerlink" href="#invalid-yaml-in-config_path-exc" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/config/loader.py:128-131</code>. <code>{exc}</code> is the PyYAML parse error, including the line and
+column it gave up at. Tabs for indentation and an unclosed <code>[</code> are the usual causes.</p>
+<h3 id="config-root-must-be-a-mapping-got-typeraw__name__"><code>Config root must be a mapping, got {type(raw).__name__}</code><a class="headerlink" href="#config-root-must-be-a-mapping-got-typeraw__name__" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/config/loader.py:132-134</code>. The file parsed to a list or a scalar. Rendered example:
+<code>Config root must be a mapping, got list</code> — a document that starts with <code>-</code>.</p>
+<h3 id="interpolated-config-root-must-remain-a-mapping"><code>Interpolated config root must remain a mapping</code><a class="headerlink" href="#interpolated-config-root-must-remain-a-mapping" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/config/loader.py:136-139</code>. Environment interpolation replaced the whole document.
+Reachable when the root of the file is a single <code>${VAR}</code>.</p>
+<h3 id="missing-env-var-var-referenced-by-source-idsource_id"><code>Missing env var '{var}' referenced by source id='{source_id}'</code><a class="headerlink" href="#missing-env-var-var-referenced-by-source-idsource_id" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/config/loader.py:107-110</code>. A <code>${VAR}</code> reference has no value in the environment.
+<code>{source_id}</code> is the enclosing source, or <code>None</code> for a reference outside any source block.
+Rendered example:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Missing env var &#39;PG_DSN&#39; referenced by source id=&#39;vuln_db&#39;
+</code></pre></div>
+<p>This is the first thing the shipped <code>examples/quickstart/nautilus.yaml</code> will tell you: it
+references <code>${PG_DSN}</code>. Export it first.</p>
+<h2 id="the-sources-list">The <code>sources</code> list<a class="headerlink" href="#the-sources-list" title="Permanent link">&para;</a></h2>
+<h3 id="config-must-define-a-sources-list"><code>Config must define a 'sources' list</code><a class="headerlink" href="#config-must-define-a-sources-list" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/config/loader.py:141-144</code>. No <code>sources:</code> key, or it is not a list. An empty list is
+accepted — a broker with no sources starts.</p>
+<h3 id="each-source-entry-must-be-a-mapping"><code>Each source entry must be a mapping</code><a class="headerlink" href="#each-source-entry-must-be-a-mapping" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/config/loader.py:149-152</code>. One entry is a bare string or number. A common shape error:
+<code>sources: [postgres]</code> instead of a list of blocks.</p>
+<h3 id="each-source-entry-must-have-a-string-id"><code>Each source entry must have a string 'id'</code><a class="headerlink" href="#each-source-entry-must-have-a-string-id" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/config/loader.py:153-156</code>.</p>
+<h3 id="duplicate-source-idsource_id"><code>Duplicate source id='{source_id}'</code><a class="headerlink" href="#duplicate-source-idsource_id" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/config/loader.py:157</code> and again in <code>nautilus/config/registry.py:28</code>. Source ids key
+routing decisions and scope constraints, so they must be unique.</p>
+<h3 id="source-idsource_id-is-missing-the-required-key-type-one-of-sortedsupported_types"><code>Source id='{source_id}' is missing the required key 'type' (one of: {sorted(supported_types)})</code><a class="headerlink" href="#source-idsource_id-is-missing-the-required-key-type-one-of-sortedsupported_types" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/config/loader.py:161-166</code>. Rendered example:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>Source id=&#39;s1&#39; is missing the required key &#39;type&#39; (one of: [&#39;elasticsearch&#39;, &#39;influxdb&#39;,
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>&#39;llm&#39;, &#39;neo4j&#39;, &#39;pgvector&#39;, &#39;postgres&#39;, &#39;rest&#39;, &#39;s3&#39;, &#39;servicenow&#39;, &#39;static&#39;])
+</code></pre></div>
+<p>The list is the live <code>ADAPTER_REGISTRY</code>, so it grows when you register a custom adapter.</p>
+<h3 id="unsupported-source-typesource_type-for-idsource_id-supported-sortedsupported_types"><code>Unsupported source type='{source_type}' for id='{source_id}' (supported: {sorted(supported_types)})</code><a class="headerlink" href="#unsupported-source-typesource_type-for-idsource_id-supported-sortedsupported_types" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/config/loader.py:167-171</code>. A typo, or a custom adapter that is configured under
+<code>sources:</code> but not registered under <code>adapters:</code>. Also raised later as
+<code>Unsupported source type '{source.type}' for id='{source.id}'</code>
+(<code>nautilus/core/broker.py:1685</code>) when the broker builds the adapter.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>python<span class="w"> </span>-<span class="w"> </span><span class="s">&lt;&lt;&#39;PY&#39;</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="s">import pathlib, tempfile</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="s">from nautilus.config.loader import ConfigError, load_config</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="s">d = pathlib.Path(tempfile.mkdtemp())</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a><span class="s">cases = {</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a><span class="s">  &quot;no-type&quot;:   &quot;sources:\n  - id: s1\n&quot;,</span>
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a><span class="s">  &quot;bad-type&quot;:  &quot;sources:\n  - id: s1\n    type: nope\n&quot;,</span>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="s">  &quot;duplicate&quot;: &quot;sources:\n  - id: s1\n    type: static\n  - id: s1\n    type: static\n&quot;,</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a><span class="s">  &quot;no-sources&quot;: &quot;api: {}\n&quot;,</span>
+<a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a><span class="s">  &quot;not-mapping&quot;: &quot;- 1\n&quot;,</span>
+<a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a><span class="s">  &quot;missing-env&quot;: &quot;sources:\n  - id: s1\n    type: postgres\n    connection: ${NAUTILUS_UNSET}\n&quot;,</span>
+<a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a><span class="s">}</span>
+<a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a><span class="s">for name, text in cases.items():</span>
+<a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a><span class="s">    p = d / f&quot;{name}.yaml&quot;</span>
+<a id="__codelineno-2-15" name="__codelineno-2-15" href="#__codelineno-2-15"></a><span class="s">    p.write_text(text)</span>
+<a id="__codelineno-2-16" name="__codelineno-2-16" href="#__codelineno-2-16"></a><span class="s">    try:</span>
+<a id="__codelineno-2-17" name="__codelineno-2-17" href="#__codelineno-2-17"></a><span class="s">        load_config(str(p))</span>
+<a id="__codelineno-2-18" name="__codelineno-2-18" href="#__codelineno-2-18"></a><span class="s">    except ConfigError as exc:</span>
+<a id="__codelineno-2-19" name="__codelineno-2-19" href="#__codelineno-2-19"></a><span class="s">        print(f&quot;[{name}] {exc}&quot;)</span>
+<a id="__codelineno-2-20" name="__codelineno-2-20" href="#__codelineno-2-20"></a><span class="s">PY</span>
+</code></pre></div>
+<h2 id="config-validation-failed"><code>Config validation failed:</code><a class="headerlink" href="#config-validation-failed" title="Permanent link">&para;</a></h2>
+<p>Two forms, both <code>ConfigError</code>:</p>
+<ul>
+<li><code>Config validation failed:\n{_redacted_errors(exc)}</code> — <code>nautilus/config/loader.py:175-177</code>,
+  one indented <code>path: message [type=...]</code> line per pydantic error, with values redacted so a DSN
+  or a key never lands in a log.</li>
+<li><code>Config validation failed: {exc}</code> — <code>nautilus/config/loader.py:178-179</code>, the fallback.</li>
+</ul>
+<p>Rendered example:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>Config validation failed:
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>  sources.0.classification: Field required [type=missing]
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>  sources.0.data_types: Field required [type=missing]
+</code></pre></div>
+<p>The <code>path</code> is a dotted route into the YAML: <code>sources.0.classification</code> is the <code>classification</code>
+key of the first source. <code>Field required [type=missing]</code> means the key is absent; every source
+needs at least <code>id</code>, <code>type</code>, <code>classification</code> and <code>data_types</code>.</p>
+<h3 id="sourcesiid-string-should-match-pattern-a-za-z0-9a-za-z0-9_-typestring_pattern_mismatch"><code>sources.{i}.id: String should match pattern '^[A-Za-z0-9][A-Za-z0-9._-]*$' [type=string_pattern_mismatch]</code><a class="headerlink" href="#sourcesiid-string-should-match-pattern-a-za-z0-9a-za-z0-9_-typestring_pattern_mismatch" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/config/models.py:147</code>. A source id is letters, digits, <code>.</code>, <code>_</code> and <code>-</code>, starting with
+a letter or a digit. The bound is there because the id is <em>reproduced</em>: it is interpolated into
+application log lines, it becomes the OpenTelemetry span name <code>adapter.&lt;id&gt;</code>, and it is the
+<code>{name}</code> segment of <code>GET /v1/adapters/{name}/schema</code>. A newline in it used to split one log
+record into two, the second reading as a line the broker wrote itself.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>Config validation failed:
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>  sources.0.id: String should match pattern &#39;^[A-Za-z0-9][A-Za-z0-9._-]*$&#39; [type=string_pattern_mismatch]
+</code></pre></div>
+<p>The anchors are exact rather than lenient: a <em>trailing</em> newline is refused too. Rename the source;
+nothing downstream stores the old id except the audit entries already written, which keep it.</p>
+<p>Nautilus's own validators appear here as <code>Value error, &lt;message&gt;</code>:</p>
+<h3 id="source-selfid-has-type-selftype-but-no-required-the-selftype-adapter-requires-it-so-every-request-to-this-source-would-fail-at-runtime"><code>source '{self.id}' has type '{self.type}' but no '{required}'. The {self.type} adapter requires it, so every request to this source would fail at runtime.</code><a class="headerlink" href="#source-selfid-has-type-selftype-but-no-required-the-selftype-adapter-requires-it-so-every-request-to-this-source-would-fail-at-runtime" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/config/models.py:212-217</code>. <code>{required}</code> is the per-type key — <code>table</code> for <code>postgres</code>
+and <code>pgvector</code>, <code>index</code> for <code>elasticsearch</code>, <code>label</code> for <code>neo4j</code>, <code>model</code> for <code>llm</code>.</p>
+<h3 id="source-selfid-has-type-selftype-but-no-connection-the-selftype-adapter-has-nothing-to-dial-so-every-request-to-this-source-would-fail-at-runtime"><code>source '{self.id}' has type '{self.type}' but no 'connection'. The {self.type} adapter has nothing to dial, so every request to this source would fail at runtime.</code><a class="headerlink" href="#source-selfid-has-type-selftype-but-no-connection-the-selftype-adapter-has-nothing-to-dial-so-every-request-to-this-source-would-fail-at-runtime" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/config/models.py:219-223</code>.</p>
+<h3 id="analysismodeanalysismoder-requires-analysisprovider-to-be-set"><code>analysis.mode={analysis.mode!r} requires analysis.provider to be set</code><a class="headerlink" href="#analysismodeanalysismoder-requires-analysisprovider-to-be-set" title="Permanent link">&para;</a></h3>
+<p><strong><code>ConfigError</code></strong>, <code>nautilus/core/broker.py:1471-1475</code>. <code>analysis.mode: llm</code> needs a provider
+block. Either add one, or return to <code>analysis.mode: pattern</code>.</p>
+<h3 id="rkmauto_promoteenabled-auto-promotion-is-not-implemented"><code>rkm.auto_promote.enabled: auto-promotion is not implemented.</code> …<a class="headerlink" href="#rkmauto_promoteenabled-auto-promotion-is-not-implemented" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/config/models.py:701-705</code>. Startup refuses rather than silently ignoring the key. In
+full:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>rkm.auto_promote.enabled: auto-promotion is not implemented. Every proposal routes to the
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>human-review queue (`nautilus rkm queue`, `POST /v1/rkm/queue/{id}/approve`); remove the key
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>or set it to false.
+</code></pre></div>
+<h3 id="classification-labels-are-not-levels-of-the-classification-hierarchy-known-errors"><code>classification labels are not levels of the 'classification' hierarchy ({known}): {errors}</code><a class="headerlink" href="#classification-labels-are-not-levels-of-the-classification-hierarchy-known-errors" title="Permanent link">&para;</a></h3>
+<p><strong><code>ConfigError</code></strong>, <code>nautilus/core/broker.py:690-695</code>. <code>{known}</code> is the configured hierarchy;
+<code>{errors}</code> is a <code>;</code>-joined list naming each offender, in one of three shapes:
+<code>sources['s1'].classification='secret'</code>, <code>agents['analyst'].clearance='secret'</code>, or
+<code>escalation rule 'r1'.resulting_level='secret'</code>.</p>
+<p><strong>Means.</strong> A label was used that the hierarchy does not define, so it could not be ordered
+against any other label. Add the level to the hierarchy, or correct the spelling.</p>
+<p>Auth-related validation errors — <code>proxy_trust</code> without <code>trusted_proxies</code>, malformed CIDRs and
+unknown capabilities — are in <a href="../auth/">auth.md</a>. Session-store validation is in
+<a href="../sessions/">sessions.md</a>.</p>
+<h2 id="custom-adapters-under-adapters">Custom adapters under <code>adapters:</code><a class="headerlink" href="#custom-adapters-under-adapters" title="Permanent link">&para;</a></h2>
+<p>Raised by <code>Broker._load_custom_adapters</code> (<code>nautilus/core/broker.py:404-449</code>). <code>{i}</code> is the index
+in the <code>adapters:</code> list, so <code>adapters[0]:</code> is the first entry.</p>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Cause</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>adapters[{i}]: module_path does not exist or is not a file: {module_path}</code></td>
+<td>Path is wrong or points at a directory. It is resolved relative to the process working directory unless absolute.</td>
+</tr>
+<tr>
+<td><code>adapters[{i}]: cannot import module from {module_path}</code></td>
+<td>Python could not build a module spec — usually not a <code>.py</code> file.</td>
+</tr>
+<tr>
+<td><code>adapters[{i}]: error executing {module_path}: {exc}</code></td>
+<td>The module raised while being imported. <code>{exc}</code> is that exception; a missing third-party import is the usual one.</td>
+</tr>
+<tr>
+<td><code>adapters[{i}]: class '{cfg.class_name}' not found in {module_path}</code></td>
+<td>The module imported but has no such attribute. Check spelling and that the class is at module level.</td>
+</tr>
+<tr>
+<td><code>adapters[{i}]: '{cfg.class_name}' in {module_path} is not a class</code></td>
+<td>The name resolves to a function or an instance.</td>
+</tr>
+<tr>
+<td><code>adapters[{i}]: '{cfg.class_name}' in {module_path} does not implement the Adapter protocol (missing: {gaps})</code></td>
+<td><code>{gaps}</code> names the missing members — <code>connect</code>, <code>execute</code>, <code>close</code>.</td>
+</tr>
+<tr>
+<td><code>adapters[{i}]: declared source_type='{cfg.source_type}' does not match {cfg.class_name}.source_type={actual_type!r} in {module_path}</code></td>
+<td>The <code>source_type</code> in config disagrees with the class attribute. Two names for one adapter is a routing bug waiting to happen.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="source-idsourceid-has-type-sourcetype-whose-driver-is-not-installed-install_extra_hintextra-import-failed"><code>source id='{source.id}' has type '{source.type}', whose driver is not installed -- {install_extra_hint(extra)} (import failed: {…})</code><a class="headerlink" href="#source-idsourceid-has-type-sourcetype-whose-driver-is-not-installed-install_extra_hintextra-import-failed" title="Permanent link">&para;</a></h3>
+<p><strong><code>ConfigError</code></strong>, <code>nautilus/core/broker.py:1692-1697</code>. The source type is built in, but its
+optional driver is not installed, so <code>nautilus.adapters</code> registered a stand-in. The parenthesised
+text is the original <code>ImportError</code>. <code>{install_extra_hint(extra)}</code> names both ways to obtain the
+extra (<a href="../#reading-a-quoted-message">index.md</a>); on the published container image only the
+<code>image:</code> half applies, because there is no <code>pip</code> in it. In full, for a <code>postgres</code> source:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>ERROR: invalid config: source id=&#39;rows&#39; has type &#39;postgres&#39;, whose driver is not installed -- host: pip install &#39;nautilus-rkm[postgres]&#39;; image: docker build --build-arg EXTRAS=&quot;--extra postgres&quot; . (the published image installs --extra otel only, and has no shell or pip to add to it) (import failed: No module named &#39;asyncpg&#39;)
+</code></pre></div>
+<p>Install the extra, rebuild the image with it, or remove the source.</p>
+<h2 id="escalation-packs">Escalation packs<a class="headerlink" href="#escalation-packs" title="Permanent link">&para;</a></h2>
+<h3 id="escalation-pack-yaml_path-must-contain-a-top-level-list-got-typeraw__name__"><code>Escalation pack '{yaml_path}' must contain a top-level list, got {type(raw).__name__}</code><a class="headerlink" href="#escalation-pack-yaml_path-must-contain-a-top-level-list-got-typeraw__name__" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/config/escalation.py:52-56</code>.</p>
+<h3 id="each-escalation-entry-in-yaml_path-must-be-a-mapping"><code>Each escalation entry in '{yaml_path}' must be a mapping</code><a class="headerlink" href="#each-escalation-entry-in-yaml_path-must-be-a-mapping" title="Permanent link">&para;</a></h3>
+<p><code>nautilus/config/escalation.py:58-60</code>.</p>
+<h2 id="what-the-cli-shows">What the CLI shows<a class="headerlink" href="#what-the-cli-shows" title="Permanent link">&para;</a></h2>
+<p><code>nautilus serve</code> wraps the above (<code>nautilus/cli/serve.py:358-407</code>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>ERROR: config path does not exist or is not a file: {config_path}
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a>ERROR: invalid config: {exc}
+<a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a>ERROR: broker construction failed: {exc}
+</code></pre></div>
+<p><code>nautilus config check &lt;path&gt;</code> prints the same three, with the same exit <strong>2</strong>, without starting
+anything: it calls the same function. That is how you read these messages before a deployment
+rather than after one — see
+<a href="../../../how-to/operator-guide/#the-config">Check what you are about to deploy</a>.</p>
+<p>The first is checked before the file is opened; the second wraps <code>ConfigError</code>; the third catches
+everything else raised while wiring the broker. All three exit <strong>2</strong>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>nautilus<span class="w"> </span>serve<span class="w"> </span>--config<span class="w"> </span>/nonexistent/nautilus.yaml<span class="p">;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="s2">&quot;exit=</span><span class="nv">$?</span><span class="s2">&quot;</span>
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

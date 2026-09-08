@@ -1,0 +1,4474 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Policy-first data broker for AI agents">
+      
+      
+      
+        <link rel="canonical" href="https://nautilus.krakn.ai/0.3/how-to/deploying/">
+      
+      
+        <link rel="prev" href="../operator-guide/">
+      
+      
+        <link rel="next" href="../authoring-rules/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Deploying - Nautilus</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#deploying-nautilus" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Nautilus" class="md-header__button md-logo" aria-label="Nautilus" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Nautilus
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Deploying
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/KrakenNet/nautilus" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    KrakenNet/nautilus
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  How-to Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../concepts/" class="md-tabs__link">
+          
+  
+  
+  Concepts
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Nautilus" class="md-nav__button md-logo" aria-label="Nautilus" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Nautilus
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/KrakenNet/nautilus" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    KrakenNet/nautilus
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How-to Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How-to Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../operator-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operator Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deploying
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deploying
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-the-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. The image
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. The image">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#build-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Build it
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#extras-and-what-the-published-image-carries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extras, and what the published image carries
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-path-a-plain-container-runtime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Path A — plain container runtime
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Path A — plain container runtime">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-lay-out-the-host-directories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Lay out the host directories
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-write-the-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Write the config
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-run-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 Run it
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-confirm-it-came-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.4 Confirm it came up
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-path-b-kubernetes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Path B — Kubernetes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Path B — Kubernetes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-make-the-image-reachable-from-the-cluster" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Make the image reachable from the cluster
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-fill-in-the-secrets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Fill in the Secrets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-apply-in-this-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 Apply, in this order
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-confirm-it-came-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.4 Confirm it came up
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Environment variables
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Environment variables">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#serve-flags-the-manifest-passes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        serve flags the manifest passes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-volumes-and-mounts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Volumes and mounts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-probes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Probes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-reaching-the-broker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Reaching the broker
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-replicas-what-actually-breaks-at-two" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Replicas: what actually breaks at two
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-upgrade-and-rollback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Upgrade and rollback
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="9. Upgrade and rollback">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#kubernetes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Kubernetes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Kubernetes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-kubelet-rewrites-the-mount-config-stays-readonly-true" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The kubelet rewrites the mount; /config stays readOnly: true
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#apply-wait-for-the-pods-copy-then-signal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Apply, wait for the pod's copy, then signal
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#container-runtime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Container runtime
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="10. Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-pod-crashloops-immediately" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The pod CrashLoops immediately
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-pod-never-starts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The pod never starts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-pod-runs-but-is-never-ready" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The pod runs but is never Ready
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-pod-restarts-every-couple-of-minutes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The pod restarts every couple of minutes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#requests-fail-after-a-clean-deploy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Requests fail after a clean deploy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#getting-a-shell" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Getting a shell
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-working-inside-a-distroless-container" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Working inside a distroless container
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="11. Working inside a distroless container">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#111-reading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.1 Reading
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#112-probing-the-brokers-own-http-surface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.2 Probing the broker's own HTTP surface
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#113-writing-renaming-and-fixing-permissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.3 Writing, renaming and fixing permissions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#114-what-you-cannot-do-from-inside" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.4 What you cannot do from inside
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#115-when-the-audit-volume-is-missing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.5 When the audit volume is missing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#getting-a-real-shell-next-to-the-container" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Getting a real shell next to the container
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-why-the-manifests-look-like-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Why the manifests look like this
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../authoring-rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authoring Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../developing-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developing Adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hardening/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardening
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../add-a-postgres-source/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add a Postgres Source
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../write-a-routing-rule/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Write a Routing Rule
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../configure-attestation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configure Attestation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../verify-a-token/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verify a Token
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../add-an-llm-source/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add an LLM Source
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../monitor-with-grafana/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Monitor with Grafana
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/trust-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Trust Boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/attestation-chain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Attestation Chain
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/rkm-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RKM Rule Lifecycle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/python-sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python SDK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/rest-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    REST API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/rule-packs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rule Packs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/adapter-sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapter SDK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_7" id="__nav_5_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Errors
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/errors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/errors/auth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials and identity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/errors/session-tokens/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Session tokens
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/errors/sessions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sessions and session store
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/errors/transport/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP transport
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/errors/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration and startup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/errors/adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters and data sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/errors/rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rules, RKM and the engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/errors/attestation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Attestation and keys
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/errors/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command line
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/errors/library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Embedding as a library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_8" id="__nav_5_8_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapter SDK Docs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapter SDK Docs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sdk/docs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sdk/docs/tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sdk/docs/discovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Discovery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sdk/docs/reference/protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sdk/docs/reference/types/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sdk/docs/reference/testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-the-image" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. The image
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. The image">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#build-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Build it
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#extras-and-what-the-published-image-carries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extras, and what the published image carries
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-path-a-plain-container-runtime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Path A — plain container runtime
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Path A — plain container runtime">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-lay-out-the-host-directories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Lay out the host directories
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-write-the-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Write the config
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-run-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 Run it
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-confirm-it-came-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.4 Confirm it came up
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-path-b-kubernetes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Path B — Kubernetes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Path B — Kubernetes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-make-the-image-reachable-from-the-cluster" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Make the image reachable from the cluster
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-fill-in-the-secrets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Fill in the Secrets
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#33-apply-in-this-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.3 Apply, in this order
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#34-confirm-it-came-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.4 Confirm it came up
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Environment variables
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Environment variables">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#serve-flags-the-manifest-passes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        serve flags the manifest passes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-volumes-and-mounts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Volumes and mounts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-probes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Probes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-reaching-the-broker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Reaching the broker
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-replicas-what-actually-breaks-at-two" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Replicas: what actually breaks at two
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-upgrade-and-rollback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Upgrade and rollback
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="9. Upgrade and rollback">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#kubernetes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Kubernetes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Kubernetes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-kubelet-rewrites-the-mount-config-stays-readonly-true" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The kubelet rewrites the mount; /config stays readOnly: true
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#apply-wait-for-the-pods-copy-then-signal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Apply, wait for the pod's copy, then signal
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#container-runtime" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Container runtime
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="10. Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-pod-crashloops-immediately" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The pod CrashLoops immediately
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-pod-never-starts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The pod never starts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-pod-runs-but-is-never-ready" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The pod runs but is never Ready
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-pod-restarts-every-couple-of-minutes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The pod restarts every couple of minutes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#requests-fail-after-a-clean-deploy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Requests fail after a clean deploy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#getting-a-shell" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Getting a shell
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-working-inside-a-distroless-container" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Working inside a distroless container
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="11. Working inside a distroless container">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#111-reading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.1 Reading
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#112-probing-the-brokers-own-http-surface" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.2 Probing the broker's own HTTP surface
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#113-writing-renaming-and-fixing-permissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.3 Writing, renaming and fixing permissions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#114-what-you-cannot-do-from-inside" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.4 What you cannot do from inside
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#115-when-the-audit-volume-is-missing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11.5 When the audit volume is missing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#getting-a-real-shell-next-to-the-container" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Getting a real shell next to the container
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-why-the-manifests-look-like-this" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Why the manifests look like this
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="deploying-nautilus">Deploying Nautilus<a class="headerlink" href="#deploying-nautilus" title="Permanent link">&para;</a></h1>
+<p>Two supported ways to run the broker in production: a plain container runtime
+(<code>docker</code> / <code>podman</code>) and Kubernetes. Both run the same image, the same
+<code>nautilus.yaml</code>, the same four mounts and the same two probes. Pick one; the
+rest of this file — environment, volumes, probes, upgrade, rollback,
+troubleshooting, and <a href="#11-working-inside-a-distroless-container">what to run inside a container with no shell in
+it</a> — applies to both.</p>
+<p>Files in <code>deploy/</code> in the repository:</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Object</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>configmap.yaml</code></td>
+<td>ConfigMap <code>nautilus-config</code></td>
+<td>the broker's <code>nautilus.yaml</code>, mounted at <code>/config</code></td>
+</tr>
+<tr>
+<td><code>secret.yaml</code></td>
+<td>Secret <code>nautilus-secrets</code>, Secret <code>nautilus-attestation-key</code></td>
+<td>the API key, the source DSNs, the Ed25519 signing key</td>
+</tr>
+<tr>
+<td><code>deployment.yaml</code></td>
+<td>Deployment <code>nautilus</code></td>
+<td>one pod, four mounts, two probes</td>
+</tr>
+<tr>
+<td><code>service.yaml</code></td>
+<td>Service <code>nautilus</code></td>
+<td>ClusterIP, port 8000</td>
+</tr>
+</tbody>
+</table>
+<p>None of the manifests set <code>metadata.namespace</code>, so <code>-n &lt;ns&gt;</code> on every command
+decides where they land. Everything below uses <code>-n nautilus</code>.</p>
+<hr />
+<h2 id="1-the-image">1. The image<a class="headerlink" href="#1-the-image" title="Permanent link">&para;</a></h2>
+<p>Built from the repository <code>Dockerfile</code> (repo root), which has three stages:</p>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Base</th>
+<th>Built by default</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>builder</code></td>
+<td><code>ghcr.io/astral-sh/uv:python3.14-bookworm-slim</code></td>
+<td>yes (intermediate)</td>
+<td>resolves <code>uv.lock</code> into <code>/app/.venv</code></td>
+</tr>
+<tr>
+<td><code>debug</code></td>
+<td><code>python:3.14-slim</code></td>
+<td>no — <code>--target debug</code></td>
+<td>same tree, plus <code>bash</code>; operator-local only</td>
+</tr>
+<tr>
+<td><code>runtime</code></td>
+<td><code>gcr.io/distroless/cc-debian13</code></td>
+<td>yes — last stage, so a bare <code>docker build .</code> selects it</td>
+<td>what you ship</td>
+</tr>
+</tbody>
+</table>
+<p>Properties of the <code>runtime</code> image you have to design around:</p>
+<ul>
+<li><strong>No shell, no package manager, no <code>pip</code>.</strong> You cannot install anything into
+  a built image. <code>kubectl exec -it … -- sh</code> will fail with
+  <code>exec: "sh": executable file not found in $PATH</code>. Every operational procedure
+  in this documentation set has a form that works anyway —
+  <a href="#11-working-inside-a-distroless-container">§11</a>. The <code>debug</code> stage is for
+  reproducing a problem on your laptop, not for diagnosing a running pod:
+  swapping the image is a new rollout, so the state you wanted to look at is
+  gone before the shell exists.</li>
+<li><strong><code>ENTRYPOINT ["/app/.venv/bin/python", "-m", "nautilus"]</code></strong>, so any
+  <code>args:</code> / trailing <code>docker run</code> arguments are <code>nautilus</code> subcommand
+  arguments, not a command line.</li>
+<li><strong><code>CMD ["serve", "--config", "/config/nautilus.yaml", "--bind", "0.0.0.0:8000"]</code>.</strong>
+  <code>nautilus serve</code> defaults to <code>127.0.0.1:8000</code>, which inside a container means
+  "serve nobody"; the explicit <code>--bind</code> is what makes the port reachable.</li>
+<li><strong><code>USER 65532:65532</code></strong> (distroless <code>nonroot</code>). Every writable path you mount
+  must be writable by UID 65532.</li>
+<li><strong><code>HEALTHCHECK … CMD ["/app/.venv/bin/python", "-m", "nautilus", "health"]</code></strong>,
+  every 30s, 5s timeout, 10s start period, 3 retries. <code>nautilus health</code> GETs
+  <code>http://localhost:8000/readyz</code> and exits 0 only on HTTP 200.</li>
+<li><strong>No database drivers.</strong> The default build installs <code>--extra otel</code> and
+  nothing else — <a href="#extras-and-what-the-published-image-carries">the extras table</a>
+  is the full list, and it is held against the <code>Dockerfile</code> and against the
+  distributions a built image really has by
+  <code>tests/defects/test_wave_ops14_image_extras.py</code>, so it cannot drift from the
+  image the way a sentence can.</li>
+</ul>
+<h3 id="build-it">Build it<a class="headerlink" href="#build-it" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="nb">cd</span><span class="w"> </span>/path/to/nautilus<span class="w">                      </span><span class="c1"># repository root, where Dockerfile lives</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="c1"># Default image — no adapter drivers. Enough for `type: static` and</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># `type: rest` sources and a sqlite/memory session store.</span>
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>docker<span class="w"> </span>build<span class="w"> </span>-t<span class="w"> </span>nautilus:0.2.6.dev0<span class="w"> </span>.
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a><span class="c1"># What the manifests in `deploy/` need: configmap.yaml declares a</span>
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a><span class="c1"># `postgres` source and `session_store.backend: postgres`, and asyncpg is an</span>
+<a id="__codelineno-0-9" name="__codelineno-0-9" href="#__codelineno-0-9"></a><span class="c1"># optional extra.</span>
+<a id="__codelineno-0-10" name="__codelineno-0-10" href="#__codelineno-0-10"></a>docker<span class="w"> </span>build<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-0-11" name="__codelineno-0-11" href="#__codelineno-0-11"></a><span class="w">  </span>--build-arg<span class="w"> </span><span class="nv">EXTRAS</span><span class="o">=</span><span class="s2">&quot;--extra postgres&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-0-12" name="__codelineno-0-12" href="#__codelineno-0-12"></a><span class="w">  </span>--build-arg<span class="w"> </span><span class="nv">BUILD_REV</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>git<span class="w"> </span>rev-parse<span class="w"> </span>HEAD<span class="k">)$(</span>git<span class="w"> </span>diff<span class="w"> </span>--quiet<span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span>-dirty<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-0-13" name="__codelineno-0-13" href="#__codelineno-0-13"></a><span class="w">  </span>-t<span class="w"> </span>nautilus:0.2.6.dev0-postgres<span class="w"> </span>.
+</code></pre></div>
+<p><code>BUILD_REV</code> is what a running container answers <code>GET /healthz</code> with, and it is
+the only thing that separates two images built from the same release line —
+<code>0.2.6.dev0</code> is shared by every commit between two releases, by design.
+<code>.dockerignore</code> excludes <code>.git/</code>, so no layer can work the revision out for
+itself and it has to be passed in. <strong>Omit it and the image answers
+<code>"build": "unknown"</code></strong> — deliberately, rather than repeating the version and
+looking like a real answer. The build is not refused: an sdist has no revision
+to give.</p>
+<p>This is genuinely build time only. The arg is written into the image and the
+container reads it out of itself, so <code>docker run -e NAUTILUS_BUILD_REV=…</code> does
+not change the answer — it is reported as <code>build_override_ignored</code> on
+<code>GET /healthz</code> and warned about on <code>nautilus version</code>'s stderr, and then
+discarded. Rebuilding is the only way to give an <code>unknown</code> image a revision. The
+same string lands on the image as <code>org.opencontainers.image.revision</code>, so
+<code>docker image inspect</code> can corroborate what the container says.</p>
+<h3 id="extras-and-what-the-published-image-carries">Extras, and what the published image carries<a class="headerlink" href="#extras-and-what-the-published-image-carries" title="Permanent link">&para;</a></h3>
+<p><code>EXTRAS</code> is passed verbatim to <code>uv sync</code>, so any row below can be asked for at
+build time, and rows combine:
+<code>--build-arg EXTRAS="--extra postgres --extra s3"</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Extra</th>
+<th>In the published image</th>
+<th>Distributions it installs</th>
+<th>What needs it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>otel</code></td>
+<td><strong>yes</strong></td>
+<td><code>opentelemetry-sdk</code>, <code>opentelemetry-api</code>, <code>opentelemetry-instrumentation-fastapi</code>, <code>opentelemetry-exporter-otlp-proto-http</code>, <code>opentelemetry-exporter-prometheus</code>, <code>prometheus-client</code></td>
+<td><code>GET /metrics</code>, OTLP export</td>
+</tr>
+<tr>
+<td><code>postgres</code></td>
+<td>no</td>
+<td><code>asyncpg</code></td>
+<td><code>type: postgres</code> sources; <code>session_store.backend: postgres</code></td>
+</tr>
+<tr>
+<td><code>pgvector</code></td>
+<td>no</td>
+<td><code>asyncpg</code>, <code>pgvector</code></td>
+<td><code>type: pgvector</code> sources</td>
+</tr>
+<tr>
+<td><code>elasticsearch</code></td>
+<td>no</td>
+<td><code>elasticsearch</code></td>
+<td><code>type: elasticsearch</code> sources</td>
+</tr>
+<tr>
+<td><code>neo4j</code></td>
+<td>no</td>
+<td><code>neo4j</code></td>
+<td><code>type: neo4j</code> sources</td>
+</tr>
+<tr>
+<td><code>influxdb</code></td>
+<td>no</td>
+<td><code>influxdb-client</code></td>
+<td><code>type: influxdb</code> sources</td>
+</tr>
+<tr>
+<td><code>s3</code></td>
+<td>no</td>
+<td><code>aiobotocore</code></td>
+<td><code>type: s3</code> sources</td>
+</tr>
+<tr>
+<td><code>llm-openai</code></td>
+<td>no</td>
+<td><code>openai</code></td>
+<td><code>analysis.provider.type: openai</code>, and <code>type: local</code> — the local-inference provider speaks the OpenAI wire protocol through that SDK</td>
+</tr>
+<tr>
+<td><code>llm-anthropic</code></td>
+<td>no</td>
+<td><code>anthropic</code></td>
+<td><code>analysis.provider.type: anthropic</code></td>
+</tr>
+<tr>
+<td><code>all</code></td>
+<td>no</td>
+<td><code>asyncpg</code>, <code>pgvector</code>, <code>elasticsearch</code>, <code>neo4j</code>, <code>influxdb-client</code>, <code>aiobotocore</code></td>
+<td>every source driver at once — note it does <strong>not</strong> pull <code>otel</code> or either LLM SDK</td>
+</tr>
+</tbody>
+</table>
+<p>So the published image runs <code>type: static</code>, <code>type: rest</code>, <code>type: servicenow</code>
+and <code>type: llm</code> sources, a <code>memory</code> or <code>sqlite</code> session store, and
+<code>analysis.mode: pattern</code>. Everything else in that table is a rebuild, not a
+configuration change — there is no shell and no <code>pip</code> in the runtime stage, so
+nothing can be added to an image after it is built.</p>
+<p>Skipping this is the single most common first failure — see
+<a href="#the-pod-crashloops-immediately">the driver error</a> below. Every one of those
+failures names the extra it wants and prints the <code>docker build --build-arg</code>
+line that supplies it.</p>
+<p>Verify what you built:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>nautilus:0.2.6.dev0-postgres<span class="w"> </span>version
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="c1"># 0.2.6.dev0</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="c1"># build: 6b2879595e642133a8a04ba184659a8a8389d336-dirty</span>
+</code></pre></div>
+<p>Line 1 is the release line, line 2 the revision, so <code>… version | head -1</code> still
+gives the bare version. On the distroless runtime image this is the only way to
+ask which build you are holding without starting it: there is no shell in it.</p>
+<hr />
+<h2 id="2-path-a-plain-container-runtime">2. Path A — plain container runtime<a class="headerlink" href="#2-path-a-plain-container-runtime" title="Permanent link">&para;</a></h2>
+<p>No Kubernetes. One host, one container, bind mounts instead of volumes.</p>
+<h3 id="21-lay-out-the-host-directories">2.1 Lay out the host directories<a class="headerlink" href="#21-lay-out-the-host-directories" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>sudo<span class="w"> </span>mkdir<span class="w"> </span>-p<span class="w"> </span>/srv/nautilus/<span class="o">{</span>config,keys,state,audit<span class="o">}</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="c1"># The Ed25519 key attestations are signed with. `nautilus key` operates on a</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="c1"># *running* broker&#39;s ring (list / rotate / revoke), so it cannot mint this one.</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>sudo<span class="w"> </span>openssl<span class="w"> </span>genpkey<span class="w"> </span>-algorithm<span class="w"> </span>ed25519<span class="w"> </span>-out<span class="w"> </span>/srv/nautilus/keys/attestation.pem
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>sudo<span class="w"> </span>chmod<span class="w"> </span><span class="m">0400</span><span class="w"> </span>/srv/nautilus/keys/attestation.pem
+<a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>
+<a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a><span class="c1"># The container runs as UID 65532 and writes to state/ and audit/.</span>
+<a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>sudo<span class="w"> </span>chown<span class="w"> </span>-R<span class="w"> </span><span class="m">65532</span>:65532<span class="w"> </span>/srv/nautilus/keys<span class="w"> </span>/srv/nautilus/state<span class="w"> </span>/srv/nautilus/audit
+</code></pre></div>
+<h3 id="22-write-the-config">2.2 Write the config<a class="headerlink" href="#22-write-the-config" title="Permanent link">&para;</a></h3>
+<p>Take it straight out of <code>configmap.yaml</code> — the <code>data["nautilus.yaml"]</code> block is
+a complete config:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="c1"># Run from the repository root. Needs PyYAML on the host (pip install pyyaml);</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="c1"># copying the block out of configmap.yaml by hand and de-indenting it by four</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="c1"># spaces gives the identical file.</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>python3<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;import yaml,sys; sys.stdout.write(yaml.safe_load(open(&quot;deploy/configmap.yaml&quot;))[&quot;data&quot;][&quot;nautilus.yaml&quot;])&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a><span class="w">  </span>&gt;<span class="w"> </span>/tmp/nautilus.yaml
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>sudo<span class="w"> </span>install<span class="w"> </span>-m<span class="w"> </span><span class="m">0444</span><span class="w"> </span>/tmp/nautilus.yaml<span class="w"> </span>/srv/nautilus/config/nautilus.yaml
+</code></pre></div>
+<p>Single-host installs usually do not want a Postgres session store. Swap that
+one block for a durable local one — it survives restarts and needs no server:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="nt">session_store</span><span class="p">:</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span><span class="nt">backend</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sqlite</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span><span class="nt">sqlite_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/var/lib/nautilus/sessions.db</span><span class="w">   </span><span class="c1"># on the writable `state` mount</span>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a><span class="w">  </span><span class="nt">ttl_seconds</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">3600</span>
+</code></pre></div>
+<p>With that change <code>SESSION_DSN</code> is no longer referenced and can be dropped from
+the environment. <code>backend: memory</code> also exists and loses every session — and
+therefore every cumulative exposure total — on restart.</p>
+<h3 id="23-run-it">2.3 Run it<a class="headerlink" href="#23-run-it" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">NAUTILUS_API_KEY</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>openssl<span class="w"> </span>rand<span class="w"> </span>-hex<span class="w"> </span><span class="m">32</span><span class="k">)</span><span class="s2">&quot;</span><span class="w">   </span><span class="c1"># keep it; callers need it</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>docker<span class="w"> </span>run<span class="w"> </span>-d<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a><span class="w">  </span>--name<span class="w"> </span>nautilus<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="w">  </span>--restart<span class="w"> </span>unless-stopped<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a><span class="w">  </span>--user<span class="w"> </span><span class="m">65532</span>:65532<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a><span class="w">  </span>--read-only<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a><span class="w">  </span>--tmpfs<span class="w"> </span>/tmp:rw,noexec,nosuid,size<span class="o">=</span>16m<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-9" name="__codelineno-5-9" href="#__codelineno-5-9"></a><span class="w">  </span>--cap-drop<span class="w"> </span>ALL<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-10" name="__codelineno-5-10" href="#__codelineno-5-10"></a><span class="w">  </span>--security-opt<span class="w"> </span>no-new-privileges<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-11" name="__codelineno-5-11" href="#__codelineno-5-11"></a><span class="w">  </span>-p<span class="w"> </span><span class="m">8000</span>:8000<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-12" name="__codelineno-5-12" href="#__codelineno-5-12"></a><span class="w">  </span>-e<span class="w"> </span>NAUTILUS_API_KEY<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-13" name="__codelineno-5-13" href="#__codelineno-5-13"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">ORDERS_DSN</span><span class="o">=</span><span class="s2">&quot;postgresql://nautilus:secret@10.0.0.5:5432/orders&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-14" name="__codelineno-5-14" href="#__codelineno-5-14"></a><span class="w">  </span>-e<span class="w"> </span><span class="nv">SESSION_DSN</span><span class="o">=</span><span class="s2">&quot;postgresql://nautilus:secret@10.0.0.5:5432/sessions&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-15" name="__codelineno-5-15" href="#__codelineno-5-15"></a><span class="w">  </span>-v<span class="w"> </span>/srv/nautilus/config:/config:ro<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-16" name="__codelineno-5-16" href="#__codelineno-5-16"></a><span class="w">  </span>-v<span class="w"> </span>/srv/nautilus/keys/attestation.pem:/etc/nautilus/keys/attestation.pem:ro<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-17" name="__codelineno-5-17" href="#__codelineno-5-17"></a><span class="w">  </span>-v<span class="w"> </span>/srv/nautilus/state:/var/lib/nautilus<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-18" name="__codelineno-5-18" href="#__codelineno-5-18"></a><span class="w">  </span>-v<span class="w"> </span>/srv/nautilus/audit:/var/log/nautilus<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-19" name="__codelineno-5-19" href="#__codelineno-5-19"></a><span class="w">  </span>nautilus:0.2.6.dev0-postgres<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-5-20" name="__codelineno-5-20" href="#__codelineno-5-20"></a><span class="w">  </span>serve<span class="w"> </span>--config<span class="w"> </span>/config/nautilus.yaml<span class="w"> </span>--bind<span class="w"> </span><span class="m">0</span>.0.0.0:8000<span class="w"> </span>--log-format<span class="w"> </span>json
+</code></pre></div>
+<p>Notes on the flags that are not obvious:</p>
+<ul>
+<li><code>--read-only</code> mirrors the Kubernetes <code>readOnlyRootFilesystem: true</code>. The four
+  bind mounts are the only paths the broker writes.</li>
+<li><strong><code>-v /srv/nautilus/config:/config:ro</code> mounts the config <em>directory</em>, not the
+  config file</strong>, which is what the ConfigMap volume in <code>deployment.yaml</code> does
+  too. A file bind mount binds an <em>inode</em>: rewriting the host file in place
+  reaches the container, but <em>replacing</em> it does not, and every editor,
+  <code>sed -i</code>, and every atomic writer replaces. The container then reads the old
+  inode for the life of the container and the <a href="#9-upgrade-and-rollback"><code>SIGHUP</code> reload</a>
+  re-reads bytes that never changed. Two containers on one host directory — one
+  mounting the file, one mounting the directory — after a single <code>mv</code> replaced
+  that file with a copy saying <code>generation 2</code>:</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="gp">$ </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>by-file<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;print(open(&#39;/config/nautilus.yaml&#39;).read(), end=&#39;&#39;)&quot;</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="go">sources: []   # generation 1</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="gp">$ </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>by-dir<span class="w">  </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;print(open(&#39;/config/nautilus.yaml&#39;).read(), end=&#39;&#39;)&quot;</span>
+<a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a><span class="go">sources: []   # generation 2</span>
+</code></pre></div>
+<p><code>install</code>, <code>cp</code> and a shell redirect all rewrite in place, so §2.2's
+  <code>sudo install -m 0444 …</code> carries through a file mount as well. Mounting the
+  directory means you do not have to remember which is which.
+- <code>--tmpfs /tmp</code> is needed only if you pass <code>--air-gapped</code>, which rewrites the
+  config through <code>tempfile.NamedTemporaryFile</code>. Harmless otherwise.
+- The trailing <code>serve …</code> replaces the image <code>CMD</code>; the <code>ENTRYPOINT</code> still
+  supplies <code>python -m nautilus</code>.
+- <code>-p 8000:8000</code> maps host 8000 to the container's 8000. Change only the left
+  half; the right half must match <code>--bind</code>.</p>
+<h3 id="24-confirm-it-came-up">2.4 Confirm it came up<a class="headerlink" href="#24-confirm-it-came-up" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>docker<span class="w"> </span>ps<span class="w"> </span>--filter<span class="w"> </span><span class="nv">name</span><span class="o">=</span>nautilus<span class="w"> </span>--format<span class="w"> </span><span class="s1">&#39;{{.Names}}\t{{.Status}}&#39;</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1"># nautilus  Up 42 seconds (healthy)</span>
+</code></pre></div>
+<p><code>(healthy)</code> is the image's own <code>HEALTHCHECK</code> reporting a 200 from <code>/readyz</code>.
+<code>(unhealthy)</code> after ~40s means readiness never went green — go to
+<a href="#10-troubleshooting">§10 Troubleshooting</a>.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>curl<span class="w"> </span>-fsS<span class="w"> </span>localhost:8000/healthz<span class="p">;</span><span class="w">  </span><span class="nb">echo</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="c1"># {&quot;status&quot;:&quot;ok&quot;,&quot;version&quot;:&quot;0.2.6.dev0&quot;,&quot;build&quot;:&quot;6b2879595e642133a8a04ba184659a8a8389d336-dirty&quot;}</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>curl<span class="w"> </span>-fsS<span class="w"> </span>localhost:8000/readyz<span class="p">;</span><span class="w">   </span><span class="nb">echo</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a><span class="c1"># {&quot;status&quot;:&quot;ok&quot;}</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>
+<a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>docker<span class="w"> </span>logs<span class="w"> </span>nautilus<span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-5
+<a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a><span class="c1"># {&quot;levelname&quot;: &quot;INFO&quot;, &quot;name&quot;: &quot;uvicorn.error&quot;, &quot;message&quot;: &quot;Application startup complete.&quot;}</span>
+<a id="__codelineno-8-9" name="__codelineno-8-9" href="#__codelineno-8-9"></a><span class="c1"># {&quot;levelname&quot;: &quot;INFO&quot;, &quot;name&quot;: &quot;uvicorn.error&quot;, &quot;message&quot;: &quot;Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)&quot;}</span>
+</code></pre></div>
+<p>(<code>--log-format json</code> produces those one-JSON-object-per-line records; drop it
+or pass <code>--log-format text</code> for human-readable logs.)</p>
+<p>Then the real thing — <a href="#7-reaching-the-broker">§7 Reaching it</a>.</p>
+<hr />
+<h2 id="3-path-b-kubernetes">3. Path B — Kubernetes<a class="headerlink" href="#3-path-b-kubernetes" title="Permanent link">&para;</a></h2>
+<h3 id="31-make-the-image-reachable-from-the-cluster">3.1 Make the image reachable from the cluster<a class="headerlink" href="#31-make-the-image-reachable-from-the-cluster" title="Permanent link">&para;</a></h3>
+<p><code>deployment.yaml</code> sets <code>imagePullPolicy: IfNotPresent</code> and an image with no
+registry prefix, so the tag has to already exist on the node. Pick one:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="c1"># kind</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>kind<span class="w"> </span>load<span class="w"> </span>docker-image<span class="w"> </span>nautilus:0.2.6.dev0-postgres<span class="w"> </span>--name<span class="w"> </span>&lt;cluster&gt;
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="c1"># minikube</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>minikube<span class="w"> </span>image<span class="w"> </span>load<span class="w"> </span>nautilus:0.2.6.dev0-postgres
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>
+<a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="c1"># a real cluster: push, then edit deployment.yaml&#39;s `image:` to match</span>
+<a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a>docker<span class="w"> </span>tag<span class="w"> </span>nautilus:0.2.6.dev0-postgres<span class="w"> </span>registry.example.com/nautilus:0.2.6.dev0-postgres
+<a id="__codelineno-9-9" name="__codelineno-9-9" href="#__codelineno-9-9"></a>docker<span class="w"> </span>push<span class="w"> </span>registry.example.com/nautilus:0.2.6.dev0-postgres
+</code></pre></div>
+<h3 id="32-fill-in-the-secrets">3.2 Fill in the Secrets<a class="headerlink" href="#32-fill-in-the-secrets" title="Permanent link">&para;</a></h3>
+<p><code>secret.yaml</code> ships placeholders (<code>replace-me</code>) and is a <em>shape</em>, not a store —
+<code>stringData</code> is plaintext. Generate real values and create the Secrets outside
+git:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>kubectl<span class="w"> </span>create<span class="w"> </span>namespace<span class="w"> </span>nautilus
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>nautilus-secrets<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">NAUTILUS_API_KEY</span><span class="o">=</span><span class="s2">&quot;</span><span class="k">$(</span>openssl<span class="w"> </span>rand<span class="w"> </span>-hex<span class="w"> </span><span class="m">32</span><span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">ORDERS_DSN</span><span class="o">=</span><span class="s1">&#39;postgresql://nautilus:secret@postgres:5432/orders&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="w">  </span>--from-literal<span class="o">=</span><span class="nv">SESSION_DSN</span><span class="o">=</span><span class="s1">&#39;postgresql://nautilus:secret@postgres:5432/sessions&#39;</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a>openssl<span class="w"> </span>genpkey<span class="w"> </span>-algorithm<span class="w"> </span>ed25519<span class="w"> </span>-out<span class="w"> </span>attestation.pem
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>create<span class="w"> </span>secret<span class="w"> </span>generic<span class="w"> </span>nautilus-attestation-key<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-10-10" name="__codelineno-10-10" href="#__codelineno-10-10"></a><span class="w">  </span>--from-file<span class="o">=</span>attestation.pem<span class="o">=</span>./attestation.pem
+<a id="__codelineno-10-11" name="__codelineno-10-11" href="#__codelineno-10-11"></a>rm<span class="w"> </span>attestation.pem
+</code></pre></div>
+<p>If you would rather keep the manifest, replace every <code>replace-me</code> in
+<code>secret.yaml</code> and run it through sealed-secrets / External Secrets / SOPS
+before committing anything.</p>
+<h3 id="33-apply-in-this-order">3.3 Apply, in this order<a class="headerlink" href="#33-apply-in-this-order" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>deploy/configmap.yaml
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>deploy/secret.yaml<span class="w">      </span><span class="c1"># skip if you used `create secret` above</span>
+<a id="__codelineno-11-3" name="__codelineno-11-3" href="#__codelineno-11-3"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>deploy/deployment.yaml
+<a id="__codelineno-11-4" name="__codelineno-11-4" href="#__codelineno-11-4"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>deploy/service.yaml
+</code></pre></div>
+<p><code>kubectl apply -f deploy/</code> applies all four at once and is fine — the pod
+restarts on its own if the ConfigMap or Secret lands a moment later.</p>
+<h3 id="34-confirm-it-came-up">3.4 Confirm it came up<a class="headerlink" href="#34-confirm-it-came-up" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deployment/nautilus<span class="w"> </span>--timeout<span class="o">=</span>180s
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># Waiting for deployment &quot;nautilus&quot; rollout to finish: 0 of 1 updated replicas are available...</span>
+<a id="__codelineno-12-3" name="__codelineno-12-3" href="#__codelineno-12-3"></a><span class="c1"># deployment &quot;nautilus&quot; successfully rolled out</span>
+<a id="__codelineno-12-4" name="__codelineno-12-4" href="#__codelineno-12-4"></a>
+<a id="__codelineno-12-5" name="__codelineno-12-5" href="#__codelineno-12-5"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>nautilus
+<a id="__codelineno-12-6" name="__codelineno-12-6" href="#__codelineno-12-6"></a><span class="c1"># NAME                        READY   STATUS    RESTARTS   AGE</span>
+<a id="__codelineno-12-7" name="__codelineno-12-7" href="#__codelineno-12-7"></a><span class="c1"># nautilus-7d9c5f4b8c-2xk4p   1/1     Running   0          38s</span>
+</code></pre></div>
+<p><code>READY 1/1</code> means <code>/readyz</code> returned 200. <code>0/1</code> with <code>STATUS Running</code> means the
+process is alive and readiness is failing — read the probe body, not the pod
+list:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>deploy/nautilus<span class="w"> </span>--<span class="w"> </span>/app/.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>nautilus<span class="w"> </span>health
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="c1"># OK 200 http://localhost:8000/readyz</span>
+</code></pre></div>
+<p>(That works on the distroless image because it invokes the interpreter
+directly. <code>-- sh -c …</code> does not; there is no shell.)</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>port-forward<span class="w"> </span>svc/nautilus<span class="w"> </span><span class="m">8000</span>:8000<span class="w"> </span><span class="p">&amp;</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>curl<span class="w"> </span>-fsS<span class="w"> </span>localhost:8000/readyz<span class="p">;</span><span class="w"> </span><span class="nb">echo</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="c1"># {&quot;status&quot;:&quot;ok&quot;}</span>
+</code></pre></div>
+<hr />
+<h2 id="4-environment-variables">4. Environment variables<a class="headerlink" href="#4-environment-variables" title="Permanent link">&para;</a></h2>
+<p>Everything the container reads. <code>envFrom.secretRef: nautilus-secrets</code> injects
+the whole Secret, so every key you put in that Secret becomes an environment
+variable; only the ones a <code>${VAR}</code> in <code>nautilus.yaml</code> references are actually
+used. A <code>${VAR}</code> with no matching variable is a <strong>startup failure</strong>, not a
+warning: <code>nautilus/config/loader.py</code> raises
+<code>Missing env var 'X' referenced by source id='…'</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Required</th>
+<th>Read by</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>NAUTILUS_API_KEY</code></td>
+<td>yes, as shipped</td>
+<td><code>${NAUTILUS_API_KEY}</code> in <code>api.keys</code></td>
+<td>the value callers send as <code>X-API-Key</code>. Generate: <code>openssl rand -hex 32</code>. An empty <code>api.keys</code> fails closed — every data and governance route answers 401</td>
+</tr>
+<tr>
+<td><code>ORDERS_DSN</code></td>
+<td>yes, as shipped</td>
+<td><code>${ORDERS_DSN}</code> in <code>sources[0].connection</code></td>
+<td>Postgres DSN for the <code>orders</code> source. Rename/remove it with the source</td>
+</tr>
+<tr>
+<td><code>SESSION_DSN</code></td>
+<td>yes, as shipped</td>
+<td><code>${SESSION_DSN}</code> in <code>session_store.dsn</code></td>
+<td>Postgres DSN for the session store. Unused if you set <code>backend: sqlite</code></td>
+</tr>
+<tr>
+<td><code>OTEL_EXPORTER_OTLP_ENDPOINT</code></td>
+<td>no</td>
+<td><code>nautilus/observability/instrumentation.py</code></td>
+<td>turns <strong>trace export</strong> on. Unset, the broker still creates spans and still serves every <code>nautilus_*</code> series on <code>/metrics</code> — it just exports nothing. e.g. <code>http://otel-collector.observability:4318</code></td>
+</tr>
+<tr>
+<td><code>OTEL_EXPORTER_OTLP_TRACES_ENDPOINT</code></td>
+<td>no</td>
+<td>same</td>
+<td>traces-only variant; either one enables the exporter</td>
+</tr>
+<tr>
+<td><code>OTEL_SDK_DISABLED</code></td>
+<td>no</td>
+<td><code>nautilus/observability/__init__.py</code></td>
+<td><code>true</code> skips instrumentation entirely. This also removes the Prometheus reader, so <code>/metrics</code> loses every <code>nautilus_*</code> series. Use the endpoint variables to control export instead</td>
+</tr>
+<tr>
+<td><code>OTEL_PYTHON_FASTAPI_EXCLUDED_URLS</code></td>
+<td>no</td>
+<td>same file</td>
+<td>defaulted to <code>/healthz,/readyz</code> so probes are not traced. Override to trace them</td>
+</tr>
+<tr>
+<td><code>TEST_PG_DSN</code></td>
+<td>no</td>
+<td><code>nautilus/core/broker.py</code></td>
+<td>fallback for <code>session_store.dsn</code> when <code>backend: postgres</code> and no <code>dsn</code> is set. Prefer <code>dsn: ${SESSION_DSN}</code></td>
+</tr>
+<tr>
+<td><code>INFLUXDB_V2_TOKEN</code>, <code>INFLUXDB_V2_ORG</code></td>
+<td>only with an <code>influxdb</code> source</td>
+<td><code>nautilus/adapters/influxdb.py</code></td>
+<td>token/org when the source config carries no <code>auth_token</code></td>
+</tr>
+<tr>
+<td><code>NAUTILUS_REVIEWER</code></td>
+<td>no</td>
+<td><code>nautilus/cli/_common.py</code></td>
+<td>identity stamped on <code>nautilus rkm</code> approvals. Irrelevant to <code>serve</code></td>
+</tr>
+<tr>
+<td><code>PYTHONPATH=/app</code>, <code>PATH=/app/.venv/bin:$PATH</code>, <code>PYTHONDONTWRITEBYTECODE=1</code>, <code>PYTHONUNBUFFERED=1</code></td>
+<td>baked in</td>
+<td><code>Dockerfile</code> <code>runtime</code> stage</td>
+<td>do not override. <code>PYTHONDONTWRITEBYTECODE</code> is what makes a read-only root filesystem work; <code>PYTHONUNBUFFERED</code> is what makes logs appear before a crash</td>
+</tr>
+</tbody>
+</table>
+<p>An LLM analysis provider reads whatever variable <code>analysis.provider.api_key_env</code>
+names (<code>nautilus/analysis/llm/*_provider.py</code>) — nothing is read unless you
+configure one.</p>
+<h3 id="serve-flags-the-manifest-passes"><code>serve</code> flags the manifest passes<a class="headerlink" href="#serve-flags-the-manifest-passes" title="Permanent link">&para;</a></h3>
+<p><code>deployment.yaml</code> sets
+<code>args: ["serve", "--config", "/config/nautilus.yaml", "--bind", "0.0.0.0:8000", "--log-format", "json"]</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Default</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--config</code></td>
+<td><code>./nautilus.yaml</code></td>
+<td>must match the ConfigMap mount path</td>
+</tr>
+<tr>
+<td><code>--bind HOST:PORT</code></td>
+<td><code>api.host</code>/<code>api.port</code> from the config, else <code>127.0.0.1:8000</code></td>
+<td>overrides the config. Must be <code>0.0.0.0</code> in a container</td>
+</tr>
+<tr>
+<td><code>--log-format</code></td>
+<td><code>text</code></td>
+<td><code>json</code> for SIEM-ingestable lines on stdout</td>
+</tr>
+<tr>
+<td><code>--transport</code></td>
+<td><code>rest</code></td>
+<td><code>mcp</code> or <code>both</code>; with <code>both</code> and <code>--mcp-mode http</code>, MCP binds <code>PORT + 1</code> (8001) — add a second <code>containerPort</code> and Service port for it</td>
+</tr>
+<tr>
+<td><code>--mcp-mode</code></td>
+<td><code>stdio</code></td>
+<td><code>http</code> when serving MCP over a socket</td>
+</tr>
+<tr>
+<td><code>--air-gapped</code></td>
+<td>off</td>
+<td>forces <code>analysis.mode: pattern</code> and drops non-loopback <code>type: llm</code> sources, printing a <code>WARN:</code> line per override</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="5-volumes-and-mounts">5. Volumes and mounts<a class="headerlink" href="#5-volumes-and-mounts" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Mount path</th>
+<th>Volume</th>
+<th>Source</th>
+<th>Mode</th>
+<th>What it holds</th>
+<th>What happens without it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/config</code></td>
+<td><code>config</code></td>
+<td>ConfigMap <code>nautilus-config</code></td>
+<td>read-only</td>
+<td><code>nautilus.yaml</code></td>
+<td><code>ERROR: config path does not exist or is not a file: /config/nautilus.yaml</code>, exit 2, CrashLoopBackOff</td>
+</tr>
+<tr>
+<td><code>/etc/nautilus/keys</code></td>
+<td><code>attestation-key</code></td>
+<td>Secret <code>nautilus-attestation-key</code></td>
+<td>read-only</td>
+<td><code>attestation.pem</code>, the Ed25519 key from <code>attestation.private_key_path</code></td>
+<td><code>ERROR: broker construction failed: [Errno 2] No such file or directory: '/etc/nautilus/keys/attestation.pem'</code>, exit 2 — <code>attestation.enabled: true</code> reads the key at construction</td>
+</tr>
+<tr>
+<td><code>/var/lib/nautilus</code></td>
+<td><code>state</code></td>
+<td><code>emptyDir</code>, <code>sizeLimit: 512Mi</code></td>
+<td><strong>read-write</strong></td>
+<td><code>keyring.json</code> (<code>session_tokens.key_ring_path</code>) and the schema-drift baselines (<code>state_dir</code>)</td>
+<td>the broker tries to write under the read-only <code>/config</code> mount and under a <code>readOnlyRootFilesystem</code>; session tokens cannot be signed</td>
+</tr>
+<tr>
+<td><code>/var/log/nautilus</code></td>
+<td><code>audit</code></td>
+<td><code>emptyDir</code>, <code>sizeLimit: 2Gi</code></td>
+<td><strong>read-write</strong></td>
+<td><code>audit.jsonl</code> (<code>audit.path</code>) — one line per decision</td>
+<td>startup refuses, exit 2, before anything binds: <code>ERROR: broker construction failed: cannot open the audit log directory /var/log/nautilus</code>. The pod crash-loops rather than serving unrecorded requests, and there is no <code>/readyz</code> to ask (<a href="#115-when-the-audit-volume-is-missing">§11.5</a>)</td>
+</tr>
+</tbody>
+</table>
+<p>Both writable volumes are <code>emptyDir</code>, which means <strong>their contents die with the
+pod</strong>. That is deliberate for an example you can apply anywhere, and wrong for
+anything you rely on:</p>
+<ul>
+<li><code>audit</code> — the record of every decision the broker made. Replace with a
+  PersistentVolumeClaim, or ship the lines to a collector (a sidecar tailing
+  <code>/var/log/nautilus/audit.jsonl</code> works, since the mount is shareable).</li>
+<li><code>state</code> — losing <code>keyring.json</code> invalidates every session token already
+  issued: the next request presenting one fails the session-provenance gate
+  closed. Losing the drift baselines just makes the next schema comparison
+  re-learn from scratch.</li>
+</ul>
+<p>Keep each <code>emptyDir</code> <code>sizeLimit</code> at or under <code>resources.limits.ephemeral-storage</code>
+(4Gi). <code>emptyDir</code> counts against the pod's ephemeral storage; exceeding the pod
+limit evicts the pod, exceeding the node's free space is a node condition and
+evicts the neighbours too.</p>
+<hr />
+<h2 id="6-probes">6. Probes<a class="headerlink" href="#6-probes" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Liveness</th>
+<th>Readiness</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Endpoint</td>
+<td><code>GET /healthz</code></td>
+<td><code>GET /readyz</code></td>
+</tr>
+<tr>
+<td>Healthy</td>
+<td><code>200 {"status":"ok","version":"…","build":"…"}</code> — see <a href="../../reference/rest-api/#get-healthz"><code>GET /healthz</code></a> for what the two identifiers mean</td>
+<td><code>200 {"status":"ok"}</code></td>
+</tr>
+<tr>
+<td>Checks</td>
+<td>nothing — the process answers, therefore it is alive</td>
+<td>startup completed, <strong>and</strong> the audit sink is writable, <strong>and</strong> the session store answers a sentinel read on <code>_ready_probe_</code>, <strong>and</strong> the store's schema stamp still matches this build</td>
+</tr>
+<tr>
+<td><code>initialDelaySeconds</code></td>
+<td>5</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>periodSeconds</code></td>
+<td>30</td>
+<td>10</td>
+</tr>
+<tr>
+<td><code>timeoutSeconds</code></td>
+<td>3</td>
+<td>5</td>
+</tr>
+<tr>
+<td><code>failureThreshold</code></td>
+<td>3</td>
+<td>3</td>
+</tr>
+<tr>
+<td>On failure</td>
+<td>container restarted after ~95s of failures</td>
+<td>pod removed from the Service's endpoints; the container keeps running</td>
+</tr>
+<tr>
+<td>Auth</td>
+<td>none — <code>/healthz</code>, <code>/readyz</code> and <code>/metrics</code> are the only ungated paths</td>
+<td>none</td>
+</tr>
+</tbody>
+</table>
+<p><code>timeoutSeconds: 5</code> on readiness is not padding: <code>/readyz</code> budgets 2.0s
+(<code>_READY_PROBE_TIMEOUT_S</code>) for the sentinel read and another 2.0s for the
+schema re-check. The kubelet's default <code>timeoutSeconds</code> is <strong>1</strong>, so a merely
+slow store read as a hard failure and drained a pod that was fine.</p>
+<p>The 503 bodies, verbatim, and what each means:</p>
+<table>
+<thead>
+<tr>
+<th>Body</th>
+<th>Cause</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>{"status":"not_ready","reason":"startup_incomplete"}</code></td>
+<td>the ASGI lifespan has not finished — normal for the first seconds, permanent means startup is stuck</td>
+<td><code>kubectl logs</code> for the last line before it stopped</td>
+</tr>
+<tr>
+<td><code>{"status":"not_ready","reason":"audit log directory /var/log/nautilus does not exist"}</code></td>
+<td>the audit directory was there at startup and is gone now — a volume detached under a running pod</td>
+<td>re-apply <code>deployment.yaml</code>. A volumeMount that was <strong>never</strong> there does not reach this probe: startup refuses first, exit 2, with <code>ERROR: broker construction failed: cannot open the audit log directory /var/log/nautilus</code> and no port bound, so there is no <code>/readyz</code> to ask (<a href="#115-when-the-audit-volume-is-missing">§11.5</a>)</td>
+</tr>
+<tr>
+<td><code>{"status":"not_ready","reason":"audit log directory /var/log/nautilus is not writable"}</code></td>
+<td>the volume is not writable by UID 65532</td>
+<td><code>fsGroup: 65532</code> in the pod securityContext; on the docker path, <code>sudo chown -R 65532:65532 /srv/nautilus/audit</code> <strong>on the host</strong> (<a href="#21-lay-out-the-host-directories">§2.1</a>) — there is no <code>chown</code> inside the container, and no capability that would give you one (<a href="#114-what-you-cannot-do-from-inside">§11.4</a>)</td>
+</tr>
+<tr>
+<td><code>{"status":"not_ready","reason":"audit log /var/log/nautilus/audit.jsonl is not writable"}</code></td>
+<td>the file exists with wrong mode or wrong ownership — usually a volume first written by a root-run container</td>
+<td>if UID 65532 owns it, <code>os.chmod</code> from inside fixes it in place; if it does not, rename it aside and let the broker create a new one. Both, measured, in <a href="#113-writing-renaming-and-fixing-permissions">§11.3</a></td>
+</tr>
+<tr>
+<td><code>{"status":"not_ready","reason":"session_store_timeout"}</code></td>
+<td>the store did not answer within 2.0s</td>
+<td>Postgres is overloaded or the network path is broken; check <code>pool_max_size</code> (default 10) against your in-flight request count</td>
+</tr>
+<tr>
+<td><code>{"status":"not_ready","reason":"SessionStoreUnavailableError"}</code></td>
+<td><code>on_failure: fail_closed</code> and Postgres is unreachable</td>
+<td>fix <code>SESSION_DSN</code> / the database. This is the intended behaviour: no session store means no cumulative exposure accounting</td>
+</tr>
+<tr>
+<td><code>{"status":"not_ready","reason":"SessionSchemaError"}</code></td>
+<td>another Nautilus migrated the shared store to a schema version this build does not understand</td>
+<td>finish or roll back the other rollout; <code>nautilus session version --dsn "$SESSION_DSN"</code> prints what is on disk</td>
+</tr>
+</tbody>
+</table>
+<p>Any other exception class name can appear in <code>reason</code> — it is
+<code>type(exc).__name__</code> for whatever the store raised.</p>
+<p>Neither probe is a startup probe. The liveness <code>initialDelaySeconds: 5</code> plus
+<code>3 × 30s</code> gives the broker ~95 seconds to open its Postgres pool and run its
+<code>CREATE TABLE IF NOT EXISTS</code> DDL before the kubelet restarts it. If your
+database is slower than that to accept connections at cold start, raise
+<code>failureThreshold</code> on the liveness probe rather than the delay.</p>
+<hr />
+<h2 id="7-reaching-the-broker">7. Reaching the broker<a class="headerlink" href="#7-reaching-the-broker" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Where you are</th>
+<th>Address</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>another pod, same namespace</td>
+<td><code>http://nautilus:8000</code></td>
+</tr>
+<tr>
+<td>another pod, another namespace</td>
+<td><code>http://nautilus.nautilus.svc.cluster.local:8000</code></td>
+</tr>
+<tr>
+<td>your laptop, via Kubernetes</td>
+<td><code>kubectl -n nautilus port-forward svc/nautilus 8000:8000</code> → <code>http://localhost:8000</code></td>
+</tr>
+<tr>
+<td>your laptop, docker path</td>
+<td><code>http://localhost:8000</code> (the <code>-p 8000:8000</code> mapping)</td>
+</tr>
+</tbody>
+</table>
+<p>The Service is <code>type: ClusterIP</code> — deliberately not internet-facing. To expose
+it, put an Ingress or a Gateway in front and terminate TLS there; the broker
+speaks plain HTTP. If you front it with a proxy that authenticates users, set
+<code>api.auth.mode: proxy_trust</code> and <code>api.auth.trusted_proxies</code> so
+<code>X-Forwarded-User</code> is honoured only from that proxy — otherwise anyone who can
+reach the pod can set the header.</p>
+<p><code>service.yaml</code> maps <code>port: 8000</code> → <code>targetPort: http</code>, the <em>named</em> container
+port. Changing the container's port name breaks the Service silently
+(endpoints stay empty); changing <code>containerPort: 8000</code> without changing
+<code>--bind</code> breaks nothing at all, because the number in <code>--bind</code> is what the
+process actually listens on.</p>
+<p>The one request that proves the whole path works:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>curl<span class="w"> </span>-sS<span class="w"> </span>-H<span class="w"> </span><span class="s2">&quot;X-API-Key: </span><span class="nv">$NAUTILUS_API_KEY</span><span class="s2">&quot;</span><span class="w"> </span>-H<span class="w"> </span><span class="s1">&#39;Content-Type: application/json&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="w">  </span>-X<span class="w"> </span>POST<span class="w"> </span>localhost:8000/v1/request<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="w">  </span>-d<span class="w"> </span><span class="s1">&#39;{&quot;agent_id&quot;: &quot;support-bot&quot;, &quot;intent&quot;: &quot;recent orders&quot;, &quot;context&quot;: {&quot;purpose&quot;: &quot;support&quot;}}&#39;</span>
+</code></pre></div>
+<ul>
+<li><code>agent_id</code> must exist in the ConfigMap's <code>agents:</code> block — <code>support-bot</code> is
+  the one it ships.</li>
+<li><code>context.purpose</code> must be in that agent's <code>allowed_purposes</code> <strong>and</strong> the
+  source's — <code>support</code> is in both.</li>
+<li><code>Content-Type: application/json</code> is mandatory. Without it curl sends
+  <code>application/x-www-form-urlencoded</code> and <code>/v1/request</code> answers <code>422</code>.</li>
+<li>The body is validated with <code>extra="forbid"</code>: <code>session_id</code>, <code>purpose</code> and
+  <code>clearance</code> go <strong>inside</strong> <code>context</code>, and sending them at the top level is a
+  422, not a silent drop.</li>
+</ul>
+<p>A successful response is JSON with <code>request_id</code>, <code>data</code> (rows keyed by source
+id), <code>sources_queried</code>, <code>sources_denied</code>, <code>denial_records</code>, <code>rule_trace</code>,
+<code>scope_restrictions</code>, <code>attestation_token</code> and <code>duration_ms</code>. An empty
+<code>data</code> with a populated <code>denial_records</code> is a working broker refusing — read
+the <code>reason</code> and the rule id in each record.</p>
+<p>Other responses you will see from a correctly deployed broker:</p>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Body</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>401</td>
+<td><code>{"detail":"API key required"}</code></td>
+<td><code>api.keys</code> is empty — the broker fails closed</td>
+</tr>
+<tr>
+<td>401</td>
+<td><code>{"detail":"Invalid API key"}</code></td>
+<td><code>X-API-Key</code> does not match any configured key</td>
+</tr>
+<tr>
+<td>403</td>
+<td><code>{"detail":"…"}</code></td>
+<td>the policy refused; the detail names the rule</td>
+</tr>
+<tr>
+<td>413</td>
+<td><code>{"detail":"Request body is N bytes; this broker accepts at most 1048576 (api.max_request_bytes)."}</code></td>
+<td>raise <code>api.max_request_bytes</code></td>
+</tr>
+<tr>
+<td>503</td>
+<td><code>{"detail":"Broker busy: 64 requests are already in flight (api.max_concurrent_requests). Retry."}</code></td>
+<td>with <code>Retry-After: 1</code>. Saturation, not failure — the broker refuses rather than growing a queue behind the limit</td>
+</tr>
+</tbody>
+</table>
+<p><code>GET /metrics</code> (ungated) serves the Prometheus text format, including every
+<code>nautilus_*</code> series. <code>GET /v1/sources</code> lists source metadata the caller's
+clearance permits — never a DSN.</p>
+<hr />
+<h2 id="8-replicas-what-actually-breaks-at-two">8. Replicas: what actually breaks at two<a class="headerlink" href="#8-replicas-what-actually-breaks-at-two" title="Permanent link">&para;</a></h2>
+<p><code>replicas: 1</code>, and <code>strategy: Recreate</code> so a rolling update does not
+transiently produce a second pod. Both are load-bearing. With
+<code>replicas: 2</code> and the manifests exactly as shipped:</p>
+<ol>
+<li><strong>Session tokens stop verifying.</strong> <code>session_tokens.key_ring_path</code> is
+   <code>/var/lib/nautilus/keyring.json</code> on an <code>emptyDir</code>, so each pod mints its own
+   Ed25519 ring on first boot. A token signed by pod A and presented to pod B
+   fails the session-provenance gate — closed, by design. <code>GET /v1/keys/jwks.json</code>
+   returns a different key set depending on which pod the Service picked.
+   <strong>Requires:</strong> one key ring on a ReadWriteMany volume, or an external signer.</li>
+<li><strong>The audit log splits in two.</strong> <code>audit.path</code> is per-pod, so "every decision"
+   lives in two files on two ephemeral disks, and neither is complete. Point
+   both at one RWX volume and a chained attestation sink refuses the second
+   writer — it takes an exclusive lock, and the pod that loses it reports the
+   lock in its <code>/readyz</code> <code>reason</code> and never becomes ready.
+   <strong>Requires:</strong> a single-writer sink, or a collector that merges both streams.</li>
+<li><strong>Schema-drift baselines desynchronize.</strong> <code>state_dir: /var/lib/nautilus</code>
+   holds what each pod learned about source schemas. Two pods learn separately,
+   so a real drift is reported twice and a rescheduled pod re-learns silently.
+   <strong>Requires:</strong> the same RWX volume, or accept duplicate alerts.</li>
+<li><strong>Cumulative exposure caps still hold</strong> — this one is already fixed.
+   <code>session_store.backend: postgres</code> with <code>dsn: ${SESSION_DSN}</code> puts the
+   exposure ledger in a shared database, so a caller cannot dodge a cap by
+   landing on the other replica. Leave it <code>postgres</code> if you scale; with
+   <code>backend: sqlite</code> or <code>memory</code> each replica accounts separately and the caps
+   are advisory.</li>
+</ol>
+<p>So: shared session store (already), shared key ring, single audit writer,
+shared state dir. Until all four hold, one replica is the correct number, and a
+<code>Recreate</code> rollout is the correct upgrade. Depth on the tradeoffs:
+<a href="../operator-guide/#running-more-than-one-replica">Running more than one replica</a>.</p>
+<p>One deployment is also one <strong>tenant</strong>: the agent registry, the exposure ledger
+and the signing ring are deployment-wide. A second tenant is a second
+deployment, with its own namespace, Secret and database
+(<code>docs/concepts/trust-boundary.md</code>).</p>
+<hr />
+<h2 id="9-upgrade-and-rollback">9. Upgrade and rollback<a class="headerlink" href="#9-upgrade-and-rollback" title="Permanent link">&para;</a></h2>
+<h3 id="kubernetes">Kubernetes<a class="headerlink" href="#kubernetes" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>docker<span class="w"> </span>build<span class="w"> </span>--build-arg<span class="w"> </span><span class="nv">EXTRAS</span><span class="o">=</span><span class="s2">&quot;--extra postgres&quot;</span><span class="w"> </span>-t<span class="w"> </span>nautilus:0.2.6-postgres<span class="w"> </span>.
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>kind<span class="w"> </span>load<span class="w"> </span>docker-image<span class="w"> </span>nautilus:0.2.6-postgres<span class="w"> </span>--name<span class="w"> </span>&lt;cluster&gt;<span class="w">   </span><span class="c1"># or push to your registry</span>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span><span class="nb">set</span><span class="w"> </span>image<span class="w"> </span>deployment/nautilus<span class="w"> </span><span class="nv">nautilus</span><span class="o">=</span>nautilus:0.2.6-postgres
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deployment/nautilus<span class="w"> </span>--timeout<span class="o">=</span>180s
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="c1"># deployment &quot;nautilus&quot; successfully rolled out</span>
+</code></pre></div>
+<p><code>strategy: Recreate</code> means the old pod is terminated <em>before</em> the new one
+starts: expect a gap of a few seconds to a minute where the Service has no
+endpoints and callers get connection refused. Drain callers first if that
+matters.</p>
+<p>Config-only changes cost a rollout <strong>only when they touch a startup-only key</strong>.
+A ConfigMap edit never restarts anything on its own; what it does is change the
+file under <code>/config</code>, and what happens next depends on the key.</p>
+<p><code>sources</code>, <code>rules</code> and the two live <code>session_store</code> limits reload in place on
+<code>SIGHUP</code> — no rollout, no gap in service, which matters here because
+<code>strategy: Recreate</code> at <code>replicas: 1</code> means a rollout <em>is</em> a gap.</p>
+<p>It is two steps, and skipping either one leaves you with a broker still serving
+the old file. The kubelet updates the mounted copy; <strong>nothing tells the process
+to re-read it.</strong></p>
+<h4 id="the-kubelet-rewrites-the-mount-config-stays-readonly-true">The kubelet rewrites the mount; <code>/config</code> stays <code>readOnly: true</code><a class="headerlink" href="#the-kubelet-rewrites-the-mount-config-stays-readonly-true" title="Permanent link">&para;</a></h4>
+<p>A ConfigMap volume is not a copy of a file, it is a directory the kubelet
+rewrites out from under the container: each generation lands in its own
+timestamped directory, <code>..data</code> is a symlink to the current one, and the update
+is a <code>rename(2)</code> of that symlink. Every path the broker opens goes through it:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="gp">$ </span>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>deploy/nautilus<span class="w"> </span>--<span class="w"> </span>/app/.venv/bin/python<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="w">    </span>-c<span class="w"> </span><span class="s2">&quot;import os; [print(n, &#39;-&gt;&#39;, os.readlink(&#39;/config/&#39;+n) if os.path.islink(&#39;/config/&#39;+n) else &#39;(regular file)&#39;) for n in sorted(os.listdir(&#39;/config&#39;))]&quot;</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="go">..2026_09_02_05_40_36.2403785900 -&gt; (regular file)</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="go">..data -&gt; ..2026_09_02_05_40_36.2403785900</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a><span class="go">nautilus.yaml -&gt; ..data/nautilus.yaml</span>
+</code></pre></div>
+<p>The writer is the kubelet, on the node, outside the container — so the content
+under <code>/config</code> changes while the mount the container sees stays read-only, and
+the two errors <a href="#114-what-you-cannot-do-from-inside">§11.4</a> quotes still hold on
+the same pod at the same moment:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="gp">$ </span>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>deploy/nautilus<span class="w"> </span>--<span class="w"> </span>/app/.venv/bin/python<span class="w"> </span>-c<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="w">    </span><span class="s2">&quot;open(&#39;/config/nautilus.yaml&#39;,&#39;a&#39;).write(&#39;x&#39;)&quot;</span><span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>Error
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="go">PermissionError: [Errno 13] Permission denied: &#39;/config/nautilus.yaml&#39;</span>
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="gp">$ </span>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>deploy/nautilus<span class="w"> </span>--<span class="w"> </span>/app/.venv/bin/python<span class="w"> </span>-c<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a><span class="w">    </span><span class="s2">&quot;open(&#39;/config/other.yaml&#39;,&#39;w&#39;).write(&#39;x&#39;)&quot;</span><span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>Error
+<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="go">OSError: [Errno 30] Read-only file system: &#39;/config/other.yaml&#39;</span>
+</code></pre></div>
+<p>(<code>grep Error</code> because the interpreter prints a traceback and <code>kubectl</code> adds
+<code>command terminated with exit code 1</code> after it, so <code>tail -1</code> shows you the
+wrong line.)</p>
+<p><strong>Do not make the <code>config</code> volume writable to get a reload.</strong> It does not help —
+the container is not the thing that writes it — and it turns the one input the
+broker trusts into something anything in the pod can edit.</p>
+<h4 id="apply-wait-for-the-pods-copy-then-signal">Apply, wait for the pod's copy, then signal<a class="headerlink" href="#apply-wait-for-the-pods-copy-then-signal" title="Permanent link">&para;</a></h4>
+<p>The kubelet notices a changed ConfigMap on its own watch and sync schedule, not
+on <code>apply</code>. Measured on kind v1.34.0 with default kubelet settings: 37s, 42s,
+50s and 70s over four edits. Do not guess — compare what the API server holds
+against what the pod is reading, and only signal once they match:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="gp">$ </span>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>deploy/configmap.yaml
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="go">configmap/nautilus-config configured</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a><span class="gp">$ </span>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>get<span class="w"> </span>cm<span class="w"> </span>nautilus-config<span class="w"> </span>-o<span class="w"> </span><span class="nv">jsonpath</span><span class="o">=</span><span class="s1">&#39;{.data.nautilus\.yaml}&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sha256sum
+<a id="__codelineno-19-5" name="__codelineno-19-5" href="#__codelineno-19-5"></a><span class="go">5d8c6bd7313971b876f8b017d2f1085a7e133972529e7b69c112efadbc848d33  -</span>
+<a id="__codelineno-19-6" name="__codelineno-19-6" href="#__codelineno-19-6"></a><span class="gp">$ </span>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>deploy/nautilus<span class="w"> </span>--<span class="w"> </span>/app/.venv/bin/python<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-19-7" name="__codelineno-19-7" href="#__codelineno-19-7"></a><span class="w">    </span>-c<span class="w"> </span><span class="s2">&quot;import hashlib; print(hashlib.sha256(open(&#39;/config/nautilus.yaml&#39;,&#39;rb&#39;).read()).hexdigest())&quot;</span>
+<a id="__codelineno-19-8" name="__codelineno-19-8" href="#__codelineno-19-8"></a><span class="go">ef9884c5c8a898b5ce3394f86d1d48a03c683b6b66bae2ef6e31ad07c5560f34</span>
+<a id="__codelineno-19-9" name="__codelineno-19-9" href="#__codelineno-19-9"></a>
+<a id="__codelineno-19-10" name="__codelineno-19-10" href="#__codelineno-19-10"></a><span class="gp">$ </span><span class="c1"># ... 37s later, the same command:</span>
+<a id="__codelineno-19-11" name="__codelineno-19-11" href="#__codelineno-19-11"></a><span class="go">5d8c6bd7313971b876f8b017d2f1085a7e133972529e7b69c112efadbc848d33</span>
+</code></pre></div>
+<p>Now send the signal. There is no <code>pkill</code>, no <code>kill</code> and no shell in the runtime
+image — its whole <code>$PATH</code> is the virtualenv's console scripts — so the
+interpreter is the only thing in there that can send one, and the broker is
+PID 1 (<code>Started server process [1]</code> in the startup log). <code>docker kill -s HUP</code>
+is the equivalent on the container-runtime path, and has no Kubernetes analogue
+because there is no host to run it from:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="gp">$ </span>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>deploy/nautilus<span class="w"> </span>--<span class="w"> </span>/app/.venv/bin/python<span class="w"> </span>-c<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="w">    </span><span class="s2">&quot;import os, signal; os.kill(1, signal.SIGHUP)&quot;</span>
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="gp">$ </span>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>logs<span class="w"> </span>deploy/nautilus<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s1">&#39;SIGHUP: &#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-1
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="go">{&quot;ts&quot;: &quot;2026-09-02T05:43:12.042134+00:00&quot;, &quot;level&quot;: &quot;INFO&quot;, &quot;logger&quot;: &quot;nautilus.cli.serve&quot;, &quot;module&quot;: &quot;serve&quot;, &quot;msg&quot;: &quot;SIGHUP: reloaded /config/nautilus.yaml (adopted sources)&quot;}</span>
+</code></pre></div>
+<p><code>grep</code>, not <code>--tail 1</code>: a readiness probe lands between the signal and the read
+often enough to show you an access log instead. The result line always carries
+the colon — <code>SIGHUP: reloaded …</code> or <code>SIGHUP: refused; …</code>. The startup notice
+(<code>SIGHUP reloads sources, rules and the live session_store limits from …</code>) does
+not, and is there before you signal anything.</p>
+<p><code>deploy/nautilus</code> sends the signal to <em>one</em> pod. At <code>replicas: 1</code> that is the
+pod; above one, list them and signal each
+(<a href="#8-replicas-what-actually-breaks-at-two">§8</a>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="gp">$ </span>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>nautilus<span class="w"> </span>-o<span class="w"> </span>name
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="go">pod/nautilus-787c844569-68v8k</span>
+</code></pre></div>
+<p>A refused reload leaves the running config serving and says so, so this is safe
+to run against a bad edit — but it is not a substitute for checking first, and
+the pod keeps serving the <em>old</em> file until you notice:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="gp">$ </span>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>logs<span class="w"> </span>deploy/nautilus<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s1">&#39;SIGHUP: &#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-1
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="go">{&quot;ts&quot;: &quot;2026-09-02T05:44:45.487981+00:00&quot;, &quot;level&quot;: &quot;ERROR&quot;, &quot;logger&quot;: &quot;nautilus.cli.serve&quot;, &quot;module&quot;: &quot;serve&quot;, &quot;msg&quot;: &quot;SIGHUP: refused; the running config is unchanged. Reason: invalid config: Invalid YAML in &#39;/config/nautilus.yaml&#39;: while parsing a flow node\nexpected the node content, but found &#39;-&#39;\n  in \&quot;&lt;unicode string&gt;\&quot;, line 2, column 3:\n      - id: alpha\n      ^&quot;}</span>
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="gp">$ </span>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>nautilus<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="w">    </span>-o<span class="w"> </span>custom-columns<span class="o">=</span>NAME:.metadata.name,RESTARTS:.status.containerStatuses<span class="o">[</span><span class="m">0</span><span class="o">]</span>.restartCount
+<a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a><span class="go">NAME                        RESTARTS</span>
+<a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="go">nautilus-787c844569-68v8k   0</span>
+</code></pre></div>
+<p>Everything else — <code>audit</code>, <code>attestation</code>, <code>session_tokens</code>, the rest of
+<code>session_store</code>, <code>api</code>, <code>mcp</code>, <code>ui</code>, <code>agents</code>, <code>analysis</code>, <code>adapters</code>,
+<code>state_dir</code>, <code>rkm</code> — is the rollout it always was, and the reload refuses it by
+name rather than half-applying it
+(<a href="../operator-guide/#which-keys-reload-and-which-need-a-restart">which keys, and why</a>):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>apply<span class="w"> </span>-f<span class="w"> </span>deploy/configmap.yaml
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>rollout<span class="w"> </span>restart<span class="w"> </span>deployment/nautilus
+<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deployment/nautilus<span class="w"> </span>--timeout<span class="o">=</span>180s
+</code></pre></div>
+<p>Rollback:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>rollout<span class="w"> </span><span class="nb">history</span><span class="w"> </span>deployment/nautilus
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="c1"># REVISION  CHANGE-CAUSE</span>
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="c1"># 1         &lt;none&gt;</span>
+<a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a><span class="c1"># 2         &lt;none&gt;</span>
+<a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>
+<a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>rollout<span class="w"> </span>undo<span class="w"> </span>deployment/nautilus<span class="w">              </span><span class="c1"># previous revision</span>
+<a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>rollout<span class="w"> </span>undo<span class="w"> </span>deployment/nautilus<span class="w"> </span>--to-revision<span class="o">=</span><span class="m">1</span>
+<a id="__codelineno-24-8" name="__codelineno-24-8" href="#__codelineno-24-8"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>rollout<span class="w"> </span>status<span class="w"> </span>deployment/nautilus<span class="w"> </span>--timeout<span class="o">=</span>180s
+</code></pre></div>
+<p><code>rollout undo</code> restores the pod template — image, args, probes, resources. It
+does <strong>not</strong> restore the ConfigMap or the Secrets; those are separate objects
+with their own history. If the upgrade included a config change, re-apply the
+old <code>configmap.yaml</code> from git in the same step. It also does not migrate the
+session store backwards; if the new version had stamped a new schema version,
+the rolled-back pod refuses the store with <code>SessionSchemaError</code> rather than
+writing rows it does not understand. Check first:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>deploy/nautilus<span class="w"> </span>--<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="w">  </span>/app/.venv/bin/python<span class="w"> </span>-m<span class="w"> </span>nautilus<span class="w"> </span>session<span class="w"> </span>version<span class="w"> </span>--dsn<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$SESSION_DSN</span><span class="s2">&quot;</span>
+<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="c1"># store schema version: 1</span>
+</code></pre></div>
+<h3 id="container-runtime">Container runtime<a class="headerlink" href="#container-runtime" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a>docker<span class="w"> </span>stop<span class="w"> </span>nautilus<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>docker<span class="w"> </span>rm<span class="w"> </span>nautilus
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a>docker<span class="w"> </span>run<span class="w"> </span>-d<span class="w"> </span>--name<span class="w"> </span>nautilus<span class="w"> </span>…<span class="w"> </span>nautilus:0.2.6-postgres<span class="w"> </span>serve<span class="w"> </span>…<span class="w">   </span><span class="c1"># §2.3, new tag</span>
+</code></pre></div>
+<p>Rollback is the same two commands with the previous tag — which is why §1 tags
+<code>0.2.6.dev0</code> (the version in <code>pyproject.toml</code>) rather than reusing <code>latest</code>. <code>latest</code> plus
+<code>imagePullPolicy: IfNotPresent</code> is the classic silent no-op: the node already
+has <em>a</em> <code>latest</code> and never fetches yours.</p>
+<hr />
+<h2 id="10-troubleshooting">10. Troubleshooting<a class="headerlink" href="#10-troubleshooting" title="Permanent link">&para;</a></h2>
+<p>Start here, always:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>get<span class="w"> </span>pods<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>nautilus
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>describe<span class="w"> </span>pod<span class="w"> </span>-l<span class="w"> </span>app.kubernetes.io/name<span class="o">=</span>nautilus<span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-30
+<a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>logs<span class="w"> </span>deploy/nautilus<span class="w"> </span>--tail<span class="o">=</span><span class="m">50</span>
+<a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>logs<span class="w"> </span>deploy/nautilus<span class="w"> </span>--previous<span class="w"> </span>--tail<span class="o">=</span><span class="m">50</span><span class="w">   </span><span class="c1"># the crash before the restart</span>
+</code></pre></div>
+<p>On the docker path substitute <code>docker ps -a</code>, <code>docker inspect nautilus</code>,
+<code>docker logs nautilus</code>.</p>
+<h3 id="the-pod-crashloops-immediately">The pod CrashLoops immediately<a class="headerlink" href="#the-pod-crashloops-immediately" title="Permanent link">&para;</a></h3>
+<p><code>STATUS CrashLoopBackOff</code>, and <code>describe</code> shows
+<code>Back-off restarting failed container nautilus in pod …</code>. The cause is the last
+line of <code>logs --previous</code>. All of these are exit code 2:</p>
+<table>
+<thead>
+<tr>
+<th>Log line</th>
+<th>Cause</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ERROR: invalid config: source id='orders' has type 'postgres', whose driver is not installed -- host: pip install 'nautilus-rkm[postgres]'; image: docker build --build-arg EXTRAS="--extra postgres" . (the published image installs --extra otel only, and has no shell or pip to add to it) (import failed: No module named 'asyncpg')</code></td>
+<td>you built the default image; the ConfigMap uses a <code>postgres</code> source</td>
+<td>run the <code>image:</code> half of the message. The <code>host:</code> half is for a <code>pip</code>/<code>uv</code> install, not for this container — there is no <code>pip</code> in it</td>
+</tr>
+<tr>
+<td><code>ERROR: invalid config: session_store.backend=postgres needs the 'postgres' extra, whose driver asyncpg is not installed -- host: … ; image: docker build --build-arg EXTRAS="--extra postgres" . … Or set session_store.backend to sqlite (durable, single-node) or memory, neither of which needs a driver.</code></td>
+<td>same image, and <code>session_store.backend: postgres</code> in the ConfigMap. The session store is a <em>second</em> reason to need <code>asyncpg</code>, independent of your sources</td>
+<td>rebuild with <code>--extra postgres</code>, or switch the backend as the message offers. This is refused rather than degraded even under <code>on_failure: fallback_memory</code>: a driver that is absent never becomes present, so degrading would run the exposure ledger in memory permanently</td>
+</tr>
+<tr>
+<td><code>ERROR: broker construction failed: the 'llm-openai' extra is not installed -- …</code> (or <code>analysis.provider.type=local talks to the local server over the OpenAI wire protocol …</code>)</td>
+<td><code>analysis.provider.type</code> is <code>openai</code> or <code>local</code> and the image has no <code>openai</code> SDK</td>
+<td>rebuild with <code>--build-arg EXTRAS="--extra llm-openai"</code>, or use <code>analysis.mode: pattern</code>, which needs no SDK</td>
+</tr>
+<tr>
+<td><code>ERROR: invalid config: Missing env var 'ORDERS_DSN' referenced by source id='orders'</code></td>
+<td>the key is absent from Secret <code>nautilus-secrets</code></td>
+<td><code>kubectl -n nautilus get secret nautilus-secrets -o jsonpath='{.data}' \| tr ',' '\n'</code> and add the missing key</td>
+</tr>
+<tr>
+<td><code>ERROR: config path does not exist or is not a file: /config/nautilus.yaml</code></td>
+<td>ConfigMap key is not <code>nautilus.yaml</code>, or the <code>config</code> volume did not mount</td>
+<td><code>kubectl -n nautilus get cm nautilus-config -o jsonpath='{.data}' \| head -c 200</code></td>
+</tr>
+<tr>
+<td><code>ERROR: invalid config: session_store.backend=postgres requires 'dsn' or TEST_PG_DSN env var</code></td>
+<td><code>session_store.dsn</code> was deleted from the ConfigMap</td>
+<td>restore <code>dsn: ${SESSION_DSN}</code></td>
+</tr>
+<tr>
+<td><code>ERROR: invalid config: Config validation failed:</code> followed by <code>api.auth.mode: Input should be …</code></td>
+<td>a typo in <code>nautilus.yaml</code>. The rejected <strong>value</strong> is deliberately not printed — config values are post-interpolation by then, and printing them puts your DSN in the log</td>
+<td>fix the field the location names</td>
+</tr>
+<tr>
+<td><code>ERROR: invalid config: Unsupported source type='postgress' for id='orders' (supported: [...])</code></td>
+<td>misspelled <code>type:</code></td>
+<td>the message lists every accepted type</td>
+</tr>
+<tr>
+<td><code>Application startup failed. Exiting.</code> preceded by <code>PostgresSessionStore unavailable (dsn=postgresql://postgres:5432): [Errno -2] Name or service not known</code>, then <code>ERROR: application startup failed; the server never accepted a connection. The cause is logged above.</code></td>
+<td><code>on_failure: fail_closed</code> and the database is unreachable</td>
+<td>fix DNS/credentials/network policy. That <code>dsn=</code> is the <code>scheme://host[:port]</code> <code>redact_connection</code> copies out by allowlist — no password, and no database name either, so read those from <code>session_store.dsn</code>. Exiting non-zero here is deliberate: the alternative was a pod that exited <code>Completed</code> and never restarted</td>
+</tr>
+<tr>
+<td><code>exec: "/app/.venv/bin/python": no such file or directory</code></td>
+<td>a hand-modified Dockerfile copied <code>/app</code> without the interpreter</td>
+<td>rebuild from the repository <code>Dockerfile</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="the-pod-never-starts">The pod never starts<a class="headerlink" href="#the-pod-never-starts" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th><code>describe pod</code> line</th>
+<th>Cause</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Failed to pull image "nautilus:0.2.6.dev0-postgres": … not found</code>, <code>STATUS ErrImagePull</code> / <code>ImagePullBackOff</code></td>
+<td>the tag exists on your laptop, not on the node</td>
+<td>§3.1 — <code>kind load</code> / <code>minikube image load</code> / push and re-tag</td>
+</tr>
+<tr>
+<td><code>Error: secret "nautilus-secrets" not found</code>, <code>STATUS CreateContainerConfigError</code></td>
+<td>Secret missing or in the wrong namespace</td>
+<td>§3.2, and check <code>-n</code></td>
+</tr>
+<tr>
+<td><code>Error: configmap "nautilus-config" not found</code></td>
+<td>same, for the ConfigMap</td>
+<td><code>kubectl -n nautilus apply -f deploy/configmap.yaml</code></td>
+</tr>
+<tr>
+<td><code>0/3 nodes are available: 3 Insufficient cpu.</code>, <code>STATUS Pending</code></td>
+<td><code>requests.cpu: "1"</code> does not fit</td>
+<td>free capacity, or lower the request knowing the broker's per-request work is CPU-bound on one event loop</td>
+</tr>
+<tr>
+<td><code>0/3 nodes are available: 3 Insufficient ephemeral-storage.</code></td>
+<td><code>requests.ephemeral-storage: 2Gi</code> does not fit</td>
+<td>free disk, or lower the request <em>and</em> the two <code>emptyDir</code> <code>sizeLimit</code>s together</td>
+</tr>
+<tr>
+<td><code>violates PodSecurity "restricted:latest"</code></td>
+<td>an older copy of these manifests without <code>seccompProfile: RuntimeDefault</code></td>
+<td>re-apply the shipped <code>deployment.yaml</code></td>
+</tr>
+<tr>
+<td><code>Multi-Attach error for volume "pvc-…" Volume is already used by pod(s) nautilus-…</code></td>
+<td>you replaced <code>audit</code> with a ReadWriteOnce PVC <em>and</em> changed <code>strategy</code> back to <code>RollingUpdate</code></td>
+<td>keep <code>strategy: Recreate</code>, or move to a ReadWriteMany volume</td>
+</tr>
+</tbody>
+</table>
+<h3 id="the-pod-runs-but-is-never-ready">The pod runs but is never Ready<a class="headerlink" href="#the-pod-runs-but-is-never-ready" title="Permanent link">&para;</a></h3>
+<p><code>READY 0/1</code>, <code>STATUS Running</code>, and <code>describe</code> shows
+<code>Readiness probe failed: HTTP probe failed with statuscode: 503</code>. That status
+code is all the kubelet reports; the reason is in the body:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a>kubectl<span class="w"> </span>-n<span class="w"> </span>nautilus<span class="w"> </span>port-forward<span class="w"> </span>deploy/nautilus<span class="w"> </span><span class="m">8000</span>:8000<span class="w"> </span><span class="p">&amp;</span>
+<a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a>curl<span class="w"> </span>-sS<span class="w"> </span>-o<span class="w"> </span>/dev/null<span class="w"> </span>-w<span class="w"> </span><span class="s1">&#39;%{http_code}\n&#39;</span><span class="w"> </span>localhost:8000/readyz
+<a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="c1"># 503</span>
+<a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a>curl<span class="w"> </span>-sS<span class="w"> </span>localhost:8000/readyz<span class="p">;</span><span class="w"> </span><span class="nb">echo</span>
+<a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a><span class="c1"># {&quot;status&quot;:&quot;not_ready&quot;,&quot;reason&quot;:&quot;audit log directory /var/log/nautilus is not writable&quot;}</span>
+</code></pre></div>
+<p>Look that <code>reason</code> up in <a href="#6-probes">§6</a>. <code>port-forward</code> works even when the
+pod is not Ready — it goes to the pod, not through the Service, which is why it
+is the right tool here. <code>kubectl get endpoints nautilus</code> showing
+<code>ENDPOINTS &lt;none&gt;</code> is the same fact seen from the Service side.</p>
+<h3 id="the-pod-restarts-every-couple-of-minutes">The pod restarts every couple of minutes<a class="headerlink" href="#the-pod-restarts-every-couple-of-minutes" title="Permanent link">&para;</a></h3>
+<p><code>RESTARTS</code> climbing with
+<code>Liveness probe failed: Get "http://10.244.1.7:8000/healthz": context deadline exceeded</code>.
+<code>/healthz</code> is a static handler with no I/O, so a timeout there means the event
+loop is blocked, not that a dependency is down — the broker is CPU-saturated.
+Check <code>container_cpu_cfs_throttled_seconds_total</code> and give it a full core;
+<code>resources</code> deliberately sets no CPU limit for exactly this reason.</p>
+<h3 id="requests-fail-after-a-clean-deploy">Requests fail after a clean deploy<a class="headerlink" href="#requests-fail-after-a-clean-deploy" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Cause</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>401 {"detail":"Invalid API key"}</code></td>
+<td><code>X-API-Key</code> does not match. The pod holds the Secret's value at the time it started — after rotating the Secret, <code>kubectl rollout restart</code></td>
+</tr>
+<tr>
+<td><code>401 {"detail":"API key required"}</code></td>
+<td><code>api.keys</code> resolved to empty. The startup log says so: <code>api.keys is empty, so every data and governance route will answer 401 Not authenticated. Only /healthz, /readyz and /metrics are reachable.</code></td>
+</tr>
+<tr>
+<td><code>422</code></td>
+<td>missing <code>Content-Type: application/json</code>, or <code>session_id</code>/<code>purpose</code>/<code>clearance</code> sent at the top level instead of inside <code>context</code></td>
+</tr>
+<tr>
+<td><code>200</code> with empty <code>data</code> and populated <code>denial_records</code></td>
+<td>not a deployment failure — the policy refused. Each record names the rule</td>
+</tr>
+<tr>
+<td><code>503 {"detail":"Broker busy: 64 requests are already in flight …"}</code></td>
+<td>concurrency limit; raise <code>api.max_concurrent_requests</code> or add capacity</td>
+</tr>
+<tr>
+<td>empty <code>/metrics</code></td>
+<td>the image was built without <code>--extra otel</code>, or <code>OTEL_SDK_DISABLED=true</code> is set</td>
+</tr>
+<tr>
+<td><code>STATUS Evicted</code>, <code>The node was low on resource: ephemeral-storage.</code></td>
+<td>the audit log filled the <code>emptyDir</code>. Move <code>audit</code> to a PersistentVolumeClaim or ship the lines off-box</td>
+</tr>
+</tbody>
+</table>
+<h3 id="getting-a-shell">Getting a shell<a class="headerlink" href="#getting-a-shell" title="Permanent link">&para;</a></h3>
+<p>There isn't one, and you do not need one:
+<a href="#11-working-inside-a-distroless-container">§11</a> is every procedure this
+documentation set asks you to run inside a container, rewritten for an image
+with no shell in it and measured against one.</p>
+<hr />
+<h2 id="11-working-inside-a-distroless-container">11. Working inside a distroless container<a class="headerlink" href="#11-working-inside-a-distroless-container" title="Permanent link">&para;</a></h2>
+<p>There is no shell, and the rest of this documentation set assumes you know what
+to run instead. <code>sh</code>, <code>bash</code>, <code>ls</code>, <code>cat</code>, <code>mv</code>, <code>cp</code>, <code>chmod</code>, <code>chown</code>, <code>sed</code>,
+<code>tar</code>, <code>curl</code> and <code>pip</code> are all absent from the <code>runtime</code> image, and <code>exec</code>
+reports each one identically:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="gp">$ </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>nautilus<span class="w"> </span>sh<span class="w"> </span>-c<span class="w"> </span><span class="s1">&#39;echo hi&#39;</span>
+<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="go">OCI runtime exec failed: exec failed: unable to start container process: exec: &quot;sh&quot;: executable file not found in $PATH</span>
+<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="gp">$ </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>nautilus<span class="w"> </span>ls<span class="w"> </span>-l<span class="w"> </span>/var/lib/nautilus
+<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="go">OCI runtime exec failed: exec failed: unable to start container process: exec: &quot;ls&quot;: executable file not found in $PATH</span>
+<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="gp">$ </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>nautilus<span class="w"> </span>curl<span class="w"> </span>-s<span class="w"> </span>localhost:8000/readyz
+<a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="go">OCI runtime exec failed: exec failed: unable to start container process: exec: &quot;curl&quot;: executable file not found in $PATH</span>
+<a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a><span class="gp">$ </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>nautilus<span class="w"> </span>pip<span class="w"> </span>--version
+<a id="__codelineno-29-8" name="__codelineno-29-8" href="#__codelineno-29-8"></a><span class="go">OCI runtime exec failed: exec failed: unable to start container process: exec: &quot;pip&quot;: executable file not found in $PATH</span>
+</code></pre></div>
+<p>The binary is absent from the image, so it is absent under every exec
+transport — <code>kubectl exec … -- sh</code> has nothing to find either, and only the
+wrapper text around the error differs. Every transcript in this section was
+captured with <code>docker exec</code> against a container started as in
+<a href="#23-run-it">§2.3</a>, from an image built without <code>BUILD_REV</code> and without
+<code>--log-format json</code> — so the one block here that pastes a server log record,
+the <code>SIGHUP</code> reload in <a href="#114-what-you-cannot-do-from-inside">§11.4</a>, shows the
+default text form. Under §2.3's own flags that record is a JSON object
+carrying the same text in <code>msg</code>, which is why the filter below matches the
+message and not the line prefix. Substitute
+<code>kubectl -n nautilus exec deploy/nautilus --</code> for <code>docker exec nautilus</code> and
+the argv after it is unchanged.</p>
+<p>You do not have to take a list of absences on trust. This is <strong>every</strong>
+executable in the image, exhaustively — the <code>grep -v</code> only drops the venv's
+<code>activate</code> scripts and its Windows <code>.bat</code> shims, which are not executables on
+Linux:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="gp">$ </span><span class="nv">cid</span><span class="o">=</span><span class="k">$(</span>docker<span class="w"> </span>create<span class="w"> </span>nautilus:0.2.6.dev0<span class="k">)</span>
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="gp">$ </span>docker<span class="w"> </span><span class="nb">export</span><span class="w"> </span><span class="s2">&quot;</span><span class="nv">$cid</span><span class="s2">&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tar<span class="w"> </span>-t<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="w">    </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-E<span class="w"> </span><span class="s1">&#39;^(bin|sbin|usr/bin|usr/sbin|usr/local/bin|app/\.venv/bin)/[^/]+$&#39;</span><span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="w">    </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-vE<span class="w"> </span><span class="s1">&#39;activate|\.bat$&#39;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>sort
+<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="go">app/.venv/bin/dotenv</span>
+<a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a><span class="go">app/.venv/bin/fastapi</span>
+<a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a><span class="go">app/.venv/bin/fathom</span>
+<a id="__codelineno-30-8" name="__codelineno-30-8" href="#__codelineno-30-8"></a><span class="go">app/.venv/bin/httpx</span>
+<a id="__codelineno-30-9" name="__codelineno-30-9" href="#__codelineno-30-9"></a><span class="go">app/.venv/bin/jsonschema</span>
+<a id="__codelineno-30-10" name="__codelineno-30-10" href="#__codelineno-30-10"></a><span class="go">app/.venv/bin/mcp</span>
+<a id="__codelineno-30-11" name="__codelineno-30-11" href="#__codelineno-30-11"></a><span class="go">app/.venv/bin/nautilus</span>
+<a id="__codelineno-30-12" name="__codelineno-30-12" href="#__codelineno-30-12"></a><span class="go">app/.venv/bin/normalizer</span>
+<a id="__codelineno-30-13" name="__codelineno-30-13" href="#__codelineno-30-13"></a><span class="go">app/.venv/bin/opentelemetry-bootstrap</span>
+<a id="__codelineno-30-14" name="__codelineno-30-14" href="#__codelineno-30-14"></a><span class="go">app/.venv/bin/opentelemetry-instrument</span>
+<a id="__codelineno-30-15" name="__codelineno-30-15" href="#__codelineno-30-15"></a><span class="go">app/.venv/bin/python</span>
+<a id="__codelineno-30-16" name="__codelineno-30-16" href="#__codelineno-30-16"></a><span class="go">app/.venv/bin/python3</span>
+<a id="__codelineno-30-17" name="__codelineno-30-17" href="#__codelineno-30-17"></a><span class="go">app/.venv/bin/python3.14</span>
+<a id="__codelineno-30-18" name="__codelineno-30-18" href="#__codelineno-30-18"></a><span class="go">app/.venv/bin/uvicorn</span>
+<a id="__codelineno-30-19" name="__codelineno-30-19" href="#__codelineno-30-19"></a><span class="go">app/.venv/bin/watchfiles</span>
+<a id="__codelineno-30-20" name="__codelineno-30-20" href="#__codelineno-30-20"></a><span class="go">app/.venv/bin/websockets</span>
+<a id="__codelineno-30-21" name="__codelineno-30-21" href="#__codelineno-30-21"></a><span class="go">usr/local/bin/python3</span>
+<a id="__codelineno-30-22" name="__codelineno-30-22" href="#__codelineno-30-22"></a><span class="go">usr/local/bin/python3.14</span>
+<a id="__codelineno-30-23" name="__codelineno-30-23" href="#__codelineno-30-23"></a><span class="gp">$ </span>docker<span class="w"> </span>rm<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$cid</span><span class="s2">&quot;</span><span class="w"> </span>&gt;<span class="w"> </span>/dev/null
+</code></pre></div>
+<p>The four traditional <code>bin</code> directories contribute nothing: <code>/usr/bin</code> and
+<code>/usr/sbin</code> are empty, and <code>/bin</code> and <code>/sbin</code> are symlinks to them. Only
+<code>/usr/local/bin</code> (the interpreter) and the venv have anything in them. Run that
+grep on your own build before you believe any recipe on this page — an image
+built some other way is yours to check, not ours.</p>
+<p>So: CPython 3.14 with its whole standard library, reachable as <code>python</code>,
+<code>python3</code> or <code>/app/.venv/bin/python</code>, plus the <code>nautilus</code> console script,
+because the venv's <code>bin</code> is first on <code>PATH</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="gp">$ </span>docker<span class="w"> </span>image<span class="w"> </span>inspect<span class="w"> </span>-f<span class="w"> </span><span class="s1">&#39;{{index .Config.Env 0}}&#39;</span><span class="w"> </span>nautilus:0.2.6.dev0
+<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="go">PATH=/app/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin</span>
+</code></pre></div>
+<p>That covers reading, listing, permissions, renaming, deleting and HTTP. It does
+not cover changing ownership or installing anything, and those two are
+genuinely impossible from inside — <a href="#114-what-you-cannot-do-from-inside">§11.4</a>
+says what to do instead.</p>
+<h3 id="111-reading">11.1 Reading<a class="headerlink" href="#111-reading" title="Permanent link">&para;</a></h3>
+<p><code>nautilus</code> subcommands need no shell at all — they are the entrypoint's own
+console script:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="gp">$ </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>nautilus<span class="w"> </span>nautilus<span class="w"> </span>version
+<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="go">0.2.6.dev0</span>
+<a id="__codelineno-32-3" name="__codelineno-32-3" href="#__codelineno-32-3"></a><span class="go">build: unknown</span>
+<a id="__codelineno-32-4" name="__codelineno-32-4" href="#__codelineno-32-4"></a><span class="gp">$ </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>nautilus<span class="w"> </span>nautilus<span class="w"> </span>health
+<a id="__codelineno-32-5" name="__codelineno-32-5" href="#__codelineno-32-5"></a><span class="go">OK 200 http://localhost:8000/readyz</span>
+</code></pre></div>
+<p>(<code>build: unknown</code> means the image was built without
+<code>--build-arg BUILD_REV=$(git rev-parse HEAD)</code>; see <a href="#1-the-image">§1</a>.)</p>
+<p>Read a file — this is the replacement for <code>cat</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="gp">$ </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>nautilus<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;print(open(&#39;/config/nautilus.yaml&#39;).read())&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>head<span class="w"> </span>-4
+<a id="__codelineno-33-2" name="__codelineno-33-2" href="#__codelineno-33-2"></a><span class="go">sources:</span>
+<a id="__codelineno-33-3" name="__codelineno-33-3" href="#__codelineno-33-3"></a><span class="go">  - id: orders</span>
+<a id="__codelineno-33-4" name="__codelineno-33-4" href="#__codelineno-33-4"></a><span class="go">    type: static</span>
+<a id="__codelineno-33-5" name="__codelineno-33-5" href="#__codelineno-33-5"></a><span class="go">    description: order rows</span>
+</code></pre></div>
+<p>List a directory with modes, owners, sizes and mtimes — the replacement for
+<code>ls -l</code>. <code>stat.filemode</code> renders the same <code>-rw-------</code> string <code>ls</code> does:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="gp">$ </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>nautilus<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;</span>
+<a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="go">import os, stat, time</span>
+<a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a><span class="go">d = &#39;/var/lib/nautilus&#39;</span>
+<a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a><span class="go">for n in sorted(os.listdir(d)):</span>
+<a id="__codelineno-34-5" name="__codelineno-34-5" href="#__codelineno-34-5"></a><span class="go">    s = os.stat(os.path.join(d, n))</span>
+<a id="__codelineno-34-6" name="__codelineno-34-6" href="#__codelineno-34-6"></a><span class="go">    print(f&#39;{stat.filemode(s.st_mode)} {s.st_uid}:{s.st_gid} {s.st_size:&gt;8} {time.strftime(\&quot;%Y-%m-%dT%H:%M:%SZ\&quot;, time.gmtime(s.st_mtime))} {n}&#39;)</span>
+<a id="__codelineno-34-7" name="__codelineno-34-7" href="#__codelineno-34-7"></a><span class="go">&quot;</span>
+<a id="__codelineno-34-8" name="__codelineno-34-8" href="#__codelineno-34-8"></a><span class="go">-rw------- 65532:65532      403 2026-09-02T03:27:20Z keyring.json</span>
+<a id="__codelineno-34-9" name="__codelineno-34-9" href="#__codelineno-34-9"></a><span class="go">-rw-r--r-- 65532:65532        0 2026-09-02T03:27:20Z keyring.json.lock</span>
+<a id="__codelineno-34-10" name="__codelineno-34-10" href="#__codelineno-34-10"></a><span class="go">-rw-r--r-- 65532:65532     4096 2026-09-02T03:27:21Z sessions.db</span>
+<a id="__codelineno-34-11" name="__codelineno-34-11" href="#__codelineno-34-11"></a><span class="go">-rw-r--r-- 65532:65532    32768 2026-09-02T03:27:21Z sessions.db-shm</span>
+<a id="__codelineno-34-12" name="__codelineno-34-12" href="#__codelineno-34-12"></a><span class="go">-rw-r--r-- 65532:65532    16512 2026-09-02T03:27:21Z sessions.db-wal</span>
+</code></pre></div>
+<p>Ask which of the mounts you can actually write. This one answer explains most
+readiness failures, and it is the first thing to run when <a href="#6-probes">§6</a> tells
+you a path is not writable:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="gp">$ </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>nautilus<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;</span>
+<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="go">import os</span>
+<a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a><span class="go">for d in (&#39;/&#39;, &#39;/tmp&#39;, &#39;/app&#39;, &#39;/config&#39;, &#39;/etc/nautilus/keys&#39;, &#39;/var/lib/nautilus&#39;, &#39;/var/log/nautilus&#39;):</span>
+<a id="__codelineno-35-4" name="__codelineno-35-4" href="#__codelineno-35-4"></a><span class="go">    print(f&#39;{\&quot;rw\&quot; if os.access(d, os.W_OK) else \&quot;ro\&quot;}  {d}&#39;)&quot;</span>
+<a id="__codelineno-35-5" name="__codelineno-35-5" href="#__codelineno-35-5"></a><span class="go">ro  /</span>
+<a id="__codelineno-35-6" name="__codelineno-35-6" href="#__codelineno-35-6"></a><span class="go">rw  /tmp</span>
+<a id="__codelineno-35-7" name="__codelineno-35-7" href="#__codelineno-35-7"></a><span class="go">ro  /app</span>
+<a id="__codelineno-35-8" name="__codelineno-35-8" href="#__codelineno-35-8"></a><span class="go">ro  /config</span>
+<a id="__codelineno-35-9" name="__codelineno-35-9" href="#__codelineno-35-9"></a><span class="go">ro  /etc/nautilus/keys</span>
+<a id="__codelineno-35-10" name="__codelineno-35-10" href="#__codelineno-35-10"></a><span class="go">rw  /var/lib/nautilus</span>
+<a id="__codelineno-35-11" name="__codelineno-35-11" href="#__codelineno-35-11"></a><span class="go">rw  /var/log/nautilus</span>
+</code></pre></div>
+<p><code>/</code> is read-only because of <code>readOnlyRootFilesystem: true</code> / <code>--read-only</code>;
+<code>/config</code> and <code>/etc/nautilus/keys</code> because they are mounted <code>ro</code>. The two <code>rw</code>
+lines are the <code>state</code> and <code>audit</code> volumes from <a href="#5-volumes-and-mounts">§5</a>.</p>
+<h3 id="112-probing-the-brokers-own-http-surface">11.2 Probing the broker's own HTTP surface<a class="headerlink" href="#112-probing-the-brokers-own-http-surface" title="Permanent link">&para;</a></h3>
+<p><code>curl</code> is not in the image. <code>urllib.request</code> is, and it reaches the loopback
+listener that <code>-p</code> / the Service may not expose:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="gp">$ </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>nautilus<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import urllib.request; print(urllib.request.urlopen(&#39;http://127.0.0.1:8000/v1/keys/jwks.json&#39;).read().decode())&quot;</span>
+<a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a><span class="go">{&quot;keys&quot;:[{&quot;kty&quot;:&quot;OKP&quot;,&quot;crv&quot;:&quot;Ed25519&quot;,&quot;kid&quot;:&quot;834e7ee1-b86d-4d6d-b34a-1c3e4372a640&quot;,&quot;x&quot;:&quot;rfPubI4g9sRShE-tbtJLCvj7ZhKPR2tj6El786S5WfA&quot;,&quot;use&quot;:&quot;sig&quot;}]}</span>
+</code></pre></div>
+<p>For an authenticated route add the header the same way —
+<code>urllib.request.Request(url, headers={'X-API-Key': ...}, data=..., method='POST')</code>.
+Note that this puts the key in the process table of the pod; prefer
+<code>kubectl port-forward</code> and a client on your laptop when you have the choice.</p>
+<p>The other way in needs nothing from the image at all: an ephemeral container
+joined to the running container's <strong>network</strong> namespace. It brings its own
+<code>wget</code>, and it does not require the target to cooperate:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="gp">$ </span>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--network<span class="o">=</span>container:nautilus<span class="w"> </span>busybox:latest<span class="w"> </span>wget<span class="w"> </span>-qO-<span class="w"> </span>http://127.0.0.1:8000/healthz
+<a id="__codelineno-37-2" name="__codelineno-37-2" href="#__codelineno-37-2"></a><span class="go">{&quot;status&quot;:&quot;ok&quot;,&quot;version&quot;:&quot;0.2.6.dev0&quot;,&quot;build&quot;:&quot;unknown&quot;}</span>
+</code></pre></div>
+<p>On Kubernetes that is <code>kubectl debug -it &lt;pod&gt; --image=busybox --target=&lt;container&gt;</code>;
+an ephemeral container in a pod already shares the pod's network namespace.</p>
+<h3 id="113-writing-renaming-and-fixing-permissions">11.3 Writing, renaming and fixing permissions<a class="headerlink" href="#113-writing-renaming-and-fixing-permissions" title="Permanent link">&para;</a></h3>
+<p><code>os.chmod</code>, <code>os.rename</code>, <code>os.remove</code> and <code>os.makedirs</code> are the replacements for
+<code>chmod</code>, <code>mv</code>, <code>rm</code> and <code>mkdir -p</code>, and they work on anything the broker's own
+UID owns. Reproducing the <a href="#6-probes">§6</a> <code>not writable</code> readiness failure and
+then repairing it, with no shell and no restart:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="gp">$ </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>nautilus<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import os; os.chmod(&#39;/var/log/nautilus/audit.jsonl&#39;, 0o444)&quot;</span>
+<a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a><span class="gp">$ </span>curl<span class="w"> </span>-s<span class="w"> </span>-w<span class="w"> </span><span class="s1">&#39; HTTP %{http_code}\n&#39;</span><span class="w"> </span>localhost:8000/readyz
+<a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a><span class="go">{&quot;status&quot;:&quot;not_ready&quot;,&quot;reason&quot;:&quot;audit log /var/log/nautilus/audit.jsonl is not writable&quot;} HTTP 503</span>
+<a id="__codelineno-38-4" name="__codelineno-38-4" href="#__codelineno-38-4"></a><span class="gp">$ </span>curl<span class="w"> </span>-s<span class="w"> </span>-w<span class="w"> </span><span class="s1">&#39; HTTP %{http_code}\n&#39;</span><span class="w"> </span>localhost:8000/healthz
+<a id="__codelineno-38-5" name="__codelineno-38-5" href="#__codelineno-38-5"></a><span class="go">{&quot;status&quot;:&quot;ok&quot;,&quot;version&quot;:&quot;0.2.6.dev0&quot;,&quot;build&quot;:&quot;unknown&quot;} HTTP 200</span>
+<a id="__codelineno-38-6" name="__codelineno-38-6" href="#__codelineno-38-6"></a><span class="gp">$ </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>nautilus<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import os; os.chmod(&#39;/var/log/nautilus/audit.jsonl&#39;, 0o644)&quot;</span>
+<a id="__codelineno-38-7" name="__codelineno-38-7" href="#__codelineno-38-7"></a><span class="gp">$ </span>curl<span class="w"> </span>-s<span class="w"> </span>-w<span class="w"> </span><span class="s1">&#39; HTTP %{http_code}\n&#39;</span><span class="w"> </span>localhost:8000/readyz
+<a id="__codelineno-38-8" name="__codelineno-38-8" href="#__codelineno-38-8"></a><span class="go">{&quot;status&quot;:&quot;ok&quot;} HTTP 200</span>
+</code></pre></div>
+<p>Readiness recovers on the next probe — <code>periodSeconds: 10</code> — with no rollout.
+<code>/healthz</code> stays <code>200</code> throughout, which is the whole reason liveness and
+readiness are different endpoints.</p>
+<p><strong>When the file is owned by someone else</strong>, <code>chmod</code> is not available to you at
+any privilege you hold, but <code>rename</code> is: the permission that governs renaming a
+file is write on its <em>directory</em>, not on the file. So move the bad file aside
+and let the broker create a fresh one on the next probe. This is the fix for
+the <code>audit log … is not writable</code> 503 caused by a volume first written by a
+root-run container:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="gp">$ </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>nautilus<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import os,stat; p=&#39;/var/log/nautilus/audit.jsonl&#39;; s=os.stat(p); print(oct(stat.S_IMODE(s.st_mode)), s.st_uid, s.st_gid, os.access(p, os.W_OK), os.access(&#39;/var/log/nautilus&#39;, os.W_OK))&quot;</span>
+<a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a><span class="go">0o644 0 0 False True</span>
+<a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a><span class="gp">$ </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>nautilus<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import os; os.rename(&#39;/var/log/nautilus/audit.jsonl&#39;, &#39;/var/log/nautilus/audit.jsonl.root-owned&#39;)&quot;</span>
+<a id="__codelineno-39-4" name="__codelineno-39-4" href="#__codelineno-39-4"></a><span class="gp">$ </span>curl<span class="w"> </span>-s<span class="w"> </span>-w<span class="w"> </span><span class="s1">&#39; HTTP %{http_code}\n&#39;</span><span class="w"> </span>localhost:8000/readyz
+<a id="__codelineno-39-5" name="__codelineno-39-5" href="#__codelineno-39-5"></a><span class="go">{&quot;status&quot;:&quot;ok&quot;} HTTP 200</span>
+</code></pre></div>
+<p><code>0 0</code> is the owner — root, not 65532 — and <code>False True</code> is the whole diagnosis:
+the file is not writable, the directory is. The renamed file is still there and
+still holds every record written before the problem; copy it out with the
+recipe below and then delete it. If the audit log is chained
+(<code>audit.chained: true</code>) the new file starts a <strong>new chain</strong>: verify the old one
+separately, because <code>nautilus attestation verify</code> follows one file.</p>
+<p><strong>Copying a file out.</strong> <code>docker cp</code> needs nothing in the container — it goes
+through the daemon:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="gp">$ </span>docker<span class="w"> </span>cp<span class="w"> </span>nautilus:/var/lib/nautilus/keyring.json<span class="w"> </span>./keyring.json
+<a id="__codelineno-40-2" name="__codelineno-40-2" href="#__codelineno-40-2"></a><span class="gp">$ </span><span class="nb">echo</span><span class="w"> </span><span class="nv">$?</span>
+<a id="__codelineno-40-3" name="__codelineno-40-3" href="#__codelineno-40-3"></a><span class="go">0</span>
+</code></pre></div>
+<p>It prints nothing on success, which is why the <code>echo $?</code> is there.</p>
+<p><code>kubectl cp</code> is <strong>not</strong> the equivalent and will fail here. Its own help says so:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a><span class="gp">$ </span>kubectl<span class="w"> </span>cp<span class="w"> </span>--help<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>-A3<span class="w"> </span><span class="s1">&#39;Important Note&#39;</span>
+<a id="__codelineno-41-2" name="__codelineno-41-2" href="#__codelineno-41-2"></a><span class="gp">  # </span>!!!Important<span class="w"> </span>Note!!!
+<a id="__codelineno-41-3" name="__codelineno-41-3" href="#__codelineno-41-3"></a><span class="gp">  # </span>Requires<span class="w"> </span>that<span class="w"> </span>the<span class="w"> </span><span class="s1">&#39;tar&#39;</span><span class="w"> </span>binary<span class="w"> </span>is<span class="w"> </span>present<span class="w"> </span><span class="k">in</span><span class="w"> </span>your<span class="w"> </span>container
+<a id="__codelineno-41-4" name="__codelineno-41-4" href="#__codelineno-41-4"></a><span class="gp">  # </span>image.<span class="w">  </span>If<span class="w"> </span><span class="s1">&#39;tar&#39;</span><span class="w"> </span>is<span class="w"> </span>not<span class="w"> </span>present,<span class="w"> </span><span class="s1">&#39;kubectl cp&#39;</span><span class="w"> </span>will<span class="w"> </span>fail.
+<a id="__codelineno-41-5" name="__codelineno-41-5" href="#__codelineno-41-5"></a><span class="gp">  #</span>
+</code></pre></div>
+<p>Stream the bytes through <code>exec</code> instead. This is byte-exact, including for a
+SQLite database:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="gp">$ </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>nautilus<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-42-2" name="__codelineno-42-2" href="#__codelineno-42-2"></a><span class="w">    </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import sys; sys.stdout.buffer.write(open(&#39;/var/lib/nautilus/sessions.db&#39;,&#39;rb&#39;).read())&quot;</span><span class="w"> </span>&gt;<span class="w"> </span>sessions.db
+<a id="__codelineno-42-3" name="__codelineno-42-3" href="#__codelineno-42-3"></a><span class="gp">$ </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>nautilus<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-42-4" name="__codelineno-42-4" href="#__codelineno-42-4"></a><span class="w">    </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import hashlib; print(hashlib.sha256(open(&#39;/var/lib/nautilus/sessions.db&#39;,&#39;rb&#39;).read()).hexdigest())&quot;</span>
+<a id="__codelineno-42-5" name="__codelineno-42-5" href="#__codelineno-42-5"></a><span class="go">44e9b382070d7cf97c2d422aaa250eee7edbe9a9fa39516c42c54ccea43cae81</span>
+<a id="__codelineno-42-6" name="__codelineno-42-6" href="#__codelineno-42-6"></a><span class="gp">$ </span>sha256sum<span class="w"> </span>sessions.db
+<a id="__codelineno-42-7" name="__codelineno-42-7" href="#__codelineno-42-7"></a><span class="go">44e9b382070d7cf97c2d422aaa250eee7edbe9a9fa39516c42c54ccea43cae81  sessions.db</span>
+</code></pre></div>
+<p><code>kubectl -n nautilus exec deploy/nautilus --</code> in place of <code>docker exec nautilus</code>
+does the same thing — this is the replacement for <code>kubectl cp</code> out of a
+distroless pod.</p>
+<p>Do not use <code>-t</code>/<code>--tty</code>: a TTY translates <code>\n</code> to <code>\r\n</code> and corrupts binary.
+Compare the two hashes every time — that is the check, not a formality. Copying
+<code>sessions.db</code> off a <em>running</em> broker gives you a torn database whatever the
+hashes say; see
+<a href="../operator-guide/#back-up">Back up</a> for why the <code>-wal</code> matters.</p>
+<h3 id="114-what-you-cannot-do-from-inside">11.4 What you cannot do from inside<a class="headerlink" href="#114-what-you-cannot-do-from-inside" title="Permanent link">&para;</a></h3>
+<p>These four have no in-container answer. The workaround column is the answer.</p>
+<table>
+<thead>
+<tr>
+<th>Impossible inside the container</th>
+<th>Why</th>
+<th>Do this instead</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>chown</code></td>
+<td>the process is UID 65532 with <code>capabilities.drop: ["ALL"]</code>, so it has no <code>CAP_CHOWN</code></td>
+<td>for a bind mount, <code>sudo chown -R 65532:65532 &lt;hostdir&gt;</code> on the <strong>host</strong> (<a href="#21-lay-out-the-host-directories">§2.1</a>); on Kubernetes, <code>fsGroup: 65532</code>, which the shipped <code>deployment.yaml</code> already sets. Or rename the file aside as in <a href="#113-writing-renaming-and-fixing-permissions">§11.3</a></td>
+</tr>
+<tr>
+<td>edit <code>nautilus.yaml</code> in place</td>
+<td><code>/config</code> is a <code>ro</code> mount of a ConfigMap, and the kubelet — not the container — is what rewrites it</td>
+<td>edit the ConfigMap (or the host file), then <code>kubectl rollout restart</code> — or send <code>SIGHUP</code>, which reloads the subset that can be reloaded safely and names what it refused. Both steps, and how to send the signal from an image with no <code>pkill</code> in it: <a href="#apply-wait-for-the-pods-copy-then-signal">§9</a></td>
+</tr>
+<tr>
+<td>install a package</td>
+<td>no <code>pip</code>, no package manager, no writable <code>/usr</code></td>
+<td>add it to <code>pyproject.toml</code> and rebuild; or bring your own tools in an ephemeral container, <a href="#getting-a-real-shell-next-to-the-container">below</a></td>
+</tr>
+<tr>
+<td>write anywhere but the two volumes and <code>/tmp</code></td>
+<td><code>readOnlyRootFilesystem: true</code></td>
+<td>use <code>/var/lib/nautilus</code> (persisted with the <code>state</code> volume) or <code>/tmp</code> (a 16 MiB tmpfs, gone on restart)</td>
+</tr>
+</tbody>
+</table>
+<p>The <code>chown</code> failure and the read-only root, verbatim, so you can recognise them
+in a log rather than guessing:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="gp">$ </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>nautilus<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;import os; os.chown(&#39;/var/log/nautilus/audit.jsonl&#39;, 0, 0)&quot;</span><span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-1
+<a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a><span class="go">PermissionError: [Errno 1] Operation not permitted: &#39;/var/log/nautilus/audit.jsonl&#39;</span>
+<a id="__codelineno-43-3" name="__codelineno-43-3" href="#__codelineno-43-3"></a><span class="gp">$ </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>nautilus<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;open(&#39;/probe&#39;,&#39;w&#39;).write(&#39;x&#39;)&quot;</span><span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-1
+<a id="__codelineno-43-4" name="__codelineno-43-4" href="#__codelineno-43-4"></a><span class="go">OSError: [Errno 30] Read-only file system: &#39;/probe&#39;</span>
+<a id="__codelineno-43-5" name="__codelineno-43-5" href="#__codelineno-43-5"></a><span class="gp">$ </span>docker<span class="w"> </span><span class="nb">exec</span><span class="w"> </span>nautilus<span class="w"> </span>python<span class="w"> </span>-c<span class="w"> </span><span class="s2">&quot;open(&#39;/config/nautilus.yaml&#39;,&#39;a&#39;).write(&#39;x&#39;)&quot;</span><span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-1
+<a id="__codelineno-43-6" name="__codelineno-43-6" href="#__codelineno-43-6"></a><span class="go">PermissionError: [Errno 13] Permission denied: &#39;/config/nautilus.yaml&#39;</span>
+</code></pre></div>
+<p><code>SIGHUP</code> is worth knowing before you reach for a rollout — it re-reads the
+config file and applies what it can prove safe:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a><span class="gp">$ </span>docker<span class="w"> </span><span class="nb">kill</span><span class="w"> </span>-s<span class="w"> </span>HUP<span class="w"> </span>nautilus
+<a id="__codelineno-44-2" name="__codelineno-44-2" href="#__codelineno-44-2"></a><span class="go">nautilus</span>
+<a id="__codelineno-44-3" name="__codelineno-44-3" href="#__codelineno-44-3"></a><span class="gp">$ </span><span class="k">until</span><span class="w"> </span>docker<span class="w"> </span>logs<span class="w"> </span>nautilus<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span><span class="s1">&#39;SIGHUP: &#39;</span><span class="p">;</span><span class="w"> </span><span class="k">do</span><span class="w"> </span>sleep<span class="w"> </span><span class="m">0</span>.2<span class="p">;</span><span class="w"> </span><span class="k">done</span>
+<a id="__codelineno-44-4" name="__codelineno-44-4" href="#__codelineno-44-4"></a><span class="go">INFO:nautilus.cli.serve:SIGHUP: reloaded /config/nautilus.yaml (no reloadable key changed)</span>
+</code></pre></div>
+<p>Two lines in a running log say <code>SIGHUP</code>. The startup notice — <code>SIGHUP reloads
+sources, rules and the live session_store limits from …</code> — only means the
+handler is wired, and it is there before you signal anything. The <em>result</em> of a
+reload always carries the colon: <code>SIGHUP: reloaded …</code>, or <code>SIGHUP: refused; …</code>
+when the new file is rejected and the running config keeps answering. That
+colon is what the filter matches. Do not use <code>--tail 1</code> here — a readiness
+probe lands between the signal and the read often enough to show you an access
+log instead — and the <code>until</code> loop is what waits for the reload to finish
+rather than for the log to be read.</p>
+<h3 id="115-when-the-audit-volume-is-missing">11.5 When the audit volume is missing<a class="headerlink" href="#115-when-the-audit-volume-is-missing" title="Permanent link">&para;</a></h3>
+<p>A missing <code>audit</code> volumeMount is not a readiness failure. It is a startup
+refusal, and it happens before anything binds — so there is no <code>/readyz</code> to
+ask and no pod to <code>kubectl exec</code> into. What you get is a <code>CrashLoopBackOff</code> and
+these two lines, verbatim, from <code>kubectl logs</code> or <code>docker logs</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a><span class="gp">$ </span>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>-v<span class="w"> </span>./nautilus.yaml:/etc/nautilus/n.yaml:ro<span class="w"> </span><span class="se">\</span>
+<a id="__codelineno-45-2" name="__codelineno-45-2" href="#__codelineno-45-2"></a><span class="w">    </span>nautilus:1.0<span class="w"> </span>serve<span class="w"> </span>--config<span class="w"> </span>/etc/nautilus/n.yaml<span class="w"> </span>--bind<span class="w"> </span><span class="m">0</span>.0.0.0:8080<span class="w"> </span><span class="m">2</span>&gt;<span class="p">&amp;</span><span class="m">1</span><span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-1
+<a id="__codelineno-45-3" name="__codelineno-45-3" href="#__codelineno-45-3"></a><span class="go">ERROR: broker construction failed: cannot open the audit log directory /var/log/nautilus: [Errno 13] Permission denied: &#39;/var/log/nautilus&#39;. Nautilus records one line per decision and will not serve unrecorded requests, so this refuses startup rather than degrading. Either the volume for it is not mounted, or it is not writable by the UID this process runs as.</span>
+</code></pre></div>
+<p><code>nautilus config check</code> refuses with the same sentence and the same exit code,
+which is why it is worth running in the same image and with the same mounts the
+rollout will use — it catches this before a pod ever schedules.</p>
+<p>Two causes, one message, because the container cannot tell them apart: <code>/var/log</code>
+exists in the image and UID 65532 cannot write it, so "no mount" and "a mount
+UID 65532 cannot write" both arrive as <code>Errno 13</code> on the same path. Check the
+mount first (<code>kubectl describe pod</code> → <strong>Mounts</strong>), then <code>fsGroup: 65532</code>.</p>
+<h3 id="getting-a-real-shell-next-to-the-container">Getting a real shell next to the container<a class="headerlink" href="#getting-a-real-shell-next-to-the-container" title="Permanent link">&para;</a></h3>
+<p>Not <em>in</em> it — beside it. An ephemeral container in the target's namespaces
+brings its own <code>sh</code>, <code>ls</code>, <code>mv</code> and <code>chown</code>, and needs nothing from the
+distroless image. Reaching the target's filesystem through <code>/proc/1/root</code> also
+needs <code>CAP_SYS_PTRACE</code>, which is <strong>not</strong> in Docker's default set: without
+<code>--cap-add SYS_PTRACE</code> the path exists and every access to it is denied.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-46-1" name="__codelineno-46-1" href="#__codelineno-46-1"></a><span class="gp">$ </span>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--pid<span class="o">=</span>container:nautilus<span class="w"> </span>busybox:latest<span class="w"> </span>ls<span class="w"> </span>-l<span class="w"> </span>/proc/1/root/var/log/nautilus
+<a id="__codelineno-46-2" name="__codelineno-46-2" href="#__codelineno-46-2"></a><span class="go">ls: /proc/1/root/var/log/nautilus: Permission denied</span>
+<a id="__codelineno-46-3" name="__codelineno-46-3" href="#__codelineno-46-3"></a><span class="gp">$ </span>docker<span class="w"> </span>run<span class="w"> </span>--rm<span class="w"> </span>--cap-add<span class="w"> </span>SYS_PTRACE<span class="w"> </span>--pid<span class="o">=</span>container:nautilus<span class="w"> </span>busybox:latest<span class="w"> </span>ls<span class="w"> </span>-l<span class="w"> </span>/proc/1/root/var/log/nautilus
+<a id="__codelineno-46-4" name="__codelineno-46-4" href="#__codelineno-46-4"></a><span class="go">total 8</span>
+<a id="__codelineno-46-5" name="__codelineno-46-5" href="#__codelineno-46-5"></a><span class="go">-rw-r--r--    1 65532    65532         3070 Sep  2 03:34 audit.jsonl</span>
+<a id="__codelineno-46-6" name="__codelineno-46-6" href="#__codelineno-46-6"></a><span class="go">-rw-r--r--    1 root     root             3 Sep  2 03:30 audit.jsonl.root-owned</span>
+</code></pre></div>
+<p>Mounting the volume into an ordinary container is simpler when you have the
+host, and needs no capability at all:
+<code>docker run --rm -u 0:0 -v /srv/nautilus/audit:/a busybox chown -R 65532:65532 /a</code>.</p>
+<p>On Kubernetes the equivalent is
+<code>kubectl debug -it &lt;pod&gt; --image=busybox --target=&lt;container&gt;</code>, and the same
+capability caveat applies — <code>--profile=sysadmin</code> is the flag that grants it
+(<code>kubectl debug --help</code> lists <code>legacy</code>, <code>general</code>, <code>baseline</code>, <code>netadmin</code>,
+<code>restricted</code>, <code>sysadmin</code>). Two things to expect: a namespace enforcing the
+<code>restricted</code> Pod Security Standard will reject that profile, which is the same
+admission rule that makes this Deployment safe; and <code>kubectl debug --help</code>
+warns that "when a non-root user is configured for the entire target Pod, some
+capabilities granted by debug profile may not work", which is exactly this pod.</p>
+<p><strong>Do not reach for <code>--target debug</code>.</strong> The Dockerfile's <code>debug</code> stage has
+<code>bash</code>, but swapping an image means a rebuild and a new rollout — the pod whose
+state you wanted to look at is gone by the time the shell exists. It is for
+reproducing a problem locally, never for diagnosing a live one.</p>
+<hr />
+<h2 id="12-why-the-manifests-look-like-this">12. Why the manifests look like this<a class="headerlink" href="#12-why-the-manifests-look-like-this" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>The ConfigMap holds no credentials.</strong> Source DSNs and the API key are
+  <code>${ENV}</code> references resolved from the Secret at config load, so the file you
+  paste into a ticket has nothing in it.</li>
+<li><strong><code>readOnlyRootFilesystem: true</code></strong> with two explicit writable mounts. The
+  broker writes to <code>/var/lib/nautilus</code> and <code>/var/log/nautilus</code> and nowhere
+  else; anything that tries elsewhere fails loudly instead of leaving state
+  somewhere nobody backs up.</li>
+<li><strong><code>runAsNonRoot: true</code> / <code>runAsUser: 65532</code></strong> matches the image's own
+  <code>USER 65532:65532</code>, so a cluster that enforces non-root does not have to
+  guess. <code>fsGroup: 65532</code> is what makes the two writable volumes writable.</li>
+<li><strong><code>capabilities.drop: ["ALL"]</code>, <code>allowPrivilegeEscalation: false</code>,
+  <code>seccompProfile: RuntimeDefault</code></strong> — together with the above, this pod
+  satisfies the <code>restricted</code> Pod Security Standard as shipped.</li>
+<li><strong><code>automountServiceAccountToken: false</code></strong> — the broker never calls the
+  Kubernetes API, so there is no reason for a cluster credential to sit in its
+  filesystem.</li>
+<li><strong><code>/readyz</code> is the readiness probe, not <code>/healthz</code>.</strong> It fails when the
+  session store or the audit sink is unwritable, which is exactly when a
+  replica must stop taking requests. <code>/healthz</code> answers as long as the process
+  is alive, which is the right question for liveness and the wrong one for
+  routing.</li>
+<li><strong>No CPU limit, a 1-core request.</strong> Per-request work is dominated by
+  synchronous CPU on a single event loop, so throughput does not rise with
+  concurrency: the pod cannot use more than a core, and a limit would only add
+  throttling.</li>
+<li><strong><code>strategy: Recreate</code>.</strong> At <code>replicas: 1</code> the default <code>RollingUpdate</code>
+  rounds <code>maxSurge: 25%</code> up to 1 and briefly runs two brokers — see
+  <a href="#8-replicas-what-actually-breaks-at-two">§8</a>.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

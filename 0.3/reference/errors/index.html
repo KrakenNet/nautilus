@@ -1,0 +1,3534 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Policy-first data broker for AI agents">
+      
+      
+      
+        <link rel="canonical" href="https://nautilus.krakn.ai/0.3/reference/errors/">
+      
+      
+        <link rel="prev" href="../adapter-sdk/">
+      
+      
+        <link rel="next" href="auth/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Overview - Nautilus</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#error-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Nautilus" class="md-header__button md-logo" aria-label="Nautilus" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Nautilus
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Overview
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/KrakenNet/nautilus" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    KrakenNet/nautilus
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../how-to/" class="md-tabs__link">
+          
+  
+  
+  How-to Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../concepts/" class="md-tabs__link">
+          
+  
+  
+  Concepts
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Nautilus" class="md-nav__button md-logo" aria-label="Nautilus" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Nautilus
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/KrakenNet/nautilus" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    KrakenNet/nautilus
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How-to Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How-to Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/operator-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operator Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/deploying/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deploying
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/authoring-rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authoring Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/developing-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developing Adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/hardening/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardening
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/add-a-postgres-source/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add a Postgres Source
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/write-a-routing-rule/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Write a Routing Rule
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/configure-attestation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configure Attestation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/verify-a-token/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verify a Token
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/add-an-llm-source/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add an LLM Source
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/monitor-with-grafana/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Monitor with Grafana
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/trust-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Trust Boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/attestation-chain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Attestation Chain
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/rkm-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RKM Rule Lifecycle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../python-sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python SDK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rest-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    REST API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rule-packs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rule Packs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapter-sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapter SDK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5_7" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5_7" id="__nav_5_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_7_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Errors
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-three-surfaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The three surfaces
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reading-a-quoted-message" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading a quoted message
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-scratch-broker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A scratch broker
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#find-your-message" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Find your message
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Find your message">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#credentials-capabilities-identity-authmd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credentials, capabilities, identity — auth.md
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#session-tokens-session-tokensmd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Session tokens — session-tokens.md
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sessions-exposure-ledger-session-store-sessionsmd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sessions, exposure ledger, session store — sessions.md
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#http-transport-transportmd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HTTP transport — transport.md
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration-and-startup-configmd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration and startup — config.md
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adapters-and-data-sources-adaptersmd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adapters and data sources — adapters.md
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rules-rkm-and-the-policy-engine-rulesmd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rules, RKM and the policy engine — rules.md
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#attestation-keys-and-the-chained-log-attestationmd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attestation, keys and the chained log — attestation.md
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#command-line-climd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command line — cli.md
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#embedding-nautilus-as-a-library-librarymd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Embedding Nautilus as a library — library.md
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="auth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials and identity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="session-tokens/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Session tokens
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="sessions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sessions and session store
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="transport/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP transport
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration and startup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters and data sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rules, RKM and the engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="attestation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Attestation and keys
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command line
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Embedding as a library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_8" id="__nav_5_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapter SDK Docs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapter SDK Docs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sdk/docs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sdk/docs/tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sdk/docs/discovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Discovery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sdk/docs/reference/protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sdk/docs/reference/types/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sdk/docs/reference/testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-three-surfaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The three surfaces
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reading-a-quoted-message" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reading a quoted message
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#a-scratch-broker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A scratch broker
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#find-your-message" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Find your message
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Find your message">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#credentials-capabilities-identity-authmd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credentials, capabilities, identity — auth.md
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#session-tokens-session-tokensmd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Session tokens — session-tokens.md
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sessions-exposure-ledger-session-store-sessionsmd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sessions, exposure ledger, session store — sessions.md
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#http-transport-transportmd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HTTP transport — transport.md
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration-and-startup-configmd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration and startup — config.md
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adapters-and-data-sources-adaptersmd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adapters and data sources — adapters.md
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rules-rkm-and-the-policy-engine-rulesmd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rules, RKM and the policy engine — rules.md
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#attestation-keys-and-the-chained-log-attestationmd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attestation, keys and the chained log — attestation.md
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#command-line-climd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Command line — cli.md
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#embedding-nautilus-as-a-library-librarymd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Embedding Nautilus as a library — library.md
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="error-reference">Error reference<a class="headerlink" href="#error-reference" title="Permanent link">&para;</a></h1>
+<p>Every message Nautilus can put in front of you, quoted as the source emits it, with what it
+means, why it happened, and what to do. Search this section for the literal text you saw.</p>
+<h2 id="the-three-surfaces">The three surfaces<a class="headerlink" href="#the-three-surfaces" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Surface</th>
+<th>Shape</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>REST / admin console</td>
+<td>JSON body <code>{"detail": "..."}</code> with an HTTP status</td>
+<td><code>401 {"detail":"Invalid API key"}</code></td>
+</tr>
+<tr>
+<td>MCP</td>
+<td>tool error carrying the same sentence (<code>ValueError</code> in <code>nautilus/transport/mcp_server.py</code>)</td>
+<td><code>This credential is bound to agent_id='analyst', so it cannot ask as 'other'</code></td>
+</tr>
+<tr>
+<td>CLI</td>
+<td><code>ERROR:</code>, <code>WARN:</code>, <code>FAIL:</code> on <strong>stderr</strong> (<code>nautilus/cli/_common.py:91-101</code>)</td>
+<td><code>ERROR: config path does not exist or is not a file: /nope.yaml</code></td>
+</tr>
+<tr>
+<td>Python API</td>
+<td>an exception from <code>nautilus.core</code>, <code>nautilus.config</code>, <code>nautilus.adapters</code>, <code>nautilus.rkm</code></td>
+<td><code>ConfigError: Duplicate source id='s1'</code></td>
+</tr>
+</tbody>
+</table>
+<p>CLI exit codes (<code>nautilus/cli/_common.py:5-7</code>): <strong>0</strong> success, <strong>1</strong> user error, <strong>2</strong>
+validation/policy failure. Code 3 is deliberately never used.</p>
+<p>Route-by-route and flag-by-flag context lives in the
+<a href="../rest-api/">REST API reference</a> and the <a href="../cli/">CLI reference</a>; this section is the
+string index into both.</p>
+<h2 id="reading-a-quoted-message">Reading a quoted message<a class="headerlink" href="#reading-a-quoted-message" title="Permanent link">&para;</a></h2>
+<p>Headings on these pages are the exact string in the source. Where the source uses an f-string,
+the heading shows the template and the entry says what interpolates:</p>
+<ul>
+<li><code>{name}</code> — a value substituted with <code>str()</code>.</li>
+<li><code>{name!r}</code> — substituted with <code>repr()</code>, so a string arrives quoted: <code>rule 'my_rule' not found</code>.</li>
+<li><code>{exc}</code> — the text of a wrapped, lower-level exception. The sentence before the colon is
+  Nautilus; the sentence after it is the driver, the OS, or a parser.</li>
+<li><code>{install_extra_hint(extra)}</code> — the shared remedy clause every "missing optional dependency"
+  message ends with (<code>nautilus/extras.py:31-36</code>). For <code>extra='postgres'</code> it expands to:</li>
+</ul>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>host: pip install &#39;nautilus-rkm[postgres]&#39;; image: docker build --build-arg EXTRAS=&quot;--extra postgres&quot; . (the published image installs --extra otel only, and has no shell or pip to add to it)
+</code></pre></div>
+<p>Two routes because Nautilus has two runtimes and they take opposite remedies. On a host
+  install, run the <code>host:</code> half. In the published container image, you cannot: its runtime
+  stage is distroless — no shell, no <code>pip</code> — so the <code>image:</code> half, a rebuild, is the only
+  one that works. Which extras that image already carries is
+  <a href="../../how-to/deploying/#extras-and-what-the-published-image-carries">a table in the deployment guide</a>,
+  held against the <code>Dockerfile</code> and against a built image by
+  <code>tests/defects/test_wave_ops14_image_extras.py</code>.</p>
+<h2 id="a-scratch-broker">A scratch broker<a class="headerlink" href="#a-scratch-broker" title="Permanent link">&para;</a></h2>
+<p>Every <code>curl</code> on these pages runs against this. It needs no database and no driver. It is the
+<a href="../rest-api/#running-the-examples">REST API reference's scratch broker</a> narrowed until it
+fails: keys bound to an agent and a narrow capability list, and <code>api.max_request_bytes</code> at 4096 so
+the body limit is reachable by hand. It binds <code>127.0.0.1:8001</code>, not the <code>127.0.0.1:8000</code> the API
+reference uses, so both can run side by side.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>mkdir<span class="w"> </span>-p<span class="w"> </span>/tmp/nautilus-errors<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">cd</span><span class="w"> </span>/tmp/nautilus-errors
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>cat<span class="w"> </span>&gt;<span class="w"> </span>nautilus.yaml<span class="w"> </span><span class="s">&lt;&lt;&#39;YAML&#39;</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a><span class="s">sources:</span>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="s">  - id: notes</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a><span class="s">    type: static</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a><span class="s">    classification: unclassified</span>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="s">    data_types: [note]</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a><span class="s">    allowed_purposes: [research]</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="s">    rows:</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a><span class="s">      - {id: 1, body: &quot;hello&quot;}</span>
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a><span class="s">agents:</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="s">  analyst:</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="s">    id: analyst</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="s">    clearance: unclassified</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="s">    compartments: []</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="s">    default_purpose: research</span>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="s">audit:</span>
+<a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a><span class="s">  path: ./audit.jsonl</span>
+<a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="s">attestation:</span>
+<a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="s">  enabled: true</span>
+<a id="__codelineno-1-21" name="__codelineno-1-21" href="#__codelineno-1-21"></a><span class="s">api:</span>
+<a id="__codelineno-1-22" name="__codelineno-1-22" href="#__codelineno-1-22"></a><span class="s">  max_request_bytes: 4096</span>
+<a id="__codelineno-1-23" name="__codelineno-1-23" href="#__codelineno-1-23"></a><span class="s">  keys:</span>
+<a id="__codelineno-1-24" name="__codelineno-1-24" href="#__codelineno-1-24"></a><span class="s">    - key: query-key</span>
+<a id="__codelineno-1-25" name="__codelineno-1-25" href="#__codelineno-1-25"></a><span class="s">      agent_id: analyst</span>
+<a id="__codelineno-1-26" name="__codelineno-1-26" href="#__codelineno-1-26"></a><span class="s">      capabilities: [query]</span>
+<a id="__codelineno-1-27" name="__codelineno-1-27" href="#__codelineno-1-27"></a><span class="s">    - key: govern-key</span>
+<a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a><span class="s">      agent_id: reviewer</span>
+<a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a><span class="s">      capabilities: [query, govern, audit_read, keys]</span>
+<a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a><span class="s">YAML</span>
+</code></pre></div>
+<!-- not-executed: blocks until interrupted; run it in a second terminal -->
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="nb">cd</span><span class="w"> </span>/tmp/nautilus-errors<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>nautilus<span class="w"> </span>serve<span class="w"> </span>--config<span class="w"> </span>nautilus.yaml<span class="w"> </span>--bind<span class="w"> </span><span class="m">127</span>.0.0.1:8001
+</code></pre></div>
+<p>Every <code>curl</code> on every page of this section writes its base URL as <code>$NAUTILUS</code>. Export it once per
+shell — nothing else on these pages needs a placeholder filled in:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="nb">export</span><span class="w"> </span><span class="nv">NAUTILUS</span><span class="o">=</span>http://127.0.0.1:8001
+</code></pre></div>
+<p>Confirm the broker is up before using the <code>curl</code> examples. <code>{"status":"ok"}</code> means go; a
+<code>{"status":"not_ready", …}</code> body is explained in
+<a href="transport/#readyz-refusal-payloads">transport.md</a>:</p>
+<!-- not-executed: needs the scratch broker from the block above -->
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>curl<span class="w"> </span>-s<span class="w"> </span><span class="s2">&quot;</span><span class="nv">$NAUTILUS</span><span class="s2">/readyz&quot;</span><span class="p">;</span><span class="w"> </span><span class="nb">echo</span>
+</code></pre></div>
+<h2 id="find-your-message">Find your message<a class="headerlink" href="#find-your-message" title="Permanent link">&para;</a></h2>
+<h3 id="credentials-capabilities-identity-authmd">Credentials, capabilities, identity — <a href="auth/">auth.md</a><a class="headerlink" href="#credentials-capabilities-identity-authmd" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Not authenticated</code></td>
+<td>401</td>
+</tr>
+<tr>
+<td><code>API key required</code></td>
+<td>401</td>
+</tr>
+<tr>
+<td><code>Invalid API key</code></td>
+<td>401</td>
+</tr>
+<tr>
+<td><code>This credential does not hold the {capability!r} capability (it holds {sorted(held)})</code></td>
+<td>403</td>
+</tr>
+<tr>
+<td><code>This credential is bound to agent_id={bound!r}, so it cannot ask as {body.agent_id!r}</code></td>
+<td>403</td>
+</tr>
+<tr>
+<td><code>This credential is bound to agent_id={bound!r}, so it cannot mint a session token for {requested_agent!r}</code></td>
+<td>403</td>
+</tr>
+<tr>
+<td><code>Forwarded identity rejected: peer is not a trusted proxy</code></td>
+<td>401</td>
+</tr>
+<tr>
+<td><code>Missing X-Forwarded-User</code></td>
+<td>401</td>
+</tr>
+<tr>
+<td><code>X-Nautilus-Reviewer header required</code></td>
+<td>400</td>
+</tr>
+<tr>
+<td><code>api.keys is empty, so every data and governance route will answer 401 Not authenticated. …</code></td>
+<td>log warning</td>
+</tr>
+<tr>
+<td><code>api.keys[0] is a bare string: bound to no agent_id, …</code></td>
+<td>log warning</td>
+</tr>
+<tr>
+<td><code>api.auth.mode 'proxy_trust' requires api.auth.trusted_proxies. …</code></td>
+<td>startup</td>
+</tr>
+<tr>
+<td><code>api.auth.trusted_proxies entry {entry!r} is not an address or CIDR block: {exc}</code></td>
+<td>startup</td>
+</tr>
+<tr>
+<td><code>api.keys entry declares unknown capabilities {unknown}. Known capabilities: {list(CAPABILITIES)}</code></td>
+<td>startup</td>
+</tr>
+</tbody>
+</table>
+<h3 id="session-tokens-session-tokensmd">Session tokens — <a href="session-tokens/">session-tokens.md</a><a class="headerlink" href="#session-tokens-session-tokensmd" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Reason code</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Invalid session token: {exc.reason_code}</code></td>
+<td>(401 wrapper)</td>
+</tr>
+<tr>
+<td><code>Invalid session token ({exc.reason_code}): {exc}</code></td>
+<td>(401 wrapper)</td>
+</tr>
+<tr>
+<td><code>No token provided</code></td>
+<td><code>missing</code></td>
+</tr>
+<tr>
+<td><code>session_token must be a string</code></td>
+<td><code>missing</code></td>
+</tr>
+<tr>
+<td><code>Cannot decode token header</code></td>
+<td><code>bad_signature</code></td>
+</tr>
+<tr>
+<td><code>Invalid signature</code></td>
+<td><code>bad_signature</code></td>
+</tr>
+<tr>
+<td><code>Token decode failed</code></td>
+<td><code>bad_signature</code></td>
+</tr>
+<tr>
+<td><code>Token header missing kid</code></td>
+<td><code>unknown_kid</code></td>
+</tr>
+<tr>
+<td><code>Unknown kid: {kid!r}</code></td>
+<td><code>unknown_kid</code></td>
+</tr>
+<tr>
+<td><code>Key {kid!r} has been revoked</code></td>
+<td><code>unknown_kid</code></td>
+</tr>
+<tr>
+<td><code>Token has expired</code></td>
+<td><code>expired</code></td>
+</tr>
+<tr>
+<td><code>Token issued for {broker_instance_id!r}, not {self._broker_instance_id!r}</code></td>
+<td><code>broker_instance_mismatch</code></td>
+</tr>
+<tr>
+<td><code>session token was minted for agent {claims.agent_id!r}, presented by {agent_id!r}</code></td>
+<td><code>agent_mismatch</code></td>
+</tr>
+<tr>
+<td><code>session tokens are disabled (session_tokens.enabled: false)</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>purpose {purpose!r} is not one of the purposes agent {agent_id!r} may claim ({sorted(record.allowed_purposes)})</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>Unknown agent id='{agent_id}'</code></td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<h3 id="sessions-exposure-ledger-session-store-sessionsmd">Sessions, exposure ledger, session store — <a href="sessions/">sessions.md</a><a class="headerlink" href="#sessions-exposure-ledger-session-store-sessionsmd" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>session_not_yours: session {state.session_id!r} belongs to another principal. …</code></td>
+</tr>
+<tr>
+<td><code>Broker busy: waited {budget}s to take the exposure ledger on {what!r} and did not get it. …</code></td>
+</tr>
+<tr>
+<td><code>PostgresSessionStore unavailable (dsn={self._sanitized_dsn()}): {exc}</code></td>
+</tr>
+<tr>
+<td><code>PostgresSessionStore unavailable (dsn=…) and sqlite fallback at {self._sqlite_path} failed: {sqlite_exc}</code></td>
+</tr>
+<tr>
+<td><code>PostgresSessionStore.aget() called before setup() succeeded</code></td>
+</tr>
+<tr>
+<td><code>PostgresSessionStore.aupdate() called before setup() succeeded</code></td>
+</tr>
+<tr>
+<td><code>SqliteSessionStore({self._path}) used before setup() succeeded</code></td>
+</tr>
+<tr>
+<td><code>session-store pool exhausted: no connection became free within {…}s …</code></td>
+</tr>
+<tr>
+<td><code>session-store lock pool exhausted: no connection became free within {…}s …</code></td>
+</tr>
+<tr>
+<td><code>session database carries schema version {…}; this build understands version {_SCHEMA_VERSION}. …</code></td>
+</tr>
+<tr>
+<td><code>session store at {…} now carries schema version {…}; …</code></td>
+</tr>
+<tr>
+<td><code>session database {self._path} carries schema version {found}; …</code></td>
+</tr>
+<tr>
+<td><code>session database {self._path} now carries schema version {found}; …</code></td>
+</tr>
+<tr>
+<td><code>session_store.backend: redis has no implementation. …</code></td>
+</tr>
+<tr>
+<td><code>session_store.backend=postgres requires 'dsn' or TEST_PG_DSN env var</code></td>
+</tr>
+<tr>
+<td><code>session_store.backend=postgres needs the 'postgres' extra, whose driver asyncpg is not installed -- {install_extra_hint('postgres')}. Or set session_store.backend to sqlite (durable, single-node) or memory, neither of which needs a driver.</code></td>
+</tr>
+<tr>
+<td><code>ERROR: pass exactly one of --sqlite-path or --dsn</code></td>
+</tr>
+<tr>
+<td><code>ERROR: no such file: {path}</code></td>
+</tr>
+<tr>
+<td><code>ERROR: asyncpg is not installed -- {install_extra_hint('postgres')}</code></td>
+</tr>
+<tr>
+<td><code>ERROR: could not connect: {exc}</code></td>
+</tr>
+<tr>
+<td><code>ERROR: could not read nautilus_schema_version: {exc}</code></td>
+</tr>
+<tr>
+<td><code>ERROR: nautilus_schema_version holds no row</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="http-transport-transportmd">HTTP transport — <a href="transport/">transport.md</a><a class="headerlink" href="#http-transport-transportmd" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Broker not ready</code></td>
+<td>503</td>
+</tr>
+<tr>
+<td><code>Request body is {declared} bytes; this broker accepts at most {limit} (api.max_request_bytes).</code></td>
+<td>413</td>
+</tr>
+<tr>
+<td><code>request body exceeded api.max_request_bytes ({self.max_bytes} bytes)</code></td>
+<td>connection abort</td>
+</tr>
+<tr>
+<td><code>Broker busy: {limit} requests are already in flight (api.max_concurrent_requests). Retry.</code></td>
+<td>503</td>
+</tr>
+<tr>
+<td><code>Nautilus could not record this request and will not serve what it cannot account for: {exc}</code></td>
+<td>503</td>
+</tr>
+<tr>
+<td><code>context['scope_constraints'] entry is not a scope constraint: {reasons}</code></td>
+<td>400</td>
+</tr>
+<tr>
+<td><code>invalid datetime: {value!r}</code></td>
+<td>400</td>
+</tr>
+<tr>
+<td><code>Adapter '{name}' not found</code></td>
+<td>404</td>
+</tr>
+<tr>
+<td><code>Adapter '{name}' does not support schema introspection</code></td>
+<td>501</td>
+</tr>
+<tr>
+<td><code>Schema fetch failed: {exc}</code></td>
+<td>503</td>
+</tr>
+<tr>
+<td><code>audit entry {request_id!r} not found</code></td>
+<td>404</td>
+</tr>
+<tr>
+<td><code>{"status": "not_ready", "reason": "startup_incomplete"}</code></td>
+<td>503</td>
+</tr>
+<tr>
+<td><code>{"status": "not_ready", "reason": "&lt;audit probe text&gt;"}</code></td>
+<td>503</td>
+</tr>
+<tr>
+<td><code>{"status": "not_ready", "reason": "session_store_timeout"}</code></td>
+<td>503</td>
+</tr>
+<tr>
+<td><code>{"status": "not_ready", "reason": "{type(exc).__name__}"}</code></td>
+<td>503</td>
+</tr>
+<tr>
+<td><code>Not Found</code></td>
+<td>404</td>
+</tr>
+</tbody>
+</table>
+<h3 id="configuration-and-startup-configmd">Configuration and startup — <a href="config/">config.md</a><a class="headerlink" href="#configuration-and-startup-configmd" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Unable to read config file '{config_path}': {exc}</code></td>
+</tr>
+<tr>
+<td><code>Invalid YAML in '{config_path}': {exc}</code></td>
+</tr>
+<tr>
+<td><code>Config root must be a mapping, got {type(raw).__name__}</code></td>
+</tr>
+<tr>
+<td><code>Interpolated config root must remain a mapping</code></td>
+</tr>
+<tr>
+<td><code>Config must define a 'sources' list</code></td>
+</tr>
+<tr>
+<td><code>Each source entry must be a mapping</code></td>
+</tr>
+<tr>
+<td><code>Each source entry must have a string 'id'</code></td>
+</tr>
+<tr>
+<td><code>Duplicate source id='{source_id}'</code></td>
+</tr>
+<tr>
+<td><code>Source id='{source_id}' is missing the required key 'type' (one of: {sorted(supported_types)})</code></td>
+</tr>
+<tr>
+<td><code>Unsupported source type='{source_type}' for id='{source_id}' (supported: {sorted(supported_types)})</code></td>
+</tr>
+<tr>
+<td><code>Missing env var '{var}' referenced by source id='{source_id}'</code></td>
+</tr>
+<tr>
+<td><code>Config validation failed:</code></td>
+</tr>
+<tr>
+<td><code>sources.{i}.id: String should match pattern '^[A-Za-z0-9][A-Za-z0-9._-]*$' [type=string_pattern_mismatch]</code></td>
+</tr>
+<tr>
+<td><code>source '{self.id}' has type '{self.type}' but no '{required}'. …</code></td>
+</tr>
+<tr>
+<td><code>source '{self.id}' has type '{self.type}' but no 'connection'. …</code></td>
+</tr>
+<tr>
+<td><code>source id='{source.id}' has type '{source.type}', whose driver is not installed -- {install_extra_hint(extra)} (import failed: {…})</code></td>
+</tr>
+<tr>
+<td><code>adapters[{i}]: module_path does not exist or is not a file: {module_path}</code></td>
+</tr>
+<tr>
+<td><code>adapters[{i}]: cannot import module from {module_path}</code></td>
+</tr>
+<tr>
+<td><code>adapters[{i}]: error executing {module_path}: {exc}</code></td>
+</tr>
+<tr>
+<td><code>adapters[{i}]: class '{cfg.class_name}' not found in {module_path}</code></td>
+</tr>
+<tr>
+<td><code>adapters[{i}]: '{cfg.class_name}' in {module_path} is not a class</code></td>
+</tr>
+<tr>
+<td><code>adapters[{i}]: '{cfg.class_name}' in {module_path} does not implement the Adapter protocol (missing: {gaps})</code></td>
+</tr>
+<tr>
+<td><code>adapters[{i}]: declared source_type='{cfg.source_type}' does not match {cfg.class_name}.source_type={actual_type!r} in {module_path}</code></td>
+</tr>
+<tr>
+<td><code>classification labels are not levels of the 'classification' hierarchy ({known}): …</code></td>
+</tr>
+<tr>
+<td><code>analysis.mode={analysis.mode!r} requires analysis.provider to be set</code></td>
+</tr>
+<tr>
+<td><code>rkm.auto_promote.enabled: auto-promotion is not implemented. …</code></td>
+</tr>
+<tr>
+<td><code>Escalation pack '{yaml_path}' must contain a top-level list, got {type(raw).__name__}</code></td>
+</tr>
+<tr>
+<td><code>Each escalation entry in '{yaml_path}' must be a mapping</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="adapters-and-data-sources-adaptersmd">Adapters and data sources — <a href="adapters/">adapters.md</a><a class="headerlink" href="#adapters-and-data-sources-adaptersmd" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Operator '{op}' not in allowlist: {sorted(_OPERATOR_ALLOWLIST)}</code></td>
+</tr>
+<tr>
+<td><code>Invalid field identifier '{f}'</code></td>
+</tr>
+<tr>
+<td><code>table name {table!r} has more than one schema qualifier</code></td>
+</tr>
+<tr>
+<td><code>Operator '{op}' requires a list value, got {type(bad).__name__}</code></td>
+</tr>
+<tr>
+<td><code>Operator 'IN' requires a list value, got {type(value).__name__}</code></td>
+</tr>
+<tr>
+<td><code>Operator 'NOT IN' requires a list value, got {type(value).__name__}</code></td>
+</tr>
+<tr>
+<td><code>Operator 'LIKE' requires a string value, got {type(bad).__name__}</code></td>
+</tr>
+<tr>
+<td><code>Operator 'BETWEEN' requires a 2-tuple/list value</code></td>
+</tr>
+<tr>
+<td><code>operator not allowed: {op}</code></td>
+</tr>
+<tr>
+<td><code>{Adapter}.execute called before connect()</code></td>
+</tr>
+<tr>
+<td><code>{type(self).__name__}: execute failed for source '{source_id}': {type(exc).__name__}[: {exc}]</code></td>
+</tr>
+<tr>
+<td><code>exceeded the source's timeout_s budget of {timeout_s}s</code></td>
+</tr>
+<tr>
+<td><code>source '{source_id}' declares mTLS but its client certificate could not be loaded …</code></td>
+</tr>
+<tr>
+<td><code>RestAdapter refuses base_url host '{host}': it resolves to private/loopback/link-local address {ip}</code></td>
+</tr>
+<tr>
+<td><code>LLMAdapter refuses base_url host '{host}': it resolves to link-local/multicast/unspecified address {ip}</code></td>
+</tr>
+<tr>
+<td><code>{adapter} requires a non-empty host in base_url (scheme={scheme!r}; the value is withheld …)</code></td>
+</tr>
+<tr>
+<td><code>Refused redirect from host '{base_host}' to different host '{target_host}' (status={…})</code></td>
+</tr>
+<tr>
+<td><code>Refused same-host redirect (status={…}); configure the endpoint path directly …</code></td>
+</tr>
+<tr>
+<td><code>source '{source_id}' answered with {declared} bytes, over the {MAX_RESPONSE_BYTES}-byte ceiling</code></td>
+</tr>
+<tr>
+<td><code>source '{source_id}' object {key!r} is {declared} bytes, over the {MAX_OBJECT_BYTES}-byte ceiling</code></td>
+</tr>
+<tr>
+<td><code>ElasticsearchAdapter: field '{field}' is mapped as analysed 'text' with no 'keyword' subfield, …</code></td>
+</tr>
+<tr>
+<td><code>ElasticsearchAdapter: the only exact subfield for '{field}' is '{field}.{chosen}', which has ignore_above={limit}, …</code></td>
+</tr>
+<tr>
+<td><code>NoopEmbedder(strict=True) cannot produce embeddings. …</code></td>
+</tr>
+<tr>
+<td><code>context['embedding'] must be list[float], got {type(override).__name__}</code></td>
+</tr>
+<tr>
+<td><code>sn-invalid-field: {field!r}</code>, <code>sn-injection-rejected</code>, <code>sn-unsupported-operator: {op!r}</code></td>
+</tr>
+<tr>
+<td><code>source type '{source_type}' needs its driver -- {install_extra_hint(extra)}</code></td>
+</tr>
+<tr>
+<td><code>the 'llm-anthropic' extra is not installed -- {install_extra_hint('llm-anthropic')}</code></td>
+</tr>
+<tr>
+<td><code>AnthropicProvider: env var {self.api_key_env!r} is unset or empty</code></td>
+</tr>
+<tr>
+<td><code>PostgresAdapter requires 'table' on source '{config.id}' (Phase 1 shortcut)</code></td>
+</tr>
+<tr>
+<td><code>PostgresAdapter missing 'table' for source '{self._config.id}'</code></td>
+</tr>
+<tr>
+<td><code>PgVectorAdapter requires 'table' on source '{config.id}'</code></td>
+</tr>
+<tr>
+<td><code>PgVectorAdapter missing 'table' for source '{config.id}'</code></td>
+</tr>
+<tr>
+<td><code>distance_operator '{distance_operator}' not in allowlist: {sorted(_ALLOWED_DISTANCE_OPERATORS)}</code></td>
+</tr>
+<tr>
+<td><code>ElasticsearchAdapter requires non-empty 'index' on SourceConfig</code></td>
+</tr>
+<tr>
+<td><code>Invalid Elasticsearch index '{index}': must match {_INDEX_PATTERN.pattern}</code></td>
+</tr>
+<tr>
+<td><code>ElasticsearchAdapter could not read the mapping for index '{self._index}': {exc}</code></td>
+</tr>
+<tr>
+<td><code>Neo4jAdapter requires non-empty 'label' on SourceConfig</code></td>
+</tr>
+<tr>
+<td><code>Invalid Neo4j label '{label}': must match {_LABEL_PATTERN.pattern}</code></td>
+</tr>
+<tr>
+<td><code>Invalid Neo4j property identifier '{name}'</code></td>
+</tr>
+<tr>
+<td><code>neo4j: get_schema failed for source '{self._config.id}': {exc}</code></td>
+</tr>
+<tr>
+<td><code>InfluxDBAdapter: '_time' bound {value!r} is not a Flux duration …</code></td>
+</tr>
+<tr>
+<td><code>InfluxDBAdapter: '_time' bound {value!r} is not a time, duration or Unix-second integer</code></td>
+</tr>
+<tr>
+<td><code>InfluxDBAdapter: operator {op!r} is not expressible as a time range on '_time' …</code></td>
+</tr>
+<tr>
+<td><code>InfluxDBAdapter: LIKE pattern {pattern!r} uses the '_' single-character wildcard, …</code></td>
+</tr>
+<tr>
+<td><code>InfluxDBAdapter: LIKE pattern {pattern!r} has an interior '%' wildcard, …</code></td>
+</tr>
+<tr>
+<td><code>InfluxDBAdapter: source '{config.id}' declares auth type {auth.type!r}, which InfluxDB cannot use. …</code></td>
+</tr>
+<tr>
+<td><code>influxdb: get_schema failed for source '{self._config.id}': {exc}</code></td>
+</tr>
+<tr>
+<td><code>S3Adapter: source '{config.id}' declares auth type {auth.type!r}, which S3 cannot use. …</code></td>
+</tr>
+<tr>
+<td><code>S3Adapter: unsupported operator '{op}' for field 'key'</code></td>
+</tr>
+<tr>
+<td><code>S3Adapter: unsupported operator '{op}' for tag filter</code></td>
+</tr>
+<tr>
+<td><code>S3Adapter: unsupported operator '{op}' for classification</code></td>
+</tr>
+<tr>
+<td><code>S3Adapter: unsupported scope field '{field}'</code></td>
+</tr>
+<tr>
+<td><code>S3Adapter: empty tag name</code></td>
+</tr>
+<tr>
+<td><code>S3Adapter: IN operator requires a list value, got {type(value).__name__}</code></td>
+</tr>
+<tr>
+<td><code>S3Adapter: LIKE operator requires a string value</code></td>
+</tr>
+<tr>
+<td><code>S3Adapter request failed for source '{self._config.id}': {exc}</code></td>
+</tr>
+<tr>
+<td><code>sn-invalid-value: operator {op!r} requires a list, got {type(cast(object, value)).__name__}</code></td>
+</tr>
+<tr>
+<td><code>sn-invalid-value: operator 'BETWEEN' requires a 2-tuple/list</code></td>
+</tr>
+<tr>
+<td><code>sn-invalid-value: operator 'BETWEEN' requires exactly two endpoints</code></td>
+</tr>
+<tr>
+<td><code>ServiceNowAdapter source '{config.id}' has invalid table {table!r} (expected regex '^[a-z][a-z0-9_]*$')</code></td>
+</tr>
+<tr>
+<td><code>sn-attachment-fetch-cap: {len(rows)} rows pinned, cap is {_MAX_ATTACHMENT_FETCHES}</code></td>
+</tr>
+<tr>
+<td><code>servicenow: get_schema failed for source '{self._config.id}': {exc}</code></td>
+</tr>
+<tr>
+<td><code>Operator 'NOT IN' is not supported by the REST adapter unless explicitly declared …</code></td>
+</tr>
+<tr>
+<td><code>RestAdapter source '{config.id}' declares endpoints=[] (must list at least one EndpointSpec …)</code></td>
+</tr>
+<tr>
+<td><code>EndpointSpec.operator_templates declares unknown operator '{op}' for source '{config.id}'</code></td>
+</tr>
+<tr>
+<td><code>LLMAdapter source '{config.id}' requires a 'model' field in its source block</code></td>
+</tr>
+<tr>
+<td><code>LLMAdapter source '{config.id}' does not support mTLS auth; use bearer/basic …</code></td>
+</tr>
+<tr>
+<td><code>LLMAdapter call failed: {exc}</code></td>
+</tr>
+<tr>
+<td><code>LLMAdapter received a non-OpenAI-compatible response shape: {exc}</code></td>
+</tr>
+<tr>
+<td>…and the static adapter's operator refusal, plus the analysis-provider messages below.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="rules-rkm-and-the-policy-engine-rulesmd">Rules, RKM and the policy engine — <a href="rules/">rules.md</a><a class="headerlink" href="#rules-rkm-and-the-policy-engine-rulesmd" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ERROR {serr.file}:{serr.line}: {serr.message}{hint_suffix}</code></td>
+</tr>
+<tr>
+<td><code>proposed rule {rule_name!r} does not compile: {exc}</code></td>
+</tr>
+<tr>
+<td><code>Regression detected: rule {rule_name!r} denies access the current rules grant, in {regression_count} of {replayed} replayed request(s). First: {first_regression}</code></td>
+</tr>
+<tr>
+<td><code>proposal not found: {proposal_id!r}</code></td>
+</tr>
+<tr>
+<td><code>{"error": "already_decided", "current_status": …}</code></td>
+</tr>
+<tr>
+<td><code>cannot transition {proposal_id} from {current!r} to {to!r}</code></td>
+</tr>
+<tr>
+<td><code>lock contention timeout on proposal queue</code></td>
+</tr>
+<tr>
+<td><code>proposal {proposal.proposal_id!r} carries no rule YAML: artifact has neither 'yaml' nor 'yaml_path' (keys: {sorted(artifact)})</code></td>
+</tr>
+<tr>
+<td><code>proposal {proposal.proposal_id!r} references unreadable rule file {path!r}: {exc}</code></td>
+</tr>
+<tr>
+<td><code>FathomRouter.reload_rule failed for proposal {proposal_id!r}: {exc}</code></td>
+</tr>
+<tr>
+<td><code>cannot promote rule {rule_name!r}: no rules.user_rules_dirs is configured, …</code></td>
+</tr>
+<tr>
+<td><code>cannot promote rule {rule_name!r}: writing {target} failed: {exc}</code></td>
+</tr>
+<tr>
+<td><code>cannot retract rule {rule_name!r}: it is still in force after a rebuild, …</code></td>
+</tr>
+<tr>
+<td><code>rule {rule_name!r} not found</code></td>
+</tr>
+<tr>
+<td><code>rule {rule_name!r} version {version} not found</code></td>
+</tr>
+<tr>
+<td><code>rule {rule_name!r} v{to_version} not found in lineage</code></td>
+</tr>
+<tr>
+<td><code>lineage record not found: {rule_name} v{version}</code></td>
+</tr>
+<tr>
+<td><code>invalid rule name {rule_name!r}: expected a bare rule name, optionally prefixed 'module::'</code></td>
+</tr>
+<tr>
+<td><code>rule pack {pack_name!r} is claimed by more than one installed distribution …</code></td>
+</tr>
+<tr>
+<td><code>Fathom engine construction failed: {exc}</code></td>
+</tr>
+<tr>
+<td><code>FathomRouter.route() failed for agent_id={agent_id!r}: {exc}</code></td>
+</tr>
+<tr>
+<td><code>routing_unknown_source</code>, <code>scope_without_routing</code>, <code>denial_unknown_source</code>, <code>denial_missing_linkage</code>, <code>agent_fact_integrity</code>, <code>session_exposure_count</code></td>
+</tr>
+<tr>
+<td><code>rule {rule_name!r} targets routing-owned template {template!r}</code></td>
+</tr>
+<tr>
+<td><code>{path}:{approx_line}: invalid relationship_type={rel_type!r}; must be one of [{valid}]</code></td>
+</tr>
+<tr>
+<td><code>body must carry 'rule_yaml': the contents of the rule file</code></td>
+</tr>
+<tr>
+<td><code>reason is required for rejection</code>, <code>reason is required for retraction</code>, <code>to_version is required for rollback</code>, <code>yes=true required for destructive operation</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="attestation-keys-and-the-chained-log-attestationmd">Attestation, keys and the chained log — <a href="attestation/">attestation.md</a><a class="headerlink" href="#attestation-keys-and-the-chained-log-attestationmd" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kid must be a UUID</code></td>
+</tr>
+<tr>
+<td><code>reviewer is required (no control characters)</code></td>
+</tr>
+<tr>
+<td><code>reviewer and reason are required (no control characters)</code></td>
+</tr>
+<tr>
+<td><code>kid {kid!r} not found</code></td>
+</tr>
+<tr>
+<td><code>kid {kid!r} is the current primary; rotate first, then revoke</code></td>
+</tr>
+<tr>
+<td><code>Key {entry.kid!r} has no private key (revoked)</code></td>
+</tr>
+<tr>
+<td><code>Expected Ed25519PrivateKey</code> / <code>Expected Ed25519PublicKey</code></td>
+</tr>
+<tr>
+<td><code>attestation is disabled</code></td>
+</tr>
+<tr>
+<td><code>attestation.sink.chained requires attestation.enabled with a signing key</code></td>
+</tr>
+<tr>
+<td><code>audit.chained requires attestation.enabled with a signing key: …</code></td>
+</tr>
+<tr>
+<td><code>audit.chained cannot append to the existing chain at {audit_path} with an auto-generated signing key: …</code></td>
+</tr>
+<tr>
+<td><code>{subject} is already open for writing by {holder}. A hash chain admits exactly one writer: …</code></td>
+</tr>
+<tr>
+<td><code>emit on closed ChainedFileAttestationSink</code></td>
+</tr>
+<tr>
+<td><code>unreadable offsets file {path}: {exc}</code></td>
+</tr>
+<tr>
+<td><code>offsets payload must be a JSON object, got {type(payload).__name__}</code></td>
+</tr>
+<tr>
+<td><code>last_byte_offset must be int, got {type(offset_raw).__name__}</code></td>
+</tr>
+<tr>
+<td><code>last_byte_offset must be non-negative, got {offset_raw}</code></td>
+</tr>
+<tr>
+<td><code>seen_line_sha256 must be list, got {type(seen_raw).__name__}</code></td>
+</tr>
+<tr>
+<td><code>seen_line_sha256 entries must be str, got {type(item).__name__}</code></td>
+</tr>
+<tr>
+<td><code>refusing non-monotonic save: current={…} &lt; persisted={…}</code></td>
+</tr>
+<tr>
+<td><code>AuditRecord has no {NAUTILUS_METADATA_KEY!r} metadata</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="command-line-climd">Command line — <a href="cli/">cli.md</a><a class="headerlink" href="#command-line-climd" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+<th>Exit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ERROR: NAUTILUS_REVIEWER env var required for this command. Set it to your operator identity.</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>ERROR: this decision cannot be recorded, so it will not be taken: {problem}</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>ERROR: this acknowledgement cannot be recorded, so it will not be made: {problem}</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>ERROR: config path does not exist or is not a file: {config_path}</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>ERROR: invalid config: {exc}</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>ERROR: broker construction failed: {exc}</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>ERROR: config: no subcommand given (try: check)</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>ERROR: file not found: {file_path}</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>--bind must be HOST:PORT, got {bind!r}</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>--bind port must be an integer, got {port_s!r}</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>Unable to read config '{config_path}': {exc}</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>application startup failed; the server never accepted a connection. The cause is logged above.</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>FAIL {status} {url}</code> / <code>FAIL unreachable {url}: {exc}</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>WARN: --air-gapped drops LLM source id={…!r} — connection host is not loopback (NFR-1, #43)</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>ERROR: rkm: no subcommand given (try: queue, lineage)</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>ERROR: rkm queue: no op given (try: submit, list, show, approve, reject, diff)</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>ERROR: rule: no subcommand given (try: list, retract, lineage, history, rollback)</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>ERROR: rules: no subcommand given (try: validate, test, history)</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>ERROR: adapters: no subcommand given (try: new, list, schema, schema-fingerprint, schema-diff, schema-ack)</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>ERROR: key: no subcommand given (try: list, rotate, revoke)</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>ERROR: attestation: no subcommand given (try: verify)</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>ERROR: events: no subcommand given (try: list)</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>ERROR: {target} already exists — refusing to overwrite it</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>FAIL: key {command}: --url is required. …</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>ERROR: rotate requires --yes to confirm.</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>ERROR: revoke requires --yes to confirm.</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>FAIL: key {command}: cannot reach {endpoint}: {exc}</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>ERROR: key {command}: server returned {status_code}: {text}</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>ERROR: --yes required for destructive op</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>ERROR: --reason required for retract</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>ERROR: --cascade and --orphan-children are mutually exclusive</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>ERROR: rule {name!r} not found in lineage</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>ERROR: rule {name!r} v{to_version} not found in lineage</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>WARN: no lineage records for {name!r}</code> / <code>WARN: no history for {name!r}</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>ERROR: rule file not found: {rule_path}</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>ERROR: rkm queue approve: --url is required. …</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>ERROR: rkm queue approve: cannot reach {endpoint}: {exc}</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>ERROR: rkm queue approve: server returned {status_code}: {text}</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>ERROR: proposal {proposal_id} not found</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>ERROR: proposal {proposal_id} cannot be rejected: it is {current_status}</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>WARN: could not read rkm settings from {config_path!r} ({exc}); using defaults</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>WARN: no lineage records for {id!r}</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>ERROR: invalid adapter name {name!r} (expected lowercase-dashed, e.g. my-csv-adapter)</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>ERROR: destination already exists and is not empty: {dest}</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>ERROR: copier is required for 'adapters new' — install it with: pip install copier</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>ERROR: no config found: pass --config PATH, or run from a directory containing nautilus.yaml</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>ERROR: --status {status_filter!r} needs --url: quarantine state lives in the serving process, …</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>ERROR: could not load {config_path}: {exc}</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>ERROR: {url} refused the credential (401). Pass a valid --api-key.</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>ERROR: could not reach {url}: {exc}</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>ERROR: no schema available for adapter {name!r}</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>ERROR: no schema available for adapter {name!r}; cannot ack</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>ERROR: schema-ack requires --yes to confirm</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>WARN: could not read schema for {name!r}: {exc}</code></td>
+<td>1 from <code>schema</code>, <code>schema-fingerprint</code> and <code>schema-ack</code>; 0 from <code>schema-diff</code></td>
+</tr>
+<tr>
+<td><code>WARN: no stored fingerprint for {name!r}; treating as new</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>ERROR: attestation verify: log not found: {log_path}</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>ERROR: attestation verify: pubkey not found: {pubkey_path}</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>ERROR: attestation verify: {result.error}</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>WARN: could not read audit path from {config_path!r} ({exc}); using {path}</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>ERROR: audit log not found: {audit_path}</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>ERROR: cannot read rules config from {path}: {exc}</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>ERROR: score {min_total} below threshold {threshold}: {file_path}</code></td>
+<td>2</td>
+</tr>
+<tr>
+<td><code>WARN: no rules found in {file_path}</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>WARN: affected descendants: {names}</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>WARN: rule '{name}': shadow finding {relation} (existing rule '{existing_rule}')</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>WARN: rule '{name}': insufficient audit history (replayed {replayed_n_actual} entries)</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>WARN: rule '{name}': {skipped_drifted} audit entries could not be replayed -- …</code></td>
+<td>0</td>
+</tr>
+<tr>
+<td><code>WARN: rule '{name}': {skipped_no_input_facts} audit entries carry no engine input and were not replayed</code></td>
+<td>0</td>
+</tr>
+</tbody>
+</table>
+<h3 id="embedding-nautilus-as-a-library-librarymd">Embedding Nautilus as a library — <a href="library/">library.md</a><a class="headerlink" href="#embedding-nautilus-as-a-library-librarymd" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Message</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Broker.request() called inside a running event loop. Use Broker.arequest() (async) from async contexts.</code></td>
+</tr>
+<tr>
+<td><code>Broker.close() called inside a running event loop. Use Broker.aclose() (async) from async contexts.</code></td>
+</tr>
+<tr>
+<td><code>Broker.{method}() called after close(); the attestation sink and session store are already shut down, …</code></td>
+</tr>
+<tr>
+<td><code>Broker.declare_handoff() failed for source={source_agent_id!r} receiving={receiving_agent_id!r}: {exc}</code></td>
+</tr>
+<tr>
+<td><code>create_app requires either config_path or existing_broker</code></td>
+</tr>
+<tr>
+<td><code>create_server requires either config_path or existing_broker</code></td>
+</tr>
+<tr>
+<td><code>AC-21.b: this adapter must implement get_schema() (task-006)</code></td>
+</tr>
+<tr>
+<td><code>adapter id {adapter_id!r} is not usable as a fingerprint filename</code></td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

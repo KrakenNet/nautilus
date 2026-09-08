@@ -1,0 +1,3936 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Policy-first data broker for AI agents">
+      
+      
+      
+        <link rel="canonical" href="https://nautilus.krakn.ai/0.3/reference/adapter-sdk/">
+      
+      
+        <link rel="prev" href="../rule-packs/">
+      
+      
+        <link rel="next" href="../errors/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Adapter SDK - Nautilus</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#adapter-sdk" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Nautilus" class="md-header__button md-logo" aria-label="Nautilus" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Nautilus
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Adapter SDK
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/KrakenNet/nautilus" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    KrakenNet/nautilus
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+  
+    
+  
+  Home
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../getting-started/" class="md-tabs__link">
+        
+  
+  
+    
+  
+  Getting Started
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../how-to/" class="md-tabs__link">
+          
+  
+  
+  How-to Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../concepts/" class="md-tabs__link">
+          
+  
+  
+  Concepts
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Nautilus" class="md-nav__button md-logo" aria-label="Nautilus" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Nautilus
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/KrakenNet/nautilus" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    KrakenNet/nautilus
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How-to Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How-to Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/operator-guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Operator Guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/deploying/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Deploying
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/authoring-rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Authoring Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/developing-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developing Adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/hardening/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Hardening
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/add-a-postgres-source/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add a Postgres Source
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/write-a-routing-rule/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Write a Routing Rule
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/configure-attestation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configure Attestation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/verify-a-token/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verify a Token
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/add-an-llm-source/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Add an LLM Source
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/monitor-with-grafana/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Monitor with Grafana
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Concepts
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/trust-boundary/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Trust Boundary
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/attestation-chain/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The Attestation Chain
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/rkm-lifecycle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    RKM Rule Lifecycle
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Reference
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../python-sdk/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Python SDK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rest-api/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    REST API
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rule-packs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rule Packs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapter SDK
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapter SDK
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-adapter-protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Adapter protocol
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Adapter protocol">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#source_type-classvarstr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        source_type: ClassVar[str]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#capabilities-classvarfrozensetstr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        capabilities: ClassVar[frozenset[str]]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#async-def-connectself-config-sourceconfig-none" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        async def connect(self, config: SourceConfig) -&gt; None
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#async-def-executeself-intent-intentanalysis-scope-listscopeconstraint-context-dictstr-any-adapterresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        async def execute(self, intent: IntentAnalysis, scope: list[ScopeConstraint], context: dict[str, Any]) -&gt; AdapterResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#async-def-closeself-none" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        async def close(self) -&gt; None
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#async-def-get_schemaself-adapterschema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        async def get_schema(self) -&gt; AdapterSchema
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#types-in-the-signatures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Types in the signatures
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Types in the signatures">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sourceconfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SourceConfig
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#intentanalysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        IntentAnalysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scopeconstraint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ScopeConstraint
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#honouring-a-scopeconstraint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Honouring a ScopeConstraint
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adapterresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AdapterResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#errorrecord" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ErrorRecord
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adapterschema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AdapterSchema
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exceptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exceptions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scope-enforcement-and-helper-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope-enforcement and helper API
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#registration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Registration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Registration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#entry-points-nautilusadapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Entry points — nautilus.adapters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#local-path-the-adapters-config-block" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local path — the adapters: config block
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#precedence-and-the-built-in-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Precedence and the built-in table
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compliance-suite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compliance suite
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-adapters-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus adapters commands
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#truncation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Truncation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#failure-catalogue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Failure catalogue
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_7" id="__nav_5_7_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Errors
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Errors
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../errors/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../errors/auth/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials and identity
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../errors/session-tokens/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Session tokens
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../errors/sessions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sessions and session store
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../errors/transport/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HTTP transport
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../errors/config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration and startup
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../errors/adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters and data sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../errors/rules/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rules, RKM and the engine
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../errors/attestation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Attestation and keys
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../errors/cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Command line
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../errors/library/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Embedding as a library
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_5_8" >
+        
+          
+          <label class="md-nav__link" for="__nav_5_8" id="__nav_5_8_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapter SDK Docs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_5_8_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5_8">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapter SDK Docs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sdk/docs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sdk/docs/tutorial/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tutorial
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sdk/docs/discovery/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Discovery
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sdk/docs/reference/protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sdk/docs/reference/types/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Types
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sdk/docs/reference/testing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-adapter-protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Adapter protocol
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Adapter protocol">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#source_type-classvarstr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        source_type: ClassVar[str]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#capabilities-classvarfrozensetstr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        capabilities: ClassVar[frozenset[str]]
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#async-def-connectself-config-sourceconfig-none" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        async def connect(self, config: SourceConfig) -&gt; None
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#async-def-executeself-intent-intentanalysis-scope-listscopeconstraint-context-dictstr-any-adapterresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        async def execute(self, intent: IntentAnalysis, scope: list[ScopeConstraint], context: dict[str, Any]) -&gt; AdapterResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#async-def-closeself-none" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        async def close(self) -&gt; None
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#async-def-get_schemaself-adapterschema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        async def get_schema(self) -&gt; AdapterSchema
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#types-in-the-signatures" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Types in the signatures
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Types in the signatures">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sourceconfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SourceConfig
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#intentanalysis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        IntentAnalysis
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scopeconstraint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ScopeConstraint
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#honouring-a-scopeconstraint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Honouring a ScopeConstraint
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adapterresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AdapterResult
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#errorrecord" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ErrorRecord
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adapterschema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AdapterSchema
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exceptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exceptions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scope-enforcement-and-helper-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scope-enforcement and helper API
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#registration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Registration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Registration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#entry-points-nautilusadapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Entry points — nautilus.adapters
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#local-path-the-adapters-config-block" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Local path — the adapters: config block
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#precedence-and-the-built-in-table" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Precedence and the built-in table
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#compliance-suite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Compliance suite
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#nautilus-adapters-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        nautilus adapters commands
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#truncation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Truncation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#failure-catalogue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Failure catalogue
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="adapter-sdk">Adapter SDK<a class="headerlink" href="#adapter-sdk" title="Permanent link">&para;</a></h1>
+<p>Reference for everything a third-party adapter touches: the <code>Adapter</code>
+protocol, the types in its signatures, the scope-enforcement helpers, the two
+registration paths, the compliance suite, the <code>nautilus adapters</code> commands, and
+the exact string the broker emits for each way an adapter can be wrong.</p>
+<p>For the empty-directory-to-served-request walkthrough, see
+<a href="../../how-to/developing-adapters/">Developing Adapters</a>.</p>
+<p>Everything below ships in the <code>nautilus-rkm</code> distribution, so an adapter
+package needs exactly one dependency:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;nautilus-rkm&quot;</span><span class="p">]</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>What you need</th>
+<th>Import from</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Adapter</code>, <code>AdapterError</code>, <code>ScopeEnforcementError</code>, <code>EmbeddingUnavailableError</code></td>
+<td><code>nautilus.adapters.base</code></td>
+</tr>
+<tr>
+<td><code>validate_operator</code>, <code>validate_field</code>, <code>quote_identifier</code>, <code>quote_table</code>, <code>render_field</code></td>
+<td><code>nautilus.adapters.base</code></td>
+</tr>
+<tr>
+<td><code>row_bytes</code>, <code>bounded_rows</code>, <code>wrap_execute</code>, <code>session_token_headers</code>, <code>mtls_context</code>, <code>SESSION_TOKEN_HEADER</code></td>
+<td><code>nautilus.adapters.base</code></td>
+</tr>
+<tr>
+<td><code>AdapterResult</code>, <code>IntentAnalysis</code>, <code>ScopeConstraint</code>, <code>ScopeOperator</code>, <code>ErrorRecord</code></td>
+<td><code>nautilus.core.models</code></td>
+</tr>
+<tr>
+<td><code>SourceConfig</code></td>
+<td><code>nautilus.config.models</code></td>
+</tr>
+<tr>
+<td><code>AdapterSchema</code>, <code>AdapterTable</code>, <code>AdapterField</code></td>
+<td><code>nautilus.adapters.schema</code></td>
+</tr>
+<tr>
+<td><code>AdapterComplianceSuite</code></td>
+<td><code>nautilus.adapters.testing</code></td>
+</tr>
+<tr>
+<td><code>ADAPTER_REGISTRY</code> (built-in <code>source_type</code> → class)</td>
+<td><code>nautilus.adapters</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="the-adapter-protocol">The <code>Adapter</code> protocol<a class="headerlink" href="#the-adapter-protocol" title="Permanent link">&para;</a></h2>
+<p><code>nautilus.adapters.base.Adapter</code> is a <code>@runtime_checkable</code> <code>Protocol</code>. Do not
+subclass it — the broker checks conformance structurally, so a plain class with
+the right members registers. Six members: four methods, one required class
+attribute, one optional one.</p>
+<h3 id="source_type-classvarstr"><code>source_type: ClassVar[str]</code><a class="headerlink" href="#source_type-classvarstr" title="Permanent link">&para;</a></h3>
+<p>Required. The <code>type:</code> key a <code>sources:</code> block uses to select this adapter. Must
+be a <code>str</code> on the class (not an instance attribute, not <code>None</code>).</p>
+<ul>
+<li>Loaded by entry point: must equal the entry-point name, or the config
+  declares a type that resolves to nothing.</li>
+<li>Loaded by <code>adapters:</code> config: must equal the entry's <code>source_type</code>, or the
+  broker refuses to start (see <a href="#failure-catalogue">Failure catalogue</a>, row 8).</li>
+</ul>
+<p>Missing or non-<code>str</code> → the class is reported as missing the protocol member
+<code>source_type</code> and is skipped (entry point) or refuses startup (local path).</p>
+<h3 id="capabilities-classvarfrozensetstr"><code>capabilities: ClassVar[frozenset[str]]</code><a class="headerlink" href="#capabilities-classvarfrozensetstr" title="Permanent link">&para;</a></h3>
+<p>Optional; omit it unless you need it. The only recognised member is
+<code>"non_deterministic"</code>. Declare it when <code>rows</code> are not byte-reproducible across
+identical requests (an LLM-backed source, say):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">capabilities</span><span class="p">:</span> <span class="n">ClassVar</span><span class="p">[</span><span class="nb">frozenset</span><span class="p">[</span><span class="nb">str</span><span class="p">]]</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="s2">&quot;non_deterministic&quot;</span><span class="p">})</span>
+</code></pre></div>
+<p><code>Broker._is_non_deterministic</code> then omits the source from per-source response
+hashing and the signed attestation carries <code>hash_skipped=True</code> instead. Omit it
+and the broker hashes your rows: a source that legitimately varies will produce
+a digest nobody can re-verify. It is deliberately <strong>not</strong> a typed protocol
+member, so adding it never breaks <code>isinstance</code> or <code>type[Adapter]</code>
+assignability.</p>
+<h3 id="async-def-connectself-config-sourceconfig-none"><code>async def connect(self, config: SourceConfig) -&gt; None</code><a class="headerlink" href="#async-def-connectself-config-sourceconfig-none" title="Permanent link">&para;</a></h3>
+<p>Open pools, clients, files. Called <strong>lazily</strong>, once per source, by
+<code>Broker._prepare_adapter</code> on the first request that routes to it — not at
+startup — under a per-source lock so concurrent first requests share one pool.
+A source whose <code>connect</code> raises is not retried for <code>Broker.connect_cooldown_s</code>
+(30 s), so a dead backend costs one request its <code>timeout_s</code>, not every request.</p>
+<ul>
+<li><strong>Argument</strong> — <code>config</code> is this source's own YAML block, already
+  environment-interpolated. Read <code>config.connection</code>, <code>config.table</code>,
+  <code>config.timeout_s</code> from here rather than from the environment; keep the
+  reference (<code>self._config = config</code>) because <code>execute</code> needs <code>config.id</code>.</li>
+<li><strong>Returns</strong> — <code>None</code>. Anything you return is discarded.</li>
+<li><strong>Raises</strong> — <code>AdapterError</code> on any connectivity or configuration failure.
+  The broker converts it into a <code>sources_errored</code> entry rather than
+  propagating it to the agent.</li>
+<li><strong>If you skip it</strong> — nothing else calls it for you. <code>execute</code> running before
+  <code>connect</code> is your bug to detect; the scaffold raises
+  <code>AdapterError("&lt;Class&gt;.execute() called before connect()")</code>.</li>
+</ul>
+<h3 id="async-def-executeself-intent-intentanalysis-scope-listscopeconstraint-context-dictstr-any-adapterresult"><code>async def execute(self, intent: IntentAnalysis, scope: list[ScopeConstraint], context: dict[str, Any]) -&gt; AdapterResult</code><a class="headerlink" href="#async-def-executeself-intent-intentanalysis-scope-listscopeconstraint-context-dictstr-any-adapterresult" title="Permanent link">&para;</a></h3>
+<p>The one method that reads data. Called once per source per request, inside
+<code>asyncio.gather</code> with every other routed source, under the source's
+<code>timeout_s</code>.</p>
+<ul>
+<li><strong><code>intent</code></strong> — <a href="#intentanalysis"><code>IntentAnalysis</code></a>. What the caller asked
+  for, already parsed. Nothing forces you to use it; a source that always
+  returns the same projection may ignore it.</li>
+<li><strong><code>scope</code></strong> — the router's constraints for <strong>this</strong> source. Every one of them
+  must be applied to the rows you return, or refused. See
+  <a href="#honouring-a-scopeconstraint">Honouring scope</a>.</li>
+<li><strong><code>context</code></strong> — per-request dict. Keys the broker sets: <code>purpose</code>,
+  <code>session_id</code>, <code>clearance</code>, and <code>session_token</code> when session tokens are
+  enabled. Forward the token to downstream HTTP services with
+  <code>session_token_headers(context)</code>.</li>
+<li><strong>Returns</strong> — an <code>AdapterResult</code>. On success populate <code>rows</code> and leave
+  <code>error</code> as <code>None</code>; on a handled failure return an empty <code>rows</code> with <code>error</code>
+  set. Set <code>source_id=self._config.id</code> — the broker keys <code>data</code> by it, and
+  <code>scope</code> can be empty so it is not a reliable source of the id.</li>
+<li><strong>Raises</strong> — <code>ScopeEnforcementError</code> for a constraint you cannot enforce;
+  <code>AdapterError</code> for anything else. Both land in <code>sources_errored</code>, typed.</li>
+<li><strong>If you return the wrong type</strong> — the broker first tries
+  <code>_coerce_adapter_result</code>: any object with a <code>model_dump()</code> that validates as
+  an <code>AdapterResult</code> is accepted (this is what lets an adapter mirror the model
+  instead of importing it). Anything else becomes a <code>sources_errored</code> entry
+  with <code>error_type</code> <code>AdapterContractError</code> and the message
+  <code>adapter returned &lt;typename&gt;, expected AdapterResult</code>. Co-queried sources are
+  unaffected.</li>
+<li><strong>Never</strong> compute your own response hash. <code>AdapterResult</code> has no
+  <code>response_hash</code> field on purpose: the chain-of-custody digest is computed by
+  the broker over the rows it actually returns, so a buggy or hostile adapter
+  cannot inject a digest into the signed attestation.</li>
+</ul>
+<h3 id="async-def-closeself-none"><code>async def close(self) -&gt; None</code><a class="headerlink" href="#async-def-closeself-none" title="Permanent link">&para;</a></h3>
+<p>Release resources. <strong>Must be idempotent</strong> — the compliance suite calls it
+twice, and the broker calls it on shutdown after paths that may already have
+closed. Guard with a flag:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_closed</span><span class="p">:</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>        <span class="k">return</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">_closed</span> <span class="o">=</span> <span class="kc">True</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>    <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_pool</span><span class="o">.</span><span class="n">aclose</span><span class="p">()</span>
+</code></pre></div>
+<p>Returns <code>None</code>. Raising on the second call fails
+<code>test_idempotent_close</code>.</p>
+<h3 id="async-def-get_schemaself-adapterschema"><code>async def get_schema(self) -&gt; AdapterSchema</code><a class="headerlink" href="#async-def-get_schemaself-adapterschema" title="Permanent link">&para;</a></h3>
+<p>Optional in practice, present on the protocol. Returns the surface the broker
+fingerprints for drift detection. The protocol's default implementation raises</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>NotImplementedError: AC-21.b: this adapter must implement get_schema() (task-006)
+</code></pre></div>
+<p>so registration still succeeds and only <code>nautilus adapters schema</code> /
+<code>schema-fingerprint</code> / <code>schema-diff</code> fail, at the moment they are called.</p>
+<p>Return <code>AdapterSchema.unknown(adapter_id, source_type)</code> when the backend has no
+introspectable schema (an object store). That is honest — it means "no baseline
+to compare against". It is the wrong answer for a backend that <em>does</em> have a
+schema, because drift then goes undetected.</p>
+<h2 id="types-in-the-signatures">Types in the signatures<a class="headerlink" href="#types-in-the-signatures" title="Permanent link">&para;</a></h2>
+<h3 id="sourceconfig"><code>SourceConfig</code><a class="headerlink" href="#sourceconfig" title="Permanent link">&para;</a></h3>
+<p><code>nautilus.config.models.SourceConfig</code>, one per <code>sources:</code> entry, <code>extra="forbid"</code>.
+All 25 fields, in declaration order. "Required" is what the model itself
+demands; the conditional rules below add more for specific <code>type:</code> values.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Default</th>
+<th>Meaning for you</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>id</code></td>
+<td><code>str</code></td>
+<td>yes</td>
+<td>—</td>
+<td>The key the broker files your rows under. Put it in <code>AdapterResult.source_id</code>.</td>
+</tr>
+<tr>
+<td><code>type</code></td>
+<td><code>str</code></td>
+<td>yes</td>
+<td>—</td>
+<td>Matches your <code>source_type</code>. An open <code>str</code>, not a <code>Literal</code>, so entry-point and <code>adapters:</code> types are accepted; unknown ones still fail at load (row 5 of the <a href="#failure-catalogue">catalogue</a>).</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td><code>str</code></td>
+<td>no</td>
+<td><code>""</code></td>
+<td>Free text for whoever reads the config. Nothing in <code>nautilus/</code> reads it.</td>
+</tr>
+<tr>
+<td><code>classification</code></td>
+<td><code>str</code></td>
+<td>yes</td>
+<td>—</td>
+<td>Policy input; you do not enforce it.</td>
+</tr>
+<tr>
+<td><code>data_types</code></td>
+<td><code>list[str]</code></td>
+<td>yes</td>
+<td>—</td>
+<td>What the router matches against the intent.</td>
+</tr>
+<tr>
+<td><code>allowed_purposes</code></td>
+<td><code>list[str] \| None</code></td>
+<td>no</td>
+<td><code>None</code></td>
+<td>Policy input.</td>
+</tr>
+<tr>
+<td><code>max_response_bytes</code></td>
+<td><code>int \| None</code></td>
+<td>no</td>
+<td><code>8388608</code></td>
+<td>Must be <code>&gt; 0</code>; <code>null</code> removes the bound. The broker trims to it after you return. See <a href="#truncation">Truncation</a>.</td>
+</tr>
+<tr>
+<td><code>connection</code></td>
+<td><code>str</code></td>
+<td>no</td>
+<td><code>""</code></td>
+<td>DSN / base URL / path, after <code>${ENV}</code> interpolation. Required non-empty for the built-in types that dial out (below).</td>
+</tr>
+<tr>
+<td><code>rows</code></td>
+<td><code>list[dict[str, Any]]</code></td>
+<td>no</td>
+<td><code>[]</code></td>
+<td>Inline rows, straight from the YAML. <code>static</code> only.</td>
+</tr>
+<tr>
+<td><code>table</code></td>
+<td><code>str \| None</code></td>
+<td>no</td>
+<td><code>None</code></td>
+<td>Table or collection name.</td>
+</tr>
+<tr>
+<td><code>embedding_column</code></td>
+<td><code>str \| None</code></td>
+<td>no</td>
+<td><code>None</code></td>
+<td>pgvector only: the vector column. Unset, the adapter uses <code>"embedding"</code>.</td>
+</tr>
+<tr>
+<td><code>metadata_column</code></td>
+<td><code>str \| None</code></td>
+<td>no</td>
+<td><code>None</code></td>
+<td>pgvector only: the metadata column. Unset, the adapter uses <code>"metadata"</code>.</td>
+</tr>
+<tr>
+<td><code>distance_operator</code></td>
+<td><code>Literal["&lt;=&gt;", "&lt;-&gt;", "&lt;#&gt;"] \| None</code></td>
+<td>no</td>
+<td><code>"&lt;=&gt;"</code></td>
+<td>pgvector only: the operator spliced into <code>ORDER BY &lt;embedding_column&gt; &lt;op&gt; $E</code>. Re-checked against the same three in the adapter, so it is never interpolated unchecked; <code>null</code> falls back to <code>&lt;=&gt;</code>.</td>
+</tr>
+<tr>
+<td><code>top_k</code></td>
+<td><code>int</code></td>
+<td>no</td>
+<td><code>10</code></td>
+<td>pgvector only: the <code>LIMIT</code> on the nearest-neighbour query.</td>
+</tr>
+<tr>
+<td><code>embedder</code></td>
+<td><code>Literal["default"] \| None</code></td>
+<td>no</td>
+<td><code>None</code></td>
+<td>Only <code>default</code> (the broker-wide embedder) resolves; there is no embedder registry, so any other name is rejected at config load rather than failing every request with <code>EmbeddingUnavailableError</code>.</td>
+</tr>
+<tr>
+<td><code>index</code></td>
+<td><code>str \| None</code></td>
+<td>no</td>
+<td><code>None</code></td>
+<td>elasticsearch only: the index, validated in <code>connect</code>.</td>
+</tr>
+<tr>
+<td><code>label</code></td>
+<td><code>str \| None</code></td>
+<td>no</td>
+<td><code>None</code></td>
+<td>neo4j only: the node label, validated against <code>^[A-Z][A-Za-z0-9_]*$</code> in <code>connect</code>.</td>
+</tr>
+<tr>
+<td><code>endpoints</code></td>
+<td><code>list[EndpointSpec] \| None</code></td>
+<td>no</td>
+<td><code>None</code></td>
+<td>rest / servicenow endpoint descriptors — see the table below. <code>[]</code> is refused; the REST adapter reads <code>endpoints[0]</code> only.</td>
+</tr>
+<tr>
+<td><code>auth</code></td>
+<td><code>BearerAuth \| BasicAuth \| MtlsAuth \| NoneAuth \| None</code></td>
+<td>no</td>
+<td><code>None</code></td>
+<td>Discriminated on <code>type</code> — see the table below. <code>mtls_context(config.auth, config.id)</code> turns an <code>MtlsAuth</code> into an <code>ssl.SSLContext</code>.</td>
+</tr>
+<tr>
+<td><code>compartments</code></td>
+<td><code>str</code></td>
+<td>no</td>
+<td><code>""</code></td>
+<td>Pipe-delimited compartment list, asserted verbatim as the source's <code>compartments</code> fact by the router. Policy input; you do not enforce it.</td>
+</tr>
+<tr>
+<td><code>sub_category</code></td>
+<td><code>str</code></td>
+<td>no</td>
+<td><code>""</code></td>
+<td>Declared classification metadata. Nothing in <code>nautilus/</code> reads it.</td>
+</tr>
+<tr>
+<td><code>purpose_field</code></td>
+<td><code>str</code></td>
+<td>no</td>
+<td><code>""</code></td>
+<td>Column a purpose-scoping rule constrains on. Left empty, a pack that scopes by purpose denies the source rather than over-returning it.</td>
+</tr>
+<tr>
+<td><code>like_style</code></td>
+<td><code>Literal["starts_with", "regex"]</code></td>
+<td>no</td>
+<td><code>"starts_with"</code></td>
+<td>How a <code>LIKE</code> constraint is rendered by an adapter that reads it. The neo4j adapter emits <code>STARTS WITH $p</code> for <code>starts_with</code> and <code>=~ $p</code> for <code>regex</code> (and logs a WARN at <code>connect</code> for <code>regex</code>); no other built-in adapter reads the field. See <a href="#honouring-a-scopeconstraint">Honouring a <code>ScopeConstraint</code></a>.</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td><code>str \| None</code></td>
+<td>no</td>
+<td><code>None</code></td>
+<td>llm only: the model name sent to the OpenAI-compatible endpoint at <code>connection</code>.</td>
+</tr>
+<tr>
+<td><code>timeout_s</code></td>
+<td><code>float \| None</code></td>
+<td>no</td>
+<td><code>15.0</code></td>
+<td>Per-source wall-clock budget for one connect+execute. The broker enforces it around <code>execute</code>; <code>null</code> waits indefinitely.</td>
+</tr>
+</tbody>
+</table>
+<p>Two conditional rules run in a <code>model_validator</code> on this model, so they are load
+errors, not runtime ones:</p>
+<ul>
+<li><strong>Mandatory field by type.</strong> <code>table</code> for <code>postgres</code>, <code>pgvector</code>, <code>servicenow</code>;
+  <code>index</code> for <code>elasticsearch</code>; <code>label</code> for <code>neo4j</code>; <code>model</code> for <code>llm</code>; <code>rows</code>
+  for <code>static</code>. Missing → <code>source '&lt;id&gt;' has type '&lt;type&gt;' but no '&lt;field&gt;'. The
+  &lt;type&gt; adapter requires it, so every request to this source would fail at
+  runtime.</code> (<code>rest</code> is deliberately absent: <code>endpoints</code> is optional by design.)</li>
+<li><strong>Non-empty <code>connection</code></strong> for <code>postgres</code>, <code>pgvector</code>, <code>elasticsearch</code>,
+  <code>rest</code>, <code>neo4j</code>, <code>servicenow</code>, <code>influxdb</code>, <code>s3</code>, <code>llm</code>. Missing → <code>source
+  '&lt;id&gt;' has type '&lt;type&gt;' but no 'connection'. The &lt;type&gt; adapter has nothing
+  to dial, so every request to this source would fail at runtime.</code></li>
+</ul>
+<p>Neither rule covers a third-party <code>type</code>: the model cannot know what your
+adapter needs, so validate it in <code>connect</code> and raise <code>AdapterError</code>.</p>
+<p><strong><code>EndpointSpec</code></strong> (<code>nautilus.config.models.EndpointSpec</code>, <code>extra="forbid"</code>) —
+one entry of <code>endpoints</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>path</code></td>
+<td><code>str</code></td>
+<td>yes</td>
+<td>—</td>
+<td>Appended to <code>connection</code>. The REST adapter uses <code>""</code> when no endpoint is declared.</td>
+</tr>
+<tr>
+<td><code>method</code></td>
+<td><code>Literal["GET", "POST", "PUT", "PATCH", "DELETE"]</code></td>
+<td>no</td>
+<td><code>"GET"</code></td>
+<td>HTTP method for the request.</td>
+</tr>
+<tr>
+<td><code>path_params</code></td>
+<td><code>list[str]</code></td>
+<td>no</td>
+<td><code>[]</code></td>
+<td>Declared; no adapter in <code>nautilus/</code> reads it.</td>
+</tr>
+<tr>
+<td><code>query_params</code></td>
+<td><code>list[str]</code></td>
+<td>no</td>
+<td><code>[]</code></td>
+<td>Declared; no adapter in <code>nautilus/</code> reads it.</td>
+</tr>
+<tr>
+<td><code>operator_templates</code></td>
+<td><code>dict[str, str]</code></td>
+<td>no</td>
+<td><code>{}</code></td>
+<td>Per-operator query templates. Opts an endpoint into operators the REST adapter otherwise refuses (<code>NOT IN</code>: <code>Operator 'NOT IN' is not supported by the REST adapter unless explicitly declared in EndpointSpec.operator_templates (AC-9.3).</code>). Keys are checked against the operator allowlist at <code>connect</code>: <code>EndpointSpec.operator_templates declares unknown operator '&lt;op&gt;' for source '&lt;id&gt;'</code>.</td>
+</tr>
+</tbody>
+</table>
+<p><strong><code>auth</code></strong> — <code>AuthConfig</code>, a union discriminated on <code>type</code>, all four
+<code>extra="forbid"</code>:</p>
+<table>
+<thead>
+<tr>
+<th><code>type</code></th>
+<th>Class</th>
+<th>Fields</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>bearer</code></td>
+<td><code>BearerAuth</code></td>
+<td><code>token: str</code> (required)</td>
+</tr>
+<tr>
+<td><code>basic</code></td>
+<td><code>BasicAuth</code></td>
+<td><code>username: str</code>, <code>password: str</code> (both required)</td>
+</tr>
+<tr>
+<td><code>mtls</code></td>
+<td><code>MtlsAuth</code></td>
+<td><code>cert_path: str</code>, <code>key_path: str</code> (both required); <code>ca_path: str \| None</code>, default <code>None</code></td>
+</tr>
+<tr>
+<td><code>none</code></td>
+<td><code>NoneAuth</code></td>
+<td>none — the explicit no-auth marker</td>
+</tr>
+</tbody>
+</table>
+<p>Anything a custom adapter needs that is not on this model has no place to live
+in <code>nautilus.yaml</code> — <code>SourceConfig</code> rejects unknown keys.</p>
+<h3 id="intentanalysis"><code>IntentAnalysis</code><a class="headerlink" href="#intentanalysis" title="Permanent link">&para;</a></h3>
+<p><code>nautilus.core.models.IntentAnalysis</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>raw_intent</code></td>
+<td><code>str</code> (≤ 8192 chars, <code>MAX_INTENT_LENGTH</code>)</td>
+</tr>
+<tr>
+<td><code>data_types_needed</code></td>
+<td><code>list[str]</code></td>
+</tr>
+<tr>
+<td><code>entities</code></td>
+<td><code>list[str]</code></td>
+</tr>
+<tr>
+<td><code>temporal_scope</code></td>
+<td><code>str \| None</code></td>
+</tr>
+<tr>
+<td><code>estimated_sensitivity</code></td>
+<td><code>str \| None</code></td>
+</tr>
+</tbody>
+</table>
+<p>It is a <em>hint</em>, not a query. Never interpolate <code>raw_intent</code> into a query
+string.</p>
+<h3 id="scopeconstraint"><code>ScopeConstraint</code><a class="headerlink" href="#scopeconstraint" title="Permanent link">&para;</a></h3>
+<p><code>nautilus.core.models.ScopeConstraint</code> — one row-level predicate the policy
+engine attached to your source.</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Contract</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>source_id</code></td>
+<td><code>str</code></td>
+<td>Always your source.</td>
+</tr>
+<tr>
+<td><code>field</code></td>
+<td><code>str</code></td>
+<td>Identifier, or one dotted pair for JSON access. Validate with <code>validate_field</code>.</td>
+</tr>
+<tr>
+<td><code>operator</code></td>
+<td><code>ScopeOperator</code></td>
+<td>One of the eleven below.</td>
+</tr>
+<tr>
+<td><code>value</code></td>
+<td><code>Any</code></td>
+<td>Operator-dependent: scalar, <code>list</code> for <code>IN</code>/<code>NOT IN</code>, two-element sequence for <code>BETWEEN</code>, ignored for <code>IS NULL</code>.</td>
+</tr>
+<tr>
+<td><code>expires_at</code></td>
+<td><code>str \| None</code></td>
+<td><strong>Broker-enforced, not yours.</strong></td>
+</tr>
+<tr>
+<td><code>valid_from</code></td>
+<td><code>str \| None</code></td>
+<td><strong>Broker-enforced, not yours.</strong></td>
+</tr>
+</tbody>
+</table>
+<p><code>ScopeOperator</code> is the <code>Literal</code> pinning the eleven operators; the runtime
+<code>_OPERATOR_ALLOWLIST</code> in <code>nautilus.adapters.base</code> holds the same eleven, and a
+drift-guard test keeps them equal:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>=   !=   IN   NOT IN   &lt;   &gt;   &lt;=   &gt;=   LIKE   BETWEEN   IS NULL
+</code></pre></div>
+<p><code>expires_at</code> / <code>valid_from</code> never reach you unsatisfied:
+<code>Broker._apply_temporal_filter</code> runs <code>TemporalFilter.apply</code> before fan-out and
+denies the source with a <code>scope-expired</code> <code>DenialRecord</code> if the window has
+closed. Do not re-implement the check; do not assume a constraint you received
+is expired.</p>
+<h3 id="honouring-a-scopeconstraint">Honouring a <code>ScopeConstraint</code><a class="headerlink" href="#honouring-a-scopeconstraint" title="Permanent link">&para;</a></h3>
+<p>"Honour" means one of exactly two things, per constraint, <strong>before</strong> any data
+leaves the backend:</p>
+<ol>
+<li><strong>Apply it</strong> — push the predicate into the query (<code>WHERE "field" = $1</code>) or
+   filter the rows you are about to return.</li>
+<li><strong>Refuse it</strong> — <code>raise ScopeEnforcementError</code> naming the operator and field.</li>
+</ol>
+<p>There is no third option. Returning rows that ignore a constraint is a silent
+over-scope: the response, the audit entry and the signed attestation all record
+that the constraint was applied, because the broker records what the router
+issued. <strong>Nothing downstream re-checks your rows against <code>scope</code>.</strong> The
+per-source digest proves the rows were not altered in transit; it proves
+nothing about whether they were scoped.</p>
+<p>What each operator means for a row <code>r</code>, and the shape of <code>value</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Operator</th>
+<th><code>value</code></th>
+<th>Row passes when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>=</code></td>
+<td>scalar</td>
+<td><code>r[field] == value</code></td>
+</tr>
+<tr>
+<td><code>!=</code></td>
+<td>scalar</td>
+<td><code>r[field] != value</code></td>
+</tr>
+<tr>
+<td><code>IN</code></td>
+<td>list</td>
+<td><code>r[field]</code> in the list</td>
+</tr>
+<tr>
+<td><code>NOT IN</code></td>
+<td>list</td>
+<td><code>r[field]</code> not in the list</td>
+</tr>
+<tr>
+<td><code>&lt;</code> <code>&gt;</code> <code>&lt;=</code> <code>&gt;=</code></td>
+<td>scalar</td>
+<td>the ordering holds</td>
+</tr>
+<tr>
+<td><code>LIKE</code></td>
+<td>pattern</td>
+<td>matches, <code>%</code> as wildcard (<code>SourceConfig.like_style</code> selects <code>starts_with</code> or <code>regex</code> semantics for sources that use it)</td>
+</tr>
+<tr>
+<td><code>BETWEEN</code></td>
+<td>two-element sequence</td>
+<td><code>value[0] &lt;= r[field] &lt;= value[1]</code></td>
+</tr>
+<tr>
+<td><code>IS NULL</code></td>
+<td>ignored</td>
+<td><code>r[field]</code> is null/absent</td>
+</tr>
+</tbody>
+</table>
+<p>A backend that cannot express one of these — an API with a fixed query shape,
+say — must raise rather than approximate. Approximating <code>!=</code> as "return
+everything" is the failure this contract exists to prevent.</p>
+<h3 id="adapterresult"><code>AdapterResult</code><a class="headerlink" href="#adapterresult" title="Permanent link">&para;</a></h3>
+<p><code>nautilus.core.models.AdapterResult</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>source_id</code></td>
+<td><code>str</code></td>
+<td>Required. Use <code>config.id</code>.</td>
+</tr>
+<tr>
+<td><code>rows</code></td>
+<td><code>list[dict[str, Any]]</code></td>
+<td>Required. JSON-serialisable values.</td>
+</tr>
+<tr>
+<td><code>duration_ms</code></td>
+<td><code>int</code></td>
+<td>Required. Your own measurement.</td>
+</tr>
+<tr>
+<td><code>error</code></td>
+<td><code>ErrorRecord \| None</code></td>
+<td>Default <code>None</code>. Set it <em>or</em> raise, not both.</td>
+</tr>
+<tr>
+<td><code>truncated</code></td>
+<td><code>bool</code></td>
+<td>Default <code>False</code>. Set <code>True</code> when you capped the row set yourself.</td>
+</tr>
+</tbody>
+</table>
+<p>There is no <code>response_hash</code> field, by design (see <code>execute</code> above).</p>
+<h3 id="errorrecord"><code>ErrorRecord</code><a class="headerlink" href="#errorrecord" title="Permanent link">&para;</a></h3>
+<p><code>nautilus.core.models.ErrorRecord</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Type</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>source_id</code></td>
+<td><code>str</code></td>
+<td>Required. Use <code>config.id</code>.</td>
+</tr>
+<tr>
+<td><code>error_type</code></td>
+<td><code>str</code></td>
+<td>Required. Conventionally the exception class name.</td>
+</tr>
+<tr>
+<td><code>message</code></td>
+<td><code>str</code></td>
+<td>Required.</td>
+</tr>
+<tr>
+<td><code>trace_id</code></td>
+<td><code>str</code></td>
+<td>Leave empty (<code>""</code>) — <code>_gather_adapter_results</code> fills in the request id, because <code>execute</code> cannot see it. Records that arrive with a <code>trace_id</code> already set are left alone.</td>
+</tr>
+<tr>
+<td><code>endpoint</code></td>
+<td><code>str \| None</code></td>
+<td>Default <code>None</code>. Leave it unset.</td>
+</tr>
+</tbody>
+</table>
+<p><code>endpoint</code> is the address the source dials, as <code>scheme://host[:port]</code>, and it
+is what makes a failed source answerable — a <code>source_id</code> is the operator's
+label for a dependency, not the dependency's address. Leave it <code>None</code> and the
+broker fills it from the source's <code>connection</code> (<code>redact_connection</code>, which
+copies scheme, host and port out and nothing else, so a DSN password or a URL
+token cannot reach the audit trail or the requesting agent). Set it yourself
+only if your adapter dials somewhere its <code>connection</code> does not name — the
+broker leaves a non-<code>None</code> value alone, so stripping credentials is then your
+job.</p>
+<h3 id="adapterschema"><code>AdapterSchema</code><a class="headerlink" href="#adapterschema" title="Permanent link">&para;</a></h3>
+<p><code>nautilus.adapters.schema.AdapterSchema</code> (frozen dataclass):</p>
+<table>
+<thead>
+<tr>
+<th>Member</th>
+<th>Type / signature</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>adapter_id</code></td>
+<td><code>str</code></td>
+</tr>
+<tr>
+<td><code>source_type</code></td>
+<td><code>str</code></td>
+</tr>
+<tr>
+<td><code>tables</code></td>
+<td><code>tuple[AdapterTable, ...]</code></td>
+</tr>
+<tr>
+<td><code>capability_flags</code></td>
+<td><code>Mapping[str, bool]</code></td>
+</tr>
+<tr>
+<td><code>fetched_at</code></td>
+<td><code>datetime</code></td>
+</tr>
+<tr>
+<td><code>AdapterSchema.unknown(adapter_id, source_type)</code></td>
+<td>classmethod → <code>AdapterSchema</code> with empty <code>tables</code> and flags</td>
+</tr>
+<tr>
+<td><code>schema.fingerprint()</code></td>
+<td><code>str</code>, <code>"sha256:&lt;hex&gt;"</code> over the canonical JSON</td>
+</tr>
+</tbody>
+</table>
+<p><code>fetched_at</code> is excluded from the fingerprint, so re-reading an unchanged
+schema is not drift.</p>
+<p><code>tables</code> holds <code>AdapterTable</code> (frozen dataclass), each holding <code>AdapterField</code>
+(frozen dataclass). Both are positional dataclasses, not models — nothing
+validates them, so what you construct is what gets fingerprinted:</p>
+<table>
+<thead>
+<tr>
+<th>Class</th>
+<th>Member</th>
+<th>Type</th>
+<th>Required</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AdapterTable</code></td>
+<td><code>name</code></td>
+<td><code>str</code></td>
+<td>yes</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>AdapterTable</code></td>
+<td><code>fields</code></td>
+<td><code>tuple[AdapterField, ...]</code></td>
+<td>yes</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>AdapterTable</code></td>
+<td><code>indexes</code></td>
+<td><code>tuple[str, ...]</code></td>
+<td>no</td>
+<td><code>()</code></td>
+</tr>
+<tr>
+<td><code>AdapterTable</code></td>
+<td><code>primary_key</code></td>
+<td><code>tuple[str, ...]</code></td>
+<td>no</td>
+<td><code>()</code></td>
+</tr>
+<tr>
+<td><code>AdapterField</code></td>
+<td><code>name</code></td>
+<td><code>str</code></td>
+<td>yes</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>AdapterField</code></td>
+<td><code>type</code></td>
+<td><code>str</code></td>
+<td>yes</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>AdapterField</code></td>
+<td><code>nullable</code></td>
+<td><code>bool</code></td>
+<td>yes</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>AdapterField</code></td>
+<td><code>description</code></td>
+<td><code>str</code></td>
+<td>no</td>
+<td><code>""</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>AdapterField.type</code> is the backend's own type name as a string — nothing parses
+it, but <code>classify_drift</code> compares it, and a change is <code>major</code> drift at
+<code>tables.&lt;table&gt;.&lt;field&gt;.type</code>.</p>
+<h2 id="exceptions">Exceptions<a class="headerlink" href="#exceptions" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Class</th>
+<th>Base</th>
+<th>Raise it when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>AdapterError</code></td>
+<td><code>Exception</code></td>
+<td>Any adapter-layer failure. The broker turns it into a <code>sources_errored</code> entry with <code>error_type="AdapterError"</code>.</td>
+</tr>
+<tr>
+<td><code>ScopeEnforcementError</code></td>
+<td><code>AdapterError</code></td>
+<td>A constraint's operator or field is one you cannot enforce.</td>
+</tr>
+<tr>
+<td><code>EmbeddingUnavailableError</code></td>
+<td><code>AdapterError</code></td>
+<td>No embedder can vectorise the request (pgvector-shaped adapters).</td>
+</tr>
+</tbody>
+</table>
+<p>Nothing an adapter raises reaches the agent as an exception; every one becomes
+a per-source error record, and the other sources in the same request still
+answer.</p>
+<h2 id="scope-enforcement-and-helper-api">Scope-enforcement and helper API<a class="headerlink" href="#scope-enforcement-and-helper-api" title="Permanent link">&para;</a></h2>
+<p>All in <code>nautilus.adapters.base</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Signature</th>
+<th>Returns</th>
+<th>Raises</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>validate_operator(op: str) -&gt; None</code></td>
+<td>—</td>
+<td><code>ScopeEnforcementError: Operator '&lt;op&gt;' not in allowlist: ['!=', '&lt;', '&lt;=', '=', '&gt;', '&gt;=', 'BETWEEN', 'IN', 'IS NULL', 'LIKE', 'NOT IN']</code></td>
+</tr>
+<tr>
+<td><code>validate_field(f: str) -&gt; None</code></td>
+<td>—</td>
+<td><code>ScopeEnforcementError: Invalid field identifier '&lt;f&gt;'</code> — the pattern is <code>^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$</code></td>
+</tr>
+<tr>
+<td><code>quote_identifier(ident: str) -&gt; str</code></td>
+<td><code>"ident"</code>, validated first</td>
+<td><code>ScopeEnforcementError</code> via <code>validate_field</code></td>
+</tr>
+<tr>
+<td><code>quote_table(table: str) -&gt; str</code></td>
+<td><code>"schema"."table"</code> or <code>"table"</code></td>
+<td><code>ScopeEnforcementError: table name '&lt;t&gt;' has more than one schema qualifier</code></td>
+</tr>
+<tr>
+<td><code>render_field(field: str) -&gt; str</code></td>
+<td><code>"col"</code>, or <code>"jsonb_col"-&gt;&gt;'key'</code> for a dotted field</td>
+<td><code>ScopeEnforcementError</code></td>
+</tr>
+<tr>
+<td><code>row_bytes(row: dict[str, Any]) -&gt; int</code></td>
+<td>JSON length + 1, the same estimate the transport uses</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>bounded_rows(rows, max_bytes) -&gt; tuple[list[dict], bool]</code></td>
+<td>rows cut to the budget, and whether anything was dropped. Whole rows only; always keeps at least one</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>session_token_headers(context: dict[str, Any]) -&gt; dict[str, str] \| None</code></td>
+<td><code>{"X-Nautilus-Session-Token": &lt;jws&gt;}</code> or <code>None</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>mtls_context(auth: MtlsAuth, source_id: str) -&gt; ssl.SSLContext</code></td>
+<td>TLS context from the source's <code>auth: {type: mtls}</code> block</td>
+<td><code>AdapterError</code> naming <code>cert_path</code> / <code>key_path</code> if the material will not load</td>
+</tr>
+<tr>
+<td><code>await resolve_base_url(base_url: str, adapter: str) -&gt; tuple[str, list[IPv4Address \| IPv6Address]]</code></td>
+<td>The host of <code>base_url</code> and every address it resolves to right now; an IP literal resolves to itself, an unresolvable name yields <code>[]</code>. The seam both SSRF guards run on — see <a href="../errors/adapters/#ssrf-guards-rest-and-llm-adapters">the SSRF entry</a> for what it can and cannot promise</td>
+<td><code>ScopeEnforcementError</code> when <code>base_url</code> has no host</td>
+</tr>
+<tr>
+<td><code>wrap_execute(fn) -&gt; fn</code></td>
+<td>Decorator: re-raises a driver's own exception as <code>AdapterError: &lt;Class&gt;: execute failed for source '&lt;id&gt;': &lt;ExcType&gt;: &lt;msg&gt;</code>, dropping <code>: &lt;msg&gt;</code> when the exception has no text</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>SESSION_TOKEN_HEADER</code></td>
+<td><code>"X-Nautilus-Session-Token"</code></td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p><code>wrap_execute</code> passes <code>AdapterError</code> (and therefore <code>ScopeEnforcementError</code>)
+through untouched, so a refused constraint stays distinguishable from an
+infrastructure failure. Decorate <code>execute</code> with it if your driver raises its
+own exception types:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="kn">from</span><span class="w"> </span><span class="nn">nautilus.adapters.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">wrap_execute</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a><span class="k">class</span><span class="w"> </span><span class="nc">MyAdapter</span><span class="p">:</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="nd">@wrap_execute</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a>    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">intent</span><span class="p">,</span> <span class="n">scope</span><span class="p">,</span> <span class="n">context</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AdapterResult</span><span class="p">:</span> <span class="o">...</span>
+</code></pre></div>
+<h2 id="registration">Registration<a class="headerlink" href="#registration" title="Permanent link">&para;</a></h2>
+<p>Two paths, and one built-in table.</p>
+<h3 id="entry-points-nautilusadapters">Entry points — <code>nautilus.adapters</code><a class="headerlink" href="#entry-points-nautilusadapters" title="Permanent link">&para;</a></h3>
+<p><code>nautilus.adapters</code> is the only entry-point group the adapter loader reads.
+It is read twice, for different reasons:</p>
+<ul>
+<li><code>Broker._discover_adapters</code> loads each target and merges the results <strong>over</strong>
+  <code>ADAPTER_REGISTRY</code>.</li>
+<li><code>nautilus.config.loader._extra_source_types</code> reads the <em>names</em> only, so
+  config validation accepts a source type an installed package advertises.
+  Because it never loads the target, a broken entry point passes config
+  validation and fails later at <code>_build_adapter</code> (rows 1–3 of the
+  <a href="#failure-catalogue">catalogue</a>).</li>
+</ul>
+<p>(<code>fathom.packs</code> is the entry-point group for rule packs, not adapters.
+<code>RulesConfig.packs</code> resolves names against it.)</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="k">[project.entry-points.</span><span class="s2">&quot;nautilus.adapters&quot;</span><span class="k">]</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">my-csv</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_csv_adapter:MyCsvAdapter&quot;</span>
+<a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a><span class="n">my-adapter</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;my_csv_adapter.extra:MyAdapter&quot;</span>
+</code></pre></div>
+<p>One line per source type; a package may advertise several, and the target may
+point into a submodule. The entry-point <strong>name</strong> is the <code>source_type</code>; the
+<strong>target</strong> must be the adapter class, <code>module:Class</code> — never a bare module,
+which discovery skips with a warning so the adapter never registers (row 1 of
+the <a href="#failure-catalogue">catalogue</a>). Discovery is best-effort — a broken
+third-party package is logged and skipped, never fatal — and one line is logged
+per success:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>INFO:nautilus.core.broker:discovered adapter entry-point &#39;my-csv&#39; -&gt; MyCsvAdapter (from &#39;my-csv-adapter&#39;)
+</code></pre></div>
+<p>An entry point may not take over a built-in source type. Name collisions with
+<code>ADAPTER_REGISTRY</code> are refused unless the target <em>is</em> that built-in (nautilus
+advertises its own optional adapters through this group).</p>
+<h3 id="local-path-the-adapters-config-block">Local path — the <code>adapters:</code> config block<a class="headerlink" href="#local-path-the-adapters-config-block" title="Permanent link">&para;</a></h3>
+<p><code>nautilus.config.models.LocalAdapterConfig</code>, three keys, all required:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="nt">adapters</span><span class="p">:</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">module_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">./adapters/csv_adapter.py</span><span class="w">   </span><span class="c1"># relative to the config file</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">    </span><span class="nt">class</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">MyCsvAdapter</span><span class="w">                      </span><span class="c1"># field name is class_name; the YAML key is &#39;class&#39;</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">    </span><span class="nt">source_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">my-csv</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>YAML key</th>
+<th>Field</th>
+<th>Type</th>
+<th>Required</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>module_path</code></td>
+<td><code>module_path</code></td>
+<td><code>str</code></td>
+<td>yes</td>
+<td>—</td>
+<td>Path to the <code>.py</code> file, resolved relative to the config file.</td>
+</tr>
+<tr>
+<td><code>class</code></td>
+<td><code>class_name</code></td>
+<td><code>str</code></td>
+<td>yes</td>
+<td>—</td>
+<td>Attribute in that module holding the adapter class. <code>class</code> is a Python keyword, hence the alias.</td>
+</tr>
+<tr>
+<td><code>source_type</code></td>
+<td><code>source_type</code></td>
+<td><code>str</code></td>
+<td>yes</td>
+<td>—</td>
+<td>Must equal the class's <code>source_type</code> ClassVar (row 8 of the <a href="#failure-catalogue">catalogue</a>).</td>
+</tr>
+</tbody>
+</table>
+<p>Unlike entry points, these are explicit operator config and <strong>fail closed</strong>:
+a missing file, an import error, a missing or non-class attribute, a protocol
+gap, or a <code>source_type</code> mismatch raises <code>ConfigError</code> and the broker does not
+start. A partial load leaves nothing behind — every module registered so far is
+removed from <code>sys.modules</code> before the error propagates.</p>
+<div class="admonition warning">
+<p class="admonition-title">Trust boundary</p>
+<p>The module is executed at broker start with the broker's privileges.
+<code>adapters:</code> entries carry the same trust as installed packages; the config
+file must only be writable by the operator.</p>
+</div>
+<h3 id="precedence-and-the-built-in-table">Precedence and the built-in table<a class="headerlink" href="#precedence-and-the-built-in-table" title="Permanent link">&para;</a></h3>
+<p><code>nautilus.adapters.ADAPTER_REGISTRY</code> maps built-in <code>source_type</code> → class and is
+public API. Its ten keys: <code>postgres</code>, <code>pgvector</code>, <code>elasticsearch</code>, <code>neo4j</code>,
+<code>rest</code>, <code>servicenow</code>, <code>influxdb</code>, <code>s3</code>, <code>llm</code>, <code>static</code>.</p>
+<p>Precedence when the same <code>source_type</code> is declared more than once:
+<strong>built-ins &lt; entry points &lt; local paths.</strong> Built-ins whose driver extra is not
+installed sit in the table as stand-ins carrying two extra ClassVars —
+<code>missing_extra: ClassVar[str]</code> (the extra to install) and
+<code>import_error: ClassVar[str]</code> (the original <code>ImportError</code>, stringified) — so
+startup fails with an install hint (row 24 of the
+<a href="#failure-catalogue">catalogue</a>) rather than an import error mid-request.</p>
+<h2 id="compliance-suite">Compliance suite<a class="headerlink" href="#compliance-suite" title="Permanent link">&para;</a></h2>
+<p><code>nautilus.adapters.testing.AdapterComplianceSuite</code>. Five checks, all <code>async</code>,
+all independent — each builds its own adapter from the factory.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">AdapterComplianceSuite</span><span class="p">(</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a>    <span class="n">adapter_factory</span><span class="p">:</span> <span class="n">Callable</span><span class="p">[[],</span> <span class="n">Any</span><span class="p">],</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="n">source_config</span><span class="p">:</span> <span class="n">SourceConfig</span><span class="p">,</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="p">)</span>
+</code></pre></div>
+<p><code>adapter_factory</code> is called with no arguments (pass the class itself when
+<code>__init__</code> takes none). <code>source_config</code> is the config every check connects
+with.</p>
+<p>What each check feeds the adapter: <code>IntentAnalysis(raw_intent="test query",
+data_types_needed=["generic"], entities=[])</code>; context <code>{"purpose": "testing",
+"session_id": "compliance", "clearance": "unclassified"}</code>; and a single
+constraint built with <code>ScopeConstraint.model_construct(source_id=&lt;config.id&gt;,
+operator=&lt;op&gt;, field="id", value=&lt;v&gt;)</code>, where <code>&lt;v&gt;</code> is <code>"test"</code> except for the
+enforcement check's refuting probe — <code>model_construct</code> because the
+invalid-operator check has to build a value the <code>Literal</code> forbids.</p>
+<table>
+<thead>
+<tr>
+<th>Method</th>
+<th>What it does</th>
+<th>Fails with</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>test_connect_execute_close_lifecycle()</code></td>
+<td><code>connect</code> → <code>execute</code> (operator <code>=</code>) → asserts the result → <code>close</code></td>
+<td><code>AssertionError: execute must return an AdapterResult, got &lt;typename&gt;</code></td>
+</tr>
+<tr>
+<td><code>test_scope_enforcement_valid_operator()</code></td>
+<td>Two <code>execute</code> calls: <code>id = "test"</code>, then <code>id = "nautilus-compliance-no-such-id-8f4c1e0a"</code>. No row from the second may carry a different <code>id</code>, and the two runs may not return identical rows. Closes in <code>finally</code></td>
+<td><code>AssertionError: the adapter returned N row(s) that contradict the scope constraint it accepted</code>, or <code>AssertionError: ... the constraint changed nothing</code>, or whatever <code>execute</code> raised</td>
+</tr>
+<tr>
+<td><code>test_scope_enforcement_invalid_operator()</code></td>
+<td><code>execute</code> with operator <code>INVALID_OP</code> must raise <code>ScopeEnforcementError</code></td>
+<td><code>AssertionError: an unsupported scope operator must raise ScopeEnforcementError</code></td>
+</tr>
+<tr>
+<td><code>test_idempotent_close()</code></td>
+<td><code>connect</code>, then <code>close()</code> twice</td>
+<td>whatever the second <code>close()</code> raised</td>
+</tr>
+<tr>
+<td><code>test_error_path_reports_the_failure()</code></td>
+<td><code>execute</code> with <code>raw_intent="__compliance_error_trigger__"</code>, <code>data_types_needed=["nonexistent"]</code>. Passes if it raises <code>AdapterError</code> <strong>or</strong> returns an <code>AdapterResult</code></td>
+<td><code>AssertionError: the error path must return an AdapterResult carrying an ErrorRecord, or raise AdapterError; got &lt;typename&gt;</code></td>
+</tr>
+</tbody>
+</table>
+<p>Scope of the suite, stated plainly: it checks <em>shape, fail-closed behaviour,
+and that a constraint you accept actually narrows the rows</em>. It does not check
+that your filtering is correct for every operator, that <code>get_schema</code> works, or
+that <code>duration_ms</code> is real. Write your own tests for those.</p>
+<p>The enforcement check is not optional politeness. The broker does not re-read
+returned rows against the constraint it issued — it records that constraint in
+<code>BrokerResponse.scope_restrictions</code>, in the audit entry, and in the signed
+attestation, all of which say it was applied. This suite is the only thing
+standing between an adapter that ignores the constraint and a signed receipt
+that says it did not. Returning unfiltered rows used to pass all five checks.</p>
+<p>If your source returns no rows for <code>id = "test"</code>, the check cannot tell an
+enforcing adapter from an ignoring one, and warns rather than fails:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>UserWarning: AdapterComplianceSuite could not verify scope enforcement: the
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>source returned no rows for id = &#39;test&#39;, ...
+</code></pre></div>
+<p>A freshly scaffolded adapter points at a backend the suite cannot seed, so that
+warning is expected on the first run. Point <code>source_config</code> at a fixture holding
+a row with <code>id = "test"</code> to make the check bite — until you do, you have four
+checks, not five.</p>
+<p><code>nautilus adapters new</code> generates <code>tests/test_compliance.py</code> wiring all five
+into pytest classes; keep them green as you replace the stub.</p>
+<h2 id="nautilus-adapters-commands"><code>nautilus adapters</code> commands<a class="headerlink" href="#nautilus-adapters-commands" title="Permanent link">&para;</a></h2>
+<p>Six subcommands. <code>--config</code> defaults to <code>./nautilus.yaml</code> when present, except
+where marked required.</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Arguments</th>
+<th>Does</th>
+<th>Exit 1 when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>nautilus adapters new NAME</code></td>
+<td><code>--dir DIR</code> (default <code>.</code>)</td>
+<td>Copier-scaffolds a package at <code>DIR/NAME</code> and prints the source type, class and next steps</td>
+<td><code>ERROR: invalid adapter name '&lt;n&gt;' (expected lowercase-dashed, e.g. my-csv-adapter)</code> — the pattern is <code>^[a-z][a-z0-9]*(-[a-z0-9]+)*$</code>; <code>ERROR: destination already exists and is not empty: &lt;path&gt;</code>; <code>ERROR: copier is required for 'adapters new' — install it with: pip install copier</code></td>
+</tr>
+<tr>
+<td><code>nautilus adapters list</code></td>
+<td><code>--config</code>, <code>--url</code>, <code>--api-key</code>, <code>--status {active,quarantined}</code>, <code>--json</code></td>
+<td>Without <code>--url</code>: loads the config and prints <code>&lt;id&gt;  type=&lt;type&gt;  status=configured</code> per source. With <code>--url</code>: <code>GET /v1/adapters</code> for live status</td>
+<td><code>ERROR: could not load &lt;path&gt;: &lt;ConfigError&gt;</code>; <code>ERROR: no config found: pass --config PATH, or run from a directory containing nautilus.yaml</code>; <code>ERROR: --status '&lt;s&gt;' needs --url: quarantine state lives in the serving process…</code></td>
+</tr>
+<tr>
+<td><code>nautilus adapters schema NAME</code></td>
+<td><code>--config</code>, <code>--json</code></td>
+<td>Connects the source named by <code>NAME</code> (a source <code>id</code>) and prints its <code>AdapterSchema</code> field by field</td>
+<td><code>ERROR: could not load &lt;path&gt;: &lt;ConfigError&gt;</code>; <code>ERROR: no schema available for adapter '&lt;n&gt;'</code></td>
+</tr>
+<tr>
+<td><code>nautilus adapters schema-fingerprint NAME</code></td>
+<td><code>--config</code></td>
+<td>Prints <code>sha256:&lt;hex&gt;</code> for the live schema</td>
+<td>same as above</td>
+</tr>
+<tr>
+<td><code>nautilus adapters schema-diff NAME</code></td>
+<td><code>--config</code> (required), <code>--json</code></td>
+<td>Compares live fingerprint against the stored baseline. Prints <code>OK: no drift for '&lt;n&gt;' (fingerprint matches)</code>, or <code>WARN: no stored fingerprint for '&lt;n&gt;'; treating as new</code>, or the stored/current pair followed by <code>DRIFT DETECTED</code>. JSON <code>status</code> is one of <code>clean</code>, <code>no_baseline</code>, <code>drift</code></td>
+<td><code>ERROR: could not load &lt;path&gt;: &lt;ConfigError&gt;</code> — its only non-zero exit once argparse is satisfied. Drift itself is reported, not an error exit</td>
+</tr>
+<tr>
+<td><code>nautilus adapters schema-ack NAME</code></td>
+<td><code>--config</code> (required), <code>--reason</code> (required), <code>--yes</code> (required)</td>
+<td>Records the current fingerprint as the accepted baseline and emits a <code>schema_drift_severity_overridden</code> event. Prints <code>OK: schema-ack recorded for '&lt;n&gt;' by &lt;reviewer&gt;: &lt;reason&gt;</code></td>
+<td><code>ERROR: schema-ack requires --yes to confirm</code>; missing <code>NAUTILUS_REVIEWER</code> env; <code>ERROR: could not load &lt;path&gt;: &lt;ConfigError&gt;</code>; <code>ERROR: no schema available for adapter '&lt;n&gt;'; cannot ack</code>; <code>ERROR: this acknowledgement cannot be recorded, so it will not be made: …</code> (exit <code>2</code>) when <code>audit.chained: true</code> and a running server holds the log's writer lock — the baseline is left untouched</td>
+</tr>
+</tbody>
+</table>
+<p><code>status=configured</code>, never <code>active</code>: the CLI process is not the one serving
+requests, so it cannot know whether an adapter is connected or quarantined.
+Only <code>--url</code> can answer that.</p>
+<h2 id="truncation">Truncation<a class="headerlink" href="#truncation" title="Permanent link">&para;</a></h2>
+<p>Two independent caps can shorten a result, and the caller is told either way.</p>
+<ol>
+<li><strong>Yours.</strong> If you cap the row set inside <code>execute</code>, set
+   <code>AdapterResult.truncated=True</code>. <code>bounded_rows(rows, budget)</code> returns the cut
+   list and the flag.</li>
+<li><strong>The broker's.</strong> After <code>execute</code> returns, <code>Broker._bound_rows</code> trims the
+   rows to the source's <code>max_response_bytes</code> (default 8 MiB) using the same
+   <code>row_bytes</code> estimate, keeping whole rows and never fewer than one. It logs</li>
+</ol>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>WARNING:nautilus.core.broker:source &#39;demo_rows&#39; returned more than max_response_bytes (40); kept 1 of 2 rows
+</code></pre></div>
+<p>and sets <code>truncated=True</code> on the result.</p>
+<p>Either way the source id appears in <code>BrokerResponse.truncated_sources</code>, so the
+caller can tell a partial answer from an exhaustive one:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="nt">&quot;data&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;demo_rows&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">&quot;id&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;1&quot;</span><span class="p">,</span><span class="w"> </span><span class="nt">&quot;name&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;alpha&quot;</span><span class="p">}]},</span>
+<a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="nt">&quot;truncated_sources&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;demo_rows&quot;</span><span class="p">]</span>
+</code></pre></div>
+<p>Trimming happens <em>after</em> your rows exist, so it is a response bound, not a
+memory bound: an adapter that can stop reading early (the postgres adapter
+streams and breaks at the budget) should do so.</p>
+<p>Returning <strong>more than the scope allows</strong> is a different thing entirely and has
+no such backstop — see <a href="#honouring-a-scopeconstraint">Honouring a <code>ScopeConstraint</code></a>.</p>
+<h2 id="failure-catalogue">Failure catalogue<a class="headerlink" href="#failure-catalogue" title="Permanent link">&para;</a></h2>
+<p>Exact strings, where they come from, and what to do. <code>&lt;...&gt;</code> marks the
+interpolated part.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Situation</th>
+<th>Exact output</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Entry point targets a module, not a class</td>
+<td><code>adapter entry-point 'my-csv' resolved to non-class module; skipping</code> (WARNING, <code>nautilus.core.broker</code>) then at startup <code>ERROR: could not load nautilus.yaml: Unsupported source type 'my-csv' for id='&lt;source&gt;'</code></td>
+<td>Change the target to <code>module:Class</code>.</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Entry-point target is missing a protocol member</td>
+<td><code>adapter entry-point 'my-csv' resolved to &lt;Class&gt;, which is missing Adapter protocol members ['connect', 'execute', 'close', 'source_type']; skipping</code> (only the missing ones are listed)</td>
+<td>Add the members; <code>source_type</code> must be a <code>str</code> class attribute.</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Entry point fails to import</td>
+<td><code>failed to load adapter entry-point 'my-csv' (&lt;module:Class&gt;); skipping</code> with the traceback attached</td>
+<td>Fix the import; <code>python -c "import my_csv_adapter"</code>.</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Entry point collides with a built-in</td>
+<td><code>refusing adapter entry-point 'static' from distribution 'my-csv-adapter': it would replace the built-in StaticAdapter. Register it under a source type of its own, or name it explicitly in the config's 'adapters' block.</code></td>
+<td>Rename the entry point, or load it via <code>adapters:</code>.</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Config declares a type nothing provides</td>
+<td><code>ERROR: could not load nautilus.yaml: Unsupported source type='my-csvv' for id='rows' (supported: ['elasticsearch', 'influxdb', 'llm', 'my-csv', 'neo4j', 'pgvector', 'postgres', 'rest', 's3', 'servicenow', 'static'])</code> — the list is every built-in plus every advertised entry-point name plus every <code>adapters:</code> <code>source_type</code></td>
+<td>Check the spelling against the printed list; if your type is absent the package is not installed in this environment.</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Type is known but the class never registered (rows 1–3)</td>
+<td><code>ERROR: could not load nautilus.yaml: Unsupported source type 'my-csv' for id='rows'</code> — note: no <code>supported:</code> list, and quoted differently. This is <code>Broker._build_adapter</code>, past config validation</td>
+<td>Read the WARNING above it; that names the real cause.</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Local-path module is missing</td>
+<td><code>ERROR: could not load nautilus.yaml: adapters[1]: module_path does not exist or is not a file: adapters/gone.py</code></td>
+<td>Path is relative to the <strong>config file</strong>, not the working directory.</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Local-path <code>source_type</code> mismatch</td>
+<td><code>ERROR: could not load nautilus.yaml: adapters[1]: declared source_type='refusr' does not match RefuserAdapter.source_type='refuser' in adapters/refuser.py</code></td>
+<td>Make the YAML key and the ClassVar agree.</td>
+</tr>
+<tr>
+<td>9</td>
+<td>Local-path class incomplete</td>
+<td><code>ERROR: could not load nautilus.yaml: adapters[1]: 'NoCloseAdapter' in adapters/noclose.py does not implement the Adapter protocol (missing: ['close'])</code></td>
+<td>Implement the listed members. Local paths fail closed — the broker will not start.</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Local-path class not found / not a class / import error</td>
+<td><code>adapters[&lt;i&gt;]: class '&lt;Name&gt;' not found in &lt;path&gt;</code> · <code>adapters[&lt;i&gt;]: '&lt;Name&gt;' in &lt;path&gt; is not a class</code> · <code>adapters[&lt;i&gt;]: error executing &lt;path&gt;: &lt;exc&gt;</code></td>
+<td>As printed.</td>
+</tr>
+<tr>
+<td>11</td>
+<td><code>execute</code> returns the wrong type</td>
+<td>In <code>sources_errored</code>: <code>{"source_id": "bad_rows", "error_type": "AdapterContractError", "message": "adapter returned dict, expected AdapterResult", "trace_id": "&lt;request_id&gt;", "endpoint": null}</code></td>
+<td>Return an <code>AdapterResult</code> (or any object whose <code>model_dump()</code> validates as one). Other sources in the request are unaffected.</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Adapter refuses a constraint</td>
+<td>In <code>sources_errored</code>: <code>{"source_id": "refused_rows", "error_type": "ScopeEnforcementError", "message": "RefuserAdapter cannot enforce '=' on field 'name'", "trace_id": "&lt;request_id&gt;", "endpoint": null}</code></td>
+<td>Expected behaviour when the backend cannot express the predicate. To serve the source, implement the operator.</td>
+</tr>
+<tr>
+<td>13</td>
+<td>Operator outside the allowlist reaches a validator</td>
+<td><code>ScopeEnforcementError: Operator 'REGEX' not in allowlist: ['!=', '&lt;', '&lt;=', '=', '&gt;', '&gt;=', 'BETWEEN', 'IN', 'IS NULL', 'LIKE', 'NOT IN']</code></td>
+<td>Only the eleven are routable. A policy rule asserting anything else is the bug.</td>
+</tr>
+<tr>
+<td>14</td>
+<td>Bad field identifier</td>
+<td><code>ScopeEnforcementError: Invalid field identifier 'user-id'</code></td>
+<td>Identifiers must match <code>^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$</code>; one dot is allowed, for JSON access.</td>
+</tr>
+<tr>
+<td>15</td>
+<td>Driver exception escapes a <code>@wrap_execute</code> method</td>
+<td><code>AdapterError: MyAdapter: execute failed for source 'rows': PostgresSyntaxError: syntax error at or near "FROM"</code></td>
+<td>Fix the query; the wrapper only re-labels.</td>
+</tr>
+<tr>
+<td>16</td>
+<td><code>get_schema</code> not implemented</td>
+<td><code>NotImplementedError: AC-21.b: this adapter must implement get_schema() (task-006)</code></td>
+<td>Implement it, or return <code>AdapterSchema.unknown(...)</code> if the backend has no schema.</td>
+</tr>
+<tr>
+<td>17</td>
+<td>Compliance check fails: no fail-closed on a bad operator</td>
+<td><code>E   AssertionError: an unsupported scope operator must raise ScopeEnforcementError</code> / <code>FAILED tests/test_compliance.py::TestMyCsvAdapterCompliance::test_invalid_operator</code></td>
+<td>Raise <code>ScopeEnforcementError</code> for every operator you do not implement — do not fall through.</td>
+</tr>
+<tr>
+<td>18</td>
+<td>Compliance check fails: wrong return type</td>
+<td><code>E   AssertionError: execute must return an AdapterResult, got dict</code></td>
+<td>Return <code>AdapterResult</code>.</td>
+</tr>
+<tr>
+<td>19</td>
+<td>Compliance check fails: error path returns junk</td>
+<td><code>E   AssertionError: the error path must return an AdapterResult carrying an ErrorRecord, or raise AdapterError; got NoneType</code></td>
+<td>Raise <code>AdapterError</code>, or return an <code>AdapterResult</code> with <code>error</code> set.</td>
+</tr>
+<tr>
+<td>20</td>
+<td><code>connect</code> raised on first use</td>
+<td>In <code>sources_errored</code>: <code>{"source_id": "orders", "error_type": "AdapterError", "message": "connect() failed: source 'orders': cannot read orders.csv: [Errno 2] No such file or directory: 'orders.csv'", …}</code> — the prefix is <code>connect() failed:</code> and <code>error_type</code> is the raised exception's own class name, so raising <code>AdapterError</code> is what keeps this readable</td>
+<td>Fix the backend or the <code>connection</code> value; relative paths resolve from the broker's working directory.</td>
+</tr>
+<tr>
+<td>21</td>
+<td>A source in cooldown after a failed connect</td>
+<td>In <code>sources_errored</code>: <code>{"error_type": "AdapterError", "message": "connect() failed 0.0s ago; not retried for another 30.0s", …}</code></td>
+<td>Wait out <code>Broker.connect_cooldown_s</code> (30 s) after fixing the cause; the next request reconnects.</td>
+</tr>
+<tr>
+<td>22</td>
+<td>Source quarantined by schema drift</td>
+<td>In <code>sources_errored</code>: <code>{"error_type": "ADAPTER_QUARANTINED", "message": "Adapter 'orders' is quarantined due to major schema drift. Operator must acknowledge drift via schema-ack before resuming.", …}</code></td>
+<td>Review with <code>nautilus adapters schema-diff</code>, then <code>schema-ack --reason … --yes</code> with <code>NAUTILUS_REVIEWER</code> set.</td>
+</tr>
+<tr>
+<td>23</td>
+<td>Source has no adapter at request time</td>
+<td>In <code>sources_errored</code>: <code>{"error_type": "AdapterError", "message": "No adapter registered for source 'orders'", …}</code></td>
+<td>The source is configured but its class never registered; see rows 1–4.</td>
+</tr>
+<tr>
+<td>24</td>
+<td>Built-in type whose driver extra is missing</td>
+<td><code>ERROR: could not load nautilus.yaml: source id='rows' has type 'postgres', whose driver is not installed -- host: pip install 'nautilus-rkm[postgres]'; image: docker build --build-arg EXTRAS="--extra postgres" . (the published image installs --extra otel only, and has no shell or pip to add to it) (import failed: No module named 'asyncpg')</code></td>
+<td>Install the named extra, or — on the container image, which has no <code>pip</code> — rebuild with the <code>--build-arg</code> the message prints.</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.tabs", "navigation.sections", "navigation.expand", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"alias": true, "default": "latest", "provider": "mike"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
